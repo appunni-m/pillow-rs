@@ -24,7 +24,7 @@ impl Image {
 
     /// Host-adapter entry retaining a wrapper-visible Mode for Pillow's
     /// supplied-palette admission while execution still reads DynamicImage.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
     #[doc(hidden)]
     pub fn quantize_with_visible_mode(
         &self,
@@ -50,17 +50,28 @@ impl Image {
             admission_mode,
             method,
         )?;
-        if matches!(&palette, QuantizePalette::Other) {
-            return Err(PilError::TypeError(
-                "palette must be a supported Pillow-rs Image".to_owned(),
-            ));
-        }
-        if let QuantizePalette::Image(palette_image) = &palette {
-            if palette_image.mode_identity()? != Mode::ImagePalette8 {
-                return Err(PilError::ValueError(
-                    "bad mode for palette image".to_owned(),
-                ));
-            }
+        if has_supplied_palette {
+            let palette_image = match &palette {
+                QuantizePalette::Image(palette_image) => {
+                    if palette_image.mode_identity()? != Mode::ImagePalette8 {
+                        return Err(PilError::ValueError(
+                            "bad mode for palette image".to_owned(),
+                        ));
+                    }
+                    Some(palette_image.as_ref())
+                }
+                QuantizePalette::NoAttachedPalette => None,
+                QuantizePalette::Other => {
+                    return Err(PilError::TypeError(
+                        "palette must be a supported Pillow-rs Image".to_owned(),
+                    ));
+                }
+                QuantizePalette::None => {
+                    return Err(PilError::InternalError(
+                        "Quantize palette argument state did not match its presence".into(),
+                    ));
+                }
+            };
             if !matches!(admission_mode, Mode::ImageRgb8 | Mode::ImageLuma8) {
                 return Err(PilError::ValueError(
                     "only RGB or L mode images can be quantized to a palette".to_owned(),
@@ -85,14 +96,15 @@ impl Image {
         )
     }
 
-    /// Maps an RGB or L image to the explicitly supplied P-mode palette.
+    /// Maps an RGB or L image through a supplied P palette or Pillow's default.
     ///
     /// Pillow's `Image.quantize(palette=...)` preserves the reference palette
-    /// and uses its entries as the destination colors.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    /// and uses its entries as destination colors; an absent table uses the
+    /// source-mode L or WEB palette instead.
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
     fn quantize_to_palette(
         &self,
-        palette_image: &Image,
+        palette_image: Option<&Image>,
         colors: u32,
         method: u32,
         dither: bool,

@@ -7341,6 +7341,7 @@
           "PIL.Image.Image.alpha_composite.nuanced.pixels-RGBa-unsupported-mode",
           "PIL.Image.Image.alpha_composite.nuanced.pixels-La-unsupported-mode",
           "PIL.Image.Image.quantize.nuanced.fast-octree-rgb-noise-256x256",
+          "PIL.Image.Image.quantize.nuanced.palette-image-no-table",
           "PIL.Image.Image.quantize.nuanced.colors-one-rgb-palette",
           "PIL.Image.Image.quantize.nuanced.colors-one-rgba-palette",
           "PIL.Image.Image.quantize.nuanced.invalid-color-count-above-maximum",

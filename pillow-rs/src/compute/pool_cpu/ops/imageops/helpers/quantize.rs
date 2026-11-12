@@ -2,6 +2,7 @@
 //! TODO(pillow-rs#3ptb): verify mode × architecture fallback receipts and
 //! CoreOnly extension behavior before closing the CPU Quantize migration.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use crate::compute::ExecutionContext;
@@ -165,11 +166,11 @@ pub(crate) fn prepare<'image, 'palette>(
     })
 }
 
-/// Maps a wrapper-admitted source carrier to a supplied P palette.
-// VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
+/// Maps a wrapper-admitted source carrier through supplied or mode-default P metadata.
+// VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
 pub(crate) fn execute_with_palette(
     image: &DynamicImage,
-    palette_image: &Image,
+    palette_image: Option<&Image>,
     colors: u32,
     method: u32,
     dither: bool,
@@ -177,12 +178,35 @@ pub(crate) fn execute_with_palette(
     context: &ExecutionContext,
 ) -> Result<(Image, StrategySelection), PilError> {
     let mode = image.mode();
-    let palette_mode = palette_image.mode_identity()?;
-    let palette_entries = palette_image
-        .palette_input()
-        .rgb
-        .map(|rgb| rgb.len() / 3)
-        .unwrap_or(0);
+    // A known empty table is distinct from missing palette metadata: Pillow
+    // rejects the former and synthesizes a mode-selected table for the latter.
+    // TODO(pillow-rs#3ptb): freeze absent-table cases for L, RGB, RGBA, RGBa,
+    // and RGBX, plus a rejected native source; assert final wrapper-fault order
+    // and Default/architecture selection receipts through the Python facade.
+    let (palette_mode, palette_rgb, palette_alpha): (Mode, Cow<'_, [u8]>, Cow<'_, [u8]>) =
+        match palette_image {
+            Some(palette_image) => {
+                let palette = palette_image.palette_input();
+                match palette.rgb {
+                    Some(rgb) => (
+                        palette_image.mode_identity()?,
+                        Cow::Borrowed(rgb),
+                        Cow::Borrowed(palette.alpha),
+                    ),
+                    None => (
+                        Mode::ImagePalette8,
+                        default_palette_rgb(mode)?,
+                        Cow::Borrowed(&[]),
+                    ),
+                }
+            }
+            None => (
+                Mode::ImagePalette8,
+                default_palette_rgb(mode)?,
+                Cow::Borrowed(&[]),
+            ),
+        };
+    let palette_entries = palette_rgb.len() / 3;
     let selection = select_quantize_request(
         image,
         PaletteKnowledge::Absent,
@@ -202,10 +226,7 @@ pub(crate) fn execute_with_palette(
         ));
     }
     let (width, height) = (image.width(), image.height());
-    let target_palette = palette_image.palette_input();
-    let palette_bytes = target_palette.rgb.unwrap_or_default().to_vec();
-    let palette_alpha = target_palette.alpha.to_vec();
-    let palette: Vec<[u8; 3]> = palette_bytes
+    let palette: Vec<[u8; 3]> = palette_rgb
         .chunks_exact(3)
         .take(256)
         .map(|entry| [entry[0], entry[1], entry[2]])
@@ -237,8 +258,8 @@ pub(crate) fn execute_with_palette(
     Ok((
         Image::Paletted(PalettedData {
             indices: DynamicImage::ImagePalette8(indices),
-            palette: palette_bytes,
-            palette_alpha,
+            palette: palette_rgb.into_owned(),
+            palette_alpha: palette_alpha.into_owned(),
             source_format: None,
             info: None,
             exif: None,
@@ -246,6 +267,25 @@ pub(crate) fn execute_with_palette(
         }),
         selection,
     ))
+}
+
+/// Borrows or builds Pillow's default palette bytes from the source mode.
+// VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
+fn default_palette_rgb(source_mode: Mode) -> Result<Cow<'static, [u8]>, PilError> {
+    match quantize_mode_strategy(source_mode).source {
+        QuantizeSource::Luma => Ok(Cow::Owned(
+            crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette(),
+        )),
+        QuantizeSource::Rgb
+        | QuantizeSource::Rgba
+        | QuantizeSource::RgbPremultiplied
+        | QuantizeSource::Rgbx => Ok(Cow::Borrowed(
+            crate::compute::pool_cpu::helpers::quantization::web_palette_colors(),
+        )),
+        QuantizeSource::Palette | QuantizeSource::Native => {
+            Err(PilError::ValueError("conversion not supported".into()))
+        }
+    }
 }
 
 // VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending

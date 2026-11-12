@@ -7821,6 +7821,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |   |-- point.rs
 |       |   |-- properties.rs
 |       |   |-- put_alpha.rs
+|       |   |-- quantize.rs
 |       |   |-- sequence.rs
 |       |   `-- transform.rs
 |       |-- image_chops.rs

@@ -102,6 +102,75 @@ def _palette_case(
     }
 
 
+def _palette_without_table_case() -> dict[str, Any]:
+    """Exercise Pillow's default palette when the P carrier has no table."""
+    source_bytes = bytes([0, 0, 0])
+    palette_bytes = bytes([0])
+    assets = [
+        ("rgb-source", source_bytes),
+        ("p-no-table", palette_bytes),
+    ]
+    return {
+        "case_id": f"{QUANTIZE_SURFACE}.quantize.nuanced.palette-image-no-table",
+        "surface": QUANTIZE_SURFACE,
+        "operation": "quantize",
+        "covers": [QUANTIZE_COLORS_REQUIREMENT],
+        "assets": [
+            {
+                "id": asset_id,
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(data).decode("ascii"),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "media_type": "application/octet-stream",
+            }
+            for asset_id, data in assets
+        ],
+        "steps": [
+            _step(
+                "image",
+                "PIL.Image",
+                "frombytes",
+                None,
+                {
+                    "mode": _literal("RGB"),
+                    "size": _literal([1, 1]),
+                    "data": {"kind": "asset", "asset_id": "rgb-source"},
+                },
+            ),
+            _step(
+                "palette",
+                "PIL.Image",
+                "frombytes",
+                None,
+                {
+                    "mode": _literal("P"),
+                    "size": _literal([1, 1]),
+                    "data": {"kind": "asset", "asset_id": "p-no-table"},
+                },
+            ),
+            _step(
+                "quantized",
+                QUANTIZE_SURFACE,
+                "quantize",
+                _binding("image"),
+                {
+                    "colors": _literal(256),
+                    "palette": _binding("palette"),
+                },
+            ),
+            _step(
+                "indices",
+                QUANTIZE_SURFACE,
+                "tobytes",
+                _binding("quantized"),
+                {},
+            ),
+        ],
+        "observations": ["quantized", "indices"],
+    }
+
+
 def _invalid_upper_color_count_case() -> dict[str, Any]:
     case_id = f"{QUANTIZE_SURFACE}.quantize.nuanced.invalid-color-count-above-maximum"
     return {
@@ -196,6 +265,7 @@ def quantize_boundary_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     if surface_id != QUANTIZE_SURFACE:
         return []
     return [
+        _palette_without_table_case(),
         _palette_case(
             f"{QUANTIZE_SURFACE}.quantize.nuanced.colors-one-rgb-palette",
             "RGB",

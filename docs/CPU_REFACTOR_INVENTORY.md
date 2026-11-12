@@ -13,11 +13,17 @@ The same review found Pillow 13.0 rejects an attached empty palette with
 `ValueError("empty palette")`; the exact-mode mapper now checks for nonempty
 palette RGB data before pixel mapping. The focused verification below covers
 the typed supplied-palette guard and mapper paths.
-A foreign P ImagingCore without a palette pointer remains TODO because Pillow
-uses the source mode to choose its grayscale or WEB fallback palette; the
-current adapter does not yet pass that source identity into core.
+A missing palette pointer is represented separately from an attached empty
+palette. The CPU Quantize helper selects Pillow's grayscale table for exact L
+sources and borrows the fixed WEB table for supported multiband sources, using
+the materialized `DynamicImage` identity. It passes palette bytes directly to
+the existing mapper without constructing a temporary P image. The Python
+wrapper still performs its post-conversion `palette.palette` assertion. The
+foreign P carrier without an attached table now passes its RGB output
+contract; other absent-table source modes, wrapper assertion/fault order,
+fallback receipts, and performance remain pending under `pillow-rs#3ptb`.
 
-Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy. Source completion remains open. The 2026-11-12 Quantize supplied-palette checkpoint passed its push-time static gates and five focused CPU Default parity cases; the full operation × Mode × Architecture verification and performance campaign remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; `0b34e9a9b` exposes same-mode Convert identity in all 25 source contracts, including palette-preserving P/PA and CoreOnly internal high-depth identities. `e75e87f43` routes named ImageOps/Paste color resolution through exact `Mode` and marks internal high-depth color results `NO_PILLOW_SUPPORT`. `7790ed967` classifies reviewed mode-preserving pipeline operations, records RemapPalette and Color3DLut output identities from typed operation contracts, and routes Tiny-RGB eager ExtractBand through prepared CPU architecture execution for CPU Default and compatibility SIMD. `054a98326` replaces clone-only same-carrier PutData prefix writes with the native writer in 16 mode owners, removes copy-only carrier conversion from four PutAlpha and 13 PutAlphaData Default paths, and makes callback-preserving PutData writes validate and mutate the exact materialized DynamicImage byte carrier. `aa6de79ae` carries exact `raster::Mode` through PutData value-kind selection, normalization, immediate-write width selection, and the deferred `PipelineOp::PutData` payload. `3f110aa47` adds callback-driven PutData's exact-mode support contract and cached CPU Default context; this worktree now routes synchronous PutData and PutPixel selections through image-pinned/active CPU Architecture policy, with native Default fallback where no specialization exists. `65fb1c21c` adds mode-owned synchronous PutPixelValueAt for numeric I/F and I;16. `e060b60c1` adds the CPU Default strategy for Pillow's raw-byte I;16 PutData path. `751fe8249` routes allocated GetData band reads through the caller-owned output path. Commit `3254bd6ad` moves GetData byte, band, I;16 scalar, and I/F scalar algorithms into exact-mode Default owners for all 25 identities. Commit `572b7fd6c` carries exact `raster::Mode` through PutAlpha and PutAlphaData descriptors, while GPU packing preserves the existing shader layout codes. Commit 11665ed82 passes typed Mode through prepared execution and array import. The lazy-mode-cache consolidation is source-only and unverified; cross-mode lazy P/PA terminal palette output is implemented in source; palette, wrapper metadata, and CPU architecture/fallback receipts remain unverified. The active implementation remains incomplete; see the latest check evidence below.
+Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy. Source completion remains open. The 2026-11-12 Quantize missing-palette checkpoint passed six focused CPU Default parity cases; the full operation × Mode × Architecture verification and performance campaign remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; `0b34e9a9b` exposes same-mode Convert identity in all 25 source contracts, including palette-preserving P/PA and CoreOnly internal high-depth identities. `e75e87f43` routes named ImageOps/Paste color resolution through exact `Mode` and marks internal high-depth color results `NO_PILLOW_SUPPORT`. `7790ed967` classifies reviewed mode-preserving pipeline operations, records RemapPalette and Color3DLut output identities from typed operation contracts, and routes Tiny-RGB eager ExtractBand through prepared CPU architecture execution for CPU Default and compatibility SIMD. `054a98326` replaces clone-only same-carrier PutData prefix writes with the native writer in 16 mode owners, removes copy-only carrier conversion from four PutAlpha and 13 PutAlphaData Default paths, and makes callback-preserving PutData writes validate and mutate the exact materialized DynamicImage byte carrier. `aa6de79ae` carries exact `raster::Mode` through PutData value-kind selection, normalization, immediate-write width selection, and the deferred `PipelineOp::PutData` payload. `3f110aa47` adds callback-driven PutData's exact-mode support contract and cached CPU Default context; this worktree now routes synchronous PutData and PutPixel selections through image-pinned/active CPU Architecture policy, with native Default fallback where no specialization exists. `65fb1c21c` adds mode-owned synchronous PutPixelValueAt for numeric I/F and I;16. `e060b60c1` adds the CPU Default strategy for Pillow's raw-byte I;16 PutData path. `751fe8249` routes allocated GetData band reads through the caller-owned output path. Commit `3254bd6ad` moves GetData byte, band, I;16 scalar, and I/F scalar algorithms into exact-mode Default owners for all 25 identities. Commit `572b7fd6c` carries exact `raster::Mode` through PutAlpha and PutAlphaData descriptors, while GPU packing preserves the existing shader layout codes. Commit 11665ed82 passes typed Mode through prepared execution and array import. The lazy-mode-cache consolidation is source-only and unverified; cross-mode lazy P/PA terminal palette output is implemented in source; palette, wrapper metadata, and CPU architecture/fallback receipts remain unverified. The active implementation remains incomplete; see the latest check evidence below.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop`. Static
 lazy output modes now come from operation support contracts without
@@ -10189,3 +10195,42 @@ zero unclassified paths. Focused parity run
 ImagingCore branch, its no-palette fallback, remaining palette-alpha and
 subclass behavior, other architectures, full CPU parity, and benchmarks remain
 pending under `pillow-rs#3ptb`.
+
+2026-11-12 Quantize missing-palette allocation follow-up: removed the
+temporary one-pixel P image from the new default-palette route. The helper
+borrows WEB palette bytes or owns the generated grayscale table, sends them
+directly to the existing mode-selected mapper, and owns a copy only for the
+returned P image metadata. This preserves absent-versus-empty palette
+selection. The changed helper's parity and benchmark markers remain pending;
+no validation command ran.
+
+2026-11-12 Quantize missing-palette parity checkpoint: regenerated the input
+corpus to 176,655 parity cases across 4,730 indexed parity documents and
+103,945 benchmark workloads. `make migration-parity-inputs-check` passed both
+deterministic regeneration and fixed-manifest validation. `make build-parity`
+compiled the Rust/Python target without replacing the Pillow oracle. Focused
+CPU Default run `migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f` passed
+6/6: the new `palette-image-no-table` case, three supplied-palette success
+cases, attached-empty-palette rejection, and unsupported-RGBA rejection. This
+verifies the RGB WEB-palette path and keeps absent metadata distinct from an
+attached empty table. No benchmark, architecture sweep, full CPU parity, or
+coverage run occurred. L default-palette behavior, remaining foreign carrier
+fault/metadata order, and fallback receipts remain pending under
+`pillow-rs#3ptb`. The final `make fmt clippy`, `make docs-lint`, and
+`make quality` checks passed after refreshing and checking the repository map.
+Clippy reported existing warning diagnostics and exited successfully.
+
+2026-11-12 operation/source crosswalk refresh: the current static report maps
+217 public operations (216 Python bindings and four target-only contracts: 3
+Python-bound and 1 direct PyO3), all 87 pipeline variants, 174/174 Python
+native calls, 33/33 direct PyO3 core receiver calls, and 88/88 PyO3 public API
+calls. It reports zero unresolved Rust module edges, operation/pipeline
+variants, public bindings, fixture or requirement references, and benchmark
+case references. The 280 source-unreached candidates remain confined to inert
+`pool_cpu/legacy`. The report also retains 17 active `prepare_pipeline`
+registry-dispatch candidates without direct public graph paths; these are
+review candidates, not dead-code findings, and the source map records their
+operation-family owners. Four shader candidates remain for the later GPU
+review. Static mapping does not prove compiler reachability or runtime use.
+Stage 5 source closure and CPU acceptance remain open; no benchmark or coverage
+was collected.

@@ -22,6 +22,7 @@ from .python_bindings import (
     python_method_owner,
 )
 from .pyo3_bindings import (
+    PyO3Declaration,
     PyO3Index,
     declaration_node,
     py_source_files,
@@ -103,6 +104,29 @@ def contextual_python_override(
     if not call_lines or override is None or override.kind != "python_method":
         return None
     return override, call_lines[0]
+
+
+def target_only_pyo3_binding(
+    operation: dict[str, Any], pyo3_index: PyO3Index
+) -> tuple[str, PyO3Declaration] | None:
+    """Resolve a target-only direct method without inventing a PIL binding."""
+    source = operation.get("source", {})
+    if "oracle_id" not in source or source["oracle_id"] is not None:
+        return None
+
+    native_owners = {"Image": "PyImage", "ImageDraw": "PyDraw"}
+    for target in operation.get("targets", []):
+        target_path = str(target.get("path") or "")
+        parts = target_path.split(".")
+        if len(parts) < 4 or parts[-3] != "_core":
+            continue
+        owner = native_owners.get(parts[-2])
+        if owner is None:
+            continue
+        declaration = pyo3_index.resolve("pymethod", parts[-1], owner=owner)
+        if declaration is not None:
+            return target_path, declaration
+    return None
 
 
 def crosswalk_source_identity(
@@ -199,7 +223,13 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
     edges: list[dict[str, Any]] = []
     findings: list[dict[str, Any]] = []
     public_operation_count = 0
+    python_bound_operation_count = 0
     unmapped_public_operations = 0
+    target_only_operation_count = 0
+    target_only_operations_with_python_bindings = 0
+    target_only_operations_mapped_to_pyo3 = 0
+    unresolved_target_only_operations = 0
+    target_only_pyo3_declarations: dict[str, PyO3Declaration] = {}
     public_bindings: dict[str, Binding] = {}
     callback_bindings: dict[str, Binding] = {}
 
@@ -207,7 +237,11 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
         for operation in surface.get("operations", []):
             public_operation_count += 1
             operation_id = f"{surface['id']}.{operation['id']}"
-            source_path = str(operation.get("source", {}).get("path") or operation_id)
+            source = operation.get("source", {})
+            source_path = str(source.get("path") or operation_id)
+            target_only = "oracle_id" in source and source["oracle_id"] is None
+            if target_only:
+                target_only_operation_count += 1
             # The manifest records methods on Pillow's ImageDraw class. The
             # public ``Draw`` factory returns that class, but it is not itself
             # the method owner and cannot be statically traversed as a method
@@ -223,10 +257,64 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                 "operation_kind": operation.get("kind"),
                 "source_path": source_path,
                 "public_target_path": public_path,
+                "oracle_id": source.get("oracle_id"),
+                "target_only_contract": target_only,
                 "manifest_path": MANIFEST_PATH.as_posix(),
             }
             binding, alias_trace = python_index.resolve_public_path(public_path)
             if not isinstance(binding, Binding):
+                if target_only:
+                    target_binding = target_only_pyo3_binding(operation, pyo3_index)
+                    if target_binding is not None:
+                        target_path, declaration = target_binding
+                        pyo3_id = (
+                            f"pyo3-{declaration.kind}:"
+                            f"{declaration.owner + '.' if declaration.owner else ''}"
+                            f"{declaration.exposed_name}"
+                        )
+                        nodes.setdefault(
+                            pyo3_id,
+                            {"id": pyo3_id, **declaration_node(declaration)},
+                        )
+                        target_only_pyo3_declarations[pyo3_id] = declaration
+                        edges.append(
+                            {
+                                "from": operation_node_id,
+                                "relation": "target_only_contract_maps_to_pyo3_binding",
+                                "to": pyo3_id,
+                                "site": {
+                                    "path": declaration.path,
+                                    "line": declaration.line,
+                                },
+                                "evidence_kind": "manifest_target_path_plus_pyo3_declaration",
+                                "target_path": target_path,
+                                "status": "target_only_binding_resolution",
+                                "runtime_execution_proven": False,
+                            }
+                        )
+                        target_only_operations_mapped_to_pyo3 += 1
+                        continue
+                    unresolved_target_only_operations += 1
+                    findings.append(
+                        {
+                            "flag": "target_only_operation_binding_unresolved",
+                            "subject": operation_node_id,
+                            "evidence": [
+                                {
+                                    "path": MANIFEST_PATH.as_posix(),
+                                    "target_paths": [
+                                        target.get("path")
+                                        for target in operation.get("targets", [])
+                                    ],
+                                }
+                            ],
+                            "reason_for_review": (
+                                "The target-only manifest path has neither a Python facade "
+                                "binding nor a matching direct PyO3 Image/Draw method."
+                            ),
+                        }
+                    )
+                    continue
                 unmapped_public_operations += 1
                 findings.append(
                     {
@@ -242,6 +330,9 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                     }
                 )
                 continue
+            python_bound_operation_count += 1
+            if target_only:
+                target_only_operations_with_python_bindings += 1
             binding_node_id = f"python-binding:{binding.path}:{binding.line}:{binding.name}"
             public_bindings.setdefault(binding_node_id, binding)
             nodes.setdefault(
@@ -325,6 +416,45 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
     unresolved_pyo3_receiver_method_calls = 0
     core_method_pipeline_routes = 0
     receiver_method_seeds: list[dict[str, Any]] = []
+    for pyo3_id, declaration in sorted(target_only_pyo3_declarations.items()):
+        receiver_type = declaration.receiver_field_type or {}
+        if receiver_type.get("resolved_type") not in {
+            "pillow_rs::Image",
+            "pillow_rs::Draw",
+        }:
+            pyo3_receiver_method_call_count += len(
+                declaration.direct_receiver_calls
+            )
+            unresolved_pyo3_receiver_method_calls += len(
+                declaration.direct_receiver_calls
+            )
+            findings.append(
+                {
+                    "flag": "pyo3_receiver_method_type_unresolved",
+                    "subject": pyo3_id,
+                    "evidence": [{"path": declaration.path, "line": declaration.line}],
+                    "reason_for_review": (
+                        "A target-only PyO3 method's receiver field did not resolve to a "
+                        "supported core Image or Draw type."
+                    ),
+                }
+            )
+            continue
+        for receiver_call in declaration.direct_receiver_calls:
+            pyo3_receiver_method_call_count += 1
+            receiver_method_seeds.append(
+                {
+                    "from": pyo3_id,
+                    "call": receiver_call,
+                    "site_path": declaration.path,
+                    "core_type": receiver_type["resolved_type"],
+                    "core_owner": (
+                        "Image"
+                        if receiver_type["resolved_type"] == "pillow_rs::Image"
+                        else "Draw"
+                    ),
+                }
+            )
     routed_python_bindings = {**public_bindings, **callback_bindings}
     pending_python_methods = list(routed_python_bindings.items())
     while pending_python_methods:
@@ -1375,8 +1505,12 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
             "registry_keys": len(registration_by_key),
             "simd_registrations": len(simd_entries),
             "public_operations": public_operation_count,
-            "public_operations_with_python_bindings": public_operation_count - unmapped_public_operations,
+            "public_operations_with_python_bindings": python_bound_operation_count,
             "unmapped_public_operation_bindings": unmapped_public_operations,
+            "target_only_operations": target_only_operation_count,
+            "target_only_operations_with_python_bindings": target_only_operations_with_python_bindings,
+            "target_only_operations_mapped_to_pyo3": target_only_operations_mapped_to_pyo3,
+            "unresolved_target_only_operations": unresolved_target_only_operations,
             "python_binding_native_calls": python_native_call_count,
             "python_binding_native_calls_mapped_to_registered_pyo3": mapped_python_native_calls,
             "python_binding_native_calls_unresolved": unresolved_python_native_calls,

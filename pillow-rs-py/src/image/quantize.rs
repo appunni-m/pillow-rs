@@ -2,11 +2,12 @@
 
 use crate::{Bound, PyAny, PyResult, map_error};
 use pillow_rs::{Image as RsImage, Mode, QuantizePalette};
-use pyo3::exceptions::PyAttributeError;
+use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::PyAnyMethods;
+use pyo3::{PyErr, Python};
 
 /// Converts native and foreign Pillow-compatible palette carriers to core input.
-// VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
 pub(super) fn quantize_palette_from_python(value: &Bound<'_, PyAny>) -> PyResult<QuantizePalette> {
     if let Some(image) = crate::inputs::image_from_python(value) {
         return Ok(QuantizePalette::Image(Box::new(image)));
@@ -33,9 +34,8 @@ pub(super) fn quantize_palette_from_python(value: &Bound<'_, PyAny>) -> PyResult
     // A foreign ImagingCore exposes its attached palette through these native
     // methods. Copy only the small color table into the Rust-owned P carrier;
     // pixel data and quantization remain in the typed Rust core.
-    // TODO(pillow-rs#3ptb): a foreign P ImagingCore with no palette pointer
-    // triggers Pillow's source-mode-dependent grayscale/WEB default palette;
-    // carry the exact source Mode into core before adapting that route.
+    // A missing table is kept distinct from an attached empty table so the
+    // mode-owned CPU route can synthesize Pillow's default palette.
     let palette_mode_method = match value.getattr("getpalettemode") {
         Ok(method) => method,
         Err(error) if error.is_instance_of::<PyAttributeError>(value.py()) => {
@@ -43,7 +43,13 @@ pub(super) fn quantize_palette_from_python(value: &Bound<'_, PyAny>) -> PyResult
         }
         Err(error) => return Err(error),
     };
-    let palette_mode = palette_mode_method.call0()?.extract::<String>()?;
+    let palette_mode = match palette_mode_method.call0() {
+        Ok(mode) => mode.extract::<String>()?,
+        Err(error) if is_missing_palette_error(&error, value.py())? => {
+            return Ok(QuantizePalette::NoAttachedPalette);
+        }
+        Err(error) => return Err(error),
+    };
     let palette_method = match value.getattr("getpalette") {
         Ok(method) => method,
         Err(error) if error.is_instance_of::<PyAttributeError>(value.py()) => {
@@ -59,4 +65,13 @@ pub(super) fn quantize_palette_from_python(value: &Bound<'_, PyAny>) -> PyResult
         .putpalette(&palette_bytes, &palette_mode)
         .map_err(map_error)?;
     Ok(QuantizePalette::Image(Box::new(image)))
+}
+
+// Pillow 13.0's ImagingCore accessor uses this ValueError for a null palette pointer.
+// VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
+fn is_missing_palette_error(error: &PyErr, py: Python<'_>) -> PyResult<bool> {
+    if !error.is_instance_of::<PyValueError>(py) {
+        return Ok(false);
+    }
+    Ok(error.value(py).str()?.extract::<String>()? == "image has no palette")
 }

@@ -49,10 +49,17 @@ const WEB_PALETTE: [u8; 678] = [
 ];
 
 /// Builds the palette whose entries map each index to the same grayscale byte.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn identity_grayscale_palette() -> Vec<u8> {
     (0u8..=u8::MAX)
         .flat_map(|value| [value, value, value])
         .collect()
+}
+
+/// Returns the fixed RGB browser palette used by Pillow's default conversion.
+// VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
+pub(crate) fn web_palette_colors() -> &'static [u8] {
+    &WEB_PALETTE
 }
 
 /// Quantizes RGB pixels to Pillow's default web palette.
