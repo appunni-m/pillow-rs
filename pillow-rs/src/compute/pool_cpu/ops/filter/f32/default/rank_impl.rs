@@ -4,7 +4,7 @@ use crate::compute::pool_cpu::ops::filter::helpers::SMALL_RANK_AREA;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbaImage};
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-26066f371e8c4e0a80be534279849518; benchmark=pending
 /// Selects the same F32 rank sample as Pillow's in-place partition algorithm.
 #[inline]
 fn select_rank_filter_f_pillow(values: &mut [f32], rank: usize) -> f32 {
@@ -41,7 +41,7 @@ fn select_rank_filter_f_pillow(values: &mut [f32], rank: usize) -> f32 {
     values[target as usize]
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-26066f371e8c4e0a80be534279849518; benchmark=pending
 /// Reuses one neighborhood buffer for every pixel in a large F-mode window.
 fn rank_filter_f_large_serial(
     raw: &[u8],
@@ -89,7 +89,7 @@ pub(super) struct RankFilterWindow {
     pub(super) rank: usize,
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-26066f371e8c4e0a80be534279849518; benchmark=pending
 /// Select an F-mode rank from a small, fixed-size neighborhood.
 fn rank_filter_f_small(
     raw: &[u8],
@@ -125,7 +125,7 @@ fn rank_filter_f_small(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-26066f371e8c4e0a80be534279849518; benchmark=pending
 /// Apply an F-mode rank filter to little-endian f32 samples in four-byte storage.
 fn rank_filter_f_impl(
     img: &DynamicImage,

@@ -10291,18 +10291,21 @@ compared the vector window selector with the preserved SIMD order-statistic
 kernel. NaN samples and mixed positive/negative zero make vector min/max or
 compare-exchange ordering unsafe, so their non-Default requests use the
 same-mode Default selector. Infinities with a single zero sign retain the IEEE
-total order needed by the vector path. Added twelve public `Image.filter`
-workflows covering MaxFilter, MinFilter, MedianFilter, and RankFilter against
-three raw F32 patterns: distinct NaN payloads, mixed signed zero, and
-vector-compatible infinities. Each case observes output bytes and is replayed
-by the CPU architecture selector matrix. The pending `pillow-rs#brg0` TODO now
-tracks the broader parity investigation. Removed the local TODO after recording
-the scoped receipt. Regenerated the checked-in input index, which now contains
-all twelve workflows and 176,667 total parity cases. `make fmt clippy docs-lint` passed, and
-the CPU architecture parity matrix passed all twelve cases on each of the nine
-declared selectors (108 executions, zero failures or infrastructure errors).
-On this arm64 host, Neon executed the vector path; x86 selectors correctly
-fell back to Default with `unavailable_hardware`, so native x86 execution is
-still unverified. VERIFY tags now record these scoped receipts. No benchmark
-or coverage ran; the broader CPU parity campaign and source-to-requirement
-mapping remain open.
+total order needed by the vector path. Expanded the public `Image.filter`
+workflows for MaxFilter, MinFilter, MedianFilter, and RankFilter across 3×3,
+5×5, 9×9, and 11×11 windows and three raw F32 patterns: distinct NaN payloads,
+mixed signed zero, and vector-compatible infinities. RankFilter also covers
+minimum, median, and maximum ranks at sizes 5, 9, and 11. All 66 workflows
+passed on each of the nine declared selectors (594 executions, zero failures
+or infrastructure errors). Neon executed the vector path for 16 eligible
+cases, including partial eight-lane tails at sizes 5 and 9; the other cases
+selected Default for incompatible values or the size-11 window. On arm64, x86
+selectors correctly fell back with `unavailable_hardware`, so native x86
+execution is still unverified. The focused size/window TODO is complete; the
+broader `pillow-rs#brg0` investigation and native x86 run remain open. The
+current generated input index contains 176,721 parity cases. Receipts and
+selector run IDs are recorded in the F32 rank entry in
+[`CPU_REFACTOR_PLAN.md`](CPU_REFACTOR_PLAN.md). `make migration-parity-inputs-check`
+and `make fmt clippy docs-lint` passed; Clippy reported the repository's
+existing warning diagnostics. No benchmark or coverage ran; the broader CPU
+parity campaign and source-to-requirement mapping remain open.

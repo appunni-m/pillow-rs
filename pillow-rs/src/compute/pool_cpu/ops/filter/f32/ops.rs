@@ -11,7 +11,10 @@ const MODE: Mode = Mode::ImageF32;
 pub(in crate::compute::pool_cpu::ops::filter) const MAX_RANK_WINDOW: u32 =
     super::helpers::MAX_RANK_WINDOW;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
+// TODO(pillow-rs#3ptb): rerun F32 rank selection on native x86 hardware. The
+// current x86 Architecture selector runs only prove ARM64 unavailable-hardware fallback.
+
+// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn rank_compatibility(
     raw: &[u8],
 ) -> F32RankCompatibility {
@@ -103,7 +106,7 @@ fn rejected(mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         OperationId::Filter3x3 => rejected(Mode::ImageF32),
@@ -147,7 +150,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,

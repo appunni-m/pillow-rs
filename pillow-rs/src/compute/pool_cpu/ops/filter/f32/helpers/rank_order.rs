@@ -1,5 +1,5 @@
 /// Detect F32 samples whose comparison semantics require the serial rank path.
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter::f32) fn requires_default_comparator(
     raw: &[u8],
 ) -> bool {

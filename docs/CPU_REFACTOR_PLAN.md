@@ -132,16 +132,20 @@ both Pillow 13 MKS filters. The encoded `Image.open` matrix has
 1,035 cases across nine modes and 115 input points; it exercises the codec
 boundary, not a compute backend.
 
-The latest committed index contains 175,041 parity cases across 4,730 indexed
-parity documents and 103,945 benchmark workloads. The current regular-polygon
-specification regenerates to 176,655 cases across the same 4,730 documents and
-103,945 workloads. It adds per-mode requirements and mode-shaped coverage for
-all 20 Pillow modes. A frozen focused selection of 192 regular-polygon cases
-passed under each of nine CPU architecture selectors (1,728 passes total).
-One standard 16×16 RGB workload was measured for Default and NEON: Default was
-8.3% faster than Pillow, while NEON was 4.8% slower, within the stated 1–5%
-allowance. These focused results do not replace the full matrix. This
-supersedes the previous
+The current generated index contains 176,721 parity cases across 4,730 indexed
+parity documents and 103,945 benchmark workloads. It includes the regular-
+polygon mode requirements and 66 F32 rank workflows for NaN payloads, mixed
+signed zero, and vector-compatible infinities over 3×3, 5×5, 9×9, and 11×11
+windows. All 66 passed for each of the nine CPU architecture selectors (594
+executions). On this arm64 host, Neon executed the vector path for 16 eligible
+cases and selected Default for the NaN, mixed-zero, and size-11 cases; x86
+selectors selected Default with `unavailable_hardware`, so native x86
+execution remains unverified. A frozen focused selection of 192
+regular-polygon cases also passed under each of nine CPU architecture
+selectors (1,728 passes total). One standard 16×16 RGB workload was measured
+for Default and NEON: Default was 8.3% faster than Pillow, while NEON was 4.8%
+slower, within the stated 1–5% allowance. These focused results do not replace
+the full matrix. This supersedes the previous
 171,666-case/100,610-workload snapshot documented in older inventory entries.
 The shared matrix still uses 38 unique sizes and 115 deterministic
 size/pattern pairs; CPU selection replays each eligible case under the nine
@@ -1089,20 +1093,21 @@ matrix; each operation's support view must come from its own declarations.
 
 | Coverage area | Existing evidence | Required for CPU acceptance |
 | --- | --- | --- |
-| Input corpus | Active Pillow 13.0 corpus: 25,022 total, 25,021 CPU-selected (24,790 Pillow comparisons and 231 recorded outputs), ID SHA-256 `42905f5f4dab5716889c6d227bf86b599398208700fec23ea3e955300e9678f9`. Current full run `migration-parity-1f1b8167163a424bbafdf84b592cba20` at `147add214`: 24,916/25,021 passed and 105 failed, zero infrastructure errors. | Fix remaining failures, complete the support-derived operation × Mode × Architecture corpus, then execute each CPU selector against Pillow 13.0. |
+| Input corpus | Current generated Pillow 13.0 index: 176,721 total cases across 4,730 parity documents and 103,945 benchmark workloads; manifest SHA-256 `33c286c55abec55ecd00a4c6df9c1989362b9ead3904927f50bb8829f34833cf`. The latest full CPU execution remains the older 25,021-case selection at `147add214` (`migration-parity-1f1b8167163a424bbafdf84b592cba20`): 24,916 passed, 105 failed, zero infrastructure errors. The 66 F32 workflows have a separate focused 9-selector receipt; that does not execute the current full denominator. | Fix remaining failures, complete the support-derived operation × Mode × Architecture corpus, then execute each CPU selector against Pillow 13.0. |
 | Recorded differences | The 105 failures in the latest full report include ImageDraw rounded_rectangle (15), ImageOps colorize (14), Image.frombytes (14), GetBBox and Histogram (8 each), Convert (7), and the remaining endpoints listed in the inventory. Pad, Resize, and Thumbnail have no failures in this run. Focused typed-u16 GetBBox (8/8) and masked-LA Histogram (9/9 including a guard) now pass; the full-corpus count has not been refreshed after either fix. Report: `build/migration-parity/pillow13-cpu-post-pad-resize-thumbnail/parity-result.json`. | Fix each remaining observed public output/error/status mismatch; preserve the case set and comparisons. Keep image-slash-star encoding work outside pillow-rs. |
 | Mode identity stimulus | Current inputs include all 20 Pillow spellings and five internal high-depth Mode identities. All 231 recorded target outputs passed on the default CPU profile. This does not prove every operation/mode route or any non-default architecture. | Finish the support-derived denominator for every operation and mode, then collect output and exact identity evidence on every CPU Architecture selector. |
 | Mode strategies | The current corpus includes selected accepted and rejected mode routes, but does not contain one case for every `OperationId` × `Mode` outcome. The full operation/mode support cross-product remains unverified. | For every operation, exercise each exact mode’s declared output or rejection, including metadata, fault order, native CoreOnly outputs, and relevant target-mode transitions. |
-| Architecture strategies | The Pillow 13.0 full-corpus run used the default CPU profile only. Historical 12.2 receipts cover nine selectors, with x86 falling back on ARM64; focused current-oracle Offset cases passed on default CPU. | After fixing current failures, verify every declared operation/mode specialization or fallback on all selectors; run native x86 specializations on an x86 host. |
+| Architecture strategies | The Pillow 13.0 full-corpus run used the default CPU profile only. Focused current-oracle evidence includes F32 rank: 66 cases × 9 selectors passed; Neon executed the vector path for 16 eligible cases, and x86 selectors fell back on arm64. Focused Offset cases also passed on default CPU. | After fixing current failures, verify every declared operation/mode specialization or fallback on all selectors; run native x86 specializations on an x86 host. |
 | Edges and composition | The existing corpus contains selected edge, callback, and multi-image cases; it does not prove all operation-specific boundaries or mode relations. | Include relevant empty/small dimensions, complete/partial vector blocks, tails, multi-image mode pairs, lazy/eager paths, and public error ordering for every declared route. |
 
 There is no defensible operation × Mode × Architecture coverage percentage yet.
 The support declarations enumerate the required combinations, but the parity
 corpus is not generated from that denominator. The 2026-11-10 matrix run proves
 outcomes only for its frozen 25,002 case IDs; it does not close missing support
-rows. Keep its report and receipts as the current-corpus baseline, not as proof
-of complete strategy coverage. Historical focused counts must not be added to
-its denominator.
+rows or represent the current 176,721-case input index. Keep its report and
+receipts as historical full-run evidence, not as proof of complete strategy
+coverage. Historical focused counts must not be added to the current
+denominator.
 The broad 2026-11-07 WIP serial-CPU report
 ([`cpu-wip-parity.json`](../build/migration-parity/cpu-wip-parity.json))
 selected 689 cases and failed 10, all in ImageOps Equalize. Eight had a
@@ -7197,18 +7202,33 @@ the full CPU parity campaign remain pending. No validation command ran.
 2026-11-13 F32 rank comparator source follow-up: source-reviewed the exact-mode
 support, content classification, request guard, Default partition selector,
 and vector order-statistic path against the preserved CPU/SIMD implementations.
-Added twelve input-only public workflows for MaxFilter, MinFilter, MedianFilter,
-and RankFilter over NaN payloads, mixed signed zero, and vector-compatible
-infinities. Non-Default requests should fall back to Default for NaN and mixed
-signed-zero inputs; infinity-only ordering stays eligible for the declared
-vector path. The source-derived expectations were confirmed by the following
-runtime receipts. Cleared the family TODO and added VERIFY markers to the
-reviewed F32 selection functions. Regenerated the indexed parity inputs; the corpus now
-contains 176,667 cases, including all twelve workflows. The combined
-`make fmt clippy docs-lint` checks passed. All twelve cases passed on each of
-the nine declared CPU
-architecture selectors (108 executions, zero failures or infrastructure
-errors). On this arm64 host, Neon executed the vector path; x86 selectors fell
-back to Default with `unavailable_hardware`, so native x86 execution is still
-unverified. Function VERIFY tags identify these scoped receipts. No benchmark
-or coverage ran. Finish the broader source-to-requirement mapping before Stage 6.
+Expanded the public workflows for MaxFilter, MinFilter, MedianFilter, and
+RankFilter over NaN payloads, mixed signed zero, and vector-compatible
+infinities from size 3 to sizes 3, 5, 9, and 11. RankFilter exercises the
+minimum, median, and maximum rank at sizes 5, 9, and 11. Non-Default requests
+fall back to Default for NaN, mixed signed-zero, and sizes above the vector
+limit; infinity-only ordering stays eligible for the vector path. The 66-case
+selection digest is `a45192ea9a16a1488a8d23ca9a457647ac10bd45b688e4ce6a7d5f7736ef591e`.
+All cases passed under each of the nine declared CPU architecture selectors
+(594 executions, zero failures or infrastructure errors). Neon executed the
+vector path for 16 cases and selected Default for the other 50. On this arm64
+host, x86 selectors fell back to Default with `unavailable_hardware`, so
+native x86 execution is still unverified. The selector run IDs are:
+
+- Default: `migration-parity-26066f371e8c4e0a80be534279849518`
+- Neon: `migration-parity-de042d8a4480460c8d2be1f284c38af6`
+- SSE2: `migration-parity-a306f39f668945e6a7d206a3c97ed39c`
+- SSE3: `migration-parity-3958196c6ac645f2889ff3e45d1b6246`
+- SSSE3: `migration-parity-aeda966f29374d7b9d4ac5df74010d3a`
+- AVX: `migration-parity-ab34044f3e2d415d9fc51a1ab1d6bd3c`
+- AVX2: `migration-parity-eaf92143cabd483397738af668b4abe6`
+- AVX+FMA: `migration-parity-b01318cce2544043827ef86b81c8f8b3`
+- AVX2+FMA: `migration-parity-8a9ee62b0c684bf783b388c8e7af7d73`
+
+The complete receipts are under
+`build/migration-parity/cpu-architecture/f32-rank-window-matrix-20261113/`.
+VERIFY markers now reference the actual scoped receipts. No benchmark or
+coverage ran. The native x86 run and broader source-to-requirement mapping
+remain open before Stage 6. Pre-push checks `make migration-parity-inputs-check`
+and `make fmt clippy docs-lint` passed; Clippy reported the repository's
+existing warning diagnostics.

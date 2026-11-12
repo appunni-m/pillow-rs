@@ -13239,7 +13239,7 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     return cases
 
 
-# VERIFY: source=pending; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=n/a
+# VERIFY: source=pending; parity=pending; benchmark=n/a
 def build_nuanced_cases(
     manifest: dict[str, Any],
     operations: dict[tuple[str, str], dict[str, Any]],
@@ -47499,7 +47499,7 @@ def i_filter_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     return [case, pipeline_case, bounded_case]
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-26066f371e8c4e0a80be534279849518; benchmark=n/a
 def f32_rank_comparator_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     """Cover F-mode rank routing for exceptional and vector-compatible values."""
     if surface_id != "PIL.Image.Image":
@@ -47540,76 +47540,92 @@ def f32_rank_comparator_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             0x3F000000,
         ),
     }
-    filters = (
-        ("MaxFilter", {"size": literal(3)}),
-        ("MinFilter", {"size": literal(3)}),
-        ("MedianFilter", {"size": literal(3)}),
-        ("RankFilter", {"size": literal(3), "rank": literal(4)}),
-    )
+    filters = ("MaxFilter", "MinFilter", "MedianFilter", "RankFilter")
+    windows = ((3, 3, 3), (5, 9, 5), (9, 17, 9), (11, 11, 9))
     cases = []
-    for filter_name, arguments in filters:
-        for pattern, words in patterns.items():
-            raw = b"".join(struct.pack("<I", word) for word in words)
-            case_id = (
-                f"{surface_id}.filter.nuanced.f32-rank-"
-                f"{filter_name.lower()}-{pattern}"
+    for filter_name in filters:
+        for window, width, height in windows:
+            area = window * window
+            ranks = (
+                (4,)
+                if filter_name == "RankFilter" and window == 3
+                else (0, area // 2, area - 1)
+                if filter_name == "RankFilter"
+                else (None,)
             )
-            cases.append(
-                {
-                    "case_id": case_id,
-                    "surface": surface_id,
-                    "operation": "filter",
-                    "covers": [
-                        f"{surface_id}.filter.behavior.default",
-                        f"{surface_id}.filter.parameter.filter",
-                    ],
-                    "assets": [
+            for rank in ranks:
+                arguments = {"size": literal(window)}
+                if rank is not None:
+                    arguments["rank"] = literal(rank)
+                for pattern, words in patterns.items():
+                    raw = b"".join(
+                        struct.pack("<I", words[index % len(words)])
+                        for index in range(width * height)
+                    )
+                    suffix = (
+                        f"{filter_name.lower()}-{pattern}"
+                        if window == 3
+                        else f"{filter_name.lower()}-{pattern}-size-{window}"
+                    )
+                    if filter_name == "RankFilter" and window != 3:
+                        suffix += f"-rank-{rank}"
+                    case_id = f"{surface_id}.filter.nuanced.f32-rank-{suffix}"
+                    cases.append(
                         {
-                            "id": "pixels",
-                            "kind": "inline",
-                            "encoding": "base64",
-                            "data": base64.b64encode(raw).decode("ascii"),
-                            "sha256": hashlib.sha256(raw).hexdigest(),
-                            "media_type": "application/octet-stream",
-                        }
-                    ],
-                    "steps": [
-                        {
-                            "step_id": "image",
-                            "surface": "PIL.Image",
-                            "operation": "frombytes",
-                            "receiver": None,
-                            "arguments": {
-                                "mode": literal("F"),
-                                "size": literal([3, 3]),
-                                "data": asset_value("pixels"),
-                            },
-                        },
-                        {
-                            "step_id": "setup-filter",
-                            "surface": "PIL.ImageFilter",
-                            "operation": filter_name,
-                            "receiver": None,
-                            "arguments": copy.deepcopy(arguments),
-                        },
-                        {
-                            "step_id": "call",
+                            "case_id": case_id,
                             "surface": surface_id,
                             "operation": "filter",
-                            "receiver": binding("image"),
-                            "arguments": {"filter": binding("setup-filter")},
-                        },
-                        {
-                            "step_id": "materialize",
-                            "surface": surface_id,
-                            "operation": "tobytes",
-                            "receiver": binding("call"),
-                            "arguments": {},
-                        },
-                    ],
-                    "observations": ["call", "materialize"],
-                }
-            )
+                            "covers": [
+                                f"{surface_id}.filter.behavior.default",
+                                f"{surface_id}.filter.parameter.filter",
+                            ],
+                            "assets": [
+                                {
+                                    "id": "pixels",
+                                    "kind": "inline",
+                                    "encoding": "base64",
+                                    "data": base64.b64encode(raw).decode("ascii"),
+                                    "sha256": hashlib.sha256(raw).hexdigest(),
+                                    "media_type": "application/octet-stream",
+                                }
+                            ],
+                            "steps": [
+                                {
+                                    "step_id": "image",
+                                    "surface": "PIL.Image",
+                                    "operation": "frombytes",
+                                    "receiver": None,
+                                    "arguments": {
+                                        "mode": literal("F"),
+                                        "size": literal([width, height]),
+                                        "data": asset_value("pixels"),
+                                    },
+                                },
+                                {
+                                    "step_id": "setup-filter",
+                                    "surface": "PIL.ImageFilter",
+                                    "operation": filter_name,
+                                    "receiver": None,
+                                    "arguments": copy.deepcopy(arguments),
+                                },
+                                {
+                                    "step_id": "call",
+                                    "surface": surface_id,
+                                    "operation": "filter",
+                                    "receiver": binding("image"),
+                                    "arguments": {"filter": binding("setup-filter")},
+                                },
+                                {
+                                    "step_id": "materialize",
+                                    "surface": surface_id,
+                                    "operation": "tobytes",
+                                    "receiver": binding("call"),
+                                    "arguments": {},
+                                },
+                            ],
+                            "observations": ["call", "materialize"],
+                        }
+                    )
     return cases
 
 
