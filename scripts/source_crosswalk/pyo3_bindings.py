@@ -13,7 +13,9 @@ from .rust_calls import (
     direct_public_api_calls,
     direct_receiver_aliases,
     direct_receiver_method_calls,
+    direct_receiver_method_calls_in_body,
     direct_literal_python_method_callbacks,
+    function_body_at,
 )
 from .rust_source import code_only, line_number, matching_delimiter
 
@@ -168,6 +170,8 @@ class PyO3Index:
                             opening + 1 + method.start(),
                             f"self.{receiver_field}",
                             include_cloned_aliases=owner == "PyImage",
+                            pyo3_owner=owner,
+                            receiver_field=receiver_field,
                         )
                         if receiver_field is not None
                         else ()
@@ -193,6 +197,8 @@ class PyO3Index:
         receiver: str,
         *,
         include_cloned_aliases: bool,
+        pyo3_owner: str,
+        receiver_field: str,
     ) -> list[dict[str, Any]]:
         calls = direct_receiver_method_calls(
             source, function_start, receiver, masked_source=masked
@@ -210,7 +216,19 @@ class PyO3Index:
                 ):
                     call["receiver_alias"] = alias
                     calls.append(call)
-        return calls
+        calls.extend(
+            _pyo3_receiver_field_calls(
+                source,
+                masked,
+                function_start,
+                pyo3_owner,
+                receiver_field,
+            )
+        )
+        deduplicated: dict[tuple[str, int, str], dict[str, Any]] = {}
+        for call in calls:
+            deduplicated[(call["symbol"], call["line"], call["expression"])] = call
+        return list(deduplicated.values())
 
     @staticmethod
     def _renamed_exposure(attributes: str, fallback: str) -> str:
@@ -227,6 +245,123 @@ def _method_attributes(body: str, method_start: int) -> str:
     """Return the contiguous Rust attributes immediately before a method."""
     match = re.search(r"((?:\s*#\s*\[[^]]*\]\s*)*)$", body[:method_start])
     return match.group(1) if match else ""
+
+
+def _pyo3_receiver_field_calls(
+    source: str,
+    masked_source: str,
+    function_start: int,
+    owner: str,
+    field: str,
+) -> list[dict[str, Any]]:
+    """Trace direct core calls through a PyO3 method's own wrapper field.
+
+    PyO3 methods commonly name their `Py<Self>` receiver `slf`, then access
+    the wrapped core value as `slf.bind(py).borrow().inner`. A clone may be
+    called later through a local alias, so record both forms as static source
+    edges. This is caller evidence only; it does not prove that the method is
+    reached at runtime.
+    """
+    signature = re.match(
+        r"fn\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*<[^;{}]*>)?\s*\(",
+        masked_source[function_start:],
+    )
+    if signature is None:
+        return []
+    opening = function_start + signature.end() - 1
+    try:
+        closing = matching_delimiter(source, opening, "(", ")")
+    except ValueError:
+        return []
+
+    # Pyo3's instance receiver is the first parameter. Stop at the first
+    # top-level comma so commas inside PyRef/Bound types do not split it.
+    parameters = masked_source[opening + 1 : closing]
+    angle = paren = bracket = brace = 0
+    first_end = len(parameters)
+    for index, char in enumerate(parameters):
+        if char == "," and not (angle or paren or bracket or brace):
+            first_end = index
+            break
+        if char == "<":
+            angle += 1
+        elif char == ">" and angle:
+            angle -= 1
+        elif char == "(":
+            paren += 1
+        elif char == ")":
+            paren = max(0, paren - 1)
+        elif char == "[":
+            bracket += 1
+        elif char == "]":
+            bracket = max(0, bracket - 1)
+        elif char == "{":
+            brace += 1
+        elif char == "}":
+            brace = max(0, brace - 1)
+    first = parameters[:first_end].strip()
+    receiver_match = re.match(
+        r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?P<type>.+)", first
+    )
+    if receiver_match is None:
+        return []
+    receiver_name = receiver_match.group("name")
+    receiver_type = receiver_match.group("type")
+    if not re.search(rf"\b(?:Self|{re.escape(owner)})\b", receiver_type):
+        return []
+
+    body_result = function_body_at(source, function_start, masked_source)
+    if body_result is None:
+        return []
+    body, body_offset = body_result
+    masked_body = code_only(body)
+    name = re.escape(receiver_name)
+    member = re.escape(field)
+    receiver_access = (
+        rf"{name}\s*\.\s*bind\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\s*\)"
+        rf"\s*\.\s*borrow(?:_mut)?\s*\(\s*\)\s*\.\s*{member}"
+        rf"|{name}\s*\.\s*borrow(?:_mut)?\s*\(\s*"
+        rf"[A-Za-z_][A-Za-z0-9_]*\s*\)\s*\.\s*{member}"
+        rf"|{name}\s*\.\s*{member}"
+    )
+    field_calls: list[dict[str, Any]] = []
+    call_pattern = re.compile(
+        rf"(?<![\w.])(?:{receiver_access})\s*\.\s*"
+        rf"(?P<symbol>[A-Za-z_][A-Za-z0-9_]*)\s*\("
+    )
+    for match in call_pattern.finditer(masked_body):
+        symbol = match.group("symbol")
+        if symbol == "clone":
+            continue
+        field_calls.append(
+            {
+                "symbol": symbol,
+                "receiver": f"{receiver_name}.{field}",
+                "line": line_number(source, body_offset + match.start()),
+                "expression": body[match.start() : match.end()].strip(),
+                "evidence_kind": "static_pyo3_receiver_field_call",
+            }
+        )
+
+    alias_pattern = re.compile(
+        rf"\blet\s+(?:mut\s+)?(?P<alias>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
+        rf"(?:{receiver_access})\s*\.\s*clone\s*\(\s*\)"
+    )
+    for alias in alias_pattern.finditer(masked_body):
+        alias_metadata = {
+            "name": alias.group("alias"),
+            "line": line_number(source, body_offset + alias.start()),
+            "expression": body[alias.start() : alias.end()].strip(),
+        }
+        for call in direct_receiver_method_calls_in_body(
+            source, body, body_offset, alias.group("alias")
+        ):
+            if call["symbol"] == "clone":
+                continue
+            call["receiver_alias"] = alias_metadata
+            call["evidence_kind"] = "static_pyo3_receiver_field_clone"
+            field_calls.append(call)
+    return field_calls
 
 
 def struct_field_type(source: str, struct_name: str, field_name: str) -> dict[str, Any]:

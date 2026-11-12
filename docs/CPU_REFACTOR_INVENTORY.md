@@ -10364,3 +10364,22 @@ passed for `PIL.Image.Image.reduce.mode.f.matrix-size-1280x720`; the receipt
 selects NEON and the guarded NEON 2x2 kernel. The moved shared vector helper
 still has parity pending because this host did not enter its helper path. No
 benchmark ran; AVX/SSE2 and Wasm execution remain pending. Stage 5 is open.
+
+2026-11-13 PyO3 receiver source-crosswalk correction: the static call mapper now
+traces instance methods whose first `Py<Self>` parameter is named `slf` through
+`bind(py).borrow().<field>` and `borrow_mut()` access, both for direct core
+method calls and cloned local aliases. Regenerating the static crosswalk maps
+70/70 PyO3 receiver calls (up from 33), with zero unresolved receiver calls,
+and increases maintained Rust source files reached from public operations from
+60 to 84. The report still has eight active pool_cpu files with registry or
+method edges but no complete public-operation route: `color3dlut/ops.rs`,
+`draw/ops.rs`, `enhance/helpers/contrast_route.rs`, `eval/ops.rs`,
+`filter/ops.rs`, `geometry/ops.rs`, `imageops/ops.rs`, and `transform/ops.rs`.
+These remain source-crosswalk review candidates, not dead-code findings; trace
+the remaining Python/core-to-pipeline edges and keep compiler reachability for
+the later quality gate. All 174 Python-to-PyO3 calls, 88/88 PyO3 public API
+calls, 87 pipeline variants, and the report's operation, binding, module, and
+fixture-reference completeness checks remain mapped with zero unresolved
+edges. This static source inventory did not build or execute image code; no
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+CPU Stage 5 remains open.
