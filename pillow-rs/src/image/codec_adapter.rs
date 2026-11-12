@@ -15,6 +15,7 @@ use crate::raster::{
 ///
 /// The codec selects mode while inspecting headers; this exhaustive boundary
 /// translation keeps raster ownership and pixel semantics in Pillow.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(super) const fn raster_mode_from_codec_mode(mode: CodecMode) -> Mode {
     match mode {
         CodecMode::One => Mode::One,
@@ -246,6 +247,7 @@ pub(crate) fn decoded_pixels_to_raster(d: &DecodedImage) -> Option<DynamicImage>
     Some(img)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(super) fn decoded_to_dynamic(
     decoded: &Decoded<DecodedImage>,
     expected_codec_mode: CodecImageMode,
@@ -312,6 +314,7 @@ pub(super) fn decoded_to_dynamic(
     Ok(image)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn attach_decoded_hidden_lanes(
     image: &mut DynamicImage,
     mode: Mode,
@@ -352,6 +355,7 @@ pub(crate) fn attach_decoded_hidden_lanes(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn retag_decoded_image(image: DynamicImage, header_mode: Mode) -> Result<DynamicImage, PilError> {
     if image.mode() == header_mode {
         return Ok(image);

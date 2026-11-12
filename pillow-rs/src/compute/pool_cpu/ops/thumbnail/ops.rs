@@ -37,7 +37,7 @@ use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::{DynamicImage, Mode};
 
-use super::mode_strategy::ThumbnailModeStrategy;
+use super::helpers::mode_strategy::ThumbnailModeStrategy;
 
 pub(super) const INPUTS: &[crate::compute::registry::support::InputContract] =
     &[crate::compute::registry::support::InputContract::Thumbnail];
@@ -47,6 +47,7 @@ const COMPOSED_OPERATIONS: &[OperationId] = &[
     OperationId::ResizeBoxed,
 ];
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -86,6 +87,7 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(
 );
 
 /// Whether a validated RGB PutPixel prefix can use Thumbnail's sparse 2x2 path.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn rgb_putpixel_fusion_supported(
     image: &DynamicImage,
     writes: &[PipelineOp],
@@ -147,10 +149,12 @@ pub(crate) struct PreparedRgbPutPixelThumbnail<'a> {
 }
 
 impl PreparedRgbPutPixelThumbnail<'_> {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.resize_selection
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         super::rgb8::ops::execute_putpixel_thumbnail(
             self.image,
@@ -163,6 +167,7 @@ impl PreparedRgbPutPixelThumbnail<'_> {
 }
 
 /// Select the supported fusion and its exact child Resize strategy.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_rgb_putpixel_thumbnail<'a>(
     image: &'a DynamicImage,
     writes: &'a [PipelineOp],
@@ -269,6 +274,7 @@ struct ThumbnailResizeRequest {
 }
 
 impl ThumbnailResizeRequest {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn bounds(self) -> (f64, f64, f64, f64) {
         (
             0.0,
@@ -280,14 +286,17 @@ impl ThumbnailResizeRequest {
 }
 
 impl PreparedThumbnail<'_> {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn composed_selections(&self) -> &[StrategySelection] {
         &self.composed_selections
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let is_composite = !self.stream_i32;
         let result = execute_thumbnail(self);
@@ -298,6 +307,7 @@ impl PreparedThumbnail<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn select_mode(
     inputs: OperationInputs<'_>,
     mode: Mode,
@@ -322,6 +332,7 @@ fn select_mode(
 }
 
 /// Prepares a mode-preserving Thumbnail operation and its nested strategies.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -384,6 +395,7 @@ pub(crate) fn prepare_pipeline<'a>(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn prepare_composed_strategies<'a>(
     inputs: OperationInputs<'a>,
     mode: Mode,
@@ -444,6 +456,7 @@ fn prepare_composed_strategies<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn reduced_resize_facts(
     inputs: OperationInputs<'_>,
     factors: (u32, u32),
@@ -481,6 +494,7 @@ fn reduced_resize_facts(
     Ok(facts)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn select_child_mode(
     support: &'static OperationSupport,
     mode: Mode,
@@ -496,6 +510,7 @@ fn select_child_mode(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn execute_thumbnail(plan: PreparedThumbnail<'_>) -> Result<DynamicImage, PilError> {
     if plan.width == 0 || plan.height == 0 {
         return Err(PilError::ValueError("thumbnail size must be > 0".into()));
@@ -546,6 +561,7 @@ fn execute_thumbnail(plan: PreparedThumbnail<'_>) -> Result<DynamicImage, PilErr
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn resize_thumbnail_work_image(
     image: &DynamicImage,
     palette: crate::compute::registry::support::PaletteInput<'_>,

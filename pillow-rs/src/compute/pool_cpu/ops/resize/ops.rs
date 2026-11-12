@@ -15,6 +15,7 @@
 use crate::compute::registry::support::{ModeSupport, OperationId, OperationSupport};
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_resize(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -45,6 +46,7 @@ fn classify_resize(mode: Mode) -> ModeSupport {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_boxed_resize(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::BOXED_SUPPORT,

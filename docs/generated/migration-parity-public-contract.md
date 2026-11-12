@@ -7,22 +7,22 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@3
-manifest_sha256: c961cb80ace865f0ca092c3648bb86c1417638402efb7480f872a6085b027cee
+manifest_sha256: 3e36271fae8f7f25405a2ff961ea338992b7f3b80679c4b8460ed2c8ef56bc4a
 statement_status: declared
 ```
 
 ## Scope
 
 - Scope: `pillow-rs-selected-public-contract` (`full`)
-- Oracle: `Pillow 12.2.0`
+- Oracle: `Pillow 13.0.0`
 - Target profiles: `python-cpu`, `python-simd`, `python-gpu`, `python-parallel-cpu`, `python-gpu-fault-contract`
 - Parity cases and requirements are shared across target profiles; the runner selects the backend and records it in the result.
 - Public surfaces: 29
 - Operations: 216
-- Requirements: 1851
-- Indexed parity cases: 17602
+- Requirements: 2370
+- Indexed parity cases: 171666
 - Indexed coverage plans: 27
-- Indexed benchmark workloads: 1034
+- Indexed benchmark workloads: 100610
 
 ## Declared operations
 
@@ -38,7 +38,7 @@ statement_status: declared
 | `PIL.Image` | `eval` | `function` | `PIL.Image.eval` | `pillow_rs.eval` | 12 |
 | `PIL.Image` | `fromarray` | `function` | `PIL.Image.fromarray` | `pillow_rs.fromarray` | 8 |
 | `PIL.Image` | `frombuffer` | `function` | `PIL.Image.frombuffer` | `pillow_rs.frombuffer` | 8 |
-| `PIL.Image` | `frombytes` | `function` | `PIL.Image.frombytes` | `pillow_rs.frombytes` | 21 |
+| `PIL.Image` | `frombytes` | `function` | `PIL.Image.frombytes` | `pillow_rs.frombytes` | 22 |
 | `PIL.Image` | `linear_gradient` | `function` | `PIL.Image.linear_gradient` | `pillow_rs.linear_gradient` | 5 |
 | `PIL.Image` | `merge` | `function` | `PIL.Image.merge` | `pillow_rs.merge` | 10 |
 | `PIL.Image` | `new` | `function` | `PIL.Image.new` | `pillow_rs.new` | 28 |
@@ -49,17 +49,17 @@ statement_status: declared
 | `PIL.Image.Image` | `close` | `method` | `PIL.Image.Image.close` | `pillow_rs.Image.close` | 9 |
 | `PIL.Image.Image` | `convert` | `method` | `PIL.Image.Image.convert` | `pillow_rs.Image.convert` | 33 |
 | `PIL.Image.Image` | `copy` | `method` | `PIL.Image.Image.copy` | `pillow_rs.Image.copy` | 9 |
-| `PIL.Image.Image` | `crop` | `method` | `PIL.Image.Image.crop` | `pillow_rs.Image.crop` | 20 |
+| `PIL.Image.Image` | `crop` | `method` | `PIL.Image.Image.crop` | `pillow_rs.Image.crop` | 34 |
 | `PIL.Image.Image` | `draft` | `method` | `PIL.Image.Image.draft` | `pillow_rs.Image.draft` | 11 |
 | `PIL.Image.Image` | `effect_spread` | `method` | `PIL.Image.Image.effect_spread` | `pillow_rs.Image.effect_spread` | 11 |
 | `PIL.Image.Image` | `entropy` | `method` | `PIL.Image.Image.entropy` | `pillow_rs.Image.entropy` | 12 |
 | `PIL.Image.Image` | `filter` | `method` | `PIL.Image.Image.filter` | `pillow_rs.Image.filter` | 27 |
 | `PIL.Image.Image` | `format` | `property_get` | `PIL.Image.Image.format` | `pillow_rs.Image.format` | 2 |
 | `PIL.Image.Image` | `frombytes` | `method` | `PIL.Image.Image.frombytes` | `pillow_rs.Image.frombytes` | 11 |
-| `PIL.Image.Image` | `get_child_images` | `method` | `PIL.Image.Image.get_child_images` | `pillow_rs.Image.get_child_images` | 5 |
+| `PIL.Image.Image` | `get_child_images` | `method` | `PIL.Image.Image.get_child_images` | `pillow_rs.Image.get_child_images` | 3 |
 | `PIL.Image.Image` | `get_flattened_data` | `method` | `PIL.Image.Image.get_flattened_data` | `pillow_rs.Image.get_flattened_data` | 6 |
 | `PIL.Image.Image` | `getbands` | `method` | `PIL.Image.Image.getbands` | `pillow_rs.Image.getbands` | 9 |
-| `PIL.Image.Image` | `getbbox` | `method` | `PIL.Image.Image.getbbox` | `pillow_rs.Image.getbbox` | 13 |
+| `PIL.Image.Image` | `getbbox` | `method` | `PIL.Image.Image.getbbox` | `pillow_rs.Image.getbbox` | 32 |
 | `PIL.Image.Image` | `getchannel` | `method` | `PIL.Image.Image.getchannel` | `pillow_rs.Image.getchannel` | 14 |
 | `PIL.Image.Image` | `getcolors` | `method` | `PIL.Image.Image.getcolors` | `pillow_rs.Image.getcolors` | 12 |
 | `PIL.Image.Image` | `getdata` | `method` | `PIL.Image.Image.getdata` | `pillow_rs.Image.getdata` | 10 |
@@ -69,7 +69,7 @@ statement_status: declared
 | `PIL.Image.Image` | `getpalette` | `method` | `PIL.Image.Image.getpalette` | `pillow_rs.Image.getpalette` | 7 |
 | `PIL.Image.Image` | `getpixel` | `method` | `PIL.Image.Image.getpixel` | `pillow_rs.Image.getpixel` | 11 |
 | `PIL.Image.Image` | `getprojection` | `method` | `PIL.Image.Image.getprojection` | `pillow_rs.Image.getprojection` | 9 |
-| `PIL.Image.Image` | `getxmp` | `method` | `PIL.Image.Image.getxmp` | `pillow_rs.Image.getxmp` | 5 |
+| `PIL.Image.Image` | `getxmp` | `method` | `PIL.Image.Image.getxmp` | `pillow_rs.Image.getxmp` | 6 |
 | `PIL.Image.Image` | `has_transparency_data` | `property_get` | `PIL.Image.Image.has_transparency_data` | `pillow_rs.Image.has_transparency_data` | 2 |
 | `PIL.Image.Image` | `height` | `property_get` | `PIL.Image.Image.height` | `pillow_rs.Image.height` | 2 |
 | `PIL.Image.Image` | `histogram` | `method` | `PIL.Image.Image.histogram` | `pillow_rs.Image.histogram` | 13 |
@@ -79,13 +79,13 @@ statement_status: declared
 | `PIL.Image.Image` | `paste` | `method` | `PIL.Image.Image.paste` | `pillow_rs.Image.paste` | 22 |
 | `PIL.Image.Image` | `point` | `method` | `PIL.Image.Image.point` | `pillow_rs.Image.point` | 11 |
 | `PIL.Image.Image` | `putalpha` | `method` | `PIL.Image.Image.putalpha` | `pillow_rs.Image.putalpha` | 11 |
-| `PIL.Image.Image` | `putdata` | `method` | `PIL.Image.Image.putdata` | `pillow_rs.Image.putdata` | 16 |
+| `PIL.Image.Image` | `putdata` | `method` | `PIL.Image.Image.putdata` | `pillow_rs.Image.putdata` | 31 |
 | `PIL.Image.Image` | `putpalette` | `method` | `PIL.Image.Image.putpalette` | `pillow_rs.Image.putpalette` | 7 |
 | `PIL.Image.Image` | `putpixel` | `method` | `PIL.Image.Image.putpixel` | `pillow_rs.Image.putpixel` | 12 |
 | `PIL.Image.Image` | `quantize` | `method` | `PIL.Image.Image.quantize` | `pillow_rs.Image.quantize` | 12 |
 | `PIL.Image.Image` | `reduce` | `method` | `PIL.Image.Image.reduce` | `pillow_rs.Image.reduce` | 10 |
 | `PIL.Image.Image` | `remap_palette` | `method` | `PIL.Image.Image.remap_palette` | `pillow_rs.Image.remap_palette` | 7 |
-| `PIL.Image.Image` | `resize` | `method` | `PIL.Image.Image.resize` | `pillow_rs.Image.resize` | 25 |
+| `PIL.Image.Image` | `resize` | `method` | `PIL.Image.Image.resize` | `pillow_rs.Image.resize` | 40 |
 | `PIL.Image.Image` | `rotate` | `method` | `PIL.Image.Image.rotate` | `pillow_rs.Image.rotate` | 23 |
 | `PIL.Image.Image` | `save` | `method` | `PIL.Image.Image.save` | `pillow_rs.Image.save` | 22 |
 | `PIL.Image.Image` | `seek` | `method` | `PIL.Image.Image.seek` | `pillow_rs.Image.seek` | 11 |
@@ -102,27 +102,27 @@ statement_status: declared
 | `PIL.Image.Image` | `transpose` | `method` | `PIL.Image.Image.transpose` | `pillow_rs.Image.transpose` | 16 |
 | `PIL.Image.Image` | `verify` | `method` | `PIL.Image.Image.verify` | `pillow_rs.Image.verify` | 7 |
 | `PIL.Image.Image` | `width` | `property_get` | `PIL.Image.Image.width` | `pillow_rs.Image.width` | 2 |
-| `PIL.ImageChops` | `add` | `function` | `PIL.ImageChops.add` | `pillow_rs.ImageChops.add` | 10 |
-| `PIL.ImageChops` | `add_modulo` | `function` | `PIL.ImageChops.add_modulo` | `pillow_rs.ImageChops.add_modulo` | 8 |
+| `PIL.ImageChops` | `add` | `function` | `PIL.ImageChops.add` | `pillow_rs.ImageChops.add` | 31 |
+| `PIL.ImageChops` | `add_modulo` | `function` | `PIL.ImageChops.add_modulo` | `pillow_rs.ImageChops.add_modulo` | 29 |
 | `PIL.ImageChops` | `blend` | `function` | `PIL.ImageChops.blend` | `pillow_rs.ImageChops.blend` | 7 |
 | `PIL.ImageChops` | `composite` | `function` | `PIL.ImageChops.composite` | `pillow_rs.ImageChops.composite` | 8 |
-| `PIL.ImageChops` | `constant` | `function` | `PIL.ImageChops.constant` | `pillow_rs.ImageChops.constant` | 7 |
-| `PIL.ImageChops` | `darker` | `function` | `PIL.ImageChops.darker` | `pillow_rs.ImageChops.darker` | 8 |
-| `PIL.ImageChops` | `difference` | `function` | `PIL.ImageChops.difference` | `pillow_rs.ImageChops.difference` | 8 |
-| `PIL.ImageChops` | `duplicate` | `function` | `PIL.ImageChops.duplicate` | `pillow_rs.ImageChops.duplicate` | 6 |
-| `PIL.ImageChops` | `hard_light` | `function` | `PIL.ImageChops.hard_light` | `pillow_rs.ImageChops.hard_light` | 8 |
-| `PIL.ImageChops` | `invert` | `function` | `PIL.ImageChops.invert` | `pillow_rs.ImageChops.invert` | 6 |
-| `PIL.ImageChops` | `lighter` | `function` | `PIL.ImageChops.lighter` | `pillow_rs.ImageChops.lighter` | 8 |
-| `PIL.ImageChops` | `logical_and` | `function` | `PIL.ImageChops.logical_and` | `pillow_rs.ImageChops.logical_and` | 5 |
-| `PIL.ImageChops` | `logical_or` | `function` | `PIL.ImageChops.logical_or` | `pillow_rs.ImageChops.logical_or` | 5 |
-| `PIL.ImageChops` | `logical_xor` | `function` | `PIL.ImageChops.logical_xor` | `pillow_rs.ImageChops.logical_xor` | 5 |
-| `PIL.ImageChops` | `multiply` | `function` | `PIL.ImageChops.multiply` | `pillow_rs.ImageChops.multiply` | 8 |
-| `PIL.ImageChops` | `offset` | `function` | `PIL.ImageChops.offset` | `pillow_rs.ImageChops.offset` | 8 |
-| `PIL.ImageChops` | `overlay` | `function` | `PIL.ImageChops.overlay` | `pillow_rs.ImageChops.overlay` | 6 |
-| `PIL.ImageChops` | `screen` | `function` | `PIL.ImageChops.screen` | `pillow_rs.ImageChops.screen` | 8 |
-| `PIL.ImageChops` | `soft_light` | `function` | `PIL.ImageChops.soft_light` | `pillow_rs.ImageChops.soft_light` | 8 |
-| `PIL.ImageChops` | `subtract` | `function` | `PIL.ImageChops.subtract` | `pillow_rs.ImageChops.subtract` | 10 |
-| `PIL.ImageChops` | `subtract_modulo` | `function` | `PIL.ImageChops.subtract_modulo` | `pillow_rs.ImageChops.subtract_modulo` | 8 |
+| `PIL.ImageChops` | `constant` | `function` | `PIL.ImageChops.constant` | `pillow_rs.ImageChops.constant` | 29 |
+| `PIL.ImageChops` | `darker` | `function` | `PIL.ImageChops.darker` | `pillow_rs.ImageChops.darker` | 29 |
+| `PIL.ImageChops` | `difference` | `function` | `PIL.ImageChops.difference` | `pillow_rs.ImageChops.difference` | 29 |
+| `PIL.ImageChops` | `duplicate` | `function` | `PIL.ImageChops.duplicate` | `pillow_rs.ImageChops.duplicate` | 28 |
+| `PIL.ImageChops` | `hard_light` | `function` | `PIL.ImageChops.hard_light` | `pillow_rs.ImageChops.hard_light` | 29 |
+| `PIL.ImageChops` | `invert` | `function` | `PIL.ImageChops.invert` | `pillow_rs.ImageChops.invert` | 28 |
+| `PIL.ImageChops` | `lighter` | `function` | `PIL.ImageChops.lighter` | `pillow_rs.ImageChops.lighter` | 29 |
+| `PIL.ImageChops` | `logical_and` | `function` | `PIL.ImageChops.logical_and` | `pillow_rs.ImageChops.logical_and` | 29 |
+| `PIL.ImageChops` | `logical_or` | `function` | `PIL.ImageChops.logical_or` | `pillow_rs.ImageChops.logical_or` | 29 |
+| `PIL.ImageChops` | `logical_xor` | `function` | `PIL.ImageChops.logical_xor` | `pillow_rs.ImageChops.logical_xor` | 29 |
+| `PIL.ImageChops` | `multiply` | `function` | `PIL.ImageChops.multiply` | `pillow_rs.ImageChops.multiply` | 29 |
+| `PIL.ImageChops` | `offset` | `function` | `PIL.ImageChops.offset` | `pillow_rs.ImageChops.offset` | 30 |
+| `PIL.ImageChops` | `overlay` | `function` | `PIL.ImageChops.overlay` | `pillow_rs.ImageChops.overlay` | 29 |
+| `PIL.ImageChops` | `screen` | `function` | `PIL.ImageChops.screen` | `pillow_rs.ImageChops.screen` | 29 |
+| `PIL.ImageChops` | `soft_light` | `function` | `PIL.ImageChops.soft_light` | `pillow_rs.ImageChops.soft_light` | 29 |
+| `PIL.ImageChops` | `subtract` | `function` | `PIL.ImageChops.subtract` | `pillow_rs.ImageChops.subtract` | 31 |
+| `PIL.ImageChops` | `subtract_modulo` | `function` | `PIL.ImageChops.subtract_modulo` | `pillow_rs.ImageChops.subtract_modulo` | 29 |
 | `PIL.ImageColor` | `getcolor` | `function` | `PIL.ImageColor.getcolor` | `pillow_rs.ImageColor.getcolor` | 6 |
 | `PIL.ImageColor` | `getrgb` | `function` | `PIL.ImageColor.getrgb` | `pillow_rs.ImageColor.getrgb` | 3 |
 | `PIL.ImageDraw` | `Draw` | `function` | `PIL.ImageDraw.Draw` | `pillow_rs.ImageDraw.Draw` | 4 |
@@ -150,10 +150,10 @@ statement_status: declared
 | `PIL.ImageEnhance` | `Color` | `type` | `PIL.ImageEnhance.Color` | `pillow_rs.ImageEnhance.Color` | 8 |
 | `PIL.ImageEnhance` | `Contrast` | `type` | `PIL.ImageEnhance.Contrast` | `pillow_rs.ImageEnhance.Contrast` | 8 |
 | `PIL.ImageEnhance` | `Sharpness` | `type` | `PIL.ImageEnhance.Sharpness` | `pillow_rs.ImageEnhance.Sharpness` | 8 |
-| `PIL.ImageEnhance.Brightness` | `enhance` | `method` | `PIL.ImageEnhance.Brightness.enhance` | `pillow_rs.ImageEnhance.Brightness.enhance` | 3 |
+| `PIL.ImageEnhance.Brightness` | `enhance` | `method` | `PIL.ImageEnhance.Brightness.enhance` | `pillow_rs.ImageEnhance.Brightness.enhance` | 28 |
 | `PIL.ImageEnhance.Color` | `enhance` | `method` | `PIL.ImageEnhance.Color.enhance` | `pillow_rs.ImageEnhance.Color.enhance` | 3 |
 | `PIL.ImageEnhance.Contrast` | `enhance` | `method` | `PIL.ImageEnhance.Contrast.enhance` | `pillow_rs.ImageEnhance.Contrast.enhance` | 3 |
-| `PIL.ImageEnhance.Sharpness` | `enhance` | `method` | `PIL.ImageEnhance.Sharpness.enhance` | `pillow_rs.ImageEnhance.Sharpness.enhance` | 3 |
+| `PIL.ImageEnhance.Sharpness` | `enhance` | `method` | `PIL.ImageEnhance.Sharpness.enhance` | `pillow_rs.ImageEnhance.Sharpness.enhance` | 20 |
 | `PIL.ImageFilter` | `BLUR` | `type` | `PIL.ImageFilter.BLUR` | `pillow_rs.ImageFilter.BLUR` | 8 |
 | `PIL.ImageFilter` | `BoxBlur` | `type` | `PIL.ImageFilter.BoxBlur` | `pillow_rs.ImageFilter.BoxBlur` | 7 |
 | `PIL.ImageFilter` | `CONTOUR` | `type` | `PIL.ImageFilter.CONTOUR` | `pillow_rs.ImageFilter.CONTOUR` | 6 |
@@ -253,6 +253,6 @@ accepted as input truth.
 
 | Lane | Documents |
 | --- | ---: |
-| parity | 29 |
+| parity | 4046 |
 | coverage | 29 |
 | benchmark | 30 |

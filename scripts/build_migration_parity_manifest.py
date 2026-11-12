@@ -58,7 +58,16 @@ try:
         CROP_CORE_ONLY_MODES,
         CROP_PILLOW_MODE_CASES,
         CORE_ONLY_RAW_MODES,
+        DIRECT_ROTATE_MODES,
+        REDUCE_CORE_ONLY_MODES,
+        REDUCE_MATRIX_FACTORS,
         SHARPNESS_CORE_ONLY_MODES,
+    )
+    from migration_parity.mode_size_matrix import (
+        MODE_SIZE_MATRIX_SHARD_SURFACES,
+        MODE_SIZE_PILLOW_MODES,
+        MODE_SIZE_MATRIX_SIZES,
+        MODE_SIZE_PARITY_SPLIT_SIZES,
     )
 except ModuleNotFoundError:
     from scripts.migration_parity.target_output_contracts import (
@@ -81,7 +90,16 @@ except ModuleNotFoundError:
         CROP_CORE_ONLY_MODES,
         CROP_PILLOW_MODE_CASES,
         CORE_ONLY_RAW_MODES,
+        DIRECT_ROTATE_MODES,
+        REDUCE_CORE_ONLY_MODES,
+        REDUCE_MATRIX_FACTORS,
         SHARPNESS_CORE_ONLY_MODES,
+    )
+    from scripts.migration_parity.mode_size_matrix import (
+        MODE_SIZE_MATRIX_SHARD_SURFACES,
+        MODE_SIZE_PILLOW_MODES,
+        MODE_SIZE_MATRIX_SIZES,
+        MODE_SIZE_PARITY_SPLIT_SIZES,
     )
 
 from migration_parity_inventory import (
@@ -125,6 +143,56 @@ CPU_ONLY_API_BENCHMARK_ENDPOINTS = {
     "PIL.ImageShow::register",
     "PIL.ImageShow::show",
 }
+TARGET_OUTPUT_MATRIX_OPERATIONS = {
+    "PIL.Image": {
+        "frombytes": ("",),
+    },
+    "PIL.ImageChops": {
+        "constant": ("",),
+        "duplicate": ("",),
+        "invert": ("",),
+        "offset": ("",),
+    },
+    "PIL.Image.Image": {
+        "crop": ("",),
+        "getbbox": ("",),
+        "reduce": tuple(REDUCE_MATRIX_FACTORS),
+        "resize": ("",),
+        "putdata": ("",),
+    },
+    "PIL.ImageEnhance.Brightness": {
+        "enhance": ("factor-zero", "factor-identity", "factor-double"),
+    },
+    "PIL.ImageEnhance.Sharpness": {
+        "enhance": ("factor-sharpened",),
+    },
+}
+TARGET_OUTPUT_MATRIX_MODES = {
+    "PIL.Image": {
+        "frombytes": tuple(mode_id for _mode, mode_id, *_ in CORE_ONLY_RAW_MODES),
+    },
+    "PIL.ImageChops": {
+        "constant": tuple(mode_id for _mode, mode_id, *_ in CHOPS_CONSTANT_CORE_ONLY_MODES),
+        "duplicate": tuple(mode_id for _mode, mode_id, *_ in CHOPS_DUPLICATE_CORE_ONLY_MODES),
+        "invert": tuple(mode_id for _mode, mode_id, *_ in CHOPS_INVERT_CORE_ONLY_MODES),
+        "offset": tuple(mode_id for _mode, mode_id, *_ in CHOPS_OFFSET_CORE_ONLY_MODES),
+    },
+    "PIL.Image.Image": {
+        "crop": tuple(mode_id for _mode, mode_id, *_ in CROP_CORE_ONLY_MODES),
+        "getbbox": tuple(mode_id for _mode, mode_id, *_ in CORE_ONLY_RAW_MODES),
+        "putdata": tuple(mode_id for _mode, mode_id, *_ in CORE_ONLY_RAW_MODES),
+        "reduce": tuple(
+            mode_id for _mode, mode_id, _sample_kind in REDUCE_CORE_ONLY_MODES
+        ),
+        "resize": tuple(mode_id for _mode, mode_id, *_ in CORE_ONLY_RAW_MODES),
+    },
+    "PIL.ImageEnhance.Brightness": {
+        "enhance": tuple(mode_id for _mode, mode_id, *_ in BRIGHTNESS_TARGET_ONLY_MODES),
+    },
+    "PIL.ImageEnhance.Sharpness": {
+        "enhance": tuple(mode_id for _mode, mode_id, *_ in SHARPNESS_CORE_ONLY_MODES),
+    },
+}
 
 # The legacy authority records the Qt-only ImageQt endpoints as ignored for
 # the current coverage campaign. Keep them in the active public inventory so
@@ -166,6 +234,10 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
         "pillow-rs-py/python/PIL/Image.py",
         "pillow-rs-py/python/pillow_rs/image.py",
         "pillow-rs-py/python/pillow_rs/operations.py",
+        "pillow-rs-py/src/image/creation.rs",
+        "pillow-rs-py/src/image/data.rs",
+        "pillow-rs-py/src/image/operations.rs",
+        "pillow-rs-py/src/image/properties.rs",
         "pillow-rs/src/image.rs",
         "pillow-rs/src/pipeline.rs",
         "pillow-rs/src/ops/module_fns.rs",
@@ -180,6 +252,7 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
         "pillow-rs/src/ops/split.rs",
         "pillow-rs/src/ops/transform.rs",
         "pillow-rs/src/ops/transpose.rs",
+        "pillow-rs/src/compute/pool_cpu/ops/transpose/ops.rs",
         "pillow-rs/src/compute/pool_cpu/ops/geometry/ops.rs",
     ),
     "image-raw-input": (
@@ -267,6 +340,10 @@ def mode_slug(value: str) -> str:
     """Keep Pillow's case-distinct premultiplied modes distinct in IDs."""
 
     return {
+        "I;16": "i16",
+        "I;16L": "i16l",
+        "I;16B": "i16b",
+        "I;16N": "i16n",
         "La": "la-premultiplied",
         "RGBa": "rgba-premultiplied",
     }.get(value, slug(value))
@@ -545,6 +622,7 @@ def source_object(endpoint: Endpoint) -> Any | None:
         raise
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
 def target_candidates(endpoint: Endpoint) -> list[str]:
     # Manifest target candidates intentionally use the internal binding path so
     # source (Pillow) and target (pillow-rs) signatures can be inspected in one
@@ -554,6 +632,8 @@ def target_candidates(endpoint: Endpoint) -> list[str]:
     surface = endpoint.surface
     operation = endpoint.operation
     if endpoint.authority == "target-only-contract":
+        if endpoint.operation == "_migration_direct_rotate":
+            return ["pillow_rs._core.Image._migration_direct_rotate"]
         if endpoint.operation == "get_child_images":
             return ["pillow_rs.Image.get_child_images"]
         if endpoint.kind == "type":
@@ -652,10 +732,13 @@ def return_annotation_text(signature: inspect.Signature) -> str:
     return str(annotation).lower()
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
 def result_shape(
     endpoint: Endpoint,
     signature: inspect.Signature,
 ) -> tuple[str, list[str]]:
+    if endpoint.operation == "_migration_direct_rotate":
+        return "image", ["image"]
     if endpoint.source_path == "PIL.ImageText.Text":
         # Text is a public value object. Compare its exposed constructor state,
         # including the selected font, instead of only checking its type name.
@@ -1005,6 +1088,34 @@ def operation_requirements(
             *(mode for mode, _mode_id, *_rest in CROP_PILLOW_MODE_CASES),
             *(mode for mode, _mode_id, *_rest in CROP_CORE_ONLY_MODES),
         ]))
+    elif endpoint.source_path == "PIL.Image.Image.resize":
+        # Resize has a native typed strategy for every Pillow raster identity,
+        # including premultiplied, palette-alpha, LAB/HSV, and I;16 byte-order
+        # variants that the frozen historical summary omitted.
+        supported_modes = list(MODE_SIZE_PILLOW_MODES)
+    elif endpoint.source_path == "PIL.Image.Image.reduce":
+        # Reduce has a native strategy for all Pillow identities and extends
+        # the exact typed I;16 and internal component modes without converting
+        # them to an unrelated Pillow mode.
+        supported_modes = list(dict.fromkeys([
+            *MODE_SIZE_PILLOW_MODES,
+            *(mode for mode, _mode_id, _sample_kind in REDUCE_CORE_ONLY_MODES),
+        ]))
+    elif endpoint.source_path == "PIL.Image.Image.putdata":
+        # PutData has a mode-owned writer for every Pillow raster identity.
+        # Keep the Pillow denominator and all native typed CoreOnly extensions
+        # visible at the operation entry point.
+        supported_modes = [
+            *MODE_SIZE_PILLOW_MODES,
+            *(mode for mode, _mode_id, _raw in CORE_ONLY_RAW_MODES),
+        ]
+    elif endpoint.source_path == "PIL.Image.Image.getbbox":
+        # GetBBox has a strategy for every Pillow mode and native typed
+        # strategies for the five internal carriers.
+        supported_modes = [
+            *MODE_SIZE_PILLOW_MODES,
+            *(mode for mode, _mode_id, _raw in CORE_ONLY_RAW_MODES),
+        ]
     if (
         endpoint.surface == "PIL.ImageEnhance"
         and endpoint.operation in {"Brightness", "Color", "Contrast", "Sharpness"}
@@ -1084,6 +1195,35 @@ def operation_requirements(
                 for mode_name, mode_id, *_rest in CROP_CORE_ONLY_MODES
                 if mode_name == mode
             )
+        elif endpoint.source_path == "PIL.Image.Image.resize":
+            mode_id = mode_slug(str(mode))
+        elif endpoint.source_path == "PIL.Image.Image.reduce":
+            mode_id = next(
+                (
+                    mode_id
+                    for mode_name, mode_id, _sample_kind in REDUCE_CORE_ONLY_MODES
+                    if mode_name == mode
+                ),
+                mode_slug(str(mode)),
+            )
+        elif endpoint.source_path == "PIL.Image.Image.putdata":
+            mode_id = next(
+                (
+                    mode_id
+                    for mode_name, mode_id, _raw in CORE_ONLY_RAW_MODES
+                    if mode_name == mode
+                ),
+                mode_slug(str(mode)),
+            )
+        elif endpoint.source_path == "PIL.Image.Image.getbbox":
+            mode_id = next(
+                (
+                    mode_id
+                    for mode_name, mode_id, _raw in CORE_ONLY_RAW_MODES
+                    if mode_name == mode
+                ),
+                mode_slug(str(mode)),
+            )
         else:
             mode_id = (
                 mode_slug(str(mode))
@@ -1098,13 +1238,45 @@ def operation_requirements(
                 for mode_name, _mode_id, *_rest in CROP_CORE_ONLY_MODES
             )
         )
+        putdata_core_only_output = (
+            endpoint.source_path == "PIL.Image.Image.putdata"
+            and any(mode_name == mode for mode_name, _mode_id, _raw in CORE_ONLY_RAW_MODES)
+        )
+        getbbox_core_only_output = (
+            endpoint.source_path == "PIL.Image.Image.getbbox"
+            and any(mode_name == mode for mode_name, _mode_id, _raw in CORE_ONLY_RAW_MODES)
+        )
+        reduce_core_only_output = (
+            endpoint.source_path == "PIL.Image.Image.reduce"
+            and any(
+                mode_name == mode
+                for mode_name, _mode_id, _sample_kind in REDUCE_CORE_ONLY_MODES
+            )
+        )
+        getbbox_pillow_mode = (
+            endpoint.source_path == "PIL.Image.Image.getbbox"
+            and not getbbox_core_only_output
+        )
         lanes = (
-            ["target_output", "coverage"]
+            ["target_output", "benchmark", "coverage"]
             if crop_core_only_output
+            or putdata_core_only_output
+            or getbbox_core_only_output
+            or reduce_core_only_output
+            else ["parity", "benchmark", "coverage"]
+            if getbbox_pillow_mode
             else ["parity", "coverage"]
         )
         if crop_core_only_output:
             description = f"Native Crop output for {mode_id} (NO_PILLOW_SUPPORT)."
+        elif putdata_core_only_output:
+            description = f"Native typed PutData output for {mode_id} (NO_PILLOW_SUPPORT)."
+        elif getbbox_core_only_output:
+            description = f"Native typed GetBBox output for {mode_id} (NO_PILLOW_SUPPORT)."
+        elif reduce_core_only_output:
+            description = f"Native typed Reduce output for {mode_id} (NO_PILLOW_SUPPORT)."
+        elif getbbox_pillow_mode:
+            description = f"Pillow GetBBox behavior for image mode {mode!r}."
         else:
             description = f"Public behavior for image mode {mode!r}."
         requirements.append(
@@ -1115,6 +1287,16 @@ def operation_requirements(
                 lanes,
             )
         )
+    if endpoint.source_path == "PIL.Image.Image.resize":
+        for _mode_name, mode_id, _raw in CORE_ONLY_RAW_MODES:
+            requirements.append(
+                requirement(
+                    f"{prefix}.mode.{mode_id}",
+                    "mode",
+                    f"Native Resize output for {mode_id} (NO_PILLOW_SUPPORT).",
+                    ["target_output", "benchmark", "coverage"],
+                )
+            )
     if endpoint.source_path == "PIL.Image.frombytes":
         # pillow-rs exposes these exact typed carriers as Rust-only raw input
         # identities. They have recorded-output coverage but no Pillow mode.
@@ -1124,9 +1306,17 @@ def operation_requirements(
                     f"{prefix}.mode.{mode_id}",
                     "mode",
                     f"Target-only typed raw-input behavior for {mode_id} (NO_PILLOW_SUPPORT).",
-                    ["target_output"],
+                    ["benchmark", "target_output"],
                 )
             )
+        requirements.append(
+            requirement(
+                f"{prefix}.code_path.rawmode-l1",
+                "code_path",
+                "Packed L;1 raw decoding into L is a Rust-only extension (NO_PILLOW_SUPPORT).",
+                ["target_output", "coverage"],
+            )
+        )
     if endpoint.source_path == "PIL.ImageEnhance.Sharpness.enhance":
         # These exact native strategies intentionally extend Pillow's
         # ImageEnhance support. Their outputs are recorded through the public
@@ -1144,7 +1334,7 @@ def operation_requirements(
                     f"{prefix}.mode.{mode_id}",
                     "mode",
                     f"Native Sharpness extension for {mode_id} (NO_PILLOW_SUPPORT).",
-                    ["target_output", "coverage"],
+                    ["target_output", "benchmark", "coverage"],
                 )
             )
     if endpoint.source_path == "PIL.ImageEnhance.Brightness.enhance":
@@ -1163,7 +1353,7 @@ def operation_requirements(
                     f"{prefix}.mode.{mode_id}",
                     "mode",
                     f"Native Brightness output for {mode_id}; no Pillow result contract (NO_PILLOW_SUPPORT).",
-                    ["target_output", "coverage"],
+                    ["target_output", "benchmark", "coverage"],
                 )
             )
     if endpoint.source_path == "PIL.ImageChops.invert":
@@ -1173,7 +1363,7 @@ def operation_requirements(
                     f"{prefix}.mode.{mode_id}",
                     "mode",
                     f"Native ImageChops inversion for {mode_id}; no Pillow result contract (NO_PILLOW_SUPPORT).",
-                    ["target_output", "coverage"],
+                    ["target_output", "benchmark", "coverage"],
                 )
             )
     if endpoint.source_path == "PIL.ImageChops.duplicate":
@@ -1184,7 +1374,7 @@ def operation_requirements(
                     "mode",
                     f"Native ImageChops Duplicate output for {mode_id} "
                     "(NO_PILLOW_SUPPORT).",
-                    ["target_output", "coverage"],
+                    ["target_output", "benchmark", "coverage"],
                 )
             )
     if endpoint.source_path == "PIL.ImageChops.constant":
@@ -1195,7 +1385,7 @@ def operation_requirements(
                     "mode",
                     f"Native ImageChops Constant output for {mode_id} "
                     "(NO_PILLOW_SUPPORT).",
-                    ["target_output", "coverage"],
+                    ["target_output", "benchmark", "coverage"],
                 )
             )
     if endpoint.source_path in CHOPS_BINARY_SOURCE_PATHS:
@@ -1225,7 +1415,7 @@ def operation_requirements(
                     f"{prefix}.mode.{mode_id}",
                     "mode",
                     f"Native ImageChops Offset for {mode_id}; no Pillow result contract (NO_PILLOW_SUPPORT).",
-                    ["target_output", "coverage"],
+                    ["target_output", "benchmark", "coverage"],
                 )
             )
     if endpoint.source_path == "PIL.Image.Image.histogram":
@@ -1297,10 +1487,11 @@ def operation_requirements(
     return requirements
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
 def component_for(endpoint: Endpoint) -> str:
     surface = endpoint.surface
     if endpoint.authority == "target-only-contract":
-        if endpoint.operation == "get_child_images":
+        if endpoint.operation in {"get_child_images", "_migration_direct_rotate"}:
             return "image-core"
         return "gpu-batch"
     if surface.startswith("PIL.ImageText"):
@@ -1350,6 +1541,7 @@ def surface_kind(surface: str) -> str:
     return "type" if surface in type_surfaces else "namespace"
 
 
+# VERIFY: source=pending; parity=pending; benchmark=n/a
 def operation_contract(
     endpoint: Endpoint,
     row_map: dict[str, dict[str, Any]],
@@ -1360,6 +1552,84 @@ def operation_contract(
         parameters = parameters_from_signature(
             target_signature, kind=endpoint.kind
         )
+        if endpoint.operation == "_migration_direct_rotate":
+            for parameter in parameters:
+                if parameter["id"] == "angle":
+                    parameter["value_types"] = ["number"]
+                elif parameter["id"] == "expand":
+                    parameter["value_types"] = ["boolean"]
+            result = result_contract(endpoint, target_signature)
+            requirements = [
+                requirement(
+                    "PIL.Image.Image._migration_direct_rotate.behavior.default",
+                    "success_path",
+                    "Run the direct Rust Rotate shortcut and preserve the exact mode.",
+                    ["target_output", "coverage"],
+                ),
+                *[
+                    requirement(
+                        f"PIL.Image.Image._migration_direct_rotate.mode.{mode_id}",
+                        "mode",
+                        f"Direct Rust Rotate identity behavior for {mode} mode.",
+                        ["target_output", "coverage"],
+                    )
+                    for mode, mode_id in DIRECT_ROTATE_MODES
+                ],
+                *[
+                    requirement(
+                        f"PIL.Image.Image._migration_direct_rotate.fast-path.{path_id}",
+                        "boundary",
+                        f"Direct Rust Rotate {description} shortcut.",
+                        ["target_output", "coverage"],
+                    )
+                    for path_id, description in (
+                        ("identity", "identity"),
+                        ("half-turn", "half-turn"),
+                        ("quarter-turn-90", "90-degree quarter-turn"),
+                        ("quarter-turn-270", "270-degree quarter-turn"),
+                        ("quarter-turn-expand", "expanded non-square quarter-turn"),
+                    )
+                ],
+            ]
+            return {
+                "id": endpoint.operation,
+                "kind": endpoint.kind,
+                "classification": endpoint.classification,
+                "lifecycle": {"status": "current"},
+                "source": {
+                    "oracle_id": None,
+                    "path": endpoint.source_path,
+                    "signature": signature_text(endpoint, target_signature),
+                    "parameters": parameters,
+                    "result": result,
+                },
+                "targets": [
+                    {
+                        "target_id": TARGET_ID,
+                        "path": target_path,
+                        "signature": signature_text(endpoint, target_signature),
+                        "support": {"status": "supported"},
+                    }
+                ],
+                "requirements": requirements,
+                "parity": {
+                    "applicability": "not_applicable",
+                    "reason": "Pillow has no direct Rust entry-point equivalent.",
+                },
+                "coverage": {
+                    "applicability": "required",
+                    "target_profiles": [TARGET_PROFILE],
+                    "component_ids": [component_for(endpoint)],
+                },
+                "benchmark": {
+                    "applicability": "not_applicable",
+                    "reason": "The test-api-only hook is not a production workload.",
+                },
+                "fault_contract": {
+                    "applicability": "not_applicable",
+                    "reason": "The direct Rotate hook has no injected fault contract.",
+                },
+            }
         if endpoint.operation == "get_child_images":
             result = result_contract(endpoint, target_signature)
             requirements = [
@@ -1823,6 +2093,42 @@ def build_manifest() -> dict[str, Any]:
             input_index[lane].append(
                 f"inputs/{lane}/{storage_slug}.json"
             )
+        # Generated size/mode cases are indexed separately from each surface's
+        # base workflows so matrix growth cannot push a parity document over
+        # the fixed per-input size limit. The builder emits an empty document
+        # when a surface has no eligible matrix cases.
+        input_index["parity"].append(
+            f"inputs/parity/{storage_slug}-mode-size-matrix.json"
+        )
+        if surface in MODE_SIZE_MATRIX_SHARD_SURFACES:
+            for width, height in MODE_SIZE_PARITY_SPLIT_SIZES:
+                input_index["parity"].append(
+                    f"inputs/parity/{storage_slug}-mode-size-matrix-"
+                    f"{width}x{height}.json"
+                )
+        if surface in TARGET_OUTPUT_MATRIX_OPERATIONS:
+            for width, height in MODE_SIZE_MATRIX_SIZES:
+                base_path = (
+                    f"inputs/parity/{storage_slug}-mode-size-target-output-"
+                    f"{width}x{height}"
+                )
+                for operation, factors in TARGET_OUTPUT_MATRIX_OPERATIONS[surface].items():
+                    mode_ids = TARGET_OUTPUT_MATRIX_MODES[surface][operation]
+                    for mode_id in mode_ids:
+                        for factor in factors:
+                            factor_suffix = f"-{factor}" if factor else ""
+                            input_index["parity"].append(
+                                f"{base_path}-{mode_id}-{operation}"
+                                f"{factor_suffix}.json"
+                            )
+        if surface == "PIL.Image":
+            # Packed L;1 is a target-only raw decoder input, not a DynamicImage
+            # Mode. Keep its expected-output shards distinct from mode rows.
+            for width, height in MODE_SIZE_MATRIX_SIZES:
+                input_index["parity"].append(
+                    f"inputs/parity/{storage_slug}-mode-size-target-output-"
+                    f"{width}x{height}-l-frombytes.json"
+                )
         surfaces.append(
             {
                 "id": surface,

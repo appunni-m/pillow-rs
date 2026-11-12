@@ -13,46 +13,281 @@ use crate::compute::{
         InputContract, ModeSupport, OperationId, OperationInputs, OperationModeRoute,
         OperationRouteOutcome, OperationRouteStage, OperationSupport, OutputModeRule,
         PaletteKnowledge, RejectionKind, RequestFacts, StrategyInputs, StrategySelection,
-        SupportAssessment, SupportScope,
+        SupportAssessment,
     },
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
-pub(crate) use super::autocontrast::PreparedAutocontrast;
-pub(crate) use super::equalize::PreparedEqualize;
-pub(crate) use super::expand::PreparedExpand;
-use super::expand::{prepare as prepare_expand, prepare_with_native_fill};
+pub(crate) use super::helpers::expand::PreparedExpand;
+pub(crate) use super::helpers::autocontrast::PreparedAutocontrast;
+pub(crate) use super::helpers::equalize::PreparedEqualize;
+pub(crate) use super::helpers::{
+    IMAGEOPS_COLORIZE_CHILDREN, IMAGEOPS_COLORIZE_LUT_CHILDREN, IMAGEOPS_INVERT_CHILDREN,
+    IMAGEOPS_LUT_CHILDREN,
+};
+use super::helpers::wrapper_routes::{
+    classify_imageops_colorize_lut_route, classify_imageops_colorize_route,
+    classify_imageops_invert_route, classify_imageops_posterize_route,
+    classify_imageops_solarize_route,
+};
+use super::helpers::expand::{
+    prepare as prepare_expand, prepare_with_native_fill,
+};
 pub(crate) use super::luma8::ops::PreparedColorize;
 
-macro_rules! declare_mode_support {
-    ($name:ident, $operation:ident, $module:ident) => {
-        pub(crate) static $name: OperationSupport = OperationSupport::new(
-            OperationId::$operation,
-            super::$module::INPUTS,
-            super::$module::classify_mode,
-        );
+// Family-level support declarations are owned by the ImageOps entrypoint.
+const AUTOCONTRAST_INPUTS: &[InputContract] = &[
+    InputContract::AutocontrastParameters,
+    InputContract::ImageOpsLumaMask,
+];
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn classify_autocontrast_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::ImageLuma8 => super::luma8::ops::AUTOCONTRAST_SUPPORT,
+        Mode::ImagePalette8 => super::palette8::ops::AUTOCONTRAST_SUPPORT,
+        Mode::ImageRgb8 => super::rgb8::ops::AUTOCONTRAST_SUPPORT,
+        _ => ModeSupport::Rejected {
+            mode,
+            reason: super::helpers::strategy::unsupported_mode_reason(mode),
+            kind: RejectionKind::OsError,
+        },
+    }
+}
+
+pub(crate) static AUTOCONTRAST_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::Autocontrast,
+    AUTOCONTRAST_INPUTS,
+    classify_autocontrast_mode,
+);
+
+const EQUALIZE_INPUTS: &[InputContract] = &[
+    InputContract::ImageOpsLumaMask,
+    InputContract::PaletteMetadata,
+];
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn classify_equalize_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::ImageLuma8 => super::luma8::ops::EQUALIZE_SUPPORT,
+        Mode::ImageRgb8 => super::rgb8::ops::EQUALIZE_SUPPORT,
+        Mode::ImagePalette8 => super::palette8::ops::EQUALIZE_SUPPORT,
+        _ => ModeSupport::Rejected {
+            mode,
+            reason: super::helpers::strategy::unsupported_mode_reason(mode),
+            kind: RejectionKind::OsError,
+        },
+    }
+}
+
+pub(crate) static EQUALIZE_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::Equalize,
+    EQUALIZE_INPUTS,
+    classify_equalize_mode,
+);
+
+/// Complete exact-mode support for native ImageOps.expand.
+pub(crate) static EXPAND_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::Expand,
+    &[],
+    classify_expand_mode,
+);
+
+macro_rules! declare_expand_mode_contract {
+    ($($mode:ident => $module:ident),+ $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        fn classify_expand_mode(mode: Mode) -> ModeSupport {
+            match mode {
+                $(Mode::$mode => super::$module::expand::SUPPORT,)+
+            }
+        }
     };
 }
 
-// Family-level support declarations are owned by the ImageOps entrypoint.
-declare_mode_support!(AUTOCONTRAST_SUPPORT, Autocontrast, autocontrast);
-declare_mode_support!(EQUALIZE_SUPPORT, Equalize, equalize);
-
-/// Complete exact-mode support for native ImageOps.expand.
-pub(crate) static EXPAND_SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Expand, &[], super::expand::classify_mode);
+declare_expand_mode_contract! {
+    One => one,
+    ImageLuma8 => luma8,
+    ImageLumaA8 => luma_a8,
+    ImageLaPremultiplied8 => la_premultiplied8,
+    ImagePalette8 => palette8,
+    ImagePaletteAlpha8 => palette_alpha8,
+    ImageRgb8 => rgb8,
+    ImageRgba8 => rgba8,
+    ImageRgbPremultiplied8 => rgb_premultiplied8,
+    ImageRgbx8 => rgbx8,
+    ImageCmyk8 => cmyk8,
+    ImageYCbCr8 => ycbcr8,
+    ImageLab8 => lab8,
+    ImageHsv8 => hsv8,
+    ImageI32 => i32,
+    ImageF32 => f32,
+    ImageI16 => i16,
+    ImageI16L => i16l,
+    ImageI16B => i16b,
+    ImageI16N => i16n,
+    ImageLumaA16 => luma_a16,
+    ImageRgb16 => rgb16,
+    ImageRgba16 => rgba16,
+    ImageRgb32F => rgb32f,
+    ImageRgba32F => rgba32f,
+}
 
 /// Exact-mode support for nearest-edge expansion on the callback handle.
 pub(crate) static IMAGING_CORE_EXPAND_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::ImagingCoreExpand,
     &[],
-    super::expand_edges::classify_mode,
+    super::helpers::expand_edges::classify_mode,
 );
 
-declare_mode_support!(QUANTIZE_SUPPORT, Quantize, quantize);
+const QUANTIZE_ALLOWED_ALPHA_METHODS: &[u32] = &[2, 3];
+const QUANTIZE_RECOGNIZED_METHODS: &[u32] = &[0, 1, 2, 3];
+const QUANTIZE_METHOD_RESTRICTED_MODES: &[Mode] = &[
+    Mode::ImageLumaA8,
+    Mode::ImageLaPremultiplied8,
+    Mode::ImagePaletteAlpha8,
+    Mode::ImageRgba8,
+    Mode::ImageRgbPremultiplied8,
+    Mode::ImageLumaA16,
+    Mode::ImageRgba16,
+    Mode::ImageRgba32F,
+];
+const QUANTIZE_PALETTE_SOURCES: &[Mode] = &[Mode::ImageRgb8, Mode::ImageLuma8];
+const QUANTIZE_PALETTE_CARRIERS: &[Mode] = &[
+    Mode::ImageLuma8,
+    Mode::ImageRgb8,
+    Mode::ImageRgba8,
+    Mode::ImageRgbPremultiplied8,
+    Mode::ImageRgbx8,
+];
+const QUANTIZE_UNAVAILABLE_METHODS: &[u32] = &[3];
+pub(super) const QUANTIZE_INPUT: InputContract = InputContract::QuantizeParameters {
+    min_colors: 1,
+    max_colors: 256,
+    recognized_methods: QUANTIZE_RECOGNIZED_METHODS,
+    method_restricted_modes: QUANTIZE_METHOD_RESTRICTED_MODES,
+    allowed_methods: QUANTIZE_ALLOWED_ALPHA_METHODS,
+    palette_mode: Mode::ImagePalette8,
+    palette_sources: QUANTIZE_PALETTE_SOURCES,
+    palette_carriers: QUANTIZE_PALETTE_CARRIERS,
+    palette_carrier_rejection: "conversion not supported",
+    unavailable_methods: QUANTIZE_UNAVAILABLE_METHODS,
+    kmeans_nonnegative: true,
+    colors_rejection: "bad number of colors",
+    invalid_method_rejection: "quantization error",
+    pillow_rgba_method_rejection: "Fast Octree (method == 2) and libimagequant (method == 3) \
+         are the only valid methods for quantizing RGBA images",
+    alpha_method_rejection: "only Fast Octree (method == 2) is supported for alpha-bearing CoreOnly modes",
+    palette_mode_rejection: "bad mode for palette image",
+    palette_source_rejection: "only RGB or L mode images can be quantized to a palette",
+    unavailable_method_rejection: "dependency required by this method was not enabled at compile time",
+    kmeans_rejection: "kmeans must not be negative",
+};
+const QUANTIZE_INPUTS: &[InputContract] = &[InputContract::PaletteMetadata, QUANTIZE_INPUT];
+const QUANTIZE_PALETTED_OUTPUT: OutputModeRule = OutputModeRule::Fixed(Mode::ImagePalette8);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum QuantizeSource {
+    Luma,
+    Palette,
+    Rgba,
+    RgbPremultiplied,
+    Rgb,
+    Rgbx,
+    Native,
+}
+
+#[derive(Clone, Copy)]
+enum QuantizeSupportScope {
+    Pillow,
+    CoreOnly,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct QuantizeModeStrategy {
+    pub(super) support: ModeSupport,
+    pub(super) source: QuantizeSource,
+    pub(super) default_method: u32,
+}
+
+/// Binds each exact mode's support declaration to its concrete source strategy.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub(super) fn quantize_mode_strategy(mode: Mode) -> QuantizeModeStrategy {
+    let (source, scope, default_method) = match mode {
+        Mode::ImageLuma8 => (QuantizeSource::Luma, QuantizeSupportScope::Pillow, 0),
+        Mode::ImagePalette8 => (QuantizeSource::Palette, QuantizeSupportScope::Pillow, 0),
+        Mode::ImageRgba8 => (QuantizeSource::Rgba, QuantizeSupportScope::Pillow, 2),
+        Mode::ImageRgbPremultiplied8 => (
+            QuantizeSource::RgbPremultiplied,
+            QuantizeSupportScope::CoreOnly,
+            2,
+        ),
+        Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageLumaA16
+        | Mode::ImageRgba16
+        | Mode::ImageRgba32F => (QuantizeSource::Native, QuantizeSupportScope::CoreOnly, 2),
+        Mode::ImageRgbx8 => (QuantizeSource::Rgbx, QuantizeSupportScope::CoreOnly, 0),
+        Mode::ImageRgb8 => (QuantizeSource::Rgb, QuantizeSupportScope::Pillow, 0),
+        // NO_PILLOW_SUPPORT: these exact mode strategies extend Pillow's
+        // Quantize source contract without changing the Pillow-defined routes.
+        Mode::One
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageRgb16
+        | Mode::ImageRgb32F => (QuantizeSource::Native, QuantizeSupportScope::CoreOnly, 0),
+    };
+    let support = match scope {
+        QuantizeSupportScope::CoreOnly => ModeSupport::cpu_core_only(
+            OperationId::Quantize,
+            mode,
+            QUANTIZE_PALETTED_OUTPUT,
+            QUANTIZE_INPUTS,
+            &[],
+            "CoreOnly mode strategies extend Pillow's Quantize mode contract",
+        ),
+        QuantizeSupportScope::Pillow => ModeSupport::cpu(
+            OperationId::Quantize,
+            mode,
+            QUANTIZE_PALETTED_OUTPUT,
+            QUANTIZE_INPUTS,
+            &[],
+        ),
+    };
+    QuantizeModeStrategy {
+        support,
+        source,
+        default_method,
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn classify_quantize_mode(mode: Mode) -> ModeSupport {
+    quantize_mode_strategy(mode).support
+}
+
+pub(crate) static QUANTIZE_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::Quantize,
+    QUANTIZE_INPUTS,
+    classify_quantize_mode,
+);
+
+pub(crate) use super::helpers::quantize::{
+    default_method, execute_with_palette, prepare as prepare_quantize, validate_kmeans_count,
+    validate_pillow_rgba_method,
+};
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_autocontrast_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -61,10 +296,17 @@ pub(crate) fn prepare_autocontrast_pipeline<'a>(
     let PipelineOp::Autocontrast { options, mask } = op else {
         return Err(PilError::ValueError("expected Autocontrast op".into()));
     };
-    super::autocontrast::prepare(input.image, options, mask.as_ref(), ctx)
+    super::helpers::autocontrast::prepare(
+        input.image,
+        options,
+        mask.as_ref(),
+        &AUTOCONTRAST_SUPPORT,
+        ctx,
+    )
         .map(crate::compute::registry::PreparedOperation::from_autocontrast)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_equalize_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -75,10 +317,11 @@ pub(crate) fn prepare_equalize_pipeline<'a>(
         PipelineOp::EqualizeMasked { mask } => Some(mask),
         _ => return Err(PilError::ValueError("expected Equalize op".into())),
     };
-    super::equalize::prepare(input, mask, ctx)
+    super::helpers::equalize::prepare(input, mask, &EQUALIZE_SUPPORT, ctx)
         .map(crate::compute::registry::PreparedOperation::from_equalize)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_expand_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -104,6 +347,7 @@ pub(in crate::compute::pool_cpu::ops::imageops) const CROP_BORDER_INPUTS: &[Inpu
 
 macro_rules! declare_crop_border_modes {
     ($($mode:ident => $module:ident),+ $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn classify_crop_border_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::CROP_BORDER_SUPPORT,)+
@@ -154,12 +398,14 @@ pub(crate) enum PreparedCropBorder<'a> {
 }
 
 impl PreparedCropBorder<'_> {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::Crop(_, selection) | Self::Empty(_, _, selection) => selection,
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self {
             Self::Crop(crop, _) => crop.execute(),
@@ -171,6 +417,7 @@ impl PreparedCropBorder<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_crop_border<'a>(
     image: &'a DynamicImage,
     border: u32,
@@ -216,6 +463,7 @@ pub(crate) fn prepare_crop_border<'a>(
     Ok(PreparedCropBorder::Crop(crop, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_crop_border_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -234,6 +482,7 @@ macro_rules! declare_invert_modes {
             $($mode(super::$module::ops::Strategy<'a>),)+
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn classify_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::SUPPORT,)+
@@ -248,6 +497,7 @@ macro_rules! declare_invert_modes {
             }
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn prepare_mode<'a>(
             image: &'a DynamicImage,
             ctx: &ExecutionContext,
@@ -266,10 +516,12 @@ macro_rules! declare_invert_modes {
         }
 
         impl PreparedInvert<'_> {
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
             }
 
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let mut output = match self {
                     $(Self::$mode(strategy) => super::$module::ops::execute(strategy),)+
@@ -298,6 +550,7 @@ declare_invert_modes! {
     ImageHsv8 => hsv8,
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn rejected(mode: Mode, reason: &'static str) -> ModeSupport {
     ModeSupport::Rejected {
         mode,
@@ -306,6 +559,7 @@ fn rejected(mode: Mode, reason: &'static str) -> ModeSupport {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn rejection_error(mode: Mode) -> PilError {
     match INVERT_SUPPORT.for_mode(mode) {
         ModeSupport::Rejected { reason, kind, .. } => kind.into_error(reason),
@@ -318,74 +572,6 @@ fn rejection_error(mode: Mode) -> PilError {
 /// Exact-mode support contract for ImageOps Invert and its CoreOnly routes.
 pub(crate) static INVERT_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Invert, &[], classify_mode);
-
-const IMAGEOPS_INVERT_CHILDREN: &[OperationId] = &[OperationId::Eval];
-
-fn imageops_invert_rejection(mode: Mode) -> Option<(&'static str, RejectionKind)> {
-    imageops_lut_wrapper_rejection(mode).or_else(|| match mode {
-        Mode::ImageLumaA8 => Some(("not supported for mode LA", RejectionKind::OsError)),
-        Mode::ImagePaletteAlpha8 => Some(("not supported for mode PA", RejectionKind::OsError)),
-        Mode::ImageRgba8 => Some(("not supported for mode RGBA", RejectionKind::OsError)),
-        Mode::ImageCmyk8 => Some(("not supported for mode CMYK", RejectionKind::OsError)),
-        Mode::ImageI32 => Some(("not supported for mode I", RejectionKind::OsError)),
-        Mode::ImageF32 => Some(("not supported for mode F", RejectionKind::OsError)),
-        Mode::ImageI16 => Some(("not supported for mode I;16", RejectionKind::OsError)),
-        Mode::ImageI16L => Some(("not supported for mode I;16L", RejectionKind::OsError)),
-        Mode::ImageI16B => Some(("not supported for mode I;16B", RejectionKind::OsError)),
-        Mode::ImageI16N => Some(("not supported for mode I;16N", RejectionKind::OsError)),
-        _ => None,
-    })
-}
-
-fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
-    let child_support = OperationId::Eval.support().for_mode(mode);
-    let wrapper_rejection = imageops_invert_rejection(mode);
-    let scope = match (wrapper_rejection, child_support) {
-        (Some(_), _) if mode.is_pillow_mode() => SupportScope::Pillow,
-        (_, ModeSupport::Supported { scope, .. }) => scope,
-        (_, ModeSupport::Rejected { .. }) if mode.is_pillow_mode() => SupportScope::Pillow,
-        _ => SupportScope::CoreOnly {
-            reason: "this internal raster identity has no Pillow ImageOps route",
-        },
-    };
-    let (support, operations, outcome) = match wrapper_rejection {
-        Some((reason, kind)) => (
-            ModeSupport::Rejected { mode, reason, kind },
-            &[][..],
-            OperationRouteOutcome::Rejects {
-                stage: OperationRouteStage::WrapperGuard,
-                reason,
-                kind,
-            },
-        ),
-        None => match child_support {
-            ModeSupport::Supported { .. } => (
-                child_support,
-                IMAGEOPS_INVERT_CHILDREN,
-                OperationRouteOutcome::Produces,
-            ),
-            ModeSupport::Rejected { reason, kind, .. } => (
-                child_support,
-                IMAGEOPS_INVERT_CHILDREN,
-                OperationRouteOutcome::Rejects {
-                    stage: OperationRouteStage::ChildAdmission,
-                    reason,
-                    kind,
-                },
-            ),
-        },
-    };
-
-    OperationModeRoute::ComposedFallback {
-        mode,
-        intermediate_mode: None,
-        scope,
-        operations,
-        output: OutputModeRule::Preserve,
-        outcome,
-        prepared_support: support,
-    }
-}
 
 /// Public ImageOps wrapper contract; Python routes through public `Image.point`
 /// and Eval, while the direct Rust API retains the exact-mode Invert child.
@@ -400,128 +586,10 @@ pub(crate) static IMAGEOPS_INVERT_SUPPORT: OperationSupport = OperationSupport::
     IMAGEOPS_INVERT_CHILDREN,
 );
 
-const IMAGEOPS_LUT_CHILDREN: &[OperationId] = &[OperationId::Eval];
-
 // TODO(pillow-rs#3ptb): verify wrapper mode/fault order, custom mode and point
 // callbacks, unsupported-mode formatting faults, and selected/fallback
 // receipts for ImageOps Invert, Posterize, and Solarize. Their Rust-native
 // operation contracts remain separate.
-fn imageops_lut_mode_support(mode: Mode) -> Option<ModeSupport> {
-    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
-        return None;
-    }
-
-    let support = OperationId::Eval.support().for_mode(mode);
-    let scope = match support {
-        ModeSupport::Supported { scope, .. } => scope,
-        ModeSupport::Rejected { .. } => return Some(support),
-    };
-
-    Some(match support {
-        ModeSupport::Supported {
-            default,
-            architectures,
-            output,
-            inputs,
-            value_result,
-            ..
-        } => ModeSupport::Supported {
-            scope,
-            default,
-            architectures,
-            output,
-            inputs,
-            value_result,
-        },
-        rejected => rejected,
-    })
-}
-
-fn imageops_lut_wrapper_rejection(mode: Mode) -> Option<(&'static str, RejectionKind)> {
-    match mode {
-        // Pillow's shared _lut wrapper rejects P; direct Rust operations
-        // retain their separately declared mode strategies.
-        Mode::ImagePalette8 => Some((
-            "mode P support coming soon",
-            RejectionKind::NotImplementedError,
-        )),
-        _ => None,
-    }
-}
-
-fn classify_imageops_lut_route(mode: Mode) -> OperationModeRoute {
-    let pillow_mode = mode.is_pillow_mode();
-    let support_scope = if pillow_mode {
-        SupportScope::Pillow
-    } else {
-        SupportScope::CoreOnly {
-            reason: "this internal raster identity has no Pillow ImageOps route",
-        }
-    };
-    let (support, operations, scope, outcome) = match (
-        imageops_lut_wrapper_rejection(mode),
-        imageops_lut_mode_support(mode),
-    ) {
-        (Some((reason, kind)), _) => (
-            ModeSupport::Rejected { mode, reason, kind },
-            &[][..],
-            support_scope,
-            OperationRouteOutcome::Rejects {
-                stage: OperationRouteStage::WrapperGuard,
-                reason,
-                kind,
-            },
-        ),
-        (None, Some(support @ ModeSupport::Supported { scope, .. })) => (
-            support,
-            IMAGEOPS_LUT_CHILDREN,
-            scope,
-            OperationRouteOutcome::Produces,
-        ),
-        (None, Some(support @ ModeSupport::Rejected { reason, kind, .. })) => (
-            support,
-            IMAGEOPS_LUT_CHILDREN,
-            support_scope,
-            OperationRouteOutcome::Rejects {
-                stage: OperationRouteStage::ChildAdmission,
-                reason,
-                kind,
-            },
-        ),
-        (None, None) => {
-            let reason = super::helpers::strategy::unsupported_mode_reason(mode);
-            let kind = RejectionKind::OsError;
-            (
-                ModeSupport::Rejected { mode, reason, kind },
-                &[][..],
-                support_scope,
-                OperationRouteOutcome::Rejects {
-                    stage: OperationRouteStage::WrapperGuard,
-                    reason,
-                    kind,
-                },
-            )
-        }
-    };
-
-    OperationModeRoute::ComposedFallback {
-        mode,
-        intermediate_mode: None,
-        scope,
-        operations,
-        output: OutputModeRule::Preserve,
-        outcome,
-        prepared_support: support,
-    }
-}
-
-fn classify_imageops_posterize_route(mode: Mode) -> OperationModeRoute {
-    classify_imageops_lut_route(mode)
-}
-
-fn classify_imageops_solarize_route(mode: Mode) -> OperationModeRoute {
-    classify_imageops_lut_route(mode)
-}
 
 /// Wrapper-visible Posterize route through the shared ImageOps LUT adapter.
 pub(crate) static IMAGEOPS_POSTERIZE_SUPPORT: OperationSupport = OperationSupport::routed(
@@ -539,6 +607,7 @@ pub(crate) static IMAGEOPS_SOLARIZE_SUPPORT: OperationSupport = OperationSupport
     IMAGEOPS_LUT_CHILDREN,
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn validate_imageops_invert_mode(mode: Mode) -> Result<(), PilError> {
     match IMAGEOPS_INVERT_SUPPORT.route_for_mode(mode) {
         OperationModeRoute::ComposedFallback {
@@ -554,76 +623,9 @@ pub(crate) fn validate_imageops_invert_mode(mode: Mode) -> Result<(), PilError> 
     }
 }
 
-fn classify_native_byte_point_mode(
-    mode: Mode,
-    luma_support: ModeSupport,
-    palette_support: ModeSupport,
-    rgb_support: ModeSupport,
-) -> ModeSupport {
-    match mode {
-        Mode::ImageLuma8 => luma_support,
-        Mode::ImageRgb8 => rgb_support,
-        Mode::ImagePalette8 => palette_support,
-        Mode::One
-        | Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N
-        | Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => rejected_native_byte_point_mode(mode),
-    }
-}
-
-fn rejected_native_byte_point_mode(mode: Mode) -> ModeSupport {
-    let reason = match mode {
-        Mode::One => "not supported for mode 1",
-        Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImagePalette8 => "not supported for this mode",
-        Mode::ImageLumaA8 => "not supported for mode LA",
-        Mode::ImageLaPremultiplied8 => "not supported for mode La",
-        Mode::ImagePaletteAlpha8 => "not supported for mode PA",
-        Mode::ImageRgba8 => "not supported for mode RGBA",
-        Mode::ImageRgbPremultiplied8 => "not supported for mode RGBa",
-        Mode::ImageRgbx8 => "not supported for mode RGBX",
-        Mode::ImageCmyk8 => "not supported for mode CMYK",
-        Mode::ImageYCbCr8 => "not supported for mode YCbCr",
-        Mode::ImageLab8 => "not supported for mode LAB",
-        Mode::ImageHsv8 => "not supported for mode HSV",
-        Mode::ImageI32 => "not supported for mode I",
-        Mode::ImageF32 => "not supported for mode F",
-        Mode::ImageI16 => "not supported for mode I;16",
-        Mode::ImageI16L => "not supported for mode I;16L",
-        Mode::ImageI16B => "not supported for mode I;16B",
-        Mode::ImageI16N => "not supported for mode I;16N",
-        Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => super::helpers::strategy::unsupported_mode_reason(mode),
-    };
-    ModeSupport::Rejected {
-        mode,
-        reason,
-        kind: RejectionKind::OsError,
-    }
-}
-
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_posterize_mode(mode: Mode) -> ModeSupport {
-    classify_native_byte_point_mode(
+    super::helpers::point_support::classify_native_byte_point_mode(
         mode,
         super::luma8::ops::POSTERIZE_SUPPORT,
         super::palette8::ops::POSTERIZE_SUPPORT,
@@ -640,8 +642,9 @@ pub(crate) static POSTERIZE_SUPPORT: OperationSupport = OperationSupport::new(
     classify_posterize_mode,
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_solarize_mode(mode: Mode) -> ModeSupport {
-    classify_native_byte_point_mode(
+    super::helpers::point_support::classify_native_byte_point_mode(
         mode,
         super::luma8::ops::SOLARIZE_SUPPORT,
         super::palette8::ops::SOLARIZE_SUPPORT,
@@ -655,6 +658,7 @@ pub(crate) static SOLARIZE_SUPPORT: OperationSupport =
 
 macro_rules! declare_colorize_modes {
     ($($mode:ident),+ $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn classify_colorize_mode(mode: Mode) -> ModeSupport {
             match mode {
                 Mode::ImageLuma8 => super::luma8::ops::COLORIZE_SUPPORT,
@@ -664,6 +668,7 @@ macro_rules! declare_colorize_modes {
     };
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn rejected_colorize_mode(mode: Mode) -> ModeSupport {
     ModeSupport::Rejected {
         mode,
@@ -704,6 +709,27 @@ pub(crate) static COLORIZE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Colorize, &[], classify_colorize_mode)
         .with_rejected_output(OutputModeRule::Fixed(Mode::ImageRgb8));
 
+/// Public ImageOps wrapper contract: L converts to RGB before the shared LUT.
+// TODO(pillow-rs#3ptb): freeze subclass `convert()` results that return P or
+// unsupported modes, including the post-conversion error and selection receipt.
+pub(crate) static IMAGEOPS_COLORIZE_SUPPORT: OperationSupport = OperationSupport::routed(
+    OperationId::ImageOpsColorize,
+    &[],
+    classify_imageops_colorize_route,
+    IMAGEOPS_COLORIZE_CHILDREN,
+);
+
+/// Support for Colorize's `_lut` stage after public Convert returns.
+// TODO(pillow-rs#3ptb): verify mode overrides, output metadata, and selected
+// or fallback Eval receipts after public Convert and Point callbacks.
+pub(crate) static IMAGEOPS_COLORIZE_LUT_SUPPORT: OperationSupport = OperationSupport::routed(
+    OperationId::ImageOpsColorizeLut,
+    &[],
+    classify_imageops_colorize_lut_route,
+    IMAGEOPS_COLORIZE_LUT_CHILDREN,
+);
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn prepare_colorize<'a>(
     image: &'a DynamicImage,
     black: &(u8, u8, u8),
@@ -725,6 +751,7 @@ fn prepare_colorize<'a>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_colorize_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -762,6 +789,7 @@ pub(crate) enum PreparedPosterize<'a> {
 }
 
 impl PreparedPosterize<'_> {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::Luma(prepared) => prepared.selection(),
@@ -770,6 +798,7 @@ impl PreparedPosterize<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let mut output = match self {
             Self::Luma(prepared) => prepared.execute()?,
@@ -789,6 +818,7 @@ pub(crate) enum PreparedSolarize<'a> {
 }
 
 impl PreparedSolarize<'_> {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::Luma(prepared) => prepared.selection(),
@@ -797,6 +827,7 @@ impl PreparedSolarize<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let mut output = match self {
             Self::Luma(prepared) => prepared.execute()?,
@@ -808,6 +839,7 @@ impl PreparedSolarize<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn mode_selection(
     support: &'static OperationSupport,
     image: &DynamicImage,
@@ -823,6 +855,7 @@ fn mode_selection(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn prepare_posterize<'a>(
     image: &'a DynamicImage,
     bits: u8,
@@ -850,6 +883,7 @@ fn prepare_posterize<'a>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn prepare_solarize<'a>(
     image: &'a DynamicImage,
     threshold: u8,
@@ -872,6 +906,7 @@ fn prepare_solarize<'a>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_posterize_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -884,6 +919,7 @@ pub(crate) fn prepare_posterize_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_posterize)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_solarize_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -896,6 +932,7 @@ pub(crate) fn prepare_solarize_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_solarize)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     ctx: &ExecutionContext,
@@ -903,6 +940,7 @@ pub(crate) fn prepare<'a>(
     prepare_mode(image, ctx)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_invert_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

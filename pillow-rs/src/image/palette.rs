@@ -322,10 +322,10 @@ impl Image {
             Image::Pipeline { ops, .. } if ops.source_info_suppressed() => None,
             Image::Pipeline { source, ops, .. } => match ops.palette_output() {
                 Some(output) => match output.wrapper_metadata {
-                    crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSource
-                    | crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded => source.image_info(),
-                    crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::ExifOnly
-                    | crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::Drop => None,
+                    crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSource
+                    | crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSourceLoaded => source.image_info(),
+                    crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::ExifOnly
+                    | crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::Drop => None,
                 },
                 None => source.image_info(),
             },
@@ -344,8 +344,8 @@ impl Image {
                 ..
             } => match ops.palette_output() {
                 Some(output) => match output.wrapper_metadata {
-                    crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSource
-                    | crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded
+                    crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSource
+                    | crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSourceLoaded
                         if !ops.source_format_suppressed() =>
                     {
                         source.source_format()
@@ -679,6 +679,7 @@ impl Image {
 impl Image {
     /// Returns the mode used when indexed samples are expanded for a
     /// palette-dependent operation, without decoding image pixels.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn palette_expansion_mode(&self, source_mode: Mode) -> Option<Mode> {
         match source_mode {
             Mode::ImagePaletteAlpha8 => Some(Mode::ImageRgba8),

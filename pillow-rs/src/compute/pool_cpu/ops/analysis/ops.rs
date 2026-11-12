@@ -4,8 +4,7 @@
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OperationModeRoute, OperationSupport,
-    StrategySelection,
+    InputContract, ModeSupport, OperationId, OperationModeRoute, OperationSupport, PaletteKnowledge, RequestFacts, StrategyInputs, StrategySelection,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -16,15 +15,6 @@ pub(crate) use super::helpers::extrema_execution::prepare as prepare_get_extrema
 pub(crate) use super::helpers::getcolors_execution::prepare_getcolors;
 pub(crate) use super::helpers::stat_execution::prepare_stat;
 
-#[path = "ops/get_bbox.rs"]
-mod get_bbox;
-pub(crate) use get_bbox::GET_BBOX_SUPPORT;
-
-#[path = "ops/get_projection.rs"]
-mod get_projection;
-pub(crate) use get_projection::{
-    ProjectionOutput, SUPPORT, execute_cmyk8_selected, execute_rgb8_selected, prepare,
-};
 
 const NO_INPUTS: &[InputContract] = &[];
 const HISTOGRAM_MASK_MODES: &[Mode] = &[Mode::One, Mode::ImageLuma8];
@@ -42,6 +32,7 @@ pub(super) const HISTOGRAM_INPUTS: &[InputContract] = &[
     },
 ];
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_get_pixel_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::GET_PIXEL_SUPPORT,
@@ -76,6 +67,7 @@ fn classify_get_pixel_mode(mode: Mode) -> ModeSupport {
 pub(crate) static GET_PIXEL_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::GetPixel, NO_INPUTS, classify_get_pixel_mode);
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_get_pixel_rgba_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::GET_PIXEL_RGBA_SUPPORT,
@@ -113,6 +105,7 @@ pub(crate) static GET_PIXEL_RGBA_SUPPORT: OperationSupport = OperationSupport::n
     classify_get_pixel_rgba_mode,
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_get_extrema_bytes_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::GET_EXTREMA_BYTES_SUPPORT,
@@ -152,6 +145,7 @@ pub(crate) static GET_EXTREMA_BYTES_SUPPORT: OperationSupport = OperationSupport
     classify_get_extrema_bytes_mode,
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_histogram_entropy_mode_support(mode: Mode) -> (ModeSupport, ModeSupport) {
     match mode {
         Mode::One => super::one::ops::histogram_entropy_support(),
@@ -182,10 +176,12 @@ fn classify_histogram_entropy_mode_support(mode: Mode) -> (ModeSupport, ModeSupp
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_histogram_mode(mode: Mode) -> ModeSupport {
     classify_histogram_entropy_mode_support(mode).0
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_entropy_mode(mode: Mode) -> ModeSupport {
     classify_histogram_entropy_mode_support(mode).1
 }
@@ -206,6 +202,7 @@ pub(crate) static ENTROPY_SUPPORT: OperationSupport = OperationSupport::composed
     &[OperationId::Histogram],
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_getcolors_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::GET_COLORS_SUPPORT,
@@ -242,6 +239,7 @@ fn classify_getcolors_mode(mode: Mode) -> ModeSupport {
 pub(crate) static GET_COLORS_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::GetColors, NO_INPUTS, classify_getcolors_mode);
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_stat_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::stat_mode_support(),
@@ -281,6 +279,7 @@ pub(crate) static STAT_SUPPORT: OperationSupport = OperationSupport::composed(
     &[OperationId::Histogram],
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_split_route(mode: Mode) -> OperationModeRoute {
     match mode {
         Mode::One => super::one::ops::split_mode_route(),
@@ -319,6 +318,7 @@ pub(crate) static SPLIT_SUPPORT: OperationSupport = OperationSupport::routed(
     &[OperationId::ExtractBand],
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_get_extrema_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::GET_EXTREMA_SUPPORT,
@@ -356,6 +356,7 @@ pub(crate) static GET_EXTREMA_SUPPORT: OperationSupport = OperationSupport::new(
     classify_get_extrema_mode,
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_get_channel_route(mode: Mode) -> OperationModeRoute {
     match mode {
         Mode::One => super::one::ops::get_channel_mode_route(),
@@ -396,6 +397,7 @@ pub(crate) static GET_CHANNEL_SUPPORT: OperationSupport = OperationSupport::rout
     &[OperationId::ExtractBand],
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_get_data_support(mode: Mode) -> (ModeSupport, ModeSupport, ModeSupport) {
     match mode {
         Mode::One => super::one::ops::get_data_mode_support(),
@@ -426,6 +428,7 @@ fn classify_get_data_support(mode: Mode) -> (ModeSupport, ModeSupport, ModeSuppo
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_get_data_mode(mode: Mode) -> ModeSupport {
     classify_get_data_support(mode).0
 }
@@ -435,6 +438,7 @@ fn classify_get_data_mode(mode: Mode) -> ModeSupport {
 pub(crate) static GET_DATA_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::GetData, NO_INPUTS, classify_get_data_mode);
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_get_data_band_mode(mode: Mode) -> ModeSupport {
     classify_get_data_support(mode).1
 }
@@ -448,6 +452,7 @@ pub(crate) static GET_DATA_BAND_SUPPORT: OperationSupport = OperationSupport::co
     &[OperationId::GetDataBandInto, OperationId::ExtractBand],
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_get_data_band_into_mode(mode: Mode) -> ModeSupport {
     classify_get_data_support(mode).2
 }
@@ -462,6 +467,7 @@ pub(crate) static GET_DATA_BAND_INTO_SUPPORT: OperationSupport = OperationSuppor
 );
 
 /// Selects the exact-mode, serial formatted pixel reader.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn select_get_pixel(
     mode: Mode,
     context: &ExecutionContext,
@@ -470,6 +476,7 @@ pub(crate) fn select_get_pixel(
 }
 
 /// Selects the exact-mode, serial RGBA8 convenience reader.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn select_get_pixel_rgba(
     mode: Mode,
     context: &ExecutionContext,
@@ -478,6 +485,7 @@ pub(crate) fn select_get_pixel_rgba(
 }
 
 /// Executes Pillow-shaped GetPixel after its declared exact-mode selection.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel(
     image: &DynamicImage,
     x: u32,
@@ -556,6 +564,7 @@ pub(crate) fn execute_get_pixel(
 }
 
 /// Executes the allocation-free RGB binding path under the GetPixel declaration.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel_rgb(
     image: &DynamicImage,
     x: u32,
@@ -571,6 +580,7 @@ pub(crate) fn execute_get_pixel_rgb(
 }
 
 /// Executes the Rust/JavaScript fixed-RGBA8 pixel accessor.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel_rgba(
     image: &DynamicImage,
     x: u32,
@@ -586,6 +596,7 @@ pub(crate) fn execute_get_pixel_rgba(
 }
 
 /// Selects the direct full-buffer read for the mode carried by the raster.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn select_get_data(
     mode: Mode,
     context: &ExecutionContext,
@@ -594,6 +605,7 @@ pub(crate) fn select_get_data(
 }
 
 /// Selects the allocated band-read strategy for the exact raster mode.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn select_get_data_band(
     mode: Mode,
     context: &ExecutionContext,
@@ -602,6 +614,7 @@ pub(crate) fn select_get_data_band(
 }
 
 /// Selects the caller-owned band-read CPU strategy for the exact raster mode.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn select_get_data_band_into(
     mode: Mode,
     context: &ExecutionContext,
@@ -618,3 +631,213 @@ pub(crate) use get_data_execution::{
     get_data_integer_samples, get_data_palette_indices_band_into, get_data_palette_indices_view,
     get_data_scalar_samples, supports_get_data_band_into, supports_get_data_band_terminal,
 };
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn classify_get_bbox_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::One => super::one::ops::get_bbox_mode_support(),
+        Mode::ImageLuma8 => super::luma8::ops::get_bbox_mode_support(),
+        Mode::ImageLumaA8 => super::luma_a8::ops::get_bbox_mode_support(),
+        Mode::ImageLaPremultiplied8 => {
+            super::la_premultiplied8::ops::get_bbox_mode_support()
+        }
+        Mode::ImagePalette8 => super::palette8::ops::get_bbox_mode_support(),
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::get_bbox_mode_support(),
+        Mode::ImageRgb8 => super::rgb8::ops::get_bbox_mode_support(),
+        Mode::ImageRgba8 => super::rgba8::ops::get_bbox_mode_support(),
+        Mode::ImageRgbPremultiplied8 => {
+            super::rgb_premultiplied8::ops::get_bbox_mode_support()
+        }
+        Mode::ImageRgbx8 => super::rgbx8::ops::get_bbox_mode_support(),
+        Mode::ImageCmyk8 => super::cmyk8::ops::get_bbox_mode_support(),
+        Mode::ImageYCbCr8 => super::ycbcr8::ops::get_bbox_mode_support(),
+        Mode::ImageLab8 => super::lab8::ops::get_bbox_mode_support(),
+        Mode::ImageHsv8 => super::hsv8::ops::get_bbox_mode_support(),
+        Mode::ImageI32 => super::i32::ops::get_bbox_mode_support(),
+        Mode::ImageF32 => super::f32::ops::get_bbox_mode_support(),
+        Mode::ImageI16 => super::i16::ops::get_bbox_mode_support(),
+        Mode::ImageI16L => super::i16l::ops::get_bbox_mode_support(),
+        Mode::ImageI16B => super::i16b::ops::get_bbox_mode_support(),
+        Mode::ImageI16N => super::i16n::ops::get_bbox_mode_support(),
+        Mode::ImageLumaA16 => super::luma_a16::ops::get_bbox_mode_support(),
+        Mode::ImageRgb16 => super::rgb16::ops::get_bbox_mode_support(),
+        Mode::ImageRgba16 => super::rgba16::ops::get_bbox_mode_support(),
+        Mode::ImageRgb32F => super::rgb32f::ops::get_bbox_mode_support(),
+        Mode::ImageRgba32F => super::rgba32f::ops::get_bbox_mode_support(),
+    }
+}
+
+/// Exhaustive GetBBox support aggregated from exact-mode owners.
+/// TODO(pillow-rs#3ptb): verify alpha-only inputs, bounds, and Default receipts.
+pub(crate) static GET_BBOX_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::GetBBox, &[], classify_get_bbox_mode);
+
+// GetProjection's public support and execution are kept beside the analysis entry point.
+pub(crate) use super::helpers::projection::ProjectionOutput;
+use super::helpers::projection::{
+    native_pixel_bytes, project_lab, project_native_bytes, project_stored_words, storage_error,
+};
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn classify_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::One => super::one::ops::get_projection_mode_support(),
+        Mode::ImageLuma8 => super::luma8::ops::get_projection_mode_support(),
+        Mode::ImageLumaA8 => super::luma_a8::ops::get_projection_mode_support(),
+        Mode::ImageLaPremultiplied8 => {
+            super::la_premultiplied8::ops::get_projection_mode_support()
+        }
+        Mode::ImagePalette8 => super::palette8::ops::get_projection_mode_support(),
+        Mode::ImagePaletteAlpha8 => {
+            super::palette_alpha8::ops::get_projection_mode_support()
+        }
+        Mode::ImageRgb8 => super::rgb8::ops::SUPPORT,
+        Mode::ImageRgba8 => super::rgba8::ops::get_projection_mode_support(),
+        Mode::ImageRgbPremultiplied8 => {
+            super::rgb_premultiplied8::ops::get_projection_mode_support()
+        }
+        Mode::ImageRgbx8 => super::rgbx8::ops::get_projection_mode_support(),
+        Mode::ImageCmyk8 => super::cmyk8::ops::SUPPORT,
+        Mode::ImageYCbCr8 => super::ycbcr8::ops::get_projection_mode_support(),
+        Mode::ImageLab8 => super::lab8::ops::get_projection_mode_support(),
+        Mode::ImageHsv8 => super::hsv8::ops::get_projection_mode_support(),
+        Mode::ImageI32 => super::i32::ops::get_projection_mode_support(),
+        Mode::ImageF32 => super::f32::ops::get_projection_mode_support(),
+        Mode::ImageI16 => super::i16::ops::get_projection_mode_support(),
+        Mode::ImageI16L => super::i16l::ops::get_projection_mode_support(),
+        Mode::ImageI16B => super::i16b::ops::get_projection_mode_support(),
+        Mode::ImageI16N => super::i16n::ops::get_projection_mode_support(),
+        Mode::ImageLumaA16 => super::luma_a16::ops::get_projection_mode_support(),
+        Mode::ImageRgb16 => super::rgb16::ops::get_projection_mode_support(),
+        Mode::ImageRgba16 => super::rgba16::ops::get_projection_mode_support(),
+        Mode::ImageRgb32F => super::rgb32f::ops::get_projection_mode_support(),
+        Mode::ImageRgba32F => super::rgba32f::ops::get_projection_mode_support(),
+    }
+}
+
+/// Exhaustive support declaration for direct materialized GetProjection.
+/// TODO(pillow-rs#3ptb): verify native axes and exact architecture receipts.
+pub(crate) static SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::GetProjection, NO_INPUTS, classify_mode);
+
+/// Prepared direct projection, retaining the exact mode and architecture choice.
+pub(crate) struct PreparedProjection<'a> {
+    image: &'a DynamicImage,
+    mode: Mode,
+    selection: StrategySelection,
+}
+
+impl PreparedProjection<'_> {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        &self.selection
+    }
+
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    pub(crate) fn execute(self) -> Result<ProjectionOutput, PilError> {
+        if self.image.mode() != self.mode {
+            return Err(PilError::InternalError(
+                "GetProjection prepared mode did not match its DynamicImage tag".into(),
+            ));
+        }
+        match self.mode {
+            Mode::ImageRgb8 => {
+                let DynamicImage::ImageRgb8(image) = self.image else {
+                    return Err(storage_error(self.mode));
+                };
+                super::rgb8::ops::execute(image, self.selection)
+            }
+            Mode::ImageCmyk8 => {
+                let DynamicImage::ImageCmyk8(image) = self.image else {
+                    return Err(storage_error(self.mode));
+                };
+                super::cmyk8::ops::execute(image, self.selection)
+            }
+            Mode::ImageLab8 => {
+                let DynamicImage::ImageLab8(image) = self.image else {
+                    return Err(storage_error(self.mode));
+                };
+                Ok(ProjectionOutput::serial(project_lab(image)))
+            }
+            Mode::ImageI32 | Mode::ImageF32 => {
+                let raw = match self.image {
+                    DynamicImage::ImageI32(image) | DynamicImage::ImageF32(image) => image.as_raw(),
+                    _ => return Err(storage_error(self.mode)),
+                };
+                Ok(ProjectionOutput::serial(project_stored_words(
+                    raw,
+                    self.image.width(),
+                    self.image.height(),
+                )?))
+            }
+            mode => {
+                let bytes_per_pixel = native_pixel_bytes(mode);
+                Ok(ProjectionOutput::serial(project_native_bytes(
+                    self.image.as_bytes(),
+                    self.image.width(),
+                    self.image.height(),
+                    bytes_per_pixel,
+                )?))
+            }
+        }
+    }
+}
+
+/// Resolve the exact mode declaration and architecture before scanning pixels.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub(crate) fn prepare<'a>(
+    image: &'a DynamicImage,
+    context: &ExecutionContext,
+) -> Result<PreparedProjection<'a>, PilError> {
+    let mode = image.mode();
+    let selection = select(
+        context,
+        mode,
+        image.width(),
+        image.height(),
+        image.as_bytes().len(),
+    )?;
+    Ok(PreparedProjection {
+        image,
+        mode,
+        selection,
+    })
+}
+
+/// Execute the prepared native RGB8 strategy for terminal CPU fusion.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub(crate) fn execute_rgb8_selected(
+    image: &crate::raster::RgbImage,
+    selection: StrategySelection,
+) -> Result<ProjectionOutput, PilError> {
+    super::rgb8::ops::execute(image, selection)
+}
+
+/// Execute the prepared native CMYK8 strategy for terminal CPU fusion.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub(crate) fn execute_cmyk8_selected(
+    image: &crate::raster::RgbaImage,
+    selection: StrategySelection,
+) -> Result<ProjectionOutput, PilError> {
+    super::cmyk8::ops::execute(image, selection)
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn select(
+    context: &ExecutionContext,
+    mode: Mode,
+    width: u32,
+    height: u32,
+    byte_len: usize,
+) -> Result<StrategySelection, PilError> {
+    SUPPORT.for_mode(mode).select(
+        context,
+        StrategyInputs {
+            width,
+            height,
+            byte_len: Some(byte_len),
+            palette: PaletteKnowledge::Unknown,
+            request: RequestFacts::Unspecified,
+        },
+    )
+}

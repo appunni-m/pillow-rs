@@ -478,7 +478,7 @@ impl Image {
                 Some(output)
                     if matches!(
                         output.wrapper_metadata,
-                        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::Drop
+                        crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::Drop
                     ) =>
                 {
                     Vec::new()
@@ -678,6 +678,8 @@ impl Image {
     }
 
     /// Returns a known exact raster identity without materializing pixels.
+    ///
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn known_mode_identity(&self) -> Option<Mode> {
         match self {
             Image::Loaded(data) => Some(data.image.mode()),
@@ -708,6 +710,8 @@ impl Image {
     /// Encoded inputs are decoded only when neither their header nor a planned
     /// pipeline can provide the identity. Host-facing Pillow spellings remain
     /// available through [`Image::mode`].
+    ///
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn mode_identity(&self) -> Result<Mode, PilError> {
         if let Some(mode) = self.known_mode_identity() {
             return Ok(mode);
@@ -722,18 +726,6 @@ impl Image {
                 } else {
                     source.mode_identity()?
                 };
-                let has_payload_mode_change = ops.iter().any(|op| {
-                    matches!(
-                        op,
-                        PipelineOp::PutData { payload_mode, .. } if *payload_mode != current
-                    )
-                });
-                if ops.mode_preserving()
-                    && !source.has_palette_samples()
-                    && !has_payload_mode_change
-                {
-                    return Ok(PipelineModeState::Planned(Some(current)));
-                }
                 for op in ops.iter() {
                     let Some(next) = known_pipeline_op_mode_with_expansion(
                         op,
@@ -757,7 +749,7 @@ impl Image {
         // classes in CPU parity. A P input without an attached palette cannot
         // predeclare its palette-dependent expansion; rejected raw pipeline
         // descriptors without a declared rejected output must retain their
-        // execution-time error; non-raster operations have no result identity.
+        // execution-time error.
         Ok(self.materialized_shared()?.mode())
     }
 

@@ -21,5 +21,4 @@ mod rgb8;
 mod rgb_premultiplied8;
 mod rgba8;
 mod rgbx8;
-pub(crate) mod scalar;
 mod ycbcr8;

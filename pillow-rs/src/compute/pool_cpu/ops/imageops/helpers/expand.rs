@@ -1,8 +1,11 @@
-//! Native sample copying for exact-mode ImageOps.expand implementations.
+//! Shared native sample kernels and exact-mode ImageOps.expand preparation.
 
 use crate::error::PilError;
-use crate::pipeline::ExpandMargins;
+use crate::compute::ExecutionContext;
+use crate::compute::registry::support::{ExpandFillRule, InputContract, ModeSupport, StrategySelection};
+use crate::pipeline::{ExpandMargins, NativeColorInput};
 use crate::raster::{ImageBuffer, Pixel, Primitive};
+use crate::raster::DynamicImage;
 
 pub(crate) fn expanded_dimensions(
     width: u32,
@@ -247,4 +250,180 @@ where
             PilError::InternalError("edge expansion could not remap hidden lanes".into())
         })?;
     Ok(output)
+}
+
+macro_rules! declare_expand_modes {
+    ($($mode:ident => $module:ident),+ $(,)?) => {
+        pub(crate) enum PreparedExpand<'a> {
+            $($mode(super::super::$module::expand::Strategy<'a>),)+
+        }
+
+        fn prepare_image<'a>(
+            image: &'a DynamicImage,
+            border: crate::pipeline::ExpandMargins,
+            fill: (u8, u8, u8, u8),
+            ctx: &ExecutionContext,
+        ) -> Result<PreparedExpand<'a>, PilError> {
+            match image {
+                $(DynamicImage::$mode(input) => super::super::$module::expand::prepare(
+                    input, border, fill, ctx,
+                ).map(PreparedExpand::$mode),)+
+            }
+        }
+
+        impl PreparedExpand<'_> {
+            pub(crate) fn selection(&self) -> &StrategySelection {
+                match self {
+                    $(Self::$mode(strategy) => strategy.selection(),)+
+                }
+            }
+
+            pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+                match self {
+                    $(Self::$mode(strategy) => super::super::$module::expand::execute(strategy),)+
+                }
+            }
+        }
+    };
+}
+
+declare_expand_modes! {
+    One => one,
+    ImageLuma8 => luma8,
+    ImageLumaA8 => luma_a8,
+    ImageLaPremultiplied8 => la_premultiplied8,
+    ImagePalette8 => palette8,
+    ImagePaletteAlpha8 => palette_alpha8,
+    ImageRgb8 => rgb8,
+    ImageRgba8 => rgba8,
+    ImageRgbPremultiplied8 => rgb_premultiplied8,
+    ImageRgbx8 => rgbx8,
+    ImageCmyk8 => cmyk8,
+    ImageYCbCr8 => ycbcr8,
+    ImageLab8 => lab8,
+    ImageHsv8 => hsv8,
+    ImageI32 => i32,
+    ImageF32 => f32,
+    ImageI16 => i16,
+    ImageI16L => i16l,
+    ImageI16B => i16b,
+    ImageI16N => i16n,
+    ImageLumaA16 => luma_a16,
+    ImageRgb16 => rgb16,
+    ImageRgba16 => rgba16,
+    ImageRgb32F => rgb32f,
+    ImageRgba32F => rgba32f,
+}
+
+pub(crate) fn prepare<'a>(
+    image: &'a DynamicImage,
+    border: crate::pipeline::ExpandMargins,
+    fill: (u8, u8, u8, u8),
+    ctx: &ExecutionContext,
+) -> Result<PreparedExpand<'a>, PilError> {
+    prepare_image(image, border, fill, ctx)
+}
+
+// TODO(pillow-rs#3ptb): Freeze CoreOnly typed component fills and
+// Default/lower-architecture fallback receipts in CPU parity.
+pub(crate) fn prepare_with_native_fill<'a>(
+    image: &'a DynamicImage,
+    border: crate::pipeline::ExpandMargins,
+    fill: (u8, u8, u8, u8),
+    native_fill: NativeColorInput,
+    ctx: &ExecutionContext,
+) -> Result<PreparedExpand<'a>, PilError> {
+    let support = super::super::ops::EXPAND_SUPPORT.for_mode(image.mode());
+    let inputs = match support {
+        ModeSupport::Supported { inputs, .. } => inputs,
+        ModeSupport::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
+    };
+    let declares_native_fill = inputs.iter().any(|contract| {
+        matches!(
+            contract,
+            InputContract::ExpandFill(ExpandFillRule::NativeU16 | ExpandFillRule::NativeF32)
+        )
+    });
+    if !declares_native_fill {
+        return Err(PilError::InternalError(
+            "typed Expand fill reached a mode without a native fill contract".into(),
+        ));
+    }
+    match image {
+        DynamicImage::ImageI16(input) => super::super::i16::expand::prepare_with_native_fill(
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
+        )
+        .map(PreparedExpand::ImageI16),
+        DynamicImage::ImageI16L(input) => super::super::i16l::expand::prepare_with_native_fill(
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
+        )
+        .map(PreparedExpand::ImageI16L),
+        DynamicImage::ImageI16B(input) => super::super::i16b::expand::prepare_with_native_fill(
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
+        )
+        .map(PreparedExpand::ImageI16B),
+        DynamicImage::ImageI16N(input) => super::super::i16n::expand::prepare_with_native_fill(
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
+        )
+        .map(PreparedExpand::ImageI16N),
+        DynamicImage::ImageLumaA16(input) => super::super::luma_a16::expand::prepare_with_native_fill(
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
+        )
+        .map(PreparedExpand::ImageLumaA16),
+        DynamicImage::ImageRgb16(input) => super::super::rgb16::expand::prepare_with_native_fill(
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
+        )
+        .map(PreparedExpand::ImageRgb16),
+        DynamicImage::ImageRgba16(input) => super::super::rgba16::expand::prepare_with_native_fill(
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
+        )
+        .map(PreparedExpand::ImageRgba16),
+        DynamicImage::ImageRgb32F(input) => super::super::rgb32f::expand::prepare_with_native_fill(
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
+        )
+        .map(PreparedExpand::ImageRgb32F),
+        DynamicImage::ImageRgba32F(input) => super::super::rgba32f::expand::prepare_with_native_fill(
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
+        )
+        .map(PreparedExpand::ImageRgba32F),
+        _ => Err(PilError::InternalError(
+            "typed Expand fill reached a non-native-width mode".into(),
+        )),
+    }
 }

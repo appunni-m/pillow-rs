@@ -23,7 +23,7 @@ pub(super) fn try_convert_to_luma16(
         );
         return Ok(Some(result));
     }
-    if crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
+    if crate::compute::pool_cpu::ops::color::ops::CONVERT_SUPPORT
         .scope_for_target(source_mode, target_mode)
         .is_some()
     {

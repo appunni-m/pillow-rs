@@ -50,7 +50,7 @@ pub(super) fn evaluate_palette_target_convert(
     })?;
     let (output_palette, output_palette_alpha) = if matches!(
         wrapper_metadata,
-        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded
+        crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSourceLoaded
     ) {
         (resolved_palette, wrapper_palette_alpha)
     } else {
@@ -93,6 +93,6 @@ pub(super) fn retain_preserved_palette_metadata(
         palette: output_palette,
         palette_alpha: output_palette_alpha,
         wrapper_metadata:
-            crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSource,
+            crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSource,
     })
 }

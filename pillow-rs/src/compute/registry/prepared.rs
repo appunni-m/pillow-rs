@@ -95,7 +95,7 @@ declare_prepared_operations! {
     Contain, geometry, PreparedContain, from_contain;
     Cover, geometry, PreparedCover, from_cover;
     Fit, geometry, PreparedFit, from_fit;
-    Pad, geometry::pad, PreparedPad, from_pad;
+    Pad, geometry, PreparedPad, from_pad;
     Scale, geometry, PreparedScale, from_scale;
     Thumbnail, thumbnail, PreparedThumbnail, from_thumbnail;
     Flip, transpose, PreparedFlip, from_flip;
@@ -141,7 +141,7 @@ impl PreparedOperation<'_> {
     /// Executes Convert while retaining palette metadata for the Image wrapper.
     pub(crate) fn execute_convert_output(
         self,
-    ) -> Result<crate::compute::pool_cpu::ops::color::convert::ops::PreparedConvertOutput, PilError>
+    ) -> Result<crate::compute::pool_cpu::ops::color::ops::PreparedConvertOutput, PilError>
     {
         match self.implementation {
             Implementation::Convert(plan) => plan.execute_with_output(),

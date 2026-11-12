@@ -35,6 +35,7 @@ macro_rules! declare_grayscale_modes {
             $($mode(super::$module::ops::Strategy<'a>),)+
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn classify_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::SUPPORT,)+
@@ -46,6 +47,7 @@ macro_rules! declare_grayscale_modes {
         }
 
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         pub(crate) fn prepare<'a>(input: GrayscaleInputs<'a>, ctx: &ExecutionContext)
             -> Result<PreparedGrayscale<'a>, PilError> {
             let GrayscaleInputs { image, palette: $palette } = input;
@@ -58,10 +60,12 @@ macro_rules! declare_grayscale_modes {
         }
 
         impl PreparedGrayscale<'_> {
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
             }
 
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self { $(Self::$mode(strategy) => grayscale_result!($result, super::$module::ops::execute(strategy)),)+ }
             }
@@ -101,6 +105,7 @@ pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Grayscale, &[], classify_mode)
         .with_rejected_output(OutputModeRule::Fixed(Mode::ImageLuma8));
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: GrayscaleInputs<'a>,
     op: &'a PipelineOp,

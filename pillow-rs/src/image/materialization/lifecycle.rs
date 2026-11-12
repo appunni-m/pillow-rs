@@ -62,7 +62,7 @@ impl Image {
                 crate::raster::Mode::ImagePalette8
                     if matches!(
                         output.wrapper_metadata,
-                        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded
+                        crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSourceLoaded
                     ) =>
                 {
                     Ok(Image::Loaded(LoadedData {

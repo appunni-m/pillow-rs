@@ -85,6 +85,7 @@ impl Image {
     /// Check whether an op can run on indexed P/PA samples without expanding
     /// them to RGB. The mode strategy owns P filter normalization; PA filters
     /// operate on their native index and alpha lanes.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn is_palette_safe_op(op: &PipelineOp) -> bool {
         if Self::palette_preserves_raw_samples(op) {
             return true;
@@ -237,6 +238,7 @@ impl Image {
     /// the raw index/alpha bands and preserves `PA`; unlike `P`, it is a valid
     /// input for built-in convolution filters. Keep the PA-specific exception
     /// out of the generic classifier so P still follows its declared rejection.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(super) fn is_palette_safe_op_for_mode(mode: Mode, op: &PipelineOp) -> bool {
         Self::is_palette_safe_op(op) || Self::putdata_preserves_palette_output(mode, op)
             // Same-mode P/PA conversion is a wrapper copy; retain indexed
@@ -328,6 +330,7 @@ impl Image {
     /// Whether this value currently represents palette indices rather than
     /// visible luma samples. Lazy inputs use cached header metadata so the
     /// first queued operation does not need to decode merely to preserve mode.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn has_palette_mode(&self) -> bool {
         self.known_mode_identity() == Some(Mode::ImagePalette8)
     }
@@ -338,6 +341,7 @@ impl Image {
     /// Keep this separate from `has_palette_mode`: callers such as
     /// `apply_transparency`, P encoding, and palette-index `putpixel` implement
     /// Pillow behavior that applies only to single-band P images.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(super) fn has_palette_samples(&self) -> bool {
         self.has_palette_mode() || self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
     }

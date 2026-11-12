@@ -893,4 +893,4 @@ pub(crate) fn prepare_color_saturation_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_color_saturation)
 }
 
-pub(crate) use super::contrast::{CONTRAST_SUPPORT, prepare_contrast_pipeline};
+pub(crate) use super::helpers::contrast_route::{CONTRAST_SUPPORT, prepare_contrast_pipeline};

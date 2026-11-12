@@ -23,6 +23,8 @@ NEAREST = Resampling.NEAREST
 BILINEAR = Resampling.BILINEAR
 BICUBIC = Resampling.BICUBIC
 LANCZOS = Resampling.LANCZOS
+MKS2013 = Resampling.MKS2013
+MKS2021 = Resampling.MKS2021
 AFFINE = Transform.AFFINE
 EXTENT = Transform.EXTENT
 PERSPECTIVE = Transform.PERSPECTIVE
@@ -68,6 +70,8 @@ __all__ = [
     "BILINEAR",
     "BICUBIC",
     "LANCZOS",
+    "MKS2013",
+    "MKS2021",
     "AFFINE",
     "EXTENT",
     "PERSPECTIVE",

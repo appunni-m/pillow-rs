@@ -1,6 +1,71 @@
 use super::RsImage;
 use crate::*;
+use pyo3::basic::CompareOp;
+use pyo3::exceptions::PyBufferError;
 use pyo3::pymethods;
+use pyo3::types::{
+    PyAnyMethods, PyByteArray, PyInt, PyList, PyMemoryView, PyString, PyTuple, PyTupleMethods,
+};
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn finish_frombytes_payload(
+    py: Python<'_>,
+    mode: pillow_rs::Mode,
+    size: (u32, u32),
+    decoder_name: String,
+    raw_decoder: Option<pillow_rs::RawDecoderPlan>,
+    data: Cow<'_, [u8]>,
+) -> PyResult<PyImage> {
+    py.detach(move || match (raw_decoder, data) {
+        (Some(plan), Cow::Borrowed(data)) => {
+            pillow_rs::image_frombytes_with_plan(size, data, &decoder_name, plan)
+        }
+        (Some(plan), Cow::Owned(data)) => {
+            pillow_rs::image_frombytes_owned_with_plan(size, data, &decoder_name, plan)
+        }
+        (None, Cow::Borrowed(data)) => pillow_rs::image_frombytes(mode, size, data, &decoder_name),
+        (None, Cow::Owned(data)) => {
+            pillow_rs::image_frombytes_owned(mode, size, data, &decoder_name)
+        }
+    })
+    .map(|inner| PyImage { inner })
+    .map_err(map_error)
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn raw_decoder_plan_from_python(
+    mode: pillow_rs::Mode,
+    args: &Bound<'_, PyTuple>,
+) -> PyResult<pillow_rs::RawDecoderPlan> {
+    let nested_args = if args.len() == 1 {
+        args.get_item(0)?.cast::<PyTuple>().ok().cloned()
+    } else {
+        None
+    };
+    let args = nested_args.as_ref().unwrap_or(args);
+    if args.len() > 3 {
+        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "function takes at most 4 arguments ({} given)",
+            args.len() + 1
+        )));
+    }
+    let rawmode = if args.is_empty() {
+        None
+    } else {
+        Some(args.get_item(0)?.extract::<String>()?)
+    };
+    let stride = if args.len() > 1 {
+        c_int_from_python(&args.get_item(1)?)?
+    } else {
+        0
+    };
+    let orientation = if args.len() > 2 {
+        c_int_from_python(&args.get_item(2)?)?
+    } else {
+        1
+    };
+    pillow_rs::RawDecoderPlan::new(mode, rawmode.as_deref(), stride, orientation).map_err(map_error)
+}
 
 #[pymethods]
 impl PyImage {
@@ -12,6 +77,32 @@ impl PyImage {
         Ok(PyImage { inner: img })
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    #[staticmethod]
+    fn _new_palette_lookup_required(
+        mode: &Bound<'_, PyAny>,
+        color: &Bound<'_, PyAny>,
+    ) -> PyResult<bool> {
+        let mode_is_palette = mode
+            .rich_compare(PyString::new(mode.py(), "P"), CompareOp::Eq)?
+            .is_truthy()?;
+        let mode = mode_is_palette.then_some(pillow_rs::Mode::ImagePalette8);
+        pillow_rs::Image::new_palette_lookup_required(mode, || {
+            if !color.is_instance_of::<PyList>() && !color.is_instance_of::<PyTuple>() {
+                return Ok(None);
+            }
+            // Match isinstance/all/len short-circuit order; len runs only
+            // after every component passes the integer check.
+            for value in color.try_iter()? {
+                if !value?.is_instance_of::<PyInt>() {
+                    return Ok(None);
+                }
+            }
+            Ok(Some(color.len()?))
+        })
+    }
+
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[classmethod]
     #[pyo3(signature = (mode, size, color=None))]
     fn new(
@@ -39,6 +130,7 @@ impl PyImage {
         Ok(PyImage { inner: image })
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[classmethod]
     #[pyo3(signature = (fp, mode=None, formats=None))]
     fn open(
@@ -167,6 +259,7 @@ impl PyImage {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
     fn tobytes_unpacked(&self, py: Python<'_>) -> PyResult<Vec<u8>> {
         py.detach(|| self.inner.tobytes_unpacked())
             .map_err(map_error)
@@ -226,38 +319,101 @@ impl PyImage {
         self.inner.tell()
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[staticmethod]
-    #[pyo3(signature = (mode, size, data, decoder_name="raw"))]
+    #[pyo3(signature = (mode, size, data, decoder_name="raw", *args))]
     fn frombytes(
-        mode: &str,
-        size: (u32, u32),
-        data: Cow<'_, [u8]>,
+        mode: &Bound<'_, PyAny>,
+        size: &Bound<'_, PyAny>,
+        data: &Bound<'_, PyAny>,
         decoder_name: &str,
+        args: &Bound<'_, PyTuple>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        if decoder_name != "raw" {
-            return Err(map_error(pillow_rs::PilError::IOError(format!(
-                "decoder {decoder_name} not available"
-            ))));
-        }
+        let (width, height) = nonnegative_output_size_items_from_python(size)?;
+        let mode_name = mode.extract::<String>()?;
         // NO_PILLOW_SUPPORT: accept Rust-only mode names only for typed raw input.
-        let mode = pillow_rs::Mode::from_pillow_name(mode)
-            .or_else(|| pillow_rs::Mode::from_rust_name(mode))
+        let mode = pillow_rs::Mode::from_pillow_name(&mode_name)
+            .or_else(|| pillow_rs::Mode::from_rust_name(&mode_name))
             .ok_or_else(|| {
                 map_error(pillow_rs::PilError::ValueError(
                     "unrecognized image mode".into(),
                 ))
             })?;
+        let size = frombytes_size_from_python(&width, &height)?;
+        if size.0 == 0 || size.1 == 0 {
+            return finish_frombytes_payload(
+                py,
+                mode,
+                size,
+                "raw".to_owned(),
+                None,
+                Cow::Borrowed(&[]),
+            );
+        }
+        if decoder_name != "raw" {
+            return Err(map_error(pillow_rs::PilError::IOError(format!(
+                "decoder {decoder_name} not available"
+            ))));
+        }
         let decoder_name = decoder_name.to_owned();
-        // PyO3 borrows immutable bytes and extracts owned vectors for mutable
-        // sequences. Preserve that ownership so raw raster modes can adopt an
-        // extracted buffer instead of copying it a second time.
-        py.detach(move || match data {
-            Cow::Borrowed(data) => pillow_rs::image_frombytes(mode, size, data, &decoder_name),
-            Cow::Owned(data) => pillow_rs::image_frombytes_owned(mode, size, data, &decoder_name),
-        })
-        .map(|img| PyImage { inner: img })
-        .map_err(map_error)
+        // Pillow creates and validates the selected decoder before asking the
+        // input object for a buffer. Keep rawmode errors at that boundary.
+        let raw_decoder = raw_decoder_plan_from_python(mode, args)?;
+        if let Ok(bytes) = data.cast::<PyBytes>() {
+            return finish_frombytes_payload(
+                py,
+                mode,
+                size,
+                decoder_name,
+                Some(raw_decoder),
+                Cow::Borrowed(bytes.as_bytes()),
+            );
+        }
+        if data.is_instance_of::<PyByteArray>() {
+            return finish_frombytes_payload(
+                py,
+                mode,
+                size,
+                decoder_name,
+                Some(raw_decoder),
+                Cow::Owned(data.extract::<Vec<u8>>()?),
+            );
+        }
+        let memoryview = PyMemoryView::from(data).map_err(|error| {
+            if error.is_instance_of::<PyTypeError>(py) {
+                if let Ok(message) = error
+                    .value(py)
+                    .str()
+                    .and_then(|value| value.extract::<String>())
+                {
+                    if let Some(message) = message.strip_prefix("memoryview: ") {
+                        return PyTypeError::new_err(message.to_owned());
+                    }
+                }
+            }
+            error
+        })?;
+        // Pillow 13's `_imaging.c::PyImaging_GetBuffer` requests
+        // `PyBUF_SIMPLE` (https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L2519-L2522),
+        // which requires C-contiguous storage. `memoryview.tobytes()` alone
+        // would flatten a strided view and accept input that Pillow rejects.
+        let c_contiguous = memoryview.getattr("c_contiguous")?.extract::<bool>()?;
+        if !c_contiguous {
+            return Err(PyBufferError::new_err(
+                "memoryview: underlying buffer is not C-contiguous",
+            ));
+        }
+        let decoded_bytes = memoryview.call_method0("tobytes")?;
+        let decoded_bytes = decoded_bytes.cast::<PyBytes>()?;
+        finish_frombytes_payload(
+            py,
+            mode,
+            size,
+            decoder_name,
+            Some(raw_decoder),
+            Cow::Borrowed(decoded_bytes.as_bytes()),
+        )
     }
 
     fn close(&self) -> PyResult<()> {

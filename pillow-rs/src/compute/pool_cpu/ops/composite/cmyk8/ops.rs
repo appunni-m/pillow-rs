@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 pub(crate) const MODE: Mode = Mode::ImageCmyk8;
 
+super::super::helpers::declare_composite_module_support!(ImageCmyk8, luma_mask(4, 16));
+
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],

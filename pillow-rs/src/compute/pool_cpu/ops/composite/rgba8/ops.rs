@@ -12,6 +12,8 @@ use crate::raster::{DynamicImage, Mode, RgbaImage};
 
 pub(crate) const MODE: Mode = Mode::ImageRgba8;
 
+super::super::helpers::declare_composite_module_support!(ImageRgba8, luma_mask(4, 4));
+
 const INPUTS: &[InputContract] = &[InputContract::SameModeSecondaryImage {
     mode: Mode::ImageRgba8,
     rejection_reason: "images do not match",

@@ -6,6 +6,9 @@ use crate::raster::{DynamicImage, Mode};
 
 pub(crate) const MODE: Mode = Mode::ImageRgba16;
 
+// NO_PILLOW_SUPPORT: CompositeModule is an internal native high-depth extension.
+super::super::helpers::declare_composite_module_support!(ImageRgba16, core_only);
+
 pub(crate) fn composite(
     source: &DynamicImage,
     destination: &DynamicImage,

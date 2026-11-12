@@ -42,7 +42,7 @@ pub(crate) struct PipelinePaletteOutput {
     pub(crate) palette: Option<Vec<u8>>,
     pub(crate) palette_alpha: Option<Vec<u8>>,
     pub(crate) wrapper_metadata:
-        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata,
+        crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata,
 }
 
 #[derive(Debug)]
@@ -211,6 +211,7 @@ impl PipelineOps {
         self.as_slice().to_vec()
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn mode_preserving(&self) -> bool {
         self.chain.mode_preserving
     }
@@ -276,15 +277,12 @@ impl PipelineOps {
     }
 }
 
-/// Whether an operation leaves the logical Pillow mode unchanged.
+/// Whether an operation variant may reuse a mode-preserving pipeline prefix.
 ///
-/// This metadata is deliberately conservative.  Returning `false` only
-/// means that a later mode query may materialize; it never changes execution
-/// semantics. This classification also gates reusable pipeline prefixes, so
-/// only operations whose output contract preserves the current mode belong
-/// here. The fast path is important for lazy native-mode chains such as
-/// repeated `ImageOps.invert`, whose validation needs the source mode but not
-/// the pixels.
+/// This variant-level hint only governs prefix reuse. Exact output identity is
+/// planned from the operation's support contract; this hint must not hide a
+/// mode-specific rejection or unresolved output.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn op_preserves_mode(op: &PipelineOp) -> bool {
     matches!(
         op,
@@ -425,22 +423,26 @@ pub struct PipelineModeCache {
 }
 
 impl PipelineModeCache {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn new() -> Self {
         Self {
             state: Arc::new(OnceLock::new()),
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn with_declared_mode(mode: Mode) -> Self {
         let cache = Self::new();
         let _ = cache.state.set(Ok(PipelineModeState::Declared(mode)));
         cache
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn get(&self) -> Option<&Result<PipelineModeState, PilError>> {
         self.state.get()
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn get_or_init<F>(&self, initialize: F) -> &Result<PipelineModeState, PilError>
     where
         F: FnOnce() -> Result<PipelineModeState, PilError>,
@@ -457,12 +459,14 @@ pub(crate) fn pipeline_shape_cache() -> PipelineShapeCache {
     Arc::new(OnceLock::new())
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn pipeline_mode_cache() -> PipelineModeCache {
     PipelineModeCache::new()
 }
 
 /// Creates the single pipeline mode cache, optionally seeded with an output
 /// identity already known while constructing or updating the lazy graph.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn pipeline_mode_cache_for(output_mode: Option<Mode>) -> PipelineModeCache {
     match output_mode {
         Some(mode) => PipelineModeCache::with_declared_mode(mode),
@@ -472,6 +476,7 @@ pub(crate) fn pipeline_mode_cache_for(output_mode: Option<Mode>) -> PipelineMode
 
 /// Returns a mode already carried by the graph or resolved by a prior metadata
 /// query, without triggering planning or materialization.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn cached_pipeline_mode(cache: &PipelineModeCache) -> Option<Mode> {
     cache
         .get()
@@ -486,6 +491,7 @@ pub(crate) fn cached_pipeline_mode(cache: &PipelineModeCache) -> Option<Mode> {
 
 /// Returns only the output identity carried by the graph, not one inferred by
 /// a later metadata query.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn declared_pipeline_mode(cache: &PipelineModeCache) -> Option<Mode> {
     cache
         .get()
@@ -506,6 +512,7 @@ struct PipelineOutputMetadata {
     preserves_palette: bool,
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMetadata {
     let source_is_paletted = source.has_palette_samples();
     let palette_safe = source_is_paletted
@@ -612,6 +619,7 @@ fn append_pipeline_op(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn pipeline_output_mode(
     source: &Image,
     op: &PipelineOp,

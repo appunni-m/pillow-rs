@@ -425,6 +425,7 @@ impl PyImage {
         self.inner.getxmp()
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
     fn getim(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         // This is the live Rust-owned image object. Do not fabricate a Pillow
         // Imaging capsule: the core has no compatible C pointer to expose.

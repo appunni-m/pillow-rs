@@ -12,6 +12,7 @@ pub(crate) struct VectorProjection {
 }
 
 /// Preserve the archived grouped CMYK SIMD scan and its scalar edge handling.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn cmyk_projection(image: &RgbaImage) -> VectorProjection {
     let row_bytes = image.width() as usize * 4;
     let block_bytes = if row_bytes >= 64 {
@@ -48,6 +49,7 @@ pub(crate) fn cmyk_projection(image: &RgbaImage) -> VectorProjection {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn rgb_block_has_nonzero(block: &[u8], zero: u8x16) -> (bool, u64) {
     let mut vectors = block.chunks_exact(16);
     let first_lanes: [u8; 16] = vectors
@@ -72,6 +74,7 @@ fn rgb_block_has_nonzero(block: &[u8], zero: u8x16) -> (bool, u64) {
 }
 
 /// Preserve the archived RGB 48-byte block scan and scalar remainder.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn rgb_projection(image: &RgbImage) -> VectorProjection {
     let (width, height) = (image.width() as usize, image.height() as usize);
     let mut horizontal = vec![0; width];

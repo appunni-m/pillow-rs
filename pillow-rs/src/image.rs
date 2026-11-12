@@ -47,7 +47,7 @@ pub(crate) mod codec_adapter;
 pub(crate) mod color_count;
 mod construction;
 pub use construction::{
-    NewColorInput, OpenFormatsInput, OpenModeInput, validate_open_inputs,
+    NewColorInput, OpenFormatsInput, OpenModeInput, RawDecoderPlan, validate_open_inputs,
     validate_open_source_bytes,
 };
 mod data_access;
@@ -159,24 +159,28 @@ pub struct LoadedData {
 ///
 /// The variants retain the distinction Pillow makes between numeric samples,
 /// packed multiband integers, and component tuples. [`Image::putdata_values`]
-/// converts these values into the canonical logical-mode bytes consumed by all
-/// compute backends.
+/// routes byte-compatible modes through their canonical payload and writes
+/// CoreOnly high-depth components directly as native samples.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PutDataValue {
     /// A numeric sample for `1`, `L`, `P`, `I`, or `F`.
     Number(f64),
     /// A signed integer whose low bytes encode one multiband pixel.
     Packed(i64),
-    /// Tuple components. Pillow parses the first component as a signed 64-bit
-    /// integer and later components as signed 32-bit integers.
+    /// Integer tuple components. Pillow-defined paths retain Pillow's signed
+    /// integer coercion; CoreOnly `u16` paths clamp these values to native
+    /// sample range.
     Components(Vec<i128>),
+    /// Floating-point tuple components for native `RGB32F` and `RGBA32F`
+    /// extensions. Values are cast directly to the destination `f32` lanes.
+    FloatComponents(Vec<f64>),
 }
 
 /// Shape of one host-language value accepted by `Image.putdata`.
 ///
-/// Bindings use this result to choose whether to extract a numeric scalar or
-/// a multiband tuple. The mode-specific distinction belongs to the core so
-/// each binding exposes the same public coercion boundary.
+/// Bindings use this result to choose whether to extract a numeric scalar,
+/// integer tuple, or float tuple. The mode-specific distinction belongs to the
+/// core so each binding exposes the same public coercion boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PutDataValueKind {
     /// A scalar sample for `1`, `L`, `P`, `I`, `I;16*`, or `F`.
@@ -186,19 +190,40 @@ pub enum PutDataValueKind {
         /// Number of logical channels in the image mode.
         channels: usize,
     },
+    /// Integer tuple for native CoreOnly multiband modes with `u16` samples.
+    NativeU16Components {
+        /// Number of logical channels in the image mode.
+        channels: usize,
+    },
+    /// Floating-point component tuple for native CoreOnly multiband modes.
+    FloatComponents {
+        /// Number of logical channels in the image mode.
+        channels: usize,
+    },
 }
 
 impl PutDataValueKind {
     /// Returns whether a component tuple length is valid for this mode shape.
     ///
-    /// The Python adapter uses this before extracting tuple items because
-    /// Pillow validates tuple length before coercing individual components.
+    /// Host adapters use this before extracting tuple items so mode-specific
+    /// arity validation happens before component coercion.
     #[doc(hidden)]
     pub const fn accepts_component_arity(self, component_count: usize) -> bool {
         match self {
             Self::Components { channels: 2 } => component_count == 2,
             Self::Components { channels: 3 | 4 } => component_count == 3 || component_count == 4,
-            Self::Numeric | Self::Components { .. } => false,
+            Self::NativeU16Components { channels: 2 } => component_count == 2,
+            Self::NativeU16Components { channels: 3 | 4 } => {
+                component_count == 3 || component_count == 4
+            }
+            Self::FloatComponents { channels: 2 } => component_count == 2,
+            Self::FloatComponents { channels: 3 | 4 } => {
+                component_count == 3 || component_count == 4
+            }
+            Self::Numeric
+            | Self::Components { .. }
+            | Self::NativeU16Components { .. }
+            | Self::FloatComponents { .. } => false,
         }
     }
 }

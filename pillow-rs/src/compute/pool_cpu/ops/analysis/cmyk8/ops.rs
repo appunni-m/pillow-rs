@@ -49,6 +49,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_get_data(
     image: &RgbaImage,
     selection: StrategySelection,
@@ -71,6 +72,7 @@ pub(crate) fn execute_get_data(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &RgbaImage,
     selection: StrategySelection,
@@ -99,6 +101,7 @@ pub(crate) fn execute(
 
 /// Build CMYK axes from bounded positive writes under the prepared strategy.
 /// `None` asks the caller to use the full scan.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_positive_writes(
     selection: StrategySelection,
     width: u32,
@@ -152,6 +155,7 @@ pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::Mode
         crate::raster::Mode::ImageCmyk8,
     );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel(
     image: &crate::raster::RgbaImage,
     x: u32,

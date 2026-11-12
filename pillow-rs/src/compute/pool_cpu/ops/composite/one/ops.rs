@@ -7,6 +7,8 @@ use std::sync::Arc;
 
 pub(crate) const MODE: Mode = Mode::One;
 
+super::super::helpers::declare_composite_module_support!(One, vector(1));
+
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],

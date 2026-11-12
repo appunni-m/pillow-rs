@@ -1301,6 +1301,56 @@ def all_backends(result: dict[str, Any]) -> None:
         raise ValueError("all_backends.status does not match lane outcomes")
 
 
+def validate_gpu_adapter_environment(environment: dict[str, Any]) -> None:
+    """Validate optional physical GPU identity attached to benchmark receipts."""
+
+    if "gpu_adapter_index" in environment:
+        non_negative_int(
+            environment["gpu_adapter_index"],
+            "benchmark.environment.gpu_adapter_index",
+        )
+    if "gpu_adapters" in environment:
+        adapters = environment["gpu_adapters"]
+        if not isinstance(adapters, list):
+            raise ValueError("benchmark.environment.gpu_adapters: expected array")
+        adapter_fields = {
+            "selection_index",
+            "name",
+            "vendor",
+            "device",
+            "device_type",
+            "backend",
+            "driver",
+            "driver_info",
+        }
+        for index, adapter in enumerate(adapters):
+            prefix = f"benchmark.environment.gpu_adapters[{index}]"
+            exact(adapter, adapter_fields, prefix)
+            if adapter["selection_index"] is not None:
+                non_negative_int(
+                    adapter["selection_index"], f"{prefix}.selection_index"
+                )
+            for field in ("vendor", "device"):
+                non_negative_int(adapter[field], f"{prefix}.{field}")
+            for field in (
+                "name",
+                "device_type",
+                "backend",
+                "driver",
+                "driver_info",
+            ):
+                string(adapter[field], f"{prefix}.{field}")
+            requested_index = environment.get("gpu_adapter_index")
+            if (
+                requested_index is not None
+                and adapter["selection_index"] is not None
+                and adapter["selection_index"] != requested_index
+            ):
+                raise ValueError(
+                    f"{prefix}.selection_index differs from requested GPU adapter"
+                )
+
+
 def benchmark(result: dict[str, Any]) -> None:
     exact(result, {"schema", "identity", "status", "environment", "summary", "workloads", "suites", "infrastructure_errors"}, "benchmark")
     if result["schema"] != "migration-parity/benchmark-result@1":
@@ -1309,18 +1359,25 @@ def benchmark(result: dict[str, Any]) -> None:
         raise ValueError("benchmark.status: invalid artifact status")
     identity(result["identity"])
     environment_fields = {"machine_id", "os", "architecture", "cpu", "memory_bytes", "power_mode", "toolchain"}
+    optional_environment_fields = {
+        "runner_id",
+        "gpu_adapter_index",
+        "gpu_adapters",
+    }
     environment = result["environment"]
-    if not isinstance(environment, dict) or set(environment) not in (
-        environment_fields,
-        environment_fields | {"runner_id"},
+    if (
+        not isinstance(environment, dict)
+        or not environment_fields.issubset(environment)
+        or set(environment) - environment_fields - optional_environment_fields
     ):
         actual = sorted(environment) if isinstance(environment, dict) else type(environment).__name__
         raise ValueError(
             f"benchmark.environment: expected keys {sorted(environment_fields)} "
-            f"with optional runner_id, got {actual}"
+            f"with optional runner_id/GPU adapter identity, got {actual}"
         )
     if "runner_id" in environment:
         string(environment["runner_id"], "benchmark.environment.runner_id")
+    validate_gpu_adapter_environment(environment)
     for field in ("machine_id", "os", "architecture", "cpu", "power_mode", "toolchain"):
         string(result["environment"][field], f"benchmark.environment.{field}")
     non_negative_int(result["environment"]["memory_bytes"], "benchmark.environment.memory_bytes")

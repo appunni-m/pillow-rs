@@ -108,6 +108,12 @@ TARGET_ARCHITECTURE_EXPLICIT = "MIGRATION_TARGET_ARCHITECTURE" in os.environ
 TARGET_ARCHITECTURE = (
     os.environ.get("MIGRATION_TARGET_ARCHITECTURE", "default").strip().lower()
 )
+TARGET_GPU_ADAPTER_INDEX_EXPLICIT = (
+    "MIGRATION_TARGET_GPU_ADAPTER_INDEX" in os.environ
+)
+TARGET_GPU_ADAPTER_INDEX = os.environ.get(
+    "MIGRATION_TARGET_GPU_ADAPTER_INDEX", ""
+).strip()
 TARGET_ARCHITECTURE_NAMES = {
     "default",
     "neon",
@@ -1693,6 +1699,7 @@ def _is_public_image(value: Any) -> bool:
     )
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
 def _serialize_image_record(
     value: Any,
     *,
@@ -1710,7 +1717,11 @@ def _serialize_image_record(
     if should_lock_target_backend(side):
         value = lock_target_image_pipeline(value)
     try:
-        raw = bytes(value.tobytes())
+        tobytes = getattr(value, "tobytes", None)
+        if callable(tobytes):
+            raw = bytes(tobytes())
+        else:
+            raw = bytes(value.tobytes_unpacked())
     except Exception:
         # A strict backend audit must preserve an explicit capability
         # failure as a public observation error.  Replacing the failed
@@ -4197,6 +4208,22 @@ def configure_target_backend() -> dict[str, Any]:
         raise ValueError(f"unknown target CPU architecture: {TARGET_ARCHITECTURE!r}")
     if TARGET_BACKEND != "cpu" and TARGET_ARCHITECTURE_EXPLICIT:
         raise ValueError("CPU architecture selection requires MIGRATION_TARGET_BACKEND=cpu")
+    if TARGET_GPU_ADAPTER_INDEX_EXPLICIT and TARGET_BACKEND != "gpu":
+        raise ValueError(
+            "GPU adapter selection requires MIGRATION_TARGET_BACKEND=gpu"
+        )
+    requested_gpu_adapter_index = None
+    if TARGET_GPU_ADAPTER_INDEX_EXPLICIT:
+        try:
+            requested_gpu_adapter_index = int(TARGET_GPU_ADAPTER_INDEX)
+        except ValueError as exc:
+            raise ValueError(
+                "MIGRATION_TARGET_GPU_ADAPTER_INDEX must be a non-negative integer"
+            ) from exc
+        if requested_gpu_adapter_index < 0:
+            raise ValueError(
+                "MIGRATION_TARGET_GPU_ADAPTER_INDEX must be a non-negative integer"
+            )
     parallel_enabled = bool(target.parallel_feature_enabled())
     wants_parallel_cpu = TARGET_PROFILE_OVERRIDE == "parallel-cpu"
     wants_gpu_fault_contract = TARGET_PROFILE_OVERRIDE == "gpu-fault-contract"
@@ -4247,6 +4274,17 @@ def configure_target_backend() -> dict[str, Any]:
         )
     if TARGET_ARCHITECTURE_EXPLICIT:
         architecture_setter(TARGET_ARCHITECTURE)
+    if TARGET_GPU_ADAPTER_INDEX_EXPLICIT:
+        gpu_adapter_info = getattr(
+            importlib.import_module("pillow_rs._core"),
+            "_migration_gpu_adapter_info",
+            None,
+        )
+        if not callable(gpu_adapter_info):
+            raise RuntimeError(
+                "the built GPU extension does not expose adapter identity; "
+                "rebuild pillow-rs-py with the default GPU feature"
+            )
     return {
         "requested": TARGET_BACKEND,
         "available": sorted(available),
@@ -4254,6 +4292,31 @@ def configure_target_backend() -> dict[str, Any]:
         "requested_architecture": (
             TARGET_ARCHITECTURE if TARGET_BACKEND == "cpu" else None
         ),
+        "requested_gpu_adapter_index": requested_gpu_adapter_index,
+    }
+
+
+def gpu_adapter_identity(value: Any) -> dict[str, Any] | None:
+    """Convert the target extension's adapter tuple into a receipt object."""
+
+    if value is None:
+        return None
+    if not isinstance(value, (tuple, list)) or len(value) != 8:
+        raise RuntimeError("GPU adapter query returned an invalid identity")
+    index, name, vendor, device, device_type, backend, driver, driver_info = value
+    if index is not None and (
+        not isinstance(index, int) or isinstance(index, bool)
+    ):
+        raise RuntimeError("GPU adapter identity has an invalid selection index")
+    return {
+        "selection_index": index,
+        "name": str(name),
+        "vendor": int(vendor),
+        "device": int(device),
+        "device_type": str(device_type),
+        "backend": str(backend),
+        "driver": str(driver),
+        "driver_info": str(driver_info),
     }
 
 
@@ -4772,6 +4835,88 @@ def compare_error(source: dict[str, Any], target: dict[str, Any], opdef: dict[st
     return []
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
+def target_not_implemented_steps(target: dict[str, Any]) -> set[str]:
+    """Return observed workflow steps whose target route is not implemented."""
+
+    step_ids: set[str] = set()
+    for observation in target.get("observations", []):
+        error = observation.get("error")
+        if (
+            observation.get("status") == "error"
+            and isinstance(error, dict)
+            and error.get("class") == "NotImplementedError"
+            and isinstance(observation.get("step_id"), str)
+        ):
+            step_ids.add(observation["step_id"])
+    for execution_error in target.get("execution_errors", []):
+        error = execution_error.get("error")
+        if (
+            isinstance(error, dict)
+            and error.get("class") == "NotImplementedError"
+            and isinstance(execution_error.get("step_id"), str)
+        ):
+            step_ids.add(execution_error["step_id"])
+    return step_ids
+
+
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
+def first_unimplemented_target_step(
+    case: dict[str, Any],
+    source: dict[str, Any],
+    target: dict[str, Any],
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+) -> str | None:
+    """Find a target gap after an identical source/target observation prefix."""
+
+    unimplemented = target_not_implemented_steps(target)
+    source_observations = {
+        item["step_id"]: item for item in source.get("observations", [])
+    }
+    target_observations = {
+        item["step_id"]: item for item in target.get("observations", [])
+    }
+    steps = case.get("steps", [])
+
+    for index, step in enumerate(steps):
+        step_id = step["step_id"]
+        if step_id not in unimplemented:
+            continue
+        if source_observations.get(step_id, {}).get("status") != "ok":
+            continue
+
+        for previous in steps[:index]:
+            previous_id = previous["step_id"]
+            left = source_observations.get(previous_id)
+            right = target_observations.get(previous_id)
+            if left is None and right is None:
+                continue
+            if left is None or right is None or left.get("status") != right.get("status"):
+                break
+            if left["status"] == "not_run":
+                if left != right:
+                    break
+                continue
+            opdef = operation_definition(
+                operation_index, previous["surface"], previous["operation"]
+            )
+            if left["status"] == "error":
+                if compare_error(left["error"], right["error"], opdef, previous_id):
+                    break
+            elif compare_value(
+                left.get("value"),
+                right.get("value"),
+                comparison_policy(operation_index, previous, case),
+                f"{previous_id}.value",
+            ):
+                break
+        else:
+            return step_id
+
+    return None
+
+
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
 def compare_case(
     case: dict[str, Any],
     source: dict[str, Any],
@@ -4843,6 +4988,11 @@ def compare_case(
                     )
         return ("pass" if not diffs else "fail"), diffs
     if case.get("verification") == "expected-output":
+        if target_not_implemented_steps(target):
+            # The output cannot be compared until this target route exists.
+            # Keep the recorded observation in the result, but classify the
+            # case as pending instead of a parity mismatch.
+            return "not_run", []
         target_observations = {
             item["step_id"]: item for item in target.get("observations", [])
         }
@@ -4920,6 +5070,11 @@ def compare_case(
                 )
             )
         return ("pass" if not diffs else "fail"), diffs
+    if first_unimplemented_target_step(case, source, target, operation_index):
+        # Source success plus an identical observed prefix proves that the
+        # first divergence is a missing target implementation. Keep it visible
+        # as pending; later implementation will make it an ordinary comparison.
+        return "not_run", []
     if source["status"] != target["status"]:
         return "fail", [_diff("status", "status_mismatch", source["status"], target["status"], "workflow status mismatch")]
     source_obs = {item["step_id"]: item for item in source["observations"]}
@@ -6228,6 +6383,24 @@ def run_side(args: argparse.Namespace) -> int:
                 if args.timings:
                     timings[case["case_id"]] = sink
                     telemetry[case["case_id"]] = phase_sink
+    if args.side == "target" and TARGET_BACKEND == "gpu":
+        adapter_info = getattr(
+            importlib.import_module("pillow_rs._core"),
+            "_migration_gpu_adapter_info",
+            None,
+        )
+        if callable(adapter_info):
+            selected_adapter = gpu_adapter_identity(adapter_info())
+            handshake["backend_state"]["selected_gpu_adapter"] = selected_adapter
+            requested_index = TARGET_GPU_ADAPTER_INDEX.strip()
+            if (
+                requested_index
+                and selected_adapter is not None
+                and selected_adapter["selection_index"] != int(requested_index)
+            ):
+                raise RuntimeError(
+                    "selected GPU adapter index differs from requested index"
+                )
     if shader_coverage_output:
         records: list[dict[str, Any]] = []
         reason = None

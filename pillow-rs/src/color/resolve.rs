@@ -132,6 +132,7 @@ impl ColorOutputMode {
 ///
 /// Returns [`crate::PilError::ValueError`] when `hex_str` is present but cannot
 /// be parsed as a color.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn resolve_new_color(
     mode: Mode,
     hex_str: Option<&str>,

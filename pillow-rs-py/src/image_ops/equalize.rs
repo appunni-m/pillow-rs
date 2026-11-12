@@ -27,6 +27,7 @@ enum EqualizeCallbackError {
 
 const PY_TPFLAGS_HEAPTYPE: u64 = 1 << 9;
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn is_standard_equalize_builtin(value: &Bound<'_, PyAny>, name: &str) -> PyResult<bool> {
     // The module snapshot can itself contain replacements installed pre-import.
     let expected_type = match name {
@@ -51,12 +52,14 @@ fn is_standard_equalize_builtin(value: &Bound<'_, PyAny>, name: &str) -> PyResul
 }
 
 impl From<pillow_rs::PilError> for EqualizeCallbackError {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn from(error: pillow_rs::PilError) -> Self {
         Self::Core(error)
     }
 }
 
 impl From<PyErr> for EqualizeCallbackError {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn from(error: PyErr) -> Self {
         Self::Python(error)
     }
@@ -73,32 +76,38 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
     type Output = Bound<'py, PyAny>;
     type Error = EqualizeCallbackError;
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn image_mode_is_palette(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
         let mode = image.getattr("mode")?;
         imageops_mode_equals(self.py, &mode, "P").map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn lut_mode_is_palette(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
         let mode = image.getattr("mode")?;
         imageops_mode_equals(self.py, &mode, "P").map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn lut_mode_is_luma_or_rgb(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
         let mode = image.getattr("mode")?;
         imageops_mode_is_luma_or_rgb(self.py, &mode).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn lut_mode_is_rgb(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
         let mode = image.getattr("mode")?;
         imageops_mode_equals(self.py, &mode, "RGB").map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn palette_mode_error(&mut self) -> Result<Self::Error, Self::Error> {
         Ok(EqualizeCallbackError::Python(
             pyo3::exceptions::PyNotImplementedError::new_err("mode P support coming soon"),
         ))
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn unsupported_mode_error(&mut self, image: &Self::Image) -> Result<Self::Error, Self::Error> {
         let mode = image.getattr("mode")?;
         Ok(EqualizeCallbackError::Python(
@@ -106,10 +115,12 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         ))
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn convert_to_rgb(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error> {
         image.call_method1("convert", ("RGB",)).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn histogram(
         &mut self,
         image: &Self::Image,
@@ -118,6 +129,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         image.call_method1("histogram", (mask,)).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn native_histogram(
         &mut self,
         histogram: &Self::Histogram,
@@ -168,10 +180,12 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         Ok(Some(counts))
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn new_lut(&mut self) -> Result<Self::Lut, Self::Error> {
         Ok(EqualizeLut::Python(PyList::empty(self.py).into_any()))
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn channel_starts(
         &mut self,
         histogram: &Self::Histogram,
@@ -182,6 +196,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         PyIterator::from_object(&starts).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn next_channel_start(
         &mut self,
         starts: &mut Self::Iterator,
@@ -189,6 +204,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         starts.next().transpose().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn histogram_channel(
         &mut self,
         histogram: &Self::Histogram,
@@ -199,10 +215,12 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         histogram.get_item(slice).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn channel_values(&mut self, channel: &Self::Sequence) -> Result<Self::Iterator, Self::Error> {
         PyIterator::from_object(channel).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn next_channel_value(
         &mut self,
         values: &mut Self::Iterator,
@@ -210,14 +228,17 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         values.next().transpose().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn value_is_truthy(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
         value.is_truthy().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn new_nonzero_values(&mut self) -> Result<Self::Sequence, Self::Error> {
         Ok(PyList::empty(self.py).into_any())
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn append_nonzero_value(
         &mut self,
         values: &mut Self::Sequence,
@@ -227,10 +248,12 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn nonzero_value_count(&mut self, values: &Self::Sequence) -> Result<Self::Value, Self::Error> {
         Ok(imageops_global_or_builtin(self.py, "len")?.call1((values,))?)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn nonzero_value_count_at_most_one(
         &mut self,
         count: &Self::Value,
@@ -238,16 +261,19 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         Ok(count.le(PyInt::new(self.py, 1))?)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn sum_nonzero_values(&mut self, values: &Self::Sequence) -> Result<Self::Value, Self::Error> {
         imageops_global_or_builtin(self.py, "sum")?
             .call1((values,))
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn last_nonzero_value(&mut self, values: &Self::Sequence) -> Result<Self::Value, Self::Error> {
         values.get_item(-1).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn subtract_values(
         &mut self,
         left: &Self::Value,
@@ -256,6 +282,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         left.sub(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn floor_divide_constant(
         &mut self,
         value: &Self::Value,
@@ -266,6 +293,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn floor_divide_values(
         &mut self,
         left: &Self::Value,
@@ -274,12 +302,14 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         left.floor_div(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn channel_offsets(&mut self) -> Result<Self::Iterator, Self::Error> {
         let range = imageops_global_or_builtin(self.py, "range")?;
         let offsets = range.call1((256,))?;
         PyIterator::from_object(&offsets).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn next_channel_offset(
         &mut self,
         offsets: &mut Self::Iterator,
@@ -287,6 +317,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         offsets.next().transpose().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn histogram_value(
         &mut self,
         histogram: &Self::Histogram,
@@ -295,6 +326,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         histogram.get_item(index).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn add_values(
         &mut self,
         left: &Self::Value,
@@ -303,6 +335,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         left.add(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn append_lut_value(
         &mut self,
         lut: &mut Self::Lut,
@@ -320,6 +353,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn extend_identity_lut(&mut self, lut: &mut Self::Lut) -> Result<(), Self::Error> {
         let EqualizeLut::Python(values) = lut else {
             return Err(PilError::InternalError(
@@ -336,10 +370,12 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn native_lut(&mut self, lut: Vec<u8>) -> Result<Self::Lut, Self::Error> {
         Ok(EqualizeLut::Native(lut))
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn point(&mut self, image: &Self::Image, lut: Self::Lut) -> Result<Self::Output, Self::Error> {
         let lut = match lut {
             EqualizeLut::Native(lut) => PyList::new(self.py, lut)?.into_any(),
@@ -349,6 +385,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn map_equalize_callback_error(error: EqualizeCallbackError) -> PyErr {
     match error {
         EqualizeCallbackError::Core(error) => map_error(error),
@@ -356,6 +393,7 @@ fn map_equalize_callback_error(error: EqualizeCallbackError) -> PyErr {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_imageops_equalize_with_callbacks(
     py: Python<'_>,
@@ -368,6 +406,7 @@ fn ops_imageops_equalize_with_callbacks(
         .map_err(map_equalize_callback_error)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(
         ops_imageops_equalize_with_callbacks,

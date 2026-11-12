@@ -1,7 +1,7 @@
 //! Shared storage helpers for mode-selected synchronous PutData writers.
 
 use crate::error::PilError;
-use crate::raster::{ImageBuffer, Pixel};
+use crate::raster::{ImageBuffer, Mode, Pixel};
 
 /// Normalizes one numeric I;16 putdata item through Pillow's byte stores.
 ///
@@ -34,6 +34,93 @@ pub(crate) fn luma16_sample(
 pub(crate) enum ValueAtInput {
     Bytes(Vec<u8>, Option<[u8; 2]>),
     Luma16(u16),
+    LumaA16([u16; 2]),
+    Rgb16([u16; 3]),
+    Rgba16([u16; 4]),
+    Rgb32F([f32; 3]),
+    Rgba32F([f32; 4]),
+}
+
+/// Normalizes CoreOnly multiband tuples directly into their native sample type.
+pub(crate) fn native_value_at_input(
+    mode: Mode,
+    value: &crate::image::PutDataValue,
+) -> Result<ValueAtInput, PilError> {
+    match mode {
+        Mode::ImageLumaA16 => native_u16_components::<2>(value, 2, u16::MAX)
+            .map(ValueAtInput::LumaA16),
+        Mode::ImageRgb16 => native_u16_components::<3>(value, 3, u16::MAX)
+            .map(ValueAtInput::Rgb16),
+        Mode::ImageRgba16 => native_u16_components::<4>(value, 4, u16::MAX)
+            .map(ValueAtInput::Rgba16),
+        Mode::ImageRgb32F => native_f32_components::<3>(value, 3).map(ValueAtInput::Rgb32F),
+        Mode::ImageRgba32F => native_f32_components::<4>(value, 4).map(ValueAtInput::Rgba32F),
+        _ => Err(PilError::InternalError(
+            "native putdata input requested for a non-native mode".into(),
+        )),
+    }
+}
+
+#[inline]
+pub(crate) fn native_u16_components<const CHANNELS: usize>(
+    value: &crate::image::PutDataValue,
+    channels: usize,
+    alpha_default: u16,
+) -> Result<[u16; CHANNELS], PilError> {
+    match value {
+        crate::image::PutDataValue::Packed(packed) => {
+            let bytes = packed.to_le_bytes();
+            Ok(std::array::from_fn(|index| {
+                u16::from_le_bytes([bytes[index * 2], bytes[index * 2 + 1]])
+            }))
+        }
+        crate::image::PutDataValue::Components(components)
+            if components.len() == channels
+                || (channels >= 3 && matches!(components.len(), 3 | 4)) =>
+        {
+            Ok(std::array::from_fn(|index| {
+                if index == 3 && components.len() == 3 {
+                    alpha_default
+                } else {
+                    components[index].clamp(0, i128::from(u16::MAX)) as u16
+                }
+            }))
+        }
+        crate::image::PutDataValue::Components(_) => Err(PilError::TypeError(
+            "color tuple has the wrong number of native samples".into(),
+        )),
+        _ => Err(PilError::TypeError(
+            "color must be an integer or a tuple of native samples".into(),
+        )),
+    }
+}
+
+#[inline]
+pub(crate) fn native_f32_components<const CHANNELS: usize>(
+    value: &crate::image::PutDataValue,
+    channels: usize,
+) -> Result<[f32; CHANNELS], PilError> {
+    match value {
+        crate::image::PutDataValue::FloatComponents(components)
+            if components.len() == channels
+                || (channels == 4 && components.len() == 3)
+                || (channels == 3 && components.len() == 4) =>
+        {
+            Ok(std::array::from_fn(|index| {
+                if index == 3 && components.len() == 3 {
+                    1.0
+                } else {
+                    components[index] as f32
+                }
+            }))
+        }
+        crate::image::PutDataValue::FloatComponents(_) => Err(PilError::TypeError(
+            "color tuple has the wrong number of native float samples".into(),
+        )),
+        _ => Err(PilError::TypeError(
+            "color must be a tuple of native float samples".into(),
+        )),
+    }
 }
 
 // TODO(pillow-rs#3ptb): verify callback-visible partial writes and faults,
@@ -111,5 +198,56 @@ pub(crate) fn write_luma16(
         .get_mut(pixel_index)
         .ok_or_else(|| PilError::InternalError("putdata I;16 offset out of bounds".into()))?;
     *pixel = sample;
+    Ok(())
+}
+
+pub(crate) fn write_native_pixel<T: Copy, const CHANNELS: usize>(
+    samples: &mut [T],
+    pixel_index: usize,
+    pixel: [T; CHANNELS],
+) -> Result<(), PilError> {
+    let start = pixel_index
+        .checked_mul(CHANNELS)
+        .ok_or_else(|| PilError::DimensionError("putdata native offset overflow".into()))?;
+    let end = start
+        .checked_add(CHANNELS)
+        .ok_or_else(|| PilError::DimensionError("putdata native offset overflow".into()))?;
+    let destination = samples
+        .get_mut(start..end)
+        .ok_or_else(|| PilError::InternalError("putdata native offset out of bounds".into()))?;
+    destination.copy_from_slice(&pixel);
+    Ok(())
+}
+
+/// Writes a sequence of already mode-selected values into native sample lanes.
+///
+/// The first value is normalized before materialization by the caller. Later
+/// values are normalized immediately before their write, preserving partial
+/// writes when a later value is invalid.
+#[inline]
+pub(crate) fn write_native_values<T: Copy, const CHANNELS: usize, F>(
+    samples: &mut [T],
+    values: &[crate::image::PutDataValue],
+    first: [T; CHANNELS],
+    mut normalize: F,
+    completed: &mut usize,
+) -> Result<(), PilError>
+where
+    F: FnMut(&crate::image::PutDataValue) -> Result<[T; CHANNELS], PilError>,
+{
+    if CHANNELS == 0 {
+        return Err(PilError::InternalError(
+            "putdata native channel count was zero".into(),
+        ));
+    }
+    let mut destinations = samples.chunks_exact_mut(CHANNELS);
+    for (index, value) in values.iter().enumerate() {
+        let pixel = if index == 0 { first } else { normalize(value)? };
+        let destination = destinations.next().ok_or_else(|| {
+            PilError::InternalError("putdata native offset out of bounds".into())
+        })?;
+        destination.copy_from_slice(&pixel);
+        *completed += 1;
+    }
     Ok(())
 }

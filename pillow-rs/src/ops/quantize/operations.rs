@@ -10,6 +10,7 @@ use super::input::QuantizePalette;
 impl Image {
     /// Applies Pillow's public quantize defaults and validation before the
     /// algorithm-specific implementation runs.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn quantize_with_input(
         &self,
         colors: Option<i32>,
@@ -23,6 +24,7 @@ impl Image {
 
     /// Host-adapter entry retaining a wrapper-visible Mode for Pillow's
     /// supplied-palette admission while execution still reads DynamicImage.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn quantize_with_visible_mode(
         &self,
@@ -42,9 +44,9 @@ impl Image {
             source_mode
         };
         let method = method.map(|method| method as u32).unwrap_or_else(|| {
-            crate::compute::pool_cpu::ops::imageops::quantize::default_method(admission_mode)
+            crate::compute::pool_cpu::ops::imageops::ops::default_method(admission_mode)
         });
-        crate::compute::pool_cpu::ops::imageops::quantize::validate_pillow_rgba_method(
+        crate::compute::pool_cpu::ops::imageops::ops::validate_pillow_rgba_method(
             admission_mode,
             method,
         )?;
@@ -73,7 +75,7 @@ impl Image {
             );
         }
         let kmeans = kmeans.unwrap_or(0);
-        crate::compute::pool_cpu::ops::imageops::quantize::validate_kmeans_count(i64::from(
+        crate::compute::pool_cpu::ops::imageops::ops::validate_kmeans_count(i64::from(
             kmeans,
         ))?;
         self.quantize(
@@ -89,6 +91,7 @@ impl Image {
     ///
     /// Pillow's `Image.quantize(palette=...)` preserves the reference palette
     /// and uses its entries as the destination colors.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn quantize_to_palette(
         &self,
         palette_image: &Image,
@@ -102,7 +105,7 @@ impl Image {
         operation_receipts.capture();
         let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
         with_quantize_receipt(operation_receipts, requested_backend, || {
-            crate::compute::pool_cpu::ops::imageops::quantize::execute_with_palette(
+            crate::compute::pool_cpu::ops::imageops::ops::execute_with_palette(
                 &image,
                 palette_image,
                 colors,
@@ -131,6 +134,7 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when `colors` is outside 1..=256, or
     /// another [`PilError`] when materialization fails.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn quantize(
         &self,
         colors: u32,
@@ -145,7 +149,7 @@ impl Image {
         let palette = self.palette_input();
         let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
         with_quantize_receipt(operation_receipts, requested_backend, || {
-            let prepared = crate::compute::pool_cpu::ops::imageops::quantize::prepare(
+            let prepared = crate::compute::pool_cpu::ops::imageops::ops::prepare_quantize(
                 &image, palette, colors, kmeans, method, &context,
             )?;
             let selection = *prepared.selection();
@@ -154,6 +158,7 @@ impl Image {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn with_quantize_receipt(
     mut operation_receipts: PipelineOperationTelemetryCapture,
     requested_backend: Option<crate::compute::Backend>,

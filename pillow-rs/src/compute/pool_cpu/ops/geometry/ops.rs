@@ -10,12 +10,15 @@
 // NO_PILLOW_SUPPORT: internal high-depth raster identities compose their
 // native Resize strategies, although Pillow has no corresponding mode names.
 
-use super::helpers::{contain_dimensions, cover_dimensions, fit_box};
+use super::helpers::{
+    contain_dimensions, cover_dimensions, fit_box, pad_dimensions as dimensions,
+};
+use super::helpers::pad_dimensions::PadFrame;
 use crate::compute::{
-    ExecutionContext,
+    Architecture, ExecutionContext,
     registry::support::{
         InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule,
-        StrategyInputs, StrategySelection, SupportAssessment,
+        PadFillRule, StrategyInputs, StrategySelection, SupportAssessment,
     },
 };
 use crate::error::PilError;
@@ -33,6 +36,7 @@ const SCALE_INPUTS: &[InputContract] = &[InputContract::ScaleParameters];
 const RESIZE_CHILD: &[OperationId] = &[OperationId::Resize];
 const BOXED_RESIZE_CHILD: &[OperationId] = &[OperationId::ResizeBoxed];
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_mode(
     operation: OperationId,
     inputs: &'static [InputContract],
@@ -69,18 +73,22 @@ fn classify_mode(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_contain(mode: Mode) -> ModeSupport {
     classify_mode(OperationId::Contain, CONTAIN_INPUTS, mode)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_cover(mode: Mode) -> ModeSupport {
     classify_mode(OperationId::Cover, COVER_INPUTS, mode)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_fit(mode: Mode) -> ModeSupport {
     classify_mode(OperationId::Fit, FIT_INPUTS, mode)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_scale(mode: Mode) -> ModeSupport {
     classify_mode(OperationId::Scale, SCALE_INPUTS, mode)
 }
@@ -134,10 +142,12 @@ pub(crate) type PreparedFit<'a> = PreparedGeometry<'a>;
 pub(crate) type PreparedScale<'a> = PreparedGeometry<'a>;
 
 impl PreparedGeometry<'_> {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn composed_selections(&self) -> &[StrategySelection] {
         match &self.work {
             GeometryWork::Copy(_) => &[],
@@ -145,6 +155,7 @@ impl PreparedGeometry<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.work {
             GeometryWork::Copy(image) => Ok(image.clone()),
@@ -156,6 +167,7 @@ impl PreparedGeometry<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn select(
     support: &'static OperationSupport,
     mode: Mode,
@@ -171,6 +183,7 @@ fn select(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn resize_plan<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -189,6 +202,7 @@ fn resize_plan<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn select_contain(
     inputs: OperationInputs<'_>,
     width: u32,
@@ -204,6 +218,7 @@ fn select_contain(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn select_cover(
     inputs: OperationInputs<'_>,
     width: u32,
@@ -219,6 +234,7 @@ fn select_cover(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn select_fit(
     inputs: OperationInputs<'_>,
     width: u32,
@@ -238,6 +254,7 @@ fn select_fit(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn select_scale(
     inputs: OperationInputs<'_>,
     factor: f64,
@@ -254,6 +271,7 @@ fn select_scale(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn prepare_contain<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -279,6 +297,7 @@ fn prepare_contain<'a>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn prepare_cover<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -304,6 +323,7 @@ fn prepare_cover<'a>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn prepare_fit<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -343,6 +363,7 @@ fn prepare_fit<'a>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn prepare_scale<'a>(
     inputs: OperationInputs<'a>,
     factor: f64,
@@ -377,6 +398,7 @@ fn prepare_scale<'a>(
 }
 
 /// Prepares Contain, Cover, Fit, or Scale with its exact mode and nested Resize plan.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -396,10 +418,380 @@ pub(crate) fn prepare_pipeline<'a>(
         } => prepare_fit(inputs, *w, *h, *filter, *bleed, *centering, context)
             .map(crate::compute::registry::PreparedOperation::from_fit),
         PipelineOp::Pad { .. } | PipelineOp::PadTyped { .. } | PipelineOp::PadPositioned { .. } => {
-            super::pad::ops::prepare_pipeline(inputs, op, context)
+            prepare_pad_pipeline(inputs, op, context)
         }
         PipelineOp::Scale { factor, filter } => prepare_scale(inputs, *factor, *filter, context)
             .map(crate::compute::registry::PreparedOperation::from_scale),
         _ => Err(PilError::ValueError("expected a geometry op".into())),
     }
+}
+
+
+#[derive(PartialEq, Eq)]
+pub(crate) enum PadContentSource {
+    Input,
+    Resized,
+}
+
+const PAD_PARAMETERS_INPUTS: &[InputContract] = &[InputContract::PadParameters];
+pub(super) const MODE_ENCODED_FILL_INPUTS: &[InputContract] = &[
+    InputContract::PadParameters,
+    InputContract::PadFill(PadFillRule::ModeEncodedBytes),
+];
+pub(super) const PALETTE_FILL_INPUTS: &[InputContract] = &[
+    InputContract::PadParameters,
+    InputContract::PadFill(PadFillRule::PaletteIndexOrColor),
+];
+pub(super) const NATIVE_U16_FILL_INPUTS: &[InputContract] = &[
+    InputContract::PadParameters,
+    InputContract::PadFill(PadFillRule::NativeU16),
+];
+pub(super) const NATIVE_F32_FILL_INPUTS: &[InputContract] = &[
+    InputContract::PadParameters,
+    InputContract::PadFill(PadFillRule::NativeF32),
+];
+const PAD_RESIZE_CHILD: &[OperationId] = &[OperationId::Resize];
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn classify_pad_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::One => super::one::ops::SUPPORT,
+        Mode::ImageLuma8 => super::luma8::ops::SUPPORT,
+        Mode::ImageLumaA8 => super::luma_a8::ops::SUPPORT,
+        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::SUPPORT,
+        Mode::ImagePalette8 => super::palette8::ops::SUPPORT,
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::SUPPORT,
+        Mode::ImageRgb8 => super::rgb8::ops::SUPPORT,
+        Mode::ImageRgba8 => super::rgba8::ops::SUPPORT,
+        Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::SUPPORT,
+        Mode::ImageRgbx8 => super::rgbx8::ops::SUPPORT,
+        Mode::ImageCmyk8 => super::cmyk8::ops::SUPPORT,
+        Mode::ImageYCbCr8 => super::ycbcr8::ops::SUPPORT,
+        Mode::ImageLab8 => super::lab8::ops::SUPPORT,
+        Mode::ImageHsv8 => super::hsv8::ops::SUPPORT,
+        Mode::ImageI32 => super::i32::ops::SUPPORT,
+        Mode::ImageF32 => super::f32::ops::SUPPORT,
+        Mode::ImageI16 => super::i16::ops::SUPPORT,
+        Mode::ImageI16L => super::i16l::ops::SUPPORT,
+        Mode::ImageI16B => super::i16b::ops::SUPPORT,
+        Mode::ImageI16N => super::i16n::ops::SUPPORT,
+        Mode::ImageLumaA16 => super::luma_a16::ops::SUPPORT,
+        Mode::ImageRgb16 => super::rgb16::ops::SUPPORT,
+        Mode::ImageRgba16 => super::rgba16::ops::SUPPORT,
+        Mode::ImageRgb32F => super::rgb32f::ops::SUPPORT,
+        Mode::ImageRgba32F => super::rgba32f::ops::SUPPORT,
+    }
+}
+
+/// Exhaustive Pad support for all exact raster identities.
+pub(crate) static PAD_SUPPORT: OperationSupport = OperationSupport::composed(
+    OperationId::Pad,
+    PAD_PARAMETERS_INPUTS,
+    classify_pad_mode,
+    PAD_RESIZE_CHILD,
+);
+
+/// Prepared Pad retaining its exact mode and selected Resize child.
+pub(crate) struct PreparedPad<'a> {
+    inputs: OperationInputs<'a>,
+    frame: PadFrame,
+    resize: Option<crate::compute::pool_cpu::ops::resize::ops::PreparedResize<'a>>,
+    selection: StrategySelection,
+}
+
+impl PreparedPad<'_> {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        &self.selection
+    }
+
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    pub(crate) fn composed_selections(&self) -> &[StrategySelection] {
+        self.resize
+            .as_ref()
+            .map_or(&[], |resize| std::slice::from_ref(resize.selection()))
+    }
+
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        let source = self.inputs.image;
+        let frame = self.frame;
+        let selection = &self.selection;
+        let architecture = selection.implementation.architecture;
+        if let Some(padded) =
+            try_direct_resize_into_canvas(source, frame, self.resize.as_ref(), selection)?
+        {
+            if let Some(resize) = self.resize.as_ref() {
+                crate::compute::record_pipeline_operation_selection(resize.selection());
+            }
+            return finish_pad(source, padded, frame);
+        }
+        let resized = match self.resize {
+            Some(resize) => {
+                crate::compute::record_pipeline_operation_selection(resize.selection());
+                Some(resize.execute()?)
+            }
+            None => None,
+        };
+        let content_source = if resized.is_some() {
+            PadContentSource::Resized
+        } else {
+            PadContentSource::Input
+        };
+        let content = resized.as_ref().unwrap_or(source);
+        if let Some((image, vector_blocks, scalar_tail)) =
+            try_vertical_append(content, frame, selection, content_source)?
+        {
+            record_vector_work(vector_blocks, scalar_tail);
+            return finish_pad(content, image, frame);
+        }
+        if architecture == Architecture::Default
+            && frame.content_width == frame.width
+            && frame.content_height == frame.height
+            && frame.offset_x == 0
+            && frame.offset_y == 0
+        {
+            return finish_pad(content, content.clone(), frame);
+        }
+        let (image, vector_blocks, scalar_tail) = pad_mode(content, frame, selection)?;
+        record_vector_work(vector_blocks, scalar_tail);
+        finish_pad(content, image, frame)
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn finish_pad(
+    source: &DynamicImage,
+    mut output: DynamicImage,
+    frame: PadFrame,
+) -> Result<DynamicImage, PilError> {
+    super::helpers::pad_hidden_lanes::preserve_same_size_content(source, &mut output, frame)?;
+    Ok(output)
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn record_vector_work(vector_blocks: u64, scalar_tail: u64) {
+    if vector_blocks != 0 || scalar_tail != 0 {
+        crate::compute::record_pipeline_operation_path("vector");
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn try_vertical_append(
+    image: &DynamicImage,
+    frame: PadFrame,
+    selection: &StrategySelection,
+    content_source: PadContentSource,
+) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
+    match image.mode() {
+        Mode::ImageLuma8 => {
+            super::luma8::ops::try_vertical_append(image, frame, selection, content_source)
+        }
+        Mode::ImageRgb8 => {
+            super::rgb8::ops::try_vertical_append(image, frame, selection, content_source)
+        }
+        Mode::ImageRgba8 => {
+            super::rgba8::ops::try_vertical_append(image, frame, selection, content_source)
+        }
+        Mode::ImageCmyk8 => {
+            super::cmyk8::ops::try_vertical_append(image, frame, selection, content_source)
+        }
+        Mode::ImageHsv8 => {
+            super::hsv8::ops::try_vertical_append(image, frame, selection, content_source)
+        }
+        Mode::ImageRgbx8 => {
+            super::rgbx8::ops::try_vertical_append(image, frame, selection, content_source)
+        }
+        mode => {
+            super::helpers::pad_strategies::selected_architecture(selection, mode)?;
+            Ok(None)
+        }
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn try_direct_resize_into_canvas(
+    image: &DynamicImage,
+    frame: PadFrame,
+    resize: Option<&crate::compute::pool_cpu::ops::resize::ops::PreparedResize<'_>>,
+    selection: &StrategySelection,
+) -> Result<Option<DynamicImage>, PilError> {
+    if resize.is_none() {
+        return Ok(None);
+    }
+    match image.mode() {
+        Mode::ImageLuma8 => {
+            super::luma8::ops::try_direct_resize_into_canvas(image, frame, resize, selection)
+        }
+        Mode::ImageRgbx8 => {
+            super::rgbx8::ops::try_direct_resize_into_canvas(image, frame, resize, selection)
+        }
+        mode => {
+            super::helpers::pad_strategies::selected_architecture(selection, mode)?;
+            Ok(None)
+        }
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn select_pad(
+    mode: Mode,
+    facts: StrategyInputs,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    match PAD_SUPPORT.for_mode(mode).assess(context, facts)? {
+        SupportAssessment::Ready(selection) => Ok(selection),
+        SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
+        SupportAssessment::Deferred { .. } => Err(PilError::InternalError(
+            "Pad preparation has unresolved input facts".into(),
+        )),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn pad_mode(
+    image: &DynamicImage,
+    frame: PadFrame,
+    selection: &StrategySelection,
+) -> Result<(DynamicImage, u64, u64), PilError> {
+    match image.mode() {
+        Mode::One => super::one::ops::pad(image, frame, selection),
+        Mode::ImageLuma8 => super::luma8::ops::pad(image, frame, selection),
+        Mode::ImageLumaA8 => super::luma_a8::ops::pad(image, frame, selection),
+        Mode::ImageLaPremultiplied8 => {
+            super::la_premultiplied8::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImagePalette8 => super::palette8::ops::pad(image, frame, selection),
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::pad(image, frame, selection),
+        Mode::ImageRgb8 => super::rgb8::ops::pad(image, frame, selection),
+        Mode::ImageRgba8 => super::rgba8::ops::pad(image, frame, selection),
+        Mode::ImageRgbPremultiplied8 => {
+            super::rgb_premultiplied8::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageRgbx8 => super::rgbx8::ops::pad(image, frame, selection),
+        Mode::ImageCmyk8 => super::cmyk8::ops::pad(image, frame, selection),
+        Mode::ImageYCbCr8 => super::ycbcr8::ops::pad(image, frame, selection),
+        Mode::ImageLab8 => {
+            super::lab8::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageHsv8 => super::hsv8::ops::pad(image, frame, selection),
+        Mode::ImageI32 => super::i32::ops::pad(image, frame, selection),
+        Mode::ImageF32 => super::f32::ops::pad(image, frame, selection),
+        Mode::ImageI16 => super::i16::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageI16L => {
+            super::i16l::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageI16B => {
+            super::i16b::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageI16N => {
+            super::i16n::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageLumaA16 => {
+            super::luma_a16::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageRgb16 => {
+            super::rgb16::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageRgba16 => {
+            super::rgba16::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageRgb32F => {
+            super::rgb32f::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageRgba32F => {
+            super::rgba32f::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub(crate) fn prepare_pad_pipeline<'a>(
+    inputs: OperationInputs<'a>,
+    op: &'a PipelineOp,
+    context: &ExecutionContext,
+) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
+    let (w, h, filter, color, native_color, centering, position) = match op {
+        PipelineOp::Pad {
+            w,
+            h,
+            filter,
+            color,
+            centering,
+        } => (w, h, filter, color, None, *centering, None),
+        PipelineOp::PadTyped {
+            w,
+            h,
+            filter,
+            color,
+            input,
+            centering,
+        } => (w, h, filter, color, Some(*input), *centering, None),
+        PipelineOp::PadPositioned {
+            w,
+            h,
+            filter,
+            color,
+            native_color,
+            position,
+        } => (
+            w,
+            h,
+            filter,
+            color,
+            *native_color,
+            (0.5, 0.5),
+            Some(*position),
+        ),
+        _ => return Err(PilError::ValueError("expected Pad op".into())),
+    };
+    let mode = inputs.mode();
+    let facts = inputs.facts().with_pad(*w, *h, *filter, *color, centering);
+    // Pillow ImageOps.pad computes its contain geometry before it reaches the
+    // resize/fill strategy. Keep direct prepared calls on that error order.
+    let mut frame = dimensions::build(
+        (inputs.image.width(), inputs.image.height()),
+        (*w, *h),
+        centering,
+        *color,
+    )?;
+    let selection = select_pad(mode, facts, context)?;
+    if let Some((x, y)) = position {
+        frame.offset_x = i64::from(x);
+        frame.offset_y = i64::from(y);
+    }
+    frame.native_color = native_color;
+    let native_identity = matches!(
+        mode,
+        Mode::ImageLuma8
+            | Mode::ImageLumaA8
+            | Mode::ImageRgb8
+            | Mode::ImageHsv8
+            | Mode::ImageRgba8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8
+    ) && (inputs.image.width(), inputs.image.height())
+        == (frame.content_width, frame.content_height);
+    let resize = if frame.content_width == 0 || frame.content_height == 0 || native_identity {
+        None
+    } else {
+        Some(crate::compute::pool_cpu::ops::resize::ops::prepare_direct(
+            inputs,
+            frame.content_width,
+            frame.content_height,
+            *filter,
+            None,
+            context,
+        )?)
+    };
+    Ok(crate::compute::registry::PreparedOperation::from_pad(
+        PreparedPad {
+            inputs,
+            frame,
+            resize,
+            selection,
+        },
+    ))
 }

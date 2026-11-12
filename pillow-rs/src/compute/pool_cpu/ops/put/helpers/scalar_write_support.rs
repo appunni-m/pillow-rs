@@ -9,13 +9,27 @@ const VALUE_AT_INPUTS: &[InputContract] = &[InputContract::CallerValidatedPixelI
 
 pub(crate) const fn put_data(mode: Mode, supported: bool) -> ModeSupport {
     if supported {
-        ModeSupport::cpu(
-            OperationId::PutDataValueAt,
-            mode,
-            OutputModeRule::Preserve,
-            VALUE_AT_INPUTS,
-            &[],
-        )
+        match mode {
+            Mode::ImageLumaA16
+            | Mode::ImageRgb16
+            | Mode::ImageRgba16
+            | Mode::ImageRgb32F
+            | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
+                OperationId::PutDataValueAt,
+                mode,
+                OutputModeRule::Preserve,
+                VALUE_AT_INPUTS,
+                &[],
+                "native typed PutData extends the CoreOnly multiband mode contract",
+            ),
+            _ => ModeSupport::cpu(
+                OperationId::PutDataValueAt,
+                mode,
+                OutputModeRule::Preserve,
+                VALUE_AT_INPUTS,
+                &[],
+            ),
+        }
     } else {
         ModeSupport::Rejected {
             mode,

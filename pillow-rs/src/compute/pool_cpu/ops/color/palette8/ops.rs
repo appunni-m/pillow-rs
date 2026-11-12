@@ -1,4 +1,6 @@
 //! P-mode support declaration and architecture selection for RemapPalette.
+
+pub(crate) use super::convert::SUPPORT as CONVERT_SUPPORT;
 // TODO(pillow-rs#3ptb): verify index output, palette metadata, empty input,
 // and Default/vector selection receipts in the frozen CPU parity matrix.
 

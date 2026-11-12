@@ -6,6 +6,7 @@ use super::{
 use crate::error::PilError;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(super) fn assess(
     contract: InputContract,
     input: StrategyInputs,
@@ -27,6 +28,7 @@ pub(super) fn assess(
             | InputContract::TransformParameters
             | InputContract::PosterizeBits
             | InputContract::ByteLutEntries { .. }
+            | InputContract::PointI32LutEntries { .. }
             | InputContract::PointFloatLutEntries { .. }
             | InputContract::ReduceFactors { .. }
             | InputContract::Thumbnail
@@ -63,6 +65,9 @@ pub(super) fn assess(
         | InputContract::SharpnessFactor => assess_filter_request(contract, input.request),
         InputContract::PosterizeBits => assess_posterize_request(input.request),
         InputContract::ByteLutEntries { .. } => assess_byte_lut_request(contract, input.request),
+        InputContract::PointI32LutEntries { .. } => {
+            assess_point_i32_lut_request(contract, input.request)
+        }
         InputContract::PointFloatLutEntries { .. } => {
             assess_point_float_lut_request(contract, input.request)
         }
@@ -96,6 +101,7 @@ fn assess_effect_request(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn assess_quantize_request(
     contract: InputContract,
     input: StrategyInputs,
@@ -277,6 +283,23 @@ fn assess_point_float_lut_request(
             Err(PilError::ValueError("wrong number of lut entries".into()))
         }
         _ => Err(wrong_request("PointFloat")),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn assess_point_i32_lut_request(
+    contract: InputContract,
+    request: RequestFacts,
+) -> Result<Option<UnresolvedGuard>, PilError> {
+    let InputContract::PointI32LutEntries { entries: expected } = contract else {
+        unreachable!("I32 point LUT assessment received another contract");
+    };
+    match request {
+        RequestFacts::EvalLut { entries } if entries == expected => Ok(None),
+        RequestFacts::EvalLut { .. } => {
+            Err(PilError::ValueError("wrong number of lut entries".into()))
+        }
+        _ => Err(wrong_request("PointModeOutput")),
     }
 }
 

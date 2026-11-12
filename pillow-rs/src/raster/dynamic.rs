@@ -119,6 +119,7 @@ pub(crate) fn crop_buffer<P: Pixel>(
 
 impl DynamicImage {
     /// Returns the exact raster identity from this image's existing variant tag.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn mode(&self) -> Mode {
         for_each_raster_identity!(dynamic_image_mode, self)

@@ -1,6 +1,5 @@
 //! Mode-specific CPU drawing strategies.
 
-pub(crate) mod floodfill;
 pub(crate) mod helpers;
 pub(crate) use helpers::bitmap_mask::BitmapMask;
 pub(crate) use helpers::bitmap_region::BitmapRegion;

@@ -1,23 +1,27 @@
 //! Pillow point/eval operations and their host-neutral input contract.
 
-use crate::compute::pool_cpu::ops::eval::scalar;
+use crate::compute::pool_cpu::ops::eval::helpers::scalar_point as scalar;
 use crate::compute::{Backend, ExecutionContext, PipelineOperationTelemetryCapture};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn exact_mode(image: &Image) -> Result<Mode, PilError> {
     image.mode_identity()
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn cpu_point_context(image: &Image) -> Result<(Option<Backend>, ExecutionContext), PilError> {
-    // PointScalar and PointFloat are CPU-owned. A SIMD request is resolved by
-    // the injected context to CPU plus the detected architecture; GPU requests
-    // use the CPU fallback until GPU point strategies are declared.
+    // PointScalar, PointFloat, and PointModeOutput are CPU-owned. A SIMD
+    // request is resolved by the injected context to CPU plus the detected
+    // architecture; GPU requests use the CPU fallback until GPU point
+    // strategies are declared.
     image.cpu_arch_execution_route()
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn execute_scalar_point<F>(
     image: &Image,
     operation: &'static str,
@@ -61,6 +65,7 @@ where
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn execute_float_point(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
     let (requested_backend, context) = cpu_point_context(image)?;
     let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
@@ -80,8 +85,14 @@ fn execute_float_point(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
     let execute = || {
         crate::compute::pool_cpu::ops::eval::ops::execute_float(input.as_ref(), mode, lut, &context)
             .and_then(|(output, selection)| {
+                if output.mode() != Mode::ImageF32 {
+                    return Err(PilError::InternalError(
+                        "PointFloat strategy returned a non-F raster".into(),
+                    ));
+                }
                 let output_bytes = output.as_bytes().len();
-                Image::from_dynamic_with_mode(output, Some(Mode::ImageF32))
+                image
+                    .from_mode_changed_dynamic(output)
                     .map(|image| (image, output_bytes, selection))
             })
     };
@@ -109,6 +120,66 @@ fn execute_float_point(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn execute_mode_point(image: &Image, target: Mode, lut: &[u8]) -> Result<Image, PilError> {
+    let (requested_backend, context) = cpu_point_context(image)?;
+    let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
+    let mode = match image.known_mode_identity() {
+        Some(mode) => mode,
+        None => image.materialized_shared()?.mode(),
+    };
+    let input = image.materialized_shared()?;
+    if input.mode() != mode {
+        return Err(PilError::InternalError(
+            "point output source mode did not match its DynamicImage variant".into(),
+        ));
+    }
+    operation_receipts.capture();
+    let execute = || {
+        crate::compute::pool_cpu::ops::eval::ops::execute_point_mode_output(
+            input.as_ref(),
+            target,
+            lut,
+            &context,
+        )
+        .and_then(|(output, selection)| {
+            if output.mode() != target {
+                return Err(PilError::InternalError(
+                    "PointModeOutput strategy returned a raster with the wrong mode".into(),
+                ));
+            }
+            let output_bytes = output.as_bytes().len();
+            image
+                .from_mode_changed_dynamic(output)
+                .map(|image| (image, output_bytes, selection))
+        })
+    };
+    if !Backend::pipeline_telemetry_enabled() {
+        return execute().map(|(image, _, _)| image);
+    }
+
+    let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
+        "PointModeOutput",
+        requested_backend,
+    );
+    operation_receipts.restore();
+    match execute() {
+        Ok((image, output_bytes, selection)) => {
+            crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
+                telemetry,
+                output_bytes,
+                "PointModeOutput",
+                selection,
+            );
+            Ok(image)
+        }
+        Err(error) => {
+            crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+            Err(error)
+        }
+    }
+}
+
 /// Host-neutral input classification for the callable form of `Image.eval`.
 #[derive(Debug, Clone, Copy)]
 pub enum EvalInputKind {
@@ -119,6 +190,7 @@ pub enum EvalInputKind {
 }
 
 /// Validates the host-independent part of `Image.eval` input handling.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
 pub fn validate_eval_input(kind: EvalInputKind) -> Result<(), PilError> {
     if matches!(kind, EvalInputKind::String) {
         return Err(PilError::TypeError(
@@ -137,6 +209,7 @@ pub fn validate_eval_input(kind: EvalInputKind) -> Result<(), PilError> {
 ///
 /// Currently returns `Ok(Image)`; LUT length validation is handled by pipeline
 /// execution.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn eval(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image,
@@ -155,6 +228,7 @@ pub fn eval(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::ValueError`] when `n_bands` is outside `1..=4` or `lut`
 /// has neither 256 nor `256 * n_bands` entries.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Image, PilError> {
     if n_bands == 0 || n_bands > 4 {
         return Err(PilError::ValueError("invalid band count".into()));
@@ -188,6 +262,7 @@ pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Imag
 /// Returns an image/materialization error when the band count cannot be read,
 /// or [`PilError::ValueError`] when `lut` is not a valid single-band or
 /// already-expanded table.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn eval_replicated_for_image(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
     let n_bands = exact_mode(image)?.pillow_band_count();
     eval_replicated(image, lut, n_bands)
@@ -198,6 +273,7 @@ pub fn eval_replicated_for_image(image: &Image, lut: &[u8]) -> Result<Image, Pil
 /// Keeping band discovery and LUT replication here means bindings only adapt
 /// their host callback to the core callback contract. The callable path uses
 /// the same expanded-table representation as Pillow's multiband point path.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn eval_callable<F>(image: &Image, callback: F) -> Result<Image, PilError>
 where
     F: FnMut(u32) -> Result<i32, PilError>,
@@ -218,6 +294,7 @@ where
 /// is intentional: Pillow loads the source before constructing the new image,
 /// and these native scalar buffers are not represented by the byte-oriented
 /// `Eval` pipeline operation.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
     execute_scalar_point(image, "PointScalar", |prepared| {
         scalar::execute_affine(prepared, scale, offset)
@@ -229,6 +306,7 @@ pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Im
 /// Unlike byte-valued point operations, scalar images do not have a bounded
 /// 256-entry lookup table. The caller owns the callback; Rust owns image
 /// materialization, sample decoding, and output conversion.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn eval_point_callable<F>(image: &Image, callback: F) -> Result<Image, PilError>
 where
     F: FnMut(f64) -> Result<f64, PilError>,
@@ -249,6 +327,7 @@ where
 /// Returns an image/materialization error when the band count cannot be read,
 /// or [`PilError::ValueError`] when the table length does not equal
 /// `256 * image_band_count`.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
     let mode = exact_mode(image)?;
     if scalar::supports(mode) {
@@ -285,14 +364,49 @@ pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::ValueError`] when the LUT length or source mode does
 /// not match Pillow's single-band floating-output path.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn eval_float(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
     execute_float_point(image, lut)
+}
+
+/// Applies a byte LUT through Pillow's documented Point output-mode transitions.
+///
+/// Supported source/target pairs are `L -> 1`, `P -> 1`, and `I -> L`. The I
+/// route consumes exactly 65,536 entries over the signed sample's clamped
+/// lookup domain; the byte routes consume one 256-entry table per source band.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub fn eval_point_mode(image: &Image, target: Mode, lut: &[u8]) -> Result<Image, PilError> {
+    execute_mode_point(image, target, lut)
+}
+
+/// Applies a callable-produced single-band LUT through the mode-aware Point path.
+///
+/// Pillow repeats callable results across source bands before dispatch. This
+/// entry point performs that expansion in core; sequence LUTs use
+/// [`eval_point_mode`] and must already have their exact expanded length.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub fn eval_point_mode_replicated_for_image(
+    image: &Image,
+    target: Mode,
+    lut: &[u8],
+) -> Result<Image, PilError> {
+    if lut.len() != 256 {
+        return Err(PilError::ValueError("wrong number of lut entries".into()));
+    }
+    let mode = exact_mode(image)?;
+    let expanded = if mode == Mode::ImageI32 {
+        lut.to_vec()
+    } else {
+        lut.repeat(mode.pillow_band_count())
+    };
+    execute_mode_point(image, target, &expanded)
 }
 
 /// Builds a floating-point point-operation LUT from a host callback.
 ///
 /// The callback remains in its owning runtime. Core controls the Pillow byte
 /// sample order and returns the values without rounding or clamping.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn make_float_lut<E, F>(mut callback: F) -> Result<Vec<f64>, E>
 where
     F: FnMut(u32) -> Result<f64, E>,
@@ -310,6 +424,7 @@ where
 /// input sample. Clamping the result to Pillow's byte range and replicating the
 /// table for multiband images remain core behavior so bindings do not duplicate
 /// the algorithm.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn make_lut<F>(n_bands: u32, mut callback: F) -> Result<Vec<u8>, PilError>
 where
     F: FnMut(u32) -> Result<i32, PilError>,

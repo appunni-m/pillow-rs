@@ -189,6 +189,44 @@ fn kernel_hamming(x: f64) -> f64 {
     (sin / pix) * cos.mul_add(0.46_f32 as f64, 0.54_f32 as f64)
 }
 
+/// Magic Kernel Sharp 2013 filter from Pillow's resampler.
+fn kernel_mks2013(x: f64) -> f64 {
+    let x = x.abs();
+    if x < 0.5 {
+        let square = x * x;
+        17.0 / 16.0 - 7.0 / 4.0 * square
+    } else if x < 1.5 {
+        (1.0 - x) * (7.0 / 4.0 - x)
+    } else if x < 2.5 {
+        let offset = x - 5.0 / 2.0;
+        let square = offset * offset;
+        -1.0 / 8.0 * square
+    } else {
+        0.0
+    }
+}
+
+/// Magic Kernel Sharp 2021 filter from Pillow's resampler.
+fn kernel_mks2021(x: f64) -> f64 {
+    let x = x.abs();
+    if x < 0.5 {
+        let square = x * x;
+        577.0 / 576.0 - 239.0 / 144.0 * square
+    } else if x < 1.5 {
+        35.0 / 36.0 * (x - 1.0) * (x - 239.0 / 140.0)
+    } else if x < 2.5 {
+        1.0 / 6.0 * (x - 2.0) * (65.0 / 24.0 - x)
+    } else if x < 3.5 {
+        1.0 / 36.0 * (x - 3.0) * (x - 15.0 / 4.0)
+    } else if x < 4.5 {
+        let offset = x - 9.0 / 2.0;
+        let square = offset * offset;
+        -1.0 / 288.0 * square
+    } else {
+        0.0
+    }
+}
+
 fn kernel_lanczos3(x: f64) -> f64 {
     kernel_lanczos(x, 3.0)
 }
@@ -205,6 +243,8 @@ pub(crate) fn filter_from_resample(filter: ResampleFilter) -> (fn(f64) -> f64, f
         ResampleFilter::Lanczos => (kernel_lanczos3, 3.0),
         ResampleFilter::Box => (kernel_box, 0.5),
         ResampleFilter::Hamming => (kernel_hamming, 1.0),
+        ResampleFilter::Mks2013 => (kernel_mks2013, 2.5),
+        ResampleFilter::Mks2021 => (kernel_mks2021, 4.5),
     }
 }
 

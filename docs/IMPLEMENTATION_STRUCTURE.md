@@ -596,7 +596,7 @@ migrated into their corresponding owner.
 | `eval` | `Eval` |
 | `transform` | `Transform` |
 | `put` | `PutPixel`, `PutData`, `PutAlpha`, `PutAlphaData`, `ExtractBand` |
-| `draw` | `DrawLine`, `DrawRectangle`, `DrawRoundedRect`, `DrawEllipse`, `DrawCircle`, `DrawPolygon`, `DrawArc`, `DrawChord`, `DrawPieslice`, `DrawPoint` |
+| `draw` | `DrawLine`, `DrawRectangle`, `DrawRoundedRect`, `DrawEllipse`, `DrawCircle`, `DrawPolygon`, `DrawArc`, `DrawChord`, `DrawPieslice`, `DrawPoint`, and direct callback operation `FloodFill` |
 
 ## 6. Shared code and composition
 

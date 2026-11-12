@@ -26,8 +26,6 @@ impl AutocontrastOptions {
 }
 
 /// Resampling filter used by resize-like operations.
-// TODO(pillow-rs#3ptb): implement Pillow 13's MKS2013/MKS2021 kernels. The
-// current enum and numeric parser cover Pillow's earlier six filter values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResampleFilter {
     /// Nearest-neighbor sampling.
@@ -42,6 +40,10 @@ pub enum ResampleFilter {
     Box,
     /// Hamming-windowed sampling.
     Hamming,
+    /// Magic Kernel Sharp 2013 sampling.
+    Mks2013,
+    /// Magic Kernel Sharp 2021 sampling.
+    Mks2021,
 }
 
 /// Pillow transpose operation.

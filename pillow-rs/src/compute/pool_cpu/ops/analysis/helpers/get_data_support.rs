@@ -19,6 +19,7 @@ pub(crate) enum SupportKind {
     Rejected,
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn band_inputs(bands: u8) -> &'static [InputContract] {
     match bands {
         1 => BAND_1,
@@ -29,6 +30,7 @@ fn band_inputs(bands: u8) -> &'static [InputContract] {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn operation_support(
     operation: OperationId,
     mode: Mode,
@@ -73,6 +75,7 @@ fn operation_support(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn mode_supports(
     mode: Mode,
     bands: u8,
@@ -95,6 +98,7 @@ pub(crate) fn mode_supports(
 
 macro_rules! declare_get_data_support {
     ($mode:ident, $bands:literal, $data:ident, $band:ident, $band_into:ident $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         pub(crate) fn get_data_mode_support() -> (
             $crate::compute::registry::support::ModeSupport,
             $crate::compute::registry::support::ModeSupport,

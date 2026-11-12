@@ -6,6 +6,7 @@ use crate::raster::Mode;
 
 use super::super::Image;
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn target_mode_for_pipeline_op(op: &PipelineOp) -> Option<Mode> {
     match op {
         PipelineOp::Convert { mode, .. } | PipelineOp::Merge { mode, .. } => Some(*mode),
@@ -14,6 +15,7 @@ fn target_mode_for_pipeline_op(op: &PipelineOp) -> Option<Mode> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn output_support_mode(op: &PipelineOp, source: Mode) -> Mode {
     match op {
         // Merge declares support by its requested result identity; the first
@@ -24,6 +26,7 @@ fn output_support_mode(op: &PipelineOp, source: Mode) -> Mode {
 }
 
 /// Resolves a declared output rule against this operation's typed parameters.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn output_mode_from_rule(op: &PipelineOp, source: Mode, output: OutputModeRule) -> Option<Mode> {
     match output {
         OutputModeRule::NoRasterResult => None,
@@ -55,6 +58,7 @@ fn output_mode_from_rule(op: &PipelineOp, source: Mode, output: OutputModeRule) 
 // keeps its materialization-time operation error instead of claiming a result
 // mode. TODO(pillow-rs#3ptb): verify these metadata/error outcomes in frozen
 // CPU parity; no runtime validation has run for this audit.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn output_mode_from_operation_contract(op: &PipelineOp, source: Mode) -> Option<Mode> {
     let support = op.support();
     let rule = match support.for_mode(output_support_mode(op, source)) {
@@ -65,6 +69,7 @@ fn output_mode_from_operation_contract(op: &PipelineOp, source: Mode) -> Option<
 }
 
 /// Plans a pipeline mode when no wrapper palette-expansion metadata is present.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<Mode> {
     known_pipeline_op_mode_with_expansion(op, current, None)
 }
@@ -76,6 +81,7 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
 /// mode at each transition, not the pipeline's original source mode.
 /// TODO(pillow-rs#3ptb): verify indexed output identity and fault timing in the
 /// frozen CPU parity matrix.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn known_pipeline_op_mode_with_expansion(
     op: &PipelineOp,
     current: Mode,
@@ -101,9 +107,5 @@ pub(crate) fn known_pipeline_op_mode_with_expansion(
             fixed_or_target => output_mode_from_rule(op, current, fixed_or_target),
         };
     }
-    match output_mode_from_operation_contract(op, current) {
-        Some(mode) => Some(mode),
-        None if super::op_preserves_mode(op) => Some(current),
-        None => None,
-    }
+    output_mode_from_operation_contract(op, current)
 }

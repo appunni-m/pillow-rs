@@ -41,16 +41,20 @@ macro_rules! declare_modes {
             $($mode(&'a DynamicImage, TransposeMethod, super::$module::ops::TransposeStrategy<'a>),)+
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn classify_flip(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::FLIP_SUPPORT,)+ }
         }
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn classify_mirror(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::MIRROR_SUPPORT,)+ }
         }
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn classify_transpose(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::TRANSPOSE_SUPPORT,)+ }
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn prepare_flip_mode<'a>(
             source: &'a DynamicImage,
             ctx: &ExecutionContext,
@@ -61,6 +65,7 @@ macro_rules! declare_modes {
             }
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn prepare_mirror_mode<'a>(
             source: &'a DynamicImage,
             ctx: &ExecutionContext,
@@ -71,6 +76,7 @@ macro_rules! declare_modes {
             }
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn prepare_transpose_mode<'a>(
             source: &'a DynamicImage,
             method: &TransposeMethod,
@@ -84,10 +90,12 @@ macro_rules! declare_modes {
         }
 
         impl PreparedFlip<'_> {
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(_, strategy) => strategy.selection(),)+ }
             }
 
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let (source, mut image) = match self {
                     $(Self::$mode(source, strategy) => (source, strategy.execute()),)+
@@ -102,10 +110,12 @@ macro_rules! declare_modes {
         }
 
         impl PreparedMirror<'_> {
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(_, strategy) => strategy.selection(),)+ }
             }
 
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let (source, mut image) = match self {
                     $(Self::$mode(source, strategy) => (source, strategy.execute()),)+
@@ -120,10 +130,12 @@ macro_rules! declare_modes {
         }
 
         impl PreparedTranspose<'_> {
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(_, _, strategy) => strategy.selection(),)+ }
             }
 
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn execute_rgba_avx2_into(
                 self,
                 output: &mut [u8],
@@ -136,6 +148,7 @@ macro_rules! declare_modes {
                 }
             }
 
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let (source, method, output) = match self {
                     $(Self::$mode(source, method, strategy) => {
@@ -190,6 +203,7 @@ pub(crate) static MIRROR_SUPPORT: OperationSupport =
 pub(crate) static TRANSPOSE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Transpose, &[], classify_transpose);
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_flip<'a>(
     image: &'a DynamicImage,
     ctx: &ExecutionContext,
@@ -197,6 +211,7 @@ pub(crate) fn prepare_flip<'a>(
     prepare_flip_mode(image, ctx)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_mirror<'a>(
     image: &'a DynamicImage,
     ctx: &ExecutionContext,
@@ -204,6 +219,7 @@ pub(crate) fn prepare_mirror<'a>(
     prepare_mirror_mode(image, ctx)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_transpose<'a>(
     image: &'a DynamicImage,
     method: &TransposeMethod,
@@ -218,6 +234,7 @@ pub(crate) fn prepare_transpose<'a>(
     prepare_transpose_mode(image, method, facts, ctx)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_flip_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -229,6 +246,7 @@ pub(crate) fn prepare_flip_pipeline<'a>(
     prepare_flip(input.image, ctx).map(crate::compute::registry::PreparedOperation::from_flip)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_mirror_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -240,6 +258,7 @@ pub(crate) fn prepare_mirror_pipeline<'a>(
     prepare_mirror(input.image, ctx).map(crate::compute::registry::PreparedOperation::from_mirror)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_transpose_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

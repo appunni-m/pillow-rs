@@ -454,6 +454,108 @@ def parse_registry_modules(
     return registrations, simd_entries
 
 
+def _use_tree_items(tree: str) -> list[str]:
+    """Expand grouped Rust use trees into their complete import paths."""
+    masked = code_only(tree)
+    opening = masked.find("{")
+    if opening < 0:
+        return [tree.strip()]
+
+    closing = matching_delimiter(tree, opening, "{", "}")
+    prefix = tree[:opening].strip().rstrip(":")
+    inner = tree[opening + 1 : closing]
+    masked_inner = code_only(inner)
+    items = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(masked_inner):
+        if char in "({[":
+            depth += 1
+        elif char in ")}]":
+            depth -= 1
+        elif char == "," and depth == 0:
+            items.append(inner[start:index].strip())
+            start = index + 1
+    items.append(inner[start:].strip())
+
+    expanded = []
+    for item in filter(None, items):
+        nested = f"{prefix}::{item}" if prefix else item
+        expanded.extend(_use_tree_items(nested))
+    return expanded
+
+
+def _module_source_file(root: Path, modules: list[str]) -> Path | None:
+    """Resolve a path of CPU operation modules to its source file."""
+    module_path = root.joinpath(*modules)
+    candidates = [module_path.with_suffix(".rs"), module_path / "mod.rs"]
+    return next((candidate for candidate in candidates if candidate.is_file()), None)
+
+
+def cpu_function_reexports(
+    root: Path, repo_root: Path
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    """Index public Rust use aliases that resolve to CPU operation functions."""
+    result: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    visibility = re.compile(r"\bpub\s*(?:\([^)]*\))?\s+use\s+([^;]+);")
+    identifier = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+    for path in sorted(root.rglob("*.rs")):
+        source = path.read_text(encoding="utf-8")
+        masked = code_only(source)
+        relative = path.relative_to(root)
+        current_module = list(relative.parent.parts)
+        if path.name != "mod.rs":
+            current_module.append(path.stem)
+
+        for match in visibility.finditer(masked):
+            tree = source[match.start(1) : match.end(1)]
+            for item in _use_tree_items(tree):
+                parts = re.split(r"\s+as\s+", item, maxsplit=1)
+                target = parts[0].strip()
+                target_parts = target.split("::")
+                symbol = target_parts[-1]
+                exported = parts[1].strip() if len(parts) == 2 else symbol
+                if not identifier.fullmatch(symbol) or not identifier.fullmatch(exported):
+                    continue
+
+                modules = target_parts[:-1]
+                if modules and modules[0] == "crate":
+                    crate_prefix = ["crate", "compute", "pool_cpu", "ops"]
+                    if modules[: len(crate_prefix)] != crate_prefix:
+                        continue
+                    modules = modules[len(crate_prefix) :]
+                elif modules and modules[0] == "self":
+                    modules = [*current_module, *modules[1:]]
+                elif modules and modules[0] == "super":
+                    modules = list(current_module)
+                    for component in target_parts[:-1]:
+                        if component == "super":
+                            if not modules:
+                                modules = []
+                                break
+                            modules.pop()
+                        elif component == "self":
+                            continue
+                        else:
+                            modules.append(component)
+                else:
+                    continue
+
+                target_path = _module_source_file(root, modules)
+                if target_path is None:
+                    continue
+                key = (path.relative_to(repo_root).as_posix(), exported)
+                result.setdefault(key, []).append(
+                    {
+                        "symbol": symbol,
+                        "path": target_path.relative_to(repo_root).as_posix(),
+                        "line": line_number(source, match.start()),
+                    }
+                )
+    return result
+
+
 def cpu_function_source_path(function_path: str) -> str | None:
     """Resolve a fully qualified CPU operation path to its Rust source file."""
     prefix = "crate::compute::pool_cpu::ops::"

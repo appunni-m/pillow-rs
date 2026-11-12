@@ -1,5 +1,6 @@
 //! ImageRgbx8 support and serial Default selection for ConvertLab.
 
+pub(crate) use super::convert::SUPPORT as CONVERT_SUPPORT;
 use crate::compute::{
     Architecture,
     registry::support::{ModeSupport, OperationId, OutputModeRule, StrategySelection},

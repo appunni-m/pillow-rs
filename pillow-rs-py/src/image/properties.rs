@@ -3,6 +3,7 @@ use pyo3::pymethods;
 
 #[pymethods]
 impl PyImage {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
     #[getter]
     fn size(&mut self) -> PyResult<(u32, u32)> {
         self.inner.size().map_err(map_error)
@@ -20,6 +21,7 @@ impl PyImage {
         Ok(h)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
     #[getter]
     fn mode(&mut self) -> PyResult<String> {
         let mode = self.inner.mode_identity().map_err(map_error)?;

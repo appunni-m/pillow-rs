@@ -180,6 +180,17 @@ const MAX_GPU_SCALE_FIXED_POINT: f64 = u32::MAX as f64;
 static GPU: std::sync::OnceLock<Result<GpuInner, PilError>> = std::sync::OnceLock::new();
 
 impl GpuPool {
+    pub(super) fn adapter_inventory() -> Vec<super::GpuAdapterInfo> {
+        device::adapter_inventory()
+    }
+
+    pub(super) fn selected_adapter_info() -> Option<super::GpuAdapterInfo> {
+        GPU.get()?
+            .as_ref()
+            .ok()
+            .map(|gpu| gpu.adapter_info.clone())
+    }
+
     fn ensure_init() -> Result<&'static GpuInner, PilError> {
         match GPU.get_or_init(GpuInner::new) {
             Ok(gpu) => Ok(gpu),

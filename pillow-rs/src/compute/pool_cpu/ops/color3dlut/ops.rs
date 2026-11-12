@@ -53,6 +53,7 @@ enum Color3DLutModeStrategy {
 }
 
 impl Color3DLutModeStrategy {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn for_mode(mode: Mode) -> Option<Self> {
         match mode {
             Mode::ImageRgb8 => Some(Self::Rgb8),
@@ -65,6 +66,7 @@ impl Color3DLutModeStrategy {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn support(self) -> ModeSupport {
         match self {
             Self::Rgb8 => super::rgb8::ops::SUPPORT,
@@ -76,6 +78,7 @@ impl Color3DLutModeStrategy {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn prepare<'a>(
         self,
         image: &'a DynamicImage,
@@ -102,6 +105,7 @@ impl Color3DLutModeStrategy {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match Color3DLutModeStrategy::for_mode(mode) {
         Some(strategy) => strategy.support(),
@@ -122,6 +126,7 @@ pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Color3DLut, &TARGET_INPUTS, classify_mode)
         .with_rejected_output(OutputModeRule::ByTargetMode);
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     mode: Mode,
     image: &'a DynamicImage,
@@ -142,6 +147,7 @@ pub(crate) fn prepare<'a>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

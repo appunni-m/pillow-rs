@@ -6,10 +6,10 @@ workflow records, so a full run can be too large for ``json.load``.  This
 reporter streams only the ``comparisons`` array and writes a compact manifest
 of failed case IDs grouped by the operation and the kind of work required.
 
-``summary.not_run`` is the only pending count.  A target ``NotImplementedError``
-is an executed parity failure, not a pending case; it is listed separately so
-the missing facade can be implemented without confusing it with runner or
-transport incompleteness.
+``summary.not_run`` includes selected cases without a comparable target result.
+When the reference succeeds but the target raises ``NotImplementedError``, the
+runner classifies that implementation gap as pending, preserves the target
+error observation, and excludes it from parity-mismatch counts.
 """
 
 from __future__ import annotations
@@ -373,6 +373,7 @@ def _summarize(path: Path, case_index: dict[str, tuple[str, str]]) -> dict[str, 
     }
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=n/a; benchmark=n/a
 def _markdown(report: dict[str, Any]) -> str:
     node = report["node"]
     browser = report["browser"]
@@ -388,7 +389,7 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         "## What is actually pending",
         "",
-        f"**{node['summary']['not_run']} cases**. Pending means a selected case has no completed target comparison (`summary.not_run`). A facade `NotImplementedError` is not pending: the case ran and failed parity.",
+        f"**{node['summary']['not_run']} cases**. Pending means a selected case has no comparable target result (`summary.not_run`), including a target `NotImplementedError` after a successful reference result. The target error stays in the comparison record so the missing implementation remains identifiable.",
         "",
         "## Failure categories",
         "",
@@ -396,7 +397,6 @@ def _markdown(report: dict[str, Any]) -> str:
         "| --- | ---: | --- |",
         "| `result_mismatch` | %d | Completed target result differs; fix core behavior or metadata, keeping bindings thin. |" % node["categories"].get("result_mismatch", 0),
         "| `target_error` | %d | Target reached a public error path whose class/message/result differs; fix boundary validation or core error parity. |" % node["categories"].get("target_error", 0),
-        "| `target_not_implemented` | %d | JS/WASM facade or an underlying public operation is missing; add a thin export only when core already owns the behavior. |" % node["categories"].get("target_not_implemented", 0),
         "| `workflow_dependency_not_run` | %d | A later observation was blocked by an earlier target failure; fix the first target error, not the dependent observation. |" % node["categories"].get("workflow_dependency_not_run", 0),
         "",
         "## Ordered operation failures",

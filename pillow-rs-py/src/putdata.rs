@@ -81,6 +81,16 @@ fn putdata_value_from_python(
         return Err(PyTypeError::new_err("color must be int or tuple"));
     };
     let tuple_len = tuple.len();
+    if matches!(kind, PutDataValueKind::FloatComponents { .. }) {
+        if !kind.accepts_component_arity(tuple_len) {
+            return Ok(PutDataValue::FloatComponents(Vec::new()));
+        }
+        let components = tuple
+            .iter()
+            .map(|item| item.extract::<f64>())
+            .collect::<PyResult<Vec<_>>>()?;
+        return Ok(PutDataValue::FloatComponents(components));
+    }
     if tuple_len == 1 {
         let packed = tuple.get_item(0)?;
         if packed.is_instance_of::<PyInt>() {
@@ -104,6 +114,14 @@ fn putdata_value_from_python(
         // Python integer overflow or type error; core emits the canonical
         // mode-specific arity error.
         return Ok(PutDataValue::Components(Vec::new()));
+    }
+
+    if matches!(kind, PutDataValueKind::NativeU16Components { .. }) {
+        let components = tuple
+            .iter()
+            .map(|item| item.extract::<i64>().map(i128::from))
+            .collect::<PyResult<Vec<_>>>()?;
+        return Ok(PutDataValue::Components(components));
     }
 
     // Keep tuple extraction in the binding, but let the core own arity
@@ -194,6 +212,18 @@ fn putdata_bulk(
         }
     }
 
+    // CoreOnly multiband modes can write exact built-in component tuples
+    // without Python callbacks. Extract the complete valid sequence before
+    // entering core; malformed or custom values retain the ordered per-item
+    // path below, including any prefix writes before an error.
+    if let Some(values) = putdata_native_component_tuples(data, kind) {
+        slf.try_borrow_mut()?
+            .inner
+            .putdata_values(&values, scale, offset)
+            .map_err(map_error)?;
+        return Ok(true);
+    }
+
     Ok(false)
 }
 
@@ -213,16 +243,69 @@ fn is_exact_builtin_numeric_sequence(data: &Bound<'_, PyAny>, kind: PutDataValue
             // be normalized as Vec<f64>: Pillow writes earlier packed ints
             // before rejecting the later float.
             PutDataValueKind::Components { .. } => list.iter().all(is_integer),
+            PutDataValueKind::NativeU16Components { .. } => list.iter().all(is_integer),
+            PutDataValueKind::FloatComponents { .. } => false,
             PutDataValueKind::Numeric => list.iter().all(is_number),
         };
     }
     if let Ok(tuple) = data.cast_exact::<PyTuple>() {
         return match kind {
             PutDataValueKind::Components { .. } => tuple.iter().all(is_integer),
+            PutDataValueKind::NativeU16Components { .. } => tuple.iter().all(is_integer),
+            PutDataValueKind::FloatComponents { .. } => false,
             PutDataValueKind::Numeric => tuple.iter().all(is_number),
         };
     }
     false
+}
+
+fn putdata_native_component_tuples(
+    data: &Bound<'_, PyAny>,
+    kind: PutDataValueKind,
+) -> Option<Vec<PutDataValue>> {
+    if !matches!(
+        kind,
+        PutDataValueKind::NativeU16Components { .. } | PutDataValueKind::FloatComponents { .. }
+    ) {
+        return None;
+    }
+    let items = if let Ok(list) = data.cast_exact::<PyList>() {
+        list.iter().collect::<Vec<_>>()
+    } else if let Ok(tuple) = data.cast_exact::<PyTuple>() {
+        tuple.iter().collect::<Vec<_>>()
+    } else {
+        return None;
+    };
+
+    let mut values = Vec::with_capacity(items.len());
+    for item in items {
+        let tuple = item.cast_exact::<PyTuple>().ok()?;
+        let packed_native_tuple = matches!(kind, PutDataValueKind::NativeU16Components { .. })
+            && tuple.len() == 1
+            && tuple
+                .get_item(0)
+                .ok()?
+                .cast_exact::<PyInt>()
+                .is_ok();
+        if !packed_native_tuple && !kind.accepts_component_arity(tuple.len()) {
+            return None;
+        }
+        let exact_components = tuple.iter().all(|component| match kind {
+            PutDataValueKind::NativeU16Components { .. } => {
+                component.cast_exact::<PyInt>().is_ok()
+            }
+            PutDataValueKind::FloatComponents { .. } => {
+                component.cast_exact::<PyInt>().is_ok()
+                    || component.cast_exact::<PyFloat>().is_ok()
+            }
+            PutDataValueKind::Numeric | PutDataValueKind::Components { .. } => false,
+        });
+        if !exact_components {
+            return None;
+        }
+        values.push(putdata_value_from_python(&item, kind).ok()?);
+    }
+    Some(values)
 }
 
 fn write_item(

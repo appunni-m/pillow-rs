@@ -8,6 +8,7 @@ _NATIVE_ALLOCATION_UNAVAILABLE = object()
 class ImagePalette:
     """Color palette for palette-mapped images."""
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     def __init__(self, mode="RGB", palette=None, size=0):
         self.mode = mode
         self.rawmode = None
@@ -51,6 +52,7 @@ class ImagePalette:
         p.dirty = self.dirty
         return p
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     def getcolor(self, color, image=None):
         """Given an rgb tuple, allocate palette entry."""
         if self.rawmode:
@@ -80,6 +82,7 @@ class ImagePalette:
             self.dirty = 1
             return index
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     def _new_color_index(self, image=None, error=None):
         if not isinstance(self.palette, bytearray):
             self._palette = bytearray(self.palette)
@@ -118,6 +121,7 @@ class ImagePalette:
                 raise ValueError("cannot allocate more than 256 colors") from error
         return index
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     def _native_allocation_index(self, image, entries, special_colors, histogram):
         # Delegate exact built-in slot selection to core. Keep Python's path for
         # subclasses and values whose comparison or iteration is observable.

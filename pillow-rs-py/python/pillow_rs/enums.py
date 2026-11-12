@@ -41,6 +41,8 @@ class Resampling(IntEnum):
     BICUBIC = 3
     BOX = 4
     HAMMING = 5
+    MKS2013 = 6
+    MKS2021 = 7
 
     # Preserve the former target-facade names as aliases. Their values now
     # follow Pillow's public enum codes instead of the old internal ordering.

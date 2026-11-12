@@ -1,11 +1,6 @@
 //! Mode-aware image operations owned by the serial CPU backend.
 
-pub(crate) mod autocontrast;
 pub(crate) mod cmyk8;
-pub(crate) mod colorize;
-pub(crate) mod equalize;
-pub(crate) mod expand;
-pub(crate) mod expand_edges;
 pub(crate) mod f32;
 pub(crate) mod helpers;
 pub(crate) mod hsv8;
@@ -23,7 +18,6 @@ pub(crate) mod one;
 pub(crate) mod ops;
 pub(crate) mod palette8;
 pub(crate) mod palette_alpha8;
-pub(crate) mod quantize;
 pub(crate) mod rgb16;
 pub(crate) mod rgb32f;
 pub(crate) mod rgb8;

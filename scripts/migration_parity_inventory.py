@@ -306,6 +306,19 @@ CORRECTIONS: tuple[Endpoint, ...] = (
             "equivalent and is exercised by a target-only fault case."
         ),
     ),
+    Endpoint(
+        surface="PIL.Image.Image",
+        operation="_migration_direct_rotate",
+        kind="method",
+        source_path="PIL.Image.Image._migration_direct_rotate",
+        classification="endpoint",
+        authority="target-only-contract",
+        legacy_refs=(),
+        correction_reason=(
+            "A test-api-only binding exercises the direct Rust Rotate entry; "
+            "the Python facade returns before the binding on shortcut cases."
+        ),
+    ),
 )
 
 

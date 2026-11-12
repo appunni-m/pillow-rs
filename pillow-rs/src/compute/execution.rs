@@ -164,7 +164,7 @@ pub(crate) fn execute_prepared_cpu_arch_convert_output(
     prepared: &PreparedExecution,
     op: &PipelineOp,
     input: crate::compute::registry::support::OperationInputs<'_>,
-) -> Result<crate::compute::pool_cpu::ops::color::convert::ops::PreparedConvertOutput, PilError> {
+) -> Result<crate::compute::pool_cpu::ops::color::ops::PreparedConvertOutput, PilError> {
     let gpu_fallback = prepared.selected_backend == Backend::Gpu;
     let context = if gpu_fallback {
         ExecutionContext::for_routed_backend(Backend::Cpu)
@@ -204,7 +204,7 @@ pub(crate) fn execute_prepared_cpu_arch_convert_output(
         PilError::InternalError("prepared palette conversion omitted its wrapper output".into())
     })?;
     Ok(
-        crate::compute::pool_cpu::ops::color::convert::ops::PreparedConvertOutput {
+        crate::compute::pool_cpu::ops::color::ops::PreparedConvertOutput {
             image,
             palette,
             palette_alpha,

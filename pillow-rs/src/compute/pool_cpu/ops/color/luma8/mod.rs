@@ -1,7 +1,11 @@
-//! Exact Pillow L source-mode strategy for palette remapping.
+//! Exact L-mode strategies for palette remapping and conversion.
 
 pub(crate) mod default;
 pub(crate) mod neon;
 pub(crate) mod ops;
 pub(crate) mod sse2;
 pub(crate) mod wasm_simd128;
+
+pub(crate) mod helpers;
+
+pub(crate) mod convert;

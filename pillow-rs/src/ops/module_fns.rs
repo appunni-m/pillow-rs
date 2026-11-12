@@ -17,8 +17,8 @@ use crate::raster::Mode;
 mod point;
 pub use point::{
     EvalInputKind, eval, eval_callable, eval_float, eval_point_callable, eval_point_transform,
-    eval_replicated, eval_replicated_for_image, eval_validated, make_float_lut, make_lut,
-    validate_eval_input,
+    eval_point_mode, eval_point_mode_replicated_for_image, eval_replicated,
+    eval_replicated_for_image, eval_validated, make_float_lut, make_lut, validate_eval_input,
 };
 
 /// Creates an image from raw bytes using Pillow's supported raw decoder.
@@ -53,6 +53,36 @@ pub fn frombytes_owned(
         )));
     }
     Image::frombytes_owned(mode, size, data)
+}
+
+/// Creates an image using a validated raw decoder plan.
+pub fn frombytes_with_plan(
+    size: (u32, u32),
+    data: &[u8],
+    decoder_name: &str,
+    plan: crate::image::RawDecoderPlan,
+) -> Result<Image, PilError> {
+    if decoder_name != "raw" {
+        return Err(PilError::IOError(format!(
+            "decoder {decoder_name} not available"
+        )));
+    }
+    plan.decode(size, data)
+}
+
+/// Creates an image from an owned buffer using a validated raw decoder plan.
+pub fn frombytes_owned_with_plan(
+    size: (u32, u32),
+    data: Vec<u8>,
+    decoder_name: &str,
+    plan: crate::image::RawDecoderPlan,
+) -> Result<Image, PilError> {
+    if decoder_name != "raw" {
+        return Err(PilError::IOError(format!(
+            "decoder {decoder_name} not available"
+        )));
+    }
+    plan.decode_owned(size, data)
 }
 
 /// Composites `im2` over `im1` and returns a new image.

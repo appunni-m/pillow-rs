@@ -5,7 +5,7 @@ fn register_part_1(m: &mut Registry) {
     m.insert(
         "Convert",
         gpu_entry!(
-            crate::compute::pool_cpu::ops::color::convert::ops::prepare_pipeline,
+            crate::compute::pool_cpu::ops::color::ops::prepare_convert_pipeline,
             "convert.wgsl"
         ),
     );

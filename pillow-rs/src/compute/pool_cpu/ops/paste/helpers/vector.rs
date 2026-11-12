@@ -404,10 +404,10 @@ fn blend_block8(
     let inverse = u16x8::splat(255) - weight;
     let values = if layout.premultiplied {
         let scaled = destination * inverse + u16x8::splat(128);
-        crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x8(scaled) + source
+        crate::compute::pool_cpu::ops::color::helpers::convert::wide::div255_u16x8(scaled) + source
     } else {
         let weighted = source * weight + destination * inverse + u16x8::splat(127);
-        crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x8(weighted)
+        crate::compute::pool_cpu::ops::color::helpers::convert::wide::div255_u16x8(weighted)
     };
     values.to_array().map(|value| value as u8)
 }
@@ -450,10 +450,10 @@ fn blend_block(
     let inverse = u16x16::splat(255) - weight;
     let values = if layout.premultiplied {
         let scaled = destination * inverse + u16x16::splat(128);
-        crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x16(scaled) + source
+        crate::compute::pool_cpu::ops::color::helpers::convert::wide::div255_u16x16(scaled) + source
     } else {
         let weighted = source * weight + destination * inverse + u16x16::splat(127);
-        crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x16(weighted)
+        crate::compute::pool_cpu::ops::color::helpers::convert::wide::div255_u16x16(weighted)
     };
     values.to_array().map(|value| value as u8)
 }
@@ -470,7 +470,7 @@ pub(crate) fn blend_l_masked_block8(
     let mask = u16x8::new(mask.map(u16::from));
     let inverse = u16x8::splat(255) - mask;
     let weighted = source * mask + destination * inverse + u16x8::splat(127);
-    crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x8(weighted)
+    crate::compute::pool_cpu::ops::color::helpers::convert::wide::div255_u16x8(weighted)
         .to_array()
         .map(|value| value as u8)
 }
@@ -487,7 +487,7 @@ pub(crate) fn blend_l_masked_block16(
     let mask = u16x16::new(mask.map(u16::from));
     let inverse = u16x16::splat(255) - mask;
     let weighted = source * mask + destination * inverse + u16x16::splat(127);
-    crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x16(weighted)
+    crate::compute::pool_cpu::ops::color::helpers::convert::wide::div255_u16x16(weighted)
         .to_array()
         .map(|value| value as u8)
 }

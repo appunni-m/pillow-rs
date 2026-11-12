@@ -391,12 +391,13 @@ impl Image {
                 fallback_reason,
                 &mut operation_receipts,
                 |context| {
-                    let prepared = crate::compute::pool_cpu::ops::imageops::expand_edges::prepare(
-                        image.as_ref(),
-                        xmargin as u32,
-                        ymargin as u32,
-                        context,
-                    )?;
+                    let prepared =
+                        crate::compute::pool_cpu::ops::imageops::helpers::expand_edges::prepare(
+                            image.as_ref(),
+                            xmargin as u32,
+                            ymargin as u32,
+                            context,
+                        )?;
                     let selection = *prepared.selection();
                     Ok((prepared.execute()?, selection))
                 },

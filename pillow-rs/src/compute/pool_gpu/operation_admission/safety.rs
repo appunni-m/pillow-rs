@@ -137,11 +137,19 @@ fn gpu_geometry_operation_is_safe(op: &PipelineOp) -> bool {
             center,
             translate,
             affine,
+            filter,
             ..
         } => {
             // TODO(pillow-rs#3ftb): admit and parameterize the host-computed
             // affine Rotate request in the separate GPU implementation.
-            affine.is_none() && gpu_rotate_op_is_safe(*angle, *center, *translate)
+            affine.is_none()
+                && matches!(
+                    filter,
+                    crate::pipeline::ResampleFilter::Nearest
+                        | crate::pipeline::ResampleFilter::Bilinear
+                        | crate::pipeline::ResampleFilter::Bicubic
+                )
+                && gpu_rotate_op_is_safe(*angle, *center, *translate)
         }
         PipelineOp::Transform {
             w,

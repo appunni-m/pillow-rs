@@ -322,6 +322,8 @@ class Image:
     BILINEAR = Resampling.BILINEAR
     BICUBIC = Resampling.BICUBIC
     LANCZOS = Resampling.LANCZOS
+    MKS2013 = Resampling.MKS2013
+    MKS2021 = Resampling.MKS2021
     Resampling = Resampling
     Transform = Transform
     Transpose = Transpose
@@ -407,6 +409,7 @@ class Image:
             self._native_info_known_empty = False
             self._rust_image = self._rust_image.materialize()
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     @classmethod
     def open(
         cls,
@@ -434,6 +437,7 @@ class Image:
         result._transpose_loads_info = rust_image.format == "WEBP"
         return result
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     @classmethod
     def new(
         cls,
@@ -456,17 +460,15 @@ class Image:
             color = getcolor(color, mode)
 
         palette = None
-        if (
-            mode == "P"
-            and isinstance(color, (list, tuple))
-            and all(isinstance(value, int) for value in color)
-        ):
+        if RustImage._new_palette_lookup_required(mode, color):
             color_ints = tuple(color)
-            if len(color_ints) in (3, 4):
-                from .imagepalette import ImagePalette
+            from .imagepalette import ImagePalette
 
-                palette = ImagePalette()
-                color = palette.getcolor(color_ints)
+            palette = ImagePalette()
+            color = palette.getcolor(color_ints)
+
+        # TODO(pillow-rs#3ptb): freeze P list/tuple iteration faults, custom
+        # mode equality, palette callback order, and palette/index outputs.
 
         result = cls(RustImage.new(mode, size, color))
         if palette is not None:
@@ -489,6 +491,7 @@ class Image:
             fp, format, options.get("compress_level"), self.load
         )
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     def resize(
         self,
         size: Tuple[int, int],
@@ -496,20 +499,26 @@ class Image:
         box=None,
         reducing_gap=None,
     ) -> "Image":
+        # Pillow validates the resampling member and reducing gap before it
+        # normalizes size or enters the native resize implementation.
+        filter_code = self._rust_image._resize_filter_code(resample)
+        if reducing_gap is not None and reducing_gap < 1.0:
+            raise ValueError("reducing_gap must be 1.0 or greater")
         palette = self.__dict__.get("_palette_object")
-        if palette is not None and palette.dirty and self.mode in ("P", "PA"):
-            # Pillow validates the filter and reducing gap, normalizes size,
-            # then takes its identity-copy or source-load path.
-            # TODO(pillow-rs#3ptb): parity-check custom geometry/gap objects
-            # whose comparisons or numeric conversion raise at this boundary.
-            filter_code = self._rust_image._resize_filter_code(resample)
-            if reducing_gap is not None and reducing_gap < 1.0:
-                raise ValueError("reducing_gap must be 1.0 or greater")
-            if box is None:
-                box = (0, 0) + self.size
-            size = tuple(size)
-            full_box = (0, 0) + self.size
-            if self.size == size and box == full_box:
+        dirty_palette = (
+            palette is not None and palette.dirty and self.mode in ("P", "PA")
+        )
+        # TODO(pillow-rs#3ptb): parity-check custom geometry/gap objects
+        # whose comparisons or numeric conversion raise at this boundary.
+        if box is None:
+            box = (0, 0) + self.size
+        size = tuple(size)
+        full_box = (0, 0) + self.size
+        identity = self.size == size and box == full_box
+        if identity and not dirty_palette:
+            return self.copy()
+        if dirty_palette:
+            if identity:
                 # The identity copy loads but does not use reducing_gap.
                 # Pass canonical geometry so Pillow-compatible identity inputs
                 # avoid later integer/box coercion in the Rust binding.
@@ -517,10 +526,13 @@ class Image:
                 box = full_box
                 reducing_gap = None
             self._realize_dirty_palette()
-            return self._new(
-                self._rust_image.resize(size, filter_code, box, reducing_gap)
-            )
-        return self._new(self._rust_image.resize(size, resample, box, reducing_gap))
+        else:
+            # Pillow loads the source before the native layer converts box and
+            # reducing_gap values; keep those conversions behind this boundary.
+            self.load()
+        return self._new(
+            self._rust_image.resize(size, filter_code, box, reducing_gap)
+        )
 
     def crop(self, box: Optional[Tuple[float, float, float, float]] = None) -> "Image":
         # Pillow rejects reversed coordinates before loading the source.
@@ -623,6 +635,7 @@ class Image:
         # observed; the Rust transpose already retains that provenance.
         return self._new(rust_image)
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     def convert(
         self,
         mode: Optional[str] = None,
@@ -907,6 +920,7 @@ class Image:
             ):
                 palette.palette = bytearray(self.getpalette(palette.mode) or [])
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
         """Reduce colors using median cut algorithm."""
@@ -936,10 +950,9 @@ class Image:
             if default_mode == self._rust_image.mode:
                 native_method = None
             # The native boundary accepts this binding's typed PyImage carrier.
-            # Other foreign ImagingCore implementations still need an explicit
-            # adapter; do not copy their pixels into a second quantization path.
-            # TODO(pillow-rs#3ptb): adapt non-PyImage palette.im carriers and
-            # freeze subclass source-mode, palette-copy, and fault outcomes.
+            # TODO(pillow-rs#3ptb): adapt foreign palette.im carriers at the
+            # host boundary into the existing Rust palette mapper; preserve
+            # visible-mode checks, palette copy, subclass behavior, and faults.
             quantized = self._rust_image.quantize(
                 256, native_method, 0, dither, palette.im, self.mode
             )
@@ -1151,6 +1164,7 @@ class Image:
         self._rust_image.close()
         self._rust_image = _ClosedImage()
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     def point(self, lut, mode=None):
         """Apply lookup table or function to each pixel."""
         self._realize_dirty_palette()
@@ -1197,6 +1211,7 @@ class Image:
         raw = bytes(self._rust_image.getexif())
         return _ExifCompat(raw, loaded_exif=self.format != "TIFF")
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
     def getim(self):
         """Return the live Rust-owned internal-image handle."""
         return self._rust_image.getim()
@@ -1376,6 +1391,7 @@ class Image:
         _QImage, _qRgb, QPixmap = self._qt_imports()
         return QPixmap.fromImage(self.toqimage())
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     def frombytes(self, data, decoder_name="raw", *args):
         """Create image from raw pixel bytes or replace in-place.
 
@@ -1383,6 +1399,8 @@ class Image:
         - Image.frombytes(mode, size, data) → creates new image (class method)
         - im.frombytes(data) → replaces pixel data in-place (instance method)
         """
+        # TODO(pillow-rs#3ptb): rerun the focused class/instance frombytes
+        # contracts after the argument-forwarding and empty-size changes.
         from ._core import Image as RustImage
 
         # Detect class method: Image.frombytes(mode, size, data, ...)
@@ -1390,13 +1408,15 @@ class Image:
         # Also handles: img.frombytes(data) where self is an instance with _rust_image
         if hasattr(self, '_rust_image'):
             # Instance method: im.frombytes(data, decoder_name, *args)
-            mode = self.mode
             size = self.size
-            pixel_data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
-            self._native_info_known_empty = False
-            self._rust_image = RustImage.frombytes(
-                mode, size, pixel_data, decoder_name
+            if size[0] == 0 or size[1] == 0:
+                return None
+            mode = self.mode
+            rust_image = RustImage.frombytes(
+                mode, size, data, decoder_name, *args
             )
+            self._rust_image = rust_image
+            self._native_info_known_empty = False
             return None
 
         # Class method: Image.frombytes(mode, size, data, ...)
@@ -1404,12 +1424,8 @@ class Image:
         size = data if isinstance(self, str) else decoder_name
         pixel_data = decoder_name if isinstance(self, str) else args[0] if args else None
         decoder = args[0] if isinstance(self, str) and args else "raw"
-        pixel_data = (
-            pixel_data
-            if isinstance(pixel_data, (bytes, bytearray))
-            else bytes(pixel_data)
-        )
-        result = Image(RustImage.frombytes(mode, size, pixel_data, decoder))
+        raw_args = args[1:] if isinstance(self, str) and args else ()
+        result = Image(RustImage.frombytes(mode, size, pixel_data, decoder, *raw_args))
         return result
 
     @classmethod

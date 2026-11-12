@@ -159,6 +159,7 @@ pub(crate) fn exact_rgb_tuple_from_python(value: &Bound<'_, PyAny>) -> Option<[u
     Some(rgb)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn new_color_input_from_python(
     mode: pillow_rs::Mode,
     color: Option<&Bound<'_, PyAny>>,
@@ -225,6 +226,7 @@ pub(crate) fn new_color_input_from_python(
     new_color_tuple_input(mode, tuple)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 #[allow(
     clippy::too_many_arguments,
     reason = "keeps the mode-classified constructor payload at one boundary"
@@ -242,6 +244,7 @@ fn new_color_input(
     pillow_rs::NewColorInput::from_parts(string, single, rgb, rgba, la, integer, float, provided)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn new_color_type_error(mode: pillow_rs::Mode) -> PyErr {
     if mode.band_count() == 1 {
         PyTypeError::new_err("color must be int or single-element tuple")
@@ -250,10 +253,12 @@ fn new_color_type_error(mode: pillow_rs::Mode) -> PyErr {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn new_color_integer(value: &Bound<'_, PyAny>) -> PyResult<i64> {
     value.extract::<i64>()
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 #[allow(
     clippy::cast_possible_truncation,
     reason = "the value is clamped to the u8 range before conversion"
@@ -262,6 +267,7 @@ fn new_color_byte(value: i64) -> u8 {
     value.clamp(0, i64::from(u8::MAX)) as u8
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn new_color_integer_input(mode: pillow_rs::Mode, value: i64) -> pillow_rs::NewColorInput {
     if matches!(
         mode,
@@ -304,6 +310,7 @@ fn new_color_integer_input(mode: pillow_rs::Mode, value: i64) -> pillow_rs::NewC
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn new_color_tuple_input(
     mode: pillow_rs::Mode,
     values: &Bound<'_, PyTuple>,
@@ -373,6 +380,7 @@ fn new_color_tuple_input(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn new_size_from_python(
     value: &Bound<'_, PyAny>,
     _py: Python<'_>,
@@ -410,6 +418,20 @@ pub(crate) fn new_size_from_python(
     Ok((width, height))
 }
 
+pub(crate) fn frombytes_size_from_python(
+    width: &Bound<'_, PyAny>,
+    height: &Bound<'_, PyAny>,
+) -> PyResult<(u32, u32)> {
+    let width = c_int_from_python(width)?;
+    let height = c_int_from_python(height)?;
+    let width = u32::try_from(width)
+        .map_err(|_| PyValueError::new_err("Width and height must be >= 0"))?;
+    let height = u32::try_from(height)
+        .map_err(|_| PyValueError::new_err("Width and height must be >= 0"))?;
+    Ok((width, height))
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn new_size_component(value: &Bound<'_, PySequence>, index: usize) -> PyResult<i32> {
     let item = match value.get_item(index) {
         Ok(item) => item,

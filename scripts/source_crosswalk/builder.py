@@ -37,6 +37,7 @@ from .rust_source import (
     code_only,
     cpu_registration_imports,
     cpu_registration_references,
+    cpu_function_reexports,
     enum_variants,
     function_index,
     macro_generated_functions,
@@ -183,6 +184,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
         registration_sources[(REGISTRATION_ROOT / "prelude.rs").as_posix()]
     )
     cpu_functions = function_index(root / CPU_ROOT, root)
+    cpu_reexports = cpu_function_reexports(root / CPU_ROOT, root)
     simd_functions = function_index(root / SIMD_ROOT, root)
     simd_generated = macro_generated_functions(root / SIMD_ROOT, root)
     rust_modules = build_rust_module_inventory(root)
@@ -921,7 +923,20 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                         if definition["path"] == source_path
                         or definition["path"].startswith(module_directory)
                     ]
-                cpu_definitions.extend((name, definition) for definition in definitions)
+                cpu_definitions.extend(
+                    (name, definition, None) for definition in definitions
+                )
+                if not definitions and source_path:
+                    for reexport in cpu_reexports.get((source_path, name), []):
+                        target_definitions = [
+                            definition
+                            for definition in cpu_functions.get(reexport["symbol"], [])
+                            if definition["path"] == reexport["path"]
+                        ]
+                        cpu_definitions.extend(
+                            (name, definition, reexport)
+                            for definition in target_definitions
+                        )
             if not cpu_definitions:
                 findings.append(
                     {
@@ -931,7 +946,7 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                         "reason_for_review": "The registry expression did not resolve to a function definition under pool_cpu/ops.",
                     }
                 )
-            resolved_names = {name for name, _ in cpu_definitions}
+            resolved_names = {name for name, _, _ in cpu_definitions}
             for name in referenced_cpu_names:
                 if name not in resolved_names:
                     findings.append(
@@ -942,27 +957,43 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                             "reason_for_review": f"Imported CPU operation symbol {name!r} has no parsed definition under pool_cpu/ops.",
                         }
                     )
-            for name, definition in cpu_definitions:
+            for name, definition, reexport in cpu_definitions:
                 symbol_id = f"cpu-symbol:{name}:{definition['path']}:{definition['line']}"
+                node = {
+                    "id": symbol_id,
+                    "kind": "cpu_function",
+                    "symbol": name,
+                    "definition_symbol": reexport["symbol"] if reexport else name,
+                    **definition,
+                }
+                if reexport:
+                    node["reexport_site"] = {
+                        "path": source_path,
+                        "line": reexport["line"],
+                    }
                 nodes.setdefault(
                     symbol_id,
-                    {
-                        "id": symbol_id,
-                        "kind": "cpu_function",
+                    node,
+                )
+                edge = {
+                    "from": key_id,
+                    "relation": "registry_expression_references_cpu_function",
+                    "to": symbol_id,
+                    "site": {"path": registration_path, "line": registration["line"]},
+                    "evidence_kind": (
+                        "module_reexport_plus_function_definition"
+                        if reexport
+                        else "function_symbol_reference"
+                    ),
+                    "status": "static_source_registration",
+                }
+                if reexport:
+                    edge["via_reexport"] = {
+                        "path": source_path,
+                        "line": reexport["line"],
                         "symbol": name,
-                        **definition,
-                    },
-                )
-                edges.append(
-                    {
-                        "from": key_id,
-                        "relation": "registry_expression_references_cpu_function",
-                        "to": symbol_id,
-                        "site": {"path": registration_path, "line": registration["line"]},
-                        "evidence_kind": "function_symbol_reference",
-                        "status": "static_source_registration",
                     }
-                )
+                edges.append(edge)
             shader = registration["shader"]
             if shader:
                 shader_path = (SHADER_ROOT / shader).as_posix()

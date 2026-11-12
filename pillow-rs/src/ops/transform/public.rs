@@ -16,7 +16,7 @@ fn parse_transform_resample(code: i32) -> Result<ResampleFilter, PilError> {
         0 => Ok(ResampleFilter::Nearest),
         2 => Ok(ResampleFilter::Bilinear),
         3 => Ok(ResampleFilter::Bicubic),
-        1 | 4 | 5 => {
+        1 | 4 | 5 | 6 | 7 => {
             // Pillow distinguishes known resize-only filters from an
             // unknown integer in Image.transform's public error contract.
             Err(transform_resample_public_error(
@@ -33,6 +33,22 @@ fn parse_transform_resample(code: i32) -> Result<ResampleFilter, PilError> {
     }
 }
 
+pub(crate) fn validate_transform_resample_filter(
+    filter: ResampleFilter,
+) -> Result<(), PilError> {
+    let code = match filter {
+        ResampleFilter::Nearest => 0,
+        ResampleFilter::Lanczos => 1,
+        ResampleFilter::Bilinear => 2,
+        ResampleFilter::Bicubic => 3,
+        ResampleFilter::Box => 4,
+        ResampleFilter::Hamming => 5,
+        ResampleFilter::Mks2013 => 6,
+        ResampleFilter::Mks2021 => 7,
+    };
+    parse_transform_resample(code).map(|_| ())
+}
+
 /// Formats a Pillow `Image.transform` resampling error using the host value's
 /// display text while keeping the public contract in the Rust core.
 pub fn transform_resample_public_error(code: Option<i32>, display: &str) -> PilError {
@@ -42,11 +58,13 @@ pub fn transform_resample_public_error(code: Option<i32>, display: &str) -> PilE
         ));
     };
     match code {
-        1 | 4 | 5 => {
+        1 | 4 | 5 | 6 | 7 => {
             let name = match code {
                 1 => "Image.Resampling.LANCZOS",
                 4 => "Image.Resampling.BOX",
                 5 => "Image.Resampling.HAMMING",
+                6 => "Image.Resampling.MKS2013",
+                7 => "Image.Resampling.MKS2021",
                 _ => unreachable!(),
             };
             PilError::ValueError(format!(

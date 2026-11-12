@@ -51,6 +51,18 @@ pub(super) const fn is_l16_identity(mode: Mode) -> bool {
     )
 }
 
+pub(super) const fn uses_native_value_at_putdata(mode: Mode) -> bool {
+    is_l16_identity(mode)
+        || matches!(
+            mode,
+            Mode::ImageLumaA16
+                | Mode::ImageRgb16
+                | Mode::ImageRgba16
+                | Mode::ImageRgb32F
+                | Mode::ImageRgba32F
+        )
+}
+
 pub(super) const fn l16_identity_uses_big_endian(mode: Mode) -> bool {
     match mode {
         Mode::ImageI16B => true,

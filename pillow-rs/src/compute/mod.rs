@@ -148,6 +148,49 @@ pub enum Backend {
     Simd = 2,
 }
 
+/// Identity of the WGPU adapter selected for GPU execution.
+///
+/// This diagnostic type is used by parity and benchmark receipts to attribute
+/// GPU results to the physical device that executed them.
+#[cfg(feature = "gpu")]
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuAdapterInfo {
+    /// Adapter index in the WGPU instance inventory when explicitly selected.
+    pub selection_index: Option<usize>,
+    /// WGPU adapter name, usually including the GPU model.
+    pub name: String,
+    /// PCI vendor identifier reported by WGPU.
+    pub vendor: u32,
+    /// PCI device identifier reported by WGPU.
+    pub device: u32,
+    /// WGPU adapter device type.
+    pub device_type: String,
+    /// WGPU graphics API backend used by the adapter.
+    pub backend: String,
+    /// Adapter driver name reported by WGPU.
+    pub driver: String,
+    /// Adapter driver details reported by WGPU.
+    pub driver_info: String,
+}
+
+/// Return the selected WGPU adapter after GPU initialization, if one executed.
+///
+/// The function does not initialize a device and is intended for execution
+/// receipts and benchmark attribution.
+#[cfg(feature = "gpu")]
+#[doc(hidden)]
+pub fn selected_gpu_adapter_info() -> Option<GpuAdapterInfo> {
+    pool_gpu::GpuPool::selected_adapter_info()
+}
+
+/// Enumerate WGPU adapters without creating a device.
+#[cfg(feature = "gpu")]
+#[doc(hidden)]
+pub fn gpu_adapter_inventory() -> Vec<GpuAdapterInfo> {
+    pool_gpu::GpuPool::adapter_inventory()
+}
+
 /// One completed pipeline timing sample and its backend/resource counters.
 ///
 /// The fields follow the order documented by [`Backend::take_pipeline_telemetry`].

@@ -45,6 +45,11 @@ MIGRATION_PARITY_OUTPUTS ?= $(MIGRATION_PARITY_OUTPUT)
 MIGRATION_PARITY_AGGREGATE_ARGS = $(foreach output,$(MIGRATION_PARITY_OUTPUTS),--parity $(output))
 MIGRATION_CPU_ARCHITECTURES ?= default neon sse2 sse3 ssse3 avx avx2 avx_fma avx2_fma
 MIGRATION_CPU_ARCH_PARITY_DIR ?= build/migration-parity/cpu-architecture
+MIGRATION_CPU_ARCH_BENCHMARK_DIR ?= build/migration-parity/cpu-architecture-benchmark
+MIGRATION_CPU_BENCHMARK_ARCHITECTURES ?= $(MIGRATION_CPU_ARCHITECTURES)
+MIGRATION_GPU_ADAPTER_INDICES ?= auto
+MIGRATION_GPU_ADAPTER_PARITY_DIR ?= build/migration-parity/gpu-adapter
+MIGRATION_GPU_ADAPTER_BENCHMARK_DIR ?= build/migration-parity/gpu-adapter-benchmark
 MIGRATION_PARALLEL_CPU_PARITY_OUTPUT ?= build/migration-parity/parity-result-parallel-cpu.json
 MIGRATION_PARITY_ARGS ?=
 MIGRATION_PARITY_CASE_IDS ?=
@@ -176,6 +181,9 @@ help: ## Show common contributor commands
 	  "  make test           Full backend and Node/browser campaign" \
 	  "  make quality        Run consolidated static quality gates" \
 	  "  make migration-parity-test-cpu-architectures  Run CPU parity for each architecture selector" \
+	  "  make migration-parity-test-gpu-adapters  Run GPU parity for every WGPU adapter" \
+	  "  make migration-parity-benchmark-cpu-architectures  Benchmark the selected CPU architecture matrix" \
+	  "  make migration-parity-benchmark-gpu-adapters  Benchmark the same inputs per WGPU adapter" \
 	  "  make install-hooks  Enable the local large-file pre-commit guard" \
 	  "  make fmt / clippy   Check Rust formatting / lint individually" \
 	  "  make bench          Run the declared benchmark cohort" \
@@ -211,7 +219,10 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify the fixed manifest and indexed inputs\n"
 	@printf "  $(CYAN)make migration-parity-crash-quarantine-check$(NC) Verify isolated crash inputs without executing them\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Validate strict result interfaces\n"
+	@printf "  $(CYAN)make migration-parity-test-gpu-adapters$(NC) Replay the shared parity inputs across native WGPU adapters\n"
 	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Compare Pillow vs CPU, SIMD, and GPU\n"
+	@printf "  $(CYAN)make migration-parity-benchmark-cpu-architectures$(NC) Reuse the benchmark inputs for each CPU architecture selector\n"
+	@printf "  $(CYAN)make migration-parity-benchmark-gpu-adapters$(NC) Reuse the benchmark inputs for each native WGPU adapter\n"
 	@printf "  $(CYAN)make migration-parity-transpose-throughput$(NC) Build parity facade; compare fresh transpose requests at host queue depths 1/2/4\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=release make migration-parity-benchmark-low-load$(NC) Run the fixed cohort with macOS utility/background scheduling\n"
 	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark$(NC) Run the representative four-workload smoke benchmark\n"
@@ -501,7 +512,8 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
-.PHONY: migration-parity-test migration-parity-test-cpu-architectures migration-parity-test-parallel-cpu migration-parity-test-gpu-fault-contract migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: migration-parity-test migration-parity-test-cpu-architectures migration-parity-test-parallel-cpu migration-parity-test-gpu-fault-contract migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-cpu-architectures migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: migration-parity-test-gpu-adapters migration-parity-benchmark-gpu-adapters
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -547,6 +559,28 @@ migration-parity-test-cpu-architectures: build-parity-cpu-architecture ## Run CP
 		done; \
 	done; \
 	exit $$failed
+
+migration-parity-test-gpu-adapters: build-parity ## Run parity once for every available WGPU adapter
+	@set -eu; \
+	mkdir -p "$(MIGRATION_GPU_ADAPTER_PARITY_DIR)"; \
+	indices="$(MIGRATION_GPU_ADAPTER_INDICES)"; \
+	if [ "$$indices" = auto ]; then indices="$$($(PYTHON) scripts/list_migration_gpu_adapters.py --indices)"; fi; \
+	$(PYTHON) scripts/list_migration_gpu_adapters.py > "$(MIGRATION_GPU_ADAPTER_PARITY_DIR)/adapters.json"; \
+	[ -n "$$indices" ] || { printf "No GPU adapter indices selected.\n" >&2; exit 2; }; \
+	for adapter_index in $$indices; do \
+		printf "GPU adapter parity: %s\n" "$$adapter_index"; \
+		parity_artifact="$(MIGRATION_GPU_ADAPTER_PARITY_DIR)/adapter-$$adapter_index.parity.json"; \
+		execution_artifact="$(MIGRATION_GPU_ADAPTER_PARITY_DIR)/adapter-$$adapter_index.execution.json"; \
+		env -u MIGRATION_TARGET_ARCHITECTURE \
+			MIGRATION_TARGET_BACKEND=gpu \
+			MIGRATION_TARGET_PROFILE= \
+			MIGRATION_TARGET_GPU_ADAPTER_INDEX="$$adapter_index" \
+			MIGRATION_PARITY_EXECUTION_OUTPUT="$$execution_artifact" \
+			$(MAKE) migration-parity-test MIGRATION_PARITY_OUTPUT="$$parity_artifact"; \
+		for artifact in "$$parity_artifact" "$$execution_artifact"; do \
+			if [ -f "$$artifact" ]; then gzip -1 -f "$$artifact"; fi; \
+		done; \
+	done
 
 migration-parity-test-parallel-cpu: build-parity-parallel-cpu ## Run live Pillow parity through the opt-in Parallel CPU profile
 	MIGRATION_TARGET_BACKEND=cpu MIGRATION_TARGET_PROFILE=parallel-cpu \
@@ -768,6 +802,45 @@ migration-parity-benchmark-run: ## Run correctness-gated benchmark workloads usi
 	status=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	$(PYTHON) scripts/validate_migration_parity_result.py benchmark $(MIGRATION_BENCHMARK_OUTPUT)
+
+migration-parity-benchmark-cpu-architectures: build-parity-cpu-architecture ## Benchmark the CPU selector matrix with the same workload inputs
+	@set -eu; \
+	mkdir -p "$(MIGRATION_CPU_ARCH_BENCHMARK_DIR)"; \
+	for architecture in $(MIGRATION_CPU_BENCHMARK_ARCHITECTURES); do \
+		case " $(MIGRATION_CPU_ARCHITECTURES) " in \
+			*" $$architecture "*) ;; \
+			*) printf "Unknown CPU architecture selector: %s\n" "$$architecture" >&2; exit 2 ;; \
+		esac; \
+		printf "CPU architecture benchmark: %s\n" "$$architecture"; \
+		MIGRATION_TARGET_BACKEND=cpu \
+		MIGRATION_TARGET_PROFILE= \
+		MIGRATION_TARGET_ARCHITECTURE="$$architecture" \
+		MIGRATION_BENCHMARK_BACKENDS=cpu \
+		MIGRATION_BENCHMARK_COHORT= \
+		$(MAKE) migration-parity-benchmark-run \
+			MIGRATION_BENCHMARK_OUTPUT="$(MIGRATION_CPU_ARCH_BENCHMARK_DIR)/$$architecture.benchmark-result.json" \
+			MIGRATION_BENCHMARK_PARITY_OUTPUT="$(MIGRATION_CPU_ARCH_BENCHMARK_DIR)/$$architecture.parity-result.json"; \
+	done
+
+migration-parity-benchmark-gpu-adapters: build-parity ## Benchmark the same workloads on each available WGPU adapter
+	@set -eu; \
+	mkdir -p "$(MIGRATION_GPU_ADAPTER_BENCHMARK_DIR)"; \
+	indices="$(MIGRATION_GPU_ADAPTER_INDICES)"; \
+	if [ "$$indices" = auto ]; then indices="$$($(PYTHON) scripts/list_migration_gpu_adapters.py --indices)"; fi; \
+	$(PYTHON) scripts/list_migration_gpu_adapters.py > "$(MIGRATION_GPU_ADAPTER_BENCHMARK_DIR)/adapters.json"; \
+	[ -n "$$indices" ] || { printf "No GPU adapter indices selected.\n" >&2; exit 2; }; \
+	for adapter_index in $$indices; do \
+		printf "GPU adapter benchmark: %s\n" "$$adapter_index"; \
+		env -u MIGRATION_TARGET_ARCHITECTURE \
+			MIGRATION_TARGET_BACKEND=gpu \
+			MIGRATION_TARGET_PROFILE= \
+			MIGRATION_TARGET_GPU_ADAPTER_INDEX="$$adapter_index" \
+			MIGRATION_BENCHMARK_BACKENDS=gpu \
+			MIGRATION_BENCHMARK_COHORT= \
+			$(MAKE) migration-parity-benchmark-run \
+				MIGRATION_BENCHMARK_OUTPUT="$(MIGRATION_GPU_ADAPTER_BENCHMARK_DIR)/adapter-$$adapter_index.benchmark-result.json" \
+				MIGRATION_BENCHMARK_PARITY_OUTPUT="$(MIGRATION_GPU_ADAPTER_BENCHMARK_DIR)/adapter-$$adapter_index.parity-result.json"; \
+	done
 
 migration-parity-benchmark-parallel-cpu: MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/benchmark-result-parallel-cpu.json
 migration-parity-benchmark-parallel-cpu: MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/benchmark-parity-result-parallel-cpu.json

@@ -1,6 +1,7 @@
 //! GPU device ownership, adapter selection, and lazy-engine construction.
 
 use super::{BufferPool, CachedPipeline, PilError, StagingBuffer};
+use crate::compute::GpuAdapterInfo;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -14,6 +15,7 @@ pub(super) struct GpuDeviceState {
 pub(super) struct GpuInner {
     pub(super) device: wgpu::Device,
     pub(super) queue: wgpu::Queue,
+    pub(super) adapter_info: GpuAdapterInfo,
     /// Pipelines are compiled on first use. Values are shared so a resolved
     /// batch can keep every pipeline alive for the full compute-pass lifetime
     /// without holding the cache lock while commands are encoded.
@@ -22,6 +24,57 @@ pub(super) struct GpuInner {
     pub(super) available_buffers: Mutex<Vec<BufferPool>>,
     pub(super) available_staging: Mutex<Vec<StagingBuffer>>,
     pub(super) direct_primary_readback: bool,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn requested_adapter_index() -> Result<Option<usize>, PilError> {
+    let Ok(value) = std::env::var("MIGRATION_TARGET_GPU_ADAPTER_INDEX") else {
+        return Ok(None);
+    };
+    value.parse::<usize>().map(Some).map_err(|_| {
+        PilError::ValueError(format!(
+            "MIGRATION_TARGET_GPU_ADAPTER_INDEX must be a non-negative integer, got {value:?}"
+        ))
+    })
+}
+
+fn adapter_identity(
+    selection_index: Option<usize>,
+    info: wgpu::AdapterInfo,
+) -> GpuAdapterInfo {
+    GpuAdapterInfo {
+        selection_index,
+        name: info.name,
+        vendor: info.vendor,
+        device: info.device,
+        device_type: format!("{:?}", info.device_type).to_lowercase(),
+        backend: format!("{:?}", info.backend).to_lowercase(),
+        driver: info.driver,
+        driver_info: info.driver_info,
+    }
+}
+
+pub(super) fn adapter_inventory() -> Vec<GpuAdapterInfo> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let descriptor = wgpu::InstanceDescriptor::from_env_or_default();
+        let instance = wgpu::Instance::new(&descriptor);
+        instance
+            .enumerate_adapters(descriptor.backends)
+            .into_iter()
+            .enumerate()
+            .map(|(index, adapter)| adapter_identity(Some(index), adapter.get_info()))
+            .collect()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        Vec::new()
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn requested_adapter_index() -> Result<Option<usize>, PilError> {
+    Ok(None)
 }
 
 pub(super) fn direct_primary_readback_supported(
@@ -53,6 +106,7 @@ impl GpuInner {
         // the Python extension as well as in standalone Rust binaries.
         let instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default();
         let instance = wgpu::Instance::new(&instance_descriptor);
+        let requested_adapter_index = requested_adapter_index()?;
         let request_options = wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             force_fallback_adapter: false,
@@ -69,8 +123,19 @@ impl GpuInner {
         // been observed to return None here even though direct enumeration
         // succeeds; use that already-enumerated adapter instead of rejecting
         // a usable device in that case.
-        let adapter =
-            pollster::block_on(instance.request_adapter(&request_options)).or_else(|| {
+        let adapter = match requested_adapter_index {
+            Some(index) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    enumerated_adapters.into_iter().nth(index)
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let _ = index;
+                    None
+                }
+            }
+            None => pollster::block_on(instance.request_adapter(&request_options)).or_else(|| {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     enumerated_adapters.into_iter().next()
@@ -79,7 +144,8 @@ impl GpuInner {
                 {
                     None
                 }
-            });
+            }),
+        };
         let adapter = adapter.ok_or_else(|| {
             #[cfg(not(target_arch = "wasm32"))]
             {
@@ -98,13 +164,14 @@ impl GpuInner {
                 ))
             }
         })?;
-        let adapter_info = adapter.get_info();
-        gpu_log!("[GPU] adapter selected: {:?}", adapter_info);
+        let selected_info = adapter.get_info();
+        gpu_log!("[GPU] adapter selected: {:?}", selected_info);
         let direct_primary_readback = direct_primary_readback_supported(
-            adapter_info.backend,
-            adapter_info.device_type,
+            selected_info.backend.clone(),
+            selected_info.device_type.clone(),
             adapter.features(),
         );
+        let adapter_info = adapter_identity(requested_adapter_index, selected_info);
         let required_features = if direct_primary_readback {
             wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
         } else {
@@ -144,6 +211,7 @@ impl GpuInner {
         Ok(GpuInner {
             device,
             queue,
+            adapter_info,
             pipelines: Mutex::new(HashMap::new()),
             device_state,
             available_buffers: Mutex::new(Vec::new()),

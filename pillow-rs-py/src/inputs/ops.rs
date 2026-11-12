@@ -33,6 +33,8 @@ pub(crate) fn resample_filter_code(filter: pillow_rs::ResampleFilter) -> i32 {
         pillow_rs::ResampleFilter::Bicubic => 3,
         pillow_rs::ResampleFilter::Box => 4,
         pillow_rs::ResampleFilter::Hamming => 5,
+        pillow_rs::ResampleFilter::Mks2013 => 6,
+        pillow_rs::ResampleFilter::Mks2021 => 7,
     }
 }
 
@@ -452,6 +454,7 @@ pub(crate) fn palette_integer_component_from_python(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn convert_mode_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<pillow_rs::ConvertModeInput> {
@@ -469,6 +472,7 @@ pub(crate) fn convert_mode_input_from_python(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn convert_palette_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<pillow_rs::ConvertPaletteInput> {

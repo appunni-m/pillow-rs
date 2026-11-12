@@ -89,11 +89,11 @@ fn lab_contrast_luma(
     context: &ExecutionContext,
 ) -> Result<(GrayImage, StrategySelection), PilError> {
     let selection = crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(
-        crate::compute::pool_cpu::ops::color::convert::lab8::ops::SUPPORT,
+        crate::compute::pool_cpu::ops::color::lab8::ops::SUPPORT,
         facts.with_convert_target(Mode::ImageLuma8),
         context,
     )?;
-    let image = crate::compute::pool_cpu::ops::color::convert::lab8::ops::execute(
+    let image = crate::compute::pool_cpu::ops::color::lab8::ops::execute(
         source,
         Mode::ImageLuma8,
         selection,
@@ -119,11 +119,11 @@ fn luma_contrast_rgb(
     }
     .with_convert_target(Mode::ImageRgb8);
     let selection = crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(
-        crate::compute::pool_cpu::ops::color::convert::luma8::ops::SUPPORT,
+        crate::compute::pool_cpu::ops::color::luma8::convert::SUPPORT,
         facts,
         context,
     )?;
-    let image = crate::compute::pool_cpu::ops::color::convert::luma8::ops::execute(
+    let image = crate::compute::pool_cpu::ops::color::luma8::convert::execute(
         source,
         Mode::ImageRgb8,
         selection,

@@ -13,7 +13,7 @@ pub(super) fn try_convert_scalar_to_rgbx(
     if !matches!(source_mode, Mode::ImageI32 | Mode::ImageF32) {
         return Ok(None);
     }
-    if crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
+    if crate::compute::pool_cpu::ops::color::ops::CONVERT_SUPPORT
         .scope_for_target(source_mode, Mode::ImageRgbx8)
         .is_none()
     {
@@ -121,7 +121,7 @@ pub(super) fn try_convert_early_modes(
         );
         return Ok(Some(result));
     }
-    if let Some(composition) = crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
+    if let Some(composition) = crate::compute::pool_cpu::ops::color::ops::CONVERT_SUPPORT
         .target_composition_for(source_mode, target_mode)
     {
         return execute_target_composition(image, dither, composition).map(Some);

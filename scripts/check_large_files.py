@@ -31,6 +31,42 @@ APPROVED_FILES: dict[str, tuple[int, str]] = {
         8_500_000,
         "Fixed public benchmark workload corpus required by the benchmark runner.",
     ),
+    "docs/generated/migration-parity-target-output-status.md": (
+        10_000_000,
+        "Generated mode/size target-output evidence index; keep its expanded matrix capped.",
+    ),
+    "pillow-rs/tests/fixtures/inputs/benchmark/pil-image-image.json": (
+        45_000_000,
+        "Fixed mode/size Image benchmark matrix inputs required for CPU and architecture replay.",
+    ),
+    "pillow-rs/tests/fixtures/inputs/benchmark/pil-image.json": (
+        9_000_000,
+        "Fixed mode/size Image benchmark matrix inputs required for CPU and architecture replay.",
+    ),
+    "pillow-rs/tests/fixtures/inputs/benchmark/pil-imagechops.json": (
+        65_000_000,
+        "Fixed mode/size ImageChops benchmark matrix inputs required for CPU and architecture replay.",
+    ),
+    "pillow-rs/tests/fixtures/inputs/benchmark/pil-imageenhance-brightness.json": (
+        9_000_000,
+        "Fixed mode/size Brightness benchmark matrix inputs required for CPU and architecture replay.",
+    ),
+    "pillow-rs/tests/fixtures/inputs/benchmark/pil-imageenhance-sharpness.json": (
+        4_000_000,
+        "Fixed mode/size Sharpness benchmark matrix inputs required for CPU and architecture replay.",
+    ),
+    "pillow-rs/tests/fixtures/inputs/benchmark/pil-imageops.json": (
+        11_000_000,
+        "Fixed mode/size ImageOps benchmark matrix inputs required for CPU and architecture replay.",
+    ),
+    "pillow-rs/tests/fixtures/inputs/coverage/pil-imagechops.json": (
+        1_200_000,
+        "Generated mode/size coverage requirements for ImageChops; keep the matrix capped.",
+    ),
+    "pillow-rs/tests/fixtures/manifest.yaml": (
+        1_500_000,
+        "Generated index for the expanded fixed parity and benchmark matrix inputs.",
+    ),
 }
 
 

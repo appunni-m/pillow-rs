@@ -45,6 +45,7 @@ pub(crate) struct PreparedMandelbrot {
     quality: i32,
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn rejected_gradient_mode(mode: Mode) -> ModeSupport {
     ModeSupport::Rejected {
         mode,
@@ -53,6 +54,7 @@ fn rejected_gradient_mode(mode: Mode) -> ModeSupport {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_linear_gradient(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::LINEAR_GRADIENT_SUPPORT,
@@ -83,6 +85,7 @@ fn classify_linear_gradient(mode: Mode) -> ModeSupport {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_radial_gradient(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::RADIAL_GRADIENT_SUPPORT,
@@ -113,6 +116,7 @@ fn classify_radial_gradient(mode: Mode) -> ModeSupport {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn classify_mandelbrot(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageLuma8 => super::luma8::ops::MANDELBROT_SUPPORT,
@@ -169,16 +173,19 @@ pub(crate) static MANDELBROT_SUPPORT: OperationSupport = OperationSupport::new(
 );
 
 impl PreparedMandelbrot {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         self.strategy.selection()
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<GeneratedImage, PilError> {
         super::luma8::ops::execute_mandelbrot(self.strategy, self.size, self.extent, self.quality)
     }
 }
 
 impl PreparedLinearGradient {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::One(plan) => plan.selection(),
@@ -189,6 +196,7 @@ impl PreparedLinearGradient {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<GeneratedImage, PilError> {
         match self {
             Self::One(plan) => super::one::ops::execute_linear_gradient(plan),
@@ -201,6 +209,7 @@ impl PreparedLinearGradient {
 }
 
 impl PreparedRadialGradient {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::One(plan) => plan.selection(),
@@ -211,6 +220,7 @@ impl PreparedRadialGradient {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<GeneratedImage, PilError> {
         match self {
             Self::One(plan) => super::one::ops::execute_radial_gradient(plan),
@@ -222,6 +232,7 @@ impl PreparedRadialGradient {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_linear_gradient(
     mode: Mode,
     ctx: &ExecutionContext,
@@ -264,6 +275,7 @@ pub(crate) fn prepare_linear_gradient(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_radial_gradient(
     mode: Mode,
     ctx: &ExecutionContext,
@@ -309,6 +321,7 @@ pub(crate) fn prepare_radial_gradient(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_mandelbrot(
     size: (u32, u32),
     extent: (f64, f64, f64, f64),
@@ -348,14 +361,17 @@ macro_rules! declare_effect_modes {
             $($mode(super::$module::ops::NoiseStrategy<'a>),)+
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn classify_spread(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::SPREAD_SUPPORT,)+ }
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn classify_noise(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::NOISE_SUPPORT,)+ }
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn prepare_spread_mode<'a>(
             image: &'a DynamicImage,
             distance: u32,
@@ -367,6 +383,7 @@ macro_rules! declare_effect_modes {
             }
         }
 
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         fn prepare_noise_mode<'a>(
             image: &'a DynamicImage,
             sigma: f64,
@@ -379,20 +396,24 @@ macro_rules! declare_effect_modes {
         }
 
         impl PreparedEffectSpread<'_> {
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(plan) => plan.selection(),)+ }
             }
 
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self { $(Self::$mode(plan) => super::$module::ops::execute_spread(plan),)+ }
             }
         }
 
         impl PreparedEffectNoise<'_> {
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(plan) => plan.selection(),)+ }
             }
 
+            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self { $(Self::$mode(plan) => super::$module::ops::execute_noise(plan),)+ }
             }
@@ -437,6 +458,7 @@ pub(crate) static EFFECT_NOISE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::EffectNoise, NOISE_INPUTS, classify_noise)
         .with_rejected_output(OutputModeRule::Fixed(Mode::ImageLuma8));
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_spread<'a>(
     image: &'a DynamicImage,
     distance: u32,
@@ -445,6 +467,7 @@ pub(crate) fn prepare_spread<'a>(
     prepare_spread_mode(image, distance, ctx)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_noise<'a>(
     image: &'a DynamicImage,
     sigma: f64,
@@ -453,6 +476,7 @@ pub(crate) fn prepare_noise<'a>(
     prepare_noise_mode(image, sigma, ctx)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_spread_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -465,6 +489,7 @@ pub(crate) fn prepare_spread_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_effect_spread)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare_noise_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

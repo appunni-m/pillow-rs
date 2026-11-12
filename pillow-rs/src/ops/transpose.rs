@@ -55,6 +55,7 @@ pub fn normalize_transposed_font_input(input: TransposeInput) -> Option<String> 
 
 impl Image {
     /// Applies the Python-facing integer/name transpose contract.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn transpose_with_input(&self, input: TransposeInput) -> Result<Image, PilError> {
         if let TransposeInput::Index(index) = input {
             let method = match index {

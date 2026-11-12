@@ -10,6 +10,7 @@ use crate::raster::Mode;
 
 mod request;
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(super) fn assess(
     contract: InputContract,
     input: StrategyInputs,
@@ -30,6 +31,7 @@ pub(super) fn assess(
         | InputContract::TransformParameters
         | InputContract::PosterizeBits
         | InputContract::ByteLutEntries { .. }
+        | InputContract::PointI32LutEntries { .. }
         | InputContract::PointFloatLutEntries { .. }
         | InputContract::ReduceFactors { .. }
         | InputContract::Thumbnail

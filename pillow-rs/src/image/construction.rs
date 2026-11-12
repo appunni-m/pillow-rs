@@ -12,7 +12,12 @@ use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode};
 
 mod empty;
+mod dynamic;
+mod frombytes;
 mod internal_samples;
+mod palette_policy;
+
+pub use frombytes::RawDecoderPlan;
 
 use super::{Image, LoadedData, PalettedData, materialization_cache};
 
@@ -155,6 +160,7 @@ pub struct NewColorInput {
 
 impl NewColorInput {
     /// Builds a constructor input from binding-level type extraction only.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[allow(clippy::too_many_arguments)]
     pub fn from_parts(
         string: Option<String>,
@@ -382,6 +388,7 @@ impl Image {
 
     // ── Constructors ──
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[allow(clippy::too_many_arguments)]
     /// Creates a new image with the requested mode, dimensions, and fill color.
     ///
@@ -401,6 +408,7 @@ impl Image {
         Self::new_with_color_presence(width, height, mode, color, true)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn new_with_color_presence(
         width: u32,
         height: u32,
@@ -447,156 +455,12 @@ impl Image {
         Ok(image)
     }
 
-    fn new_dynamic_image(
-        width: u32,
-        height: u32,
-        mode: Mode,
-        color: (u8, u8, u8, u8),
-        color_provided: bool,
-    ) -> Result<DynamicImage, PilError> {
-        let mut image = match mode {
-            Mode::ImageRgb8 => DynamicImage::ImageRgb8(crate::raster::RgbImage::from_pixel(
-                width,
-                height,
-                crate::raster::Rgb([color.0, color.1, color.2]),
-            )),
-            Mode::ImageRgba8 => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
-                width,
-                height,
-                crate::raster::Rgba([color.0, color.1, color.2, color.3]),
-            )),
-            Mode::ImageRgbPremultiplied8 => {
-                DynamicImage::ImageRgbPremultiplied8(crate::raster::RgbaImage::from_pixel(
-                    width,
-                    height,
-                    crate::raster::Rgba([color.0, color.1, color.2, color.3]),
-                ))
-            }
-            Mode::ImageRgbx8 => DynamicImage::ImageRgbx8(crate::raster::RgbaImage::from_pixel(
-                width,
-                height,
-                crate::raster::Rgba([color.0, color.1, color.2, color.3]),
-            )),
-            Mode::ImageLuma8 => DynamicImage::ImageLuma8(crate::raster::GrayImage::from_pixel(
-                width,
-                height,
-                crate::raster::Luma([color.0]),
-            )),
-            Mode::One => DynamicImage::One(crate::raster::GrayImage::from_pixel(
-                width,
-                height,
-                // Pillow stores the supplied Image.new color byte verbatim;
-                // this constructor does not threshold it to a bit value.
-                crate::raster::Luma([color.0]),
-            )),
-            Mode::ImageLumaA8 => {
-                DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::from_pixel(
-                    width,
-                    height,
-                    crate::raster::LumaA([color.0, color.3]),
-                ))
-            }
-            Mode::ImageLaPremultiplied8 => {
-                DynamicImage::ImageLaPremultiplied8(crate::raster::GrayAlphaImage::from_pixel(
-                    width,
-                    height,
-                    crate::raster::LumaA([color.0, color.3]),
-                ))
-            }
-            // The binding packs the low 16 bits of an Image.new scalar into
-            // color.0/color.1 in little-endian order. Keep the logical sample
-            // native in the raster and apply the requested raw byte order only
-            // when the public byte representation is requested.
-            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
-                Self::new_i16_dynamic_image(width, height, mode, color)
-            }
-            Mode::ImagePaletteAlpha8 => {
-                DynamicImage::ImagePaletteAlpha8(crate::raster::GrayAlphaImage::from_pixel(
-                    width,
-                    height,
-                    crate::raster::LumaA([color.0, color.3]),
-                ))
-            }
-            Mode::ImageCmyk8 => DynamicImage::ImageCmyk8(crate::raster::RgbaImage::from_pixel(
-                width,
-                height,
-                crate::raster::Rgba([color.0, color.1, color.2, color.3]),
-            )),
-            Mode::ImageYCbCr8 => DynamicImage::ImageYCbCr8(crate::raster::RgbImage::from_pixel(
-                width,
-                height,
-                crate::raster::Rgb([color.0, color.1, color.2]),
-            )),
-            Mode::ImageHsv8 => DynamicImage::ImageHsv8(crate::raster::RgbImage::from_pixel(
-                width,
-                height,
-                crate::raster::Rgb([color.0, color.1, color.2]),
-            )),
-            Mode::ImageLab8 => Self::new_lab8_dynamic_image(width, height, color),
-            Mode::ImageI32 => DynamicImage::ImageI32(crate::raster::RgbaImage::from_pixel(
-                width,
-                height,
-                crate::raster::Rgba([color.0, color.1, color.2, color.3]),
-            )),
-            Mode::ImageF32 => DynamicImage::ImageF32(crate::raster::RgbaImage::from_pixel(
-                width,
-                height,
-                crate::raster::Rgba([color.0, color.1, color.2, color.3]),
-            )),
-            Mode::ImagePalette8 => unreachable!("palette mode is handled by Image::new"),
-            Mode::ImageLumaA16
-            | Mode::ImageRgb16
-            | Mode::ImageRgba16
-            | Mode::ImageRgb32F
-            | Mode::ImageRgba32F => {
-                // NO_PILLOW_SUPPORT: these internal storage identities have
-                // no Pillow Image.new spelling or scalar-fill contract.
-                return Err(PilError::ValueError(
-                    "unsupported image mode for Image.new".into(),
-                ));
-            }
-        };
-        initialize_new_hidden_lanes(&mut image, mode, color, color_provided)?;
-        Ok(image)
-    }
-
-    fn new_i16_dynamic_image(
-        width: u32,
-        height: u32,
-        mode: Mode,
-        color: (u8, u8, u8, u8),
-    ) -> DynamicImage {
-        let image = crate::raster::ImageBuffer::from_pixel(
-            width,
-            height,
-            crate::raster::Luma([u16::from_le_bytes([color.0, color.1])]),
-        );
-        match mode {
-            Mode::ImageI16 => DynamicImage::ImageI16(image),
-            Mode::ImageI16L => DynamicImage::ImageI16L(image),
-            Mode::ImageI16B => DynamicImage::ImageI16B(image),
-            Mode::ImageI16N => DynamicImage::ImageI16N(image),
-            _ => unreachable!("matched 16-bit luma mode"),
-        }
-    }
-
-    fn new_lab8_dynamic_image(width: u32, height: u32, color: (u8, u8, u8, u8)) -> DynamicImage {
-        DynamicImage::ImageLab8(crate::raster::RgbImage::from_pixel(
-            width,
-            height,
-            crate::raster::Rgb([
-                color.0,
-                color.1.wrapping_add(128),
-                color.2.wrapping_add(128),
-            ]),
-        ))
-    }
-
     /// Creates an image using Pillow's host-facing `Image.new` color rules.
     ///
     /// Bindings extract host values into [`NewColorInput`]; this method
     /// owns mode-specific color resolution and the distinction between scalar
     /// and tuple-created palette images.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn new_with_input(
         width: u32,
         height: u32,
@@ -642,6 +506,7 @@ impl Image {
     /// Pillow distinguishes a scalar `Image.new("P", ..., index)` argument
     /// from a tuple color: the scalar is stored directly in every pixel while
     /// the image retains an empty palette.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn new_palette_index(width: u32, height: u32, index: u8) -> Self {
         Self::new_palette_index_with_metadata(
             width,
@@ -673,6 +538,7 @@ impl Image {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn new_palette_index_with_metadata(
         width: u32,
         height: u32,
@@ -911,6 +777,7 @@ impl Image {
     /// Returns [`PilError`] when the format string is unknown, the encoded
     /// header is unknown or malformed, or the hint does not match the detected
     /// format.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn open_bytes_with_format(data: Vec<u8>, format: Option<&str>) -> Result<Self, PilError> {
         let formats = format.map(|format| vec![format]);
         Self::open_bytes_with_formats(data, formats.as_deref())
@@ -926,6 +793,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when a format name is unknown, the encoded header
     /// is unknown or malformed, or no requested format matches the header.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn open_bytes_with_formats(
         data: Vec<u8>,
         formats: Option<&[&str]>,
@@ -971,6 +839,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when the encoded header is unknown or malformed.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn open_bytes(data: Vec<u8>) -> Result<Self, PilError> {
         Self::open_bytes_with_format(data, None)
     }

@@ -18,6 +18,7 @@ pub(crate) const FLOAT_LUT_INPUTS: &[InputContract] = &[
     },
 ];
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn facts(
     width: u32,
     height: u32,
@@ -34,6 +35,7 @@ pub(crate) fn facts(
     .with_eval_lut_entries(lut_entries)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn point_float_facts(
     width: u32,
     height: u32,
@@ -50,6 +52,7 @@ pub(crate) fn point_float_facts(
     .with_point_float_lut_entries(lut_entries)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn select(
     support: ModeSupport,
     input: StrategyInputs,
@@ -64,10 +67,20 @@ pub(crate) fn select(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) const fn cpu_architectures_for(mode: Mode, channels: u8) -> [ImplementationSupport; 3] {
+    cpu_architectures_for_operation(OperationId::Eval, mode, channels)
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub(crate) const fn cpu_architectures_for_operation(
+    operation: OperationId,
+    mode: Mode,
+    channels: u8,
+) -> [ImplementationSupport; 3] {
     [
         ImplementationSupport::cpu(
-            OperationId::Eval,
+            operation,
             mode,
             Architecture::Sse2,
             cfg!(all(
@@ -78,7 +91,7 @@ pub(crate) const fn cpu_architectures_for(mode: Mode, channels: u8) -> [Implemen
             StrategyGuard::NativePointwiseBytes { channels },
         ),
         ImplementationSupport::cpu(
-            OperationId::Eval,
+            operation,
             mode,
             Architecture::Neon,
             cfg!(all(target_arch = "aarch64", target_feature = "neon")),
@@ -86,7 +99,7 @@ pub(crate) const fn cpu_architectures_for(mode: Mode, channels: u8) -> [Implemen
             StrategyGuard::NativePointwiseBytes { channels },
         ),
         ImplementationSupport::cpu(
-            OperationId::Eval,
+            operation,
             mode,
             Architecture::WasmSimd128,
             cfg!(all(target_arch = "wasm32", target_feature = "simd128")),

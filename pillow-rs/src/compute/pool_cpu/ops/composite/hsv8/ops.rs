@@ -7,6 +7,8 @@ use std::sync::Arc;
 
 pub(crate) const MODE: Mode = Mode::ImageHsv8;
 
+super::super::helpers::declare_composite_module_support!(ImageHsv8, luma_mask(3, 16));
+
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],

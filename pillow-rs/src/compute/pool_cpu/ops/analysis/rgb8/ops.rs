@@ -48,6 +48,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_get_data(
     image: &RgbImage,
     selection: StrategySelection,
@@ -70,6 +71,7 @@ pub(crate) fn execute_get_data(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &RgbImage,
     selection: StrategySelection,
@@ -140,6 +142,7 @@ pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::Mode
         crate::raster::Mode::ImageRgb8,
     );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel(
     image: &crate::raster::RgbImage,
     x: u32,
@@ -154,6 +157,7 @@ pub(crate) fn execute_get_pixel(
     super::default::get_pixel_impl::execute(image, x, y)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel_rgb(
     image: &crate::raster::RgbImage,
     x: u32,

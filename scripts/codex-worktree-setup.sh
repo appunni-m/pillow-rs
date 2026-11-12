@@ -208,11 +208,11 @@ setup_python() {
   if command -v uv >/dev/null 2>&1; then
     run_command uv venv --python "${CODEX_PYTHON_VERSION:-3.12}" "$virtualenv"
     run_command uv pip install --python "$python" \
-      'maturin>=1.0,<2.0' coverage pyyaml 'pillow==12.2.0' numpy
+      'maturin>=1.0,<2.0' coverage pyyaml 'pillow==13.0.0' numpy
   else
     run_command python3 -m venv "$virtualenv"
     run_command "$python" -m pip install --cache-dir "$CACHE_ROOT/pip" \
-      'maturin>=1.0,<2.0' coverage pyyaml 'pillow==12.2.0' numpy
+      'maturin>=1.0,<2.0' coverage pyyaml 'pillow==13.0.0' numpy
   fi
 }
 

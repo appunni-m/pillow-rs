@@ -58,6 +58,7 @@ pub(super) fn register_adapter_functions(m: &Bound<'_, pyo3::types::PyModule>) -
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn point_lut_from_python(input: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
     pillow_rs::make_lut(1, |sample| {
         let result = input.call1((sample,)).map_err(|error| {
@@ -66,19 +67,35 @@ fn point_lut_from_python(input: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
         let rounded = result.call_method0("__round__").map_err(|error| {
             pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
         })?;
-        rounded.extract::<i32>().map_err(|_| {
-            pillow_rs::PilError::ValueError("LUT function must return an integer".to_owned())
-        })
+        rounded
+            .extract::<std::os::raw::c_long>()
+            .map(|value| value.clamp(0, 255) as i32)
+            .map_err(|_| {
+                pillow_rs::PilError::ValueError("LUT function must return an integer".to_owned())
+            })
     })
     .map_err(map_error)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn point_lut_values_from_python(input: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+    let mut lut = Vec::new();
+    for value in input.try_iter()? {
+        let rounded = value?.call_method0("__round__")?;
+        let value = rounded.extract::<std::os::raw::c_long>()?;
+        lut.push(value.clamp(0, 255) as u8);
+    }
+    Ok(lut)
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn point_float_lut_from_python(input: &Bound<'_, PyAny>) -> PyResult<Vec<f64>> {
     pillow_rs::image_eval_float_lut(|sample| input.call1((sample,))?.extract::<f64>())
 }
 
 #[pymethods]
 impl PyImage {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn _resize_filter_code(slf: Py<Self>, resample: Option<&Bound<'_, PyAny>>) -> PyResult<i32> {
         let _keep_self_alive = slf;
         let input = resample_input_from_python(resample)?;
@@ -86,6 +103,7 @@ impl PyImage {
         Ok(resample_filter_code(filter))
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[pyo3(signature = (size, resample=None, box_coords=None, reducing_gap=None))]
     fn resize(
         slf: Py<Self>,
@@ -95,6 +113,7 @@ impl PyImage {
         reducing_gap: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
+        let resample = resample_input_from_python(resample)?;
         let size = size.extract::<(i64, i64)>()?;
         let box_coords = box_coords
             .map(|value| value.extract::<(f64, f64, f64, f64)>())
@@ -102,7 +121,6 @@ impl PyImage {
         let reducing_gap = reducing_gap
             .map(|value| value.extract::<f64>())
             .transpose()?;
-        let resample = resample_input_from_python(resample)?;
         let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
             .detach(move || inner.resize_with_options(size, resample, box_coords, reducing_gap))
@@ -216,6 +234,32 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
+    #[cfg(feature = "test-api")]
+    #[pyo3(signature = (angle, expand=false))]
+    fn _migration_direct_rotate(
+        slf: Py<Self>,
+        angle: f64,
+        expand: bool,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
+        let inner = slf.bind(py).borrow().inner.clone();
+        let inner = py
+            .detach(move || {
+                inner.rotate_with_input(
+                    angle,
+                    pillow_rs::RotateResampleInput::Code(0),
+                    pillow_rs::RotateExpandInput::Boolean(expand),
+                    pillow_rs::RotatePointInput::Default,
+                    pillow_rs::RotatePointInput::Default,
+                    pillow_rs::ImageOpsColor::None,
+                )
+            })
+            .map_err(map_error)?;
+        Ok(PyImage { inner })
+    }
+
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[pyo3(signature = (mode=None, matrix=None, dither=None, palette=None, colors=None))]
     fn convert(
         slf: Py<Self>,
@@ -455,6 +499,7 @@ impl PyImage {
         result.map_err(map_error)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[pyo3(signature = (colors=None, method=None, kmeans=None, dither=None, palette=None, visible_mode=None))]
     fn quantize(
         slf: Py<Self>,
@@ -614,6 +659,7 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn color_lut_3d(
         slf: Py<Self>,
         mode: &str,
@@ -723,6 +769,7 @@ impl PyImage {
     }
 
     /// Applies a sequence or callable LUT through the Rust-owned public path.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[pyo3(signature = (input, mode=None))]
     fn point(
         slf: Py<Self>,
@@ -789,14 +836,32 @@ impl PyImage {
             }
             let lut = point_lut_from_python(input)?;
             let inner = slf.bind(py).borrow().inner.clone();
+            if let Some(target_mode) = target_mode.filter(|target| *target != source_mode) {
+                return py
+                    .detach(move || {
+                        pillow_rs::image_eval_point_mode_replicated_for_image(
+                            &inner,
+                            target_mode,
+                            &lut,
+                        )
+                    })
+                    .map(|i| PyImage { inner: i })
+                    .map_err(map_error);
+            }
             return py
                 .detach(move || pillow_rs::image_eval_replicated_for_image(&inner, &lut))
                 .map(|i| PyImage { inner: i })
                 .map_err(map_error);
         }
 
-        let lut = input.extract::<Vec<u8>>()?;
+        let lut = point_lut_values_from_python(input)?;
         let inner = slf.bind(py).borrow().inner.clone();
+        if let Some(target_mode) = target_mode.filter(|target| *target != source_mode) {
+            return py
+                .detach(move || pillow_rs::image_eval_point_mode(&inner, target_mode, &lut))
+                .map(|i| PyImage { inner: i })
+                .map_err(map_error);
+        }
         py.detach(move || pillow_rs::image_eval_validated(&inner, &lut))
             .map(|i| PyImage { inner: i })
             .map_err(map_error)

@@ -12,7 +12,7 @@ pub(crate) fn execute(input: &RgbImage) -> Result<DynamicImage, PilError> {
     let output = ImageBuffer::from_raw(width, height, bytes)
         .ok_or_else(|| PilError::InternalError("LAB output buffer shape mismatch".into()))?;
     let mut output = DynamicImage::ImageLab8(output);
-    super::super::super::convert::helpers::physical_lanes::preserve_compact_rgb_lane(
+    super::super::super::helpers::convert::physical_lanes::preserve_compact_rgb_lane(
         input,
         Mode::ImageLab8,
         &mut output,

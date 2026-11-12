@@ -53,7 +53,7 @@ impl Image {
         }
 
         if !(src_mode == Mode::ImageRgb8 && mode == Mode::ImageLuma8)
-            && crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
+            && crate::compute::pool_cpu::ops::color::ops::CONVERT_SUPPORT
                 .scope_for_target(src_mode, mode)
                 .is_some()
         {
@@ -136,7 +136,7 @@ fn validate_convert_request(
     }
     if !has_matrix
         && source_mode == Mode::ImageLaPremultiplied8
-        && let Some(composition) = crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
+        && let Some(composition) = crate::compute::pool_cpu::ops::color::ops::CONVERT_SUPPORT
             .target_composition_for(source_mode, target_mode)
         && composition.kind
             == crate::compute::registry::support::OperationTargetCompositionKind::ConvertGuard

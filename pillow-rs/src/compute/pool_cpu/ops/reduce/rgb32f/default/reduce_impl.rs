@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &crate::raster::Rgb32FImage,
     x_factor: u32,

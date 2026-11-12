@@ -1,7 +1,6 @@
 //! Image enhancement operations organized by exact mode and architecture.
 
 pub(crate) mod cmyk8;
-pub(crate) mod contrast;
 pub(crate) mod f32;
 pub(crate) mod helpers;
 pub(crate) mod hsv8;

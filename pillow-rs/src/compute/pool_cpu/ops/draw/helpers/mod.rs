@@ -7,6 +7,7 @@ mod canvas;
 mod clipping;
 mod dispatch;
 mod ellipse;
+pub(crate) mod floodfill;
 pub(crate) mod gray_alpha_bitmap;
 pub(crate) mod gray_alpha_text;
 pub(crate) mod hidden_lanes;

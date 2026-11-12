@@ -202,6 +202,15 @@ pub use crate::compute::GpuBatchExecutor;
 pub use crate::compute::GpuBatchStats;
 #[cfg(feature = "gpu")]
 pub use crate::compute::GpuImage;
+#[cfg(feature = "gpu")]
+#[doc(hidden)]
+pub use crate::compute::GpuAdapterInfo;
+#[cfg(feature = "gpu")]
+#[doc(hidden)]
+pub use crate::compute::gpu_adapter_inventory;
+#[cfg(feature = "gpu")]
+#[doc(hidden)]
+pub use crate::compute::selected_gpu_adapter_info;
 pub use crate::compute::ImplementationId;
 pub use crate::compute::ImplementationSupport;
 pub use crate::compute::InputContract;
@@ -368,6 +377,7 @@ pub use crate::image::FormattedImageData;
 pub use crate::image::FormattedPixelValue;
 pub use crate::image::Image;
 pub use crate::image::ImageInfoValue;
+pub use crate::image::RawDecoderPlan;
 pub use crate::image::ImagingCoreBytesInput;
 pub use crate::image::NewColorInput;
 pub use crate::image::OpenFormatsInput;
@@ -662,11 +672,15 @@ pub use crate::ops::module_fns::eval as image_eval;
 pub use crate::ops::module_fns::eval_callable as image_eval_callable;
 pub use crate::ops::module_fns::eval_float as image_eval_float;
 pub use crate::ops::module_fns::eval_point_callable as image_eval_point_callable;
+pub use crate::ops::module_fns::eval_point_mode as image_eval_point_mode;
+pub use crate::ops::module_fns::eval_point_mode_replicated_for_image as image_eval_point_mode_replicated_for_image;
 pub use crate::ops::module_fns::eval_point_transform as image_eval_point_transform;
 pub use crate::ops::module_fns::eval_replicated_for_image as image_eval_replicated_for_image;
 pub use crate::ops::module_fns::eval_validated as image_eval_validated;
 pub use crate::ops::module_fns::frombytes as image_frombytes;
 pub use crate::ops::module_fns::frombytes_owned as image_frombytes_owned;
+pub use crate::ops::module_fns::frombytes_owned_with_plan as image_frombytes_owned_with_plan;
+pub use crate::ops::module_fns::frombytes_with_plan as image_frombytes_with_plan;
 pub use crate::ops::module_fns::linear_gradient as image_linear_gradient;
 #[doc(hidden)]
 pub use crate::ops::module_fns::make_float_lut as image_eval_float_lut;

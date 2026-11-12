@@ -1346,6 +1346,7 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
     component_ids = {component["id"] for component in manifest["coverage_components"]}
     item_ids: set[str] = set()
     parity_case_ids: set[str] = set()
+    target_output_case_ids: set[str] = set()
     fault_points = {point["id"]: point for point in manifest["fault_points"]}
     fault_contracts = {
         contract["id"]: contract for contract in manifest["fault_contracts"]
@@ -1377,10 +1378,24 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
                     fault_contracts,
                 )
                 parity_case_ids.update(item_ids)
+                target_output_case_ids.update(
+                    case["case_id"]
+                    for case in document["cases"]
+                    if case.get("verification") == "expected-output"
+                )
             elif current_lane == "coverage":
                 _validate_coverage_document(document, relative, operation_index, requirement_index, profile_ids, command_ids, component_ids, item_ids, parity_case_ids)
             else:
-                _validate_benchmark_document(document, relative, operation_index, requirement_index, profile_ids, item_ids, parity_case_ids)
+                _validate_benchmark_document(
+                    document,
+                    relative,
+                    operation_index,
+                    requirement_index,
+                    profile_ids,
+                    item_ids,
+                    parity_case_ids,
+                    target_output_case_ids,
+                )
             if document.get("schema") != expected_schema:
                 raise _error(relative, f"expected {expected_schema}")
             documents[relative] = document
@@ -1700,7 +1715,7 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
                 )
                 if descriptor["kind"] == "literal":
                     value = descriptor.get("value")
-                    path = f"{spath}.arguments.{name}"
+                    argument_path = f"{spath}.arguments.{name}"
                     if (
                         isinstance(value, dict)
                         and value.get("protocol") == "invalid-argument-type"
@@ -1712,7 +1727,7 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
                             )
                         ):
                             raise _error(
-                                path,
+                                argument_path,
                                 "invalid-argument-type must wrap a value outside "
                                 "the declared parameter value_types",
                             )
@@ -1720,7 +1735,7 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
                         value, parameters[name]["value_types"]
                     ):
                         raise _error(
-                            path,
+                            argument_path,
                             "literal does not match declared parameter value_types",
                         )
             step_map[step_id] = step
@@ -1811,7 +1826,16 @@ def _validate_coverage_document(document: Any, relative: str, operation_index: d
             raise _error(f"{path}.command_id", "unknown command")
 
 
-def _validate_benchmark_document(document: Any, relative: str, operation_index: dict[tuple[str, str], dict[str, Any]], requirement_index: dict[str, dict[str, Any]], profile_ids: set[str], item_ids: set[str], known_parity_case_ids: set[str] | None = None) -> None:
+def _validate_benchmark_document(
+    document: Any,
+    relative: str,
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+    requirement_index: dict[str, dict[str, Any]],
+    profile_ids: set[str],
+    item_ids: set[str],
+    known_parity_case_ids: set[str] | None = None,
+    known_target_output_case_ids: set[str] | None = None,
+) -> None:
     document = _exact(document, {"schema", "workloads", "suites"}, relative)
     _reject_output_fields(document, relative)
     workload_ids: set[str] = set()
@@ -1865,6 +1889,8 @@ def _validate_benchmark_document(document: Any, relative: str, operation_index: 
         if not subjects:
             raise _error(f"{path}.subjects", "at least one subject is required")
         subject_ids: set[str] = set()
+        oracle_count = 0
+        target_count = 0
         for subject_index, subject in enumerate(subjects):
             spath = f"{path}.subjects[{subject_index}]"
             subject = _exact(subject, {"kind", "id"}, spath)
@@ -1876,6 +1902,12 @@ def _validate_benchmark_document(document: Any, relative: str, operation_index: 
             subject_ids.add(subject_id)
             if subject["kind"] == "target_profile" and subject_id not in profile_ids:
                 raise _error(f"{spath}.id", "unknown target profile")
+            if subject["kind"] == "oracle":
+                if subject_id != "pillow":
+                    raise _error(f"{spath}.id", "unknown oracle subject")
+                oracle_count += 1
+            else:
+                target_count += 1
         input_spec = _mapping(workload["input"], f"{path}.input")
         kind = input_spec.get("kind")
         if kind == "parity_case":
@@ -1936,6 +1968,23 @@ def _validate_benchmark_document(document: Any, relative: str, operation_index: 
             raise _error(f"{path}.measurement.cache_state", "unsupported cache state")
         if measurement["correctness_gate"] not in {"parity_pass", "source_target_match", "successful_execution", "not_applicable"}:
             raise _error(f"{path}.measurement.correctness_gate", "unsupported correctness gate")
+        if oracle_count > 1 or target_count == 0:
+            raise _error(
+                f"{path}.subjects",
+                "benchmark workloads require target profiles and at most one oracle",
+            )
+        if oracle_count == 0:
+            case_id = input_spec.get("case_id") if kind == "parity_case" else None
+            if (
+                case_id is None
+                or known_target_output_case_ids is None
+                or case_id not in known_target_output_case_ids
+                or measurement["correctness_gate"] != "parity_pass"
+            ):
+                raise _error(
+                    f"{path}.subjects",
+                    "oracle-free workloads must use a recorded target-output parity case",
+                )
     for index, suite in enumerate(_list(document["suites"], f"{relative}.suites")):
         path = f"{relative}.suites[{index}]"
         suite = _exact(suite, {"suite_id", "description", "members"}, path)

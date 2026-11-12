@@ -6,7 +6,7 @@ use crate::compute::pool_cpu::ops as cpu_ops;
 macro_rules! operation_support_match {
     ($operation:expr) => {
         match $operation {
-            Self::FloodFill => &cpu_ops::draw::floodfill::ops::SUPPORT,
+            Self::FloodFill => &cpu_ops::draw::ops::FLOODFILL_SUPPORT,
             Self::Draw
             | Self::Crop
             | Self::CropBorder
@@ -40,6 +40,7 @@ macro_rules! operation_support_match {
             | Self::Eval
             | Self::PointScalar
             | Self::PointFloat
+            | Self::PointModeOutput
             | Self::Invert
             | Self::ImageOpsInvert
             | Self::ImageOpsPosterize
@@ -167,6 +168,8 @@ pub enum OperationId {
     PointScalar,
     /// Apply a floating lookup table to a byte sample and produce native F samples.
     PointFloat,
+    /// Apply a byte lookup table through a documented Point output-mode transition.
+    PointModeOutput,
     /// Invert every byte of an image while preserving its exact mode.
     Invert,
     /// Run ImageOps inversion through wrapper-mode checks and the Eval child.
@@ -353,6 +356,7 @@ pub enum OperationId {
 
 impl OperationId {
     /// Returns the contract owned by this operation's execution entry point.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
     #[must_use]
     pub fn support(self) -> &'static OperationSupport {
         operation_support_match!(self)
@@ -385,7 +389,7 @@ fn geometry_support(id: OperationId) -> &'static OperationSupport {
         OperationId::Contain => &cpu_ops::geometry::ops::CONTAIN_SUPPORT,
         OperationId::Cover => &cpu_ops::geometry::ops::COVER_SUPPORT,
         OperationId::Fit => &cpu_ops::geometry::ops::FIT_SUPPORT,
-        OperationId::Pad => &cpu_ops::geometry::pad::ops::SUPPORT,
+        OperationId::Pad => &cpu_ops::geometry::ops::PAD_SUPPORT,
         OperationId::Scale => &cpu_ops::geometry::ops::SCALE_SUPPORT,
         OperationId::Thumbnail => &cpu_ops::thumbnail::ops::SUPPORT,
         OperationId::Rotate => &cpu_ops::rotate::ops::SUPPORT,
@@ -415,21 +419,23 @@ fn filter_support(id: OperationId) -> &'static OperationSupport {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
 fn imageops_support(id: OperationId) -> &'static OperationSupport {
     match id {
         OperationId::Grayscale => &cpu_ops::grayscale::ops::SUPPORT,
         OperationId::Eval => &cpu_ops::eval::ops::SUPPORT,
         OperationId::PointScalar => &cpu_ops::eval::ops::SCALAR_POINT_SUPPORT,
         OperationId::PointFloat => &cpu_ops::eval::ops::POINT_FLOAT_SUPPORT,
+        OperationId::PointModeOutput => &cpu_ops::eval::ops::POINT_MODE_OUTPUT_SUPPORT,
         OperationId::Invert => &cpu_ops::imageops::ops::INVERT_SUPPORT,
         OperationId::ImageOpsInvert => &cpu_ops::imageops::ops::IMAGEOPS_INVERT_SUPPORT,
         OperationId::ImageOpsPosterize => &cpu_ops::imageops::ops::IMAGEOPS_POSTERIZE_SUPPORT,
         OperationId::ImageOpsSolarize => &cpu_ops::imageops::ops::IMAGEOPS_SOLARIZE_SUPPORT,
         OperationId::ImageOpsColorize => {
-            &cpu_ops::imageops::colorize::ops::IMAGEOPS_COLORIZE_SUPPORT
+            &cpu_ops::imageops::ops::IMAGEOPS_COLORIZE_SUPPORT
         }
         OperationId::ImageOpsColorizeLut => {
-            &cpu_ops::imageops::colorize::ops::IMAGEOPS_COLORIZE_LUT_SUPPORT
+            &cpu_ops::imageops::ops::IMAGEOPS_COLORIZE_LUT_SUPPORT
         }
         OperationId::Posterize => &cpu_ops::imageops::ops::POSTERIZE_SUPPORT,
         OperationId::Solarize => &cpu_ops::imageops::ops::SOLARIZE_SUPPORT,
@@ -448,8 +454,8 @@ fn imageops_support(id: OperationId) -> &'static OperationSupport {
 fn color_support(id: OperationId) -> &'static OperationSupport {
     match id {
         OperationId::ConvertLab => &cpu_ops::color::ops::SUPPORT,
-        OperationId::Convert => &cpu_ops::color::convert::ops::SUPPORT,
-        OperationId::ConvertMatrix => &cpu_ops::color::convert::ops::MATRIX_SUPPORT,
+        OperationId::Convert => &cpu_ops::color::ops::CONVERT_SUPPORT,
+        OperationId::ConvertMatrix => &cpu_ops::color::ops::MATRIX_SUPPORT,
         OperationId::RemapPalette => &cpu_ops::color::ops::REMAP_PALETTE_SUPPORT,
         _ => unreachable!("non-color operation sent to color support"),
     }

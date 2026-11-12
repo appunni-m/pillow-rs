@@ -27,7 +27,7 @@ declare_alpha_data_strategies! {
 }
 super::super::helpers::scalar_write_support::declare_scalar_write_support!(
     ImageRgb32F,
-    false,
+    true,
     false,
     false,
 );

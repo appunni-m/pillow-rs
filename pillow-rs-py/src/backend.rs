@@ -1,6 +1,17 @@
 use crate::*;
 use pyo3::{pyfunction, wrap_pyfunction};
 
+type MigrationGpuAdapterTuple = (
+    Option<usize>,
+    String,
+    u32,
+    u32,
+    String,
+    String,
+    String,
+    String,
+);
+
 #[pyfunction]
 fn enable_backend(name: &str) -> PyResult<bool> {
     match pillow_rs::Backend::parse(name) {
@@ -83,6 +94,32 @@ fn _set_migration_target_architecture(name: &str) -> PyResult<()> {
     };
     pillow_rs::set_migration_test_cpu_architecture(architecture);
     Ok(())
+}
+
+#[pyfunction]
+fn _migration_gpu_adapter_info() -> Option<MigrationGpuAdapterTuple> {
+    pillow_rs::selected_gpu_adapter_info().map(gpu_adapter_tuple)
+}
+
+#[pyfunction]
+fn _migration_gpu_adapter_inventory() -> Vec<MigrationGpuAdapterTuple> {
+    pillow_rs::gpu_adapter_inventory()
+        .into_iter()
+        .map(gpu_adapter_tuple)
+        .collect()
+}
+
+fn gpu_adapter_tuple(info: pillow_rs::GpuAdapterInfo) -> MigrationGpuAdapterTuple {
+    (
+        info.selection_index,
+        info.name,
+        info.vendor,
+        info.device,
+        info.device_type,
+        info.backend,
+        info.driver,
+        info.driver_info,
+    )
 }
 
 /// Enable or disable bounded image-pipeline execution telemetry.
@@ -279,6 +316,8 @@ pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(backend_enabled, m)?)?;
     #[cfg(feature = "test-api")]
     m.add_function(wrap_pyfunction!(_set_migration_target_architecture, m)?)?;
+    m.add_function(wrap_pyfunction!(_migration_gpu_adapter_info, m)?)?;
+    m.add_function(wrap_pyfunction!(_migration_gpu_adapter_inventory, m)?)?;
     m.add_function(wrap_pyfunction!(set_pipeline_telemetry, m)?)?;
     m.add_function(wrap_pyfunction!(set_pipeline_telemetry_origin, m)?)?;
     m.add_function(wrap_pyfunction!(take_pipeline_telemetry, m)?)?;

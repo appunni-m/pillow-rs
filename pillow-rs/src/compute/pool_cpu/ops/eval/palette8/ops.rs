@@ -24,6 +24,12 @@ const INPUTS: &[InputContract] = &[
 
 static ARCHITECTURES: [ImplementationSupport; 3] =
     super::super::helpers::strategy::cpu_architectures_for(Mode::ImagePalette8, CHANNELS as u8);
+static POINT_ONE_ARCHITECTURES: [ImplementationSupport; 3] =
+    super::super::helpers::strategy::cpu_architectures_for_operation(
+        OperationId::PointModeOutput,
+        Mode::ImagePalette8,
+        CHANNELS as u8,
+    );
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Eval,
@@ -31,6 +37,15 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OutputModeRule::Preserve,
     INPUTS,
     &ARCHITECTURES,
+);
+
+/// Pillow's P-to-1 point route, using the source mode's selected byte kernel.
+pub(crate) const POINT_ONE_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::PointModeOutput,
+    Mode::ImagePalette8,
+    OutputModeRule::Fixed(Mode::One),
+    INPUTS,
+    &POINT_ONE_ARCHITECTURES,
 );
 
 pub(crate) const FLOAT_LUT_SUPPORT: ModeSupport = ModeSupport::cpu(
@@ -50,10 +65,30 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: &'a GrayImage,
     lut: &'a [u8],
     ctx: &ExecutionContext,
+) -> Result<Strategy<'a>, PilError> {
+    prepare_with_support(input, lut, ctx, SUPPORT)
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub(crate) fn prepare_point_one<'a>(
+    input: &'a GrayImage,
+    lut: &'a [u8],
+    ctx: &ExecutionContext,
+) -> Result<Strategy<'a>, PilError> {
+    prepare_with_support(input, lut, ctx, POINT_ONE_SUPPORT)
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn prepare_with_support<'a>(
+    input: &'a GrayImage,
+    lut: &'a [u8],
+    ctx: &ExecutionContext,
+    support: ModeSupport,
 ) -> Result<Strategy<'a>, PilError> {
     let facts = strategy::facts(
         input.width(),
@@ -61,7 +96,7 @@ pub(crate) fn prepare<'a>(
         input.as_raw().len(),
         lut.len(),
     );
-    let selection = strategy::select(SUPPORT, facts, ctx)?;
+    let selection = strategy::select(support, facts, ctx)?;
     let implementation = match selection.implementation.architecture {
         Architecture::Default => ArchitectureStrategy::Default(super::default::prepare(input, lut)),
         Architecture::Sse2 => ArchitectureStrategy::Sse2(vector::prepare::<CHANNELS>(
@@ -81,35 +116,43 @@ pub(crate) fn prepare<'a>(
         ),
         architecture => {
             return Err(PilError::InternalError(format!(
-                "unexpected {architecture:?} architecture selected for Eval mode ImagePalette8"
+                "unexpected {architecture:?} architecture selected for {:?} mode ImagePalette8",
+                selection.implementation.operation
             )));
         }
     };
     Ok(Prepared::new(implementation, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn from_vector(output: vector::Output) -> Result<super::default::Input, PilError> {
     super::default::Input::from_raw(output.width, output.height, output.bytes)
         .ok_or_else(|| PilError::InternalError("Eval LUT output dimensions were invalid".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
+    execute_gray(strategy).map(DynamicImage::ImagePalette8)
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub(crate) fn execute_point_one(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
+    execute_gray(strategy).map(DynamicImage::One)
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn execute_gray(strategy: Strategy<'_>) -> Result<GrayImage, PilError> {
     match strategy.implementation {
-        ArchitectureStrategy::Default(kernel) => {
-            super::default::execute(kernel).map(DynamicImage::ImagePalette8)
+        ArchitectureStrategy::Default(kernel) => super::default::execute(kernel),
+        ArchitectureStrategy::Sse2(kernel) => vector::execute_sse2(kernel).and_then(from_vector),
+        ArchitectureStrategy::Neon(kernel) => vector::execute_neon(kernel).and_then(from_vector),
+        ArchitectureStrategy::WasmSimd128(kernel) => {
+            vector::execute_wasm_simd128(kernel).and_then(from_vector)
         }
-        ArchitectureStrategy::Sse2(kernel) => vector::execute_sse2(kernel)
-            .and_then(from_vector)
-            .map(DynamicImage::ImagePalette8),
-        ArchitectureStrategy::Neon(kernel) => vector::execute_neon(kernel)
-            .and_then(from_vector)
-            .map(DynamicImage::ImagePalette8),
-        ArchitectureStrategy::WasmSimd128(kernel) => vector::execute_wasm_simd128(kernel)
-            .and_then(from_vector)
-            .map(DynamicImage::ImagePalette8),
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_float_lut(
     input: &GrayImage,
     lut: &[f64],

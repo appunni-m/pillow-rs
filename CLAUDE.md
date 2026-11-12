@@ -81,6 +81,11 @@
   `make checkstyle-update-baseline` and inspect the resulting baseline diff.
 - Read the affected code and its callers first. Reuse existing functions, types,
   and backend paths before adding new implementations.
+- During the CPU mode/architecture refactor, maintain the per-function
+  `VERIFY` markers defined in `docs/CPU_REFACTOR_PLAN.md`: mark only reviewed
+  or measured functions, record focused parity/benchmark run IDs, and reset all
+  fields to `pending` in the same change when implementation, behavior-affecting
+  signatures, or attributes change. Keep unresolved paths attached to a TODO.
 - Make the smallest cohesive change that solves the problem. Preserve existing
   APIs unless the task requires changing them. Refactor only as needed for the
   task; avoid broad rewrites, duplicate implementations, unrelated cleanup, and

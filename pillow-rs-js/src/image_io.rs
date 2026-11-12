@@ -48,8 +48,12 @@ fn putdata_uint8_values(
             pillow_rs::PutDataValueKind::Numeric => {
                 pillow_rs::PutDataValue::Number(f64::from(value))
             }
-            pillow_rs::PutDataValueKind::Components { .. } => {
+            pillow_rs::PutDataValueKind::Components { .. }
+            | pillow_rs::PutDataValueKind::NativeU16Components { .. } => {
                 pillow_rs::PutDataValue::Packed(i64::from(value))
+            }
+            pillow_rs::PutDataValueKind::FloatComponents { .. } => {
+                pillow_rs::PutDataValue::Number(f64::from(value))
             }
         })
         .collect::<Vec<_>>();
@@ -64,11 +68,18 @@ fn putdata_value_from_js(
         return match kind {
             pillow_rs::PutDataValueKind::Numeric => Ok(pillow_rs::PutDataValue::Number(number)),
             pillow_rs::PutDataValueKind::Components { .. }
+            | pillow_rs::PutDataValueKind::NativeU16Components { .. }
                 if number.is_finite() && number.fract() == 0.0 =>
             {
                 Ok(pillow_rs::PutDataValue::Packed(number as i64))
             }
             pillow_rs::PutDataValueKind::Components { .. } => {
+                Ok(pillow_rs::PutDataValue::Number(number))
+            }
+            pillow_rs::PutDataValueKind::NativeU16Components { .. } => {
+                Ok(pillow_rs::PutDataValue::Number(number))
+            }
+            pillow_rs::PutDataValueKind::FloatComponents { .. } => {
                 Ok(pillow_rs::PutDataValue::Number(number))
             }
         };
@@ -84,6 +95,7 @@ fn putdata_value_from_js(
                         Ok(pillow_rs::PutDataValue::Number(number))
                     }
                     pillow_rs::PutDataValueKind::Components { .. }
+                    | pillow_rs::PutDataValueKind::NativeU16Components { .. }
                         if number.is_finite() && number.fract() == 0.0 =>
                     {
                         Ok(pillow_rs::PutDataValue::Packed(number as i64))
@@ -91,11 +103,33 @@ fn putdata_value_from_js(
                     pillow_rs::PutDataValueKind::Components { .. } => {
                         Ok(pillow_rs::PutDataValue::Number(number))
                     }
+                    pillow_rs::PutDataValueKind::NativeU16Components { .. } => {
+                        Ok(pillow_rs::PutDataValue::Number(number))
+                    }
+                    pillow_rs::PutDataValueKind::FloatComponents { .. } => {
+                        Ok(pillow_rs::PutDataValue::Number(number))
+                    }
                 };
             }
         }
     }
 
+    if matches!(kind, pillow_rs::PutDataValueKind::FloatComponents { .. })
+        && value.is_array()
+    {
+        let array = js_sys::Array::from(value);
+        let components = array
+            .iter()
+            .map(|item| {
+                item.as_f64().ok_or_else(|| {
+                    err(pillow_rs::PilError::TypeError(
+                        "color components must be numeric".to_owned(),
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(pillow_rs::PutDataValue::FloatComponents(components));
+    }
     if let Some(values) = js_integer_array(value) {
         if values.len() == 1 {
             return Ok(pillow_rs::PutDataValue::Packed(values[0]));
@@ -108,6 +142,7 @@ fn putdata_value_from_js(
         if matches!(
             kind,
             pillow_rs::PutDataValueKind::Components { channels: 2 }
+                | pillow_rs::PutDataValueKind::NativeU16Components { channels: 2 }
         ) {
             return Err(err(pillow_rs::PilError::SystemError(
                 "new style getargs format but argument is not a tuple".to_owned(),
@@ -145,16 +180,16 @@ fn plain_numeric_array_value(value: &JsValue, kind: pillow_rs::PutDataValueKind)
     if value.as_f64().is_some() {
         return true;
     }
-    let pillow_rs::PutDataValueKind::Components { channels } = kind else {
+    if matches!(kind, pillow_rs::PutDataValueKind::Numeric) {
         return false;
-    };
+    }
     if !value.is_array() {
         return false;
     }
     let Ok(length) = putdata_length(value) else {
         return false;
     };
-    if length != channels {
+    if !kind.accepts_component_arity(length) {
         return false;
     }
     let object: &js_sys::Object = value.unchecked_ref();
@@ -167,9 +202,16 @@ fn plain_numeric_array_value(value: &JsValue, kind: pillow_rs::PutDataValueKind)
         let Ok(component) = js_sys::Reflect::get(&descriptor, &JsValue::from_str("value")) else {
             return false;
         };
-        component
-            .as_f64()
-            .is_some_and(|number| number.is_finite() && number.fract() == 0.0)
+        component.as_f64().is_some_and(|number| {
+            match kind {
+                pillow_rs::PutDataValueKind::FloatComponents { .. } => true,
+                pillow_rs::PutDataValueKind::Components { .. }
+                | pillow_rs::PutDataValueKind::NativeU16Components { .. } => {
+                    number.is_finite() && number.fract() == 0.0
+                }
+                pillow_rs::PutDataValueKind::Numeric => false,
+            }
+        })
     })
 }
 

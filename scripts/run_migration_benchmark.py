@@ -133,6 +133,7 @@ MAX_GPU_BENCHMARK_TIMEOUT_SECONDS = 1800
 # workload happened to complete.  Keep singleton intersections visible, but
 # mark them non-comparable so a ratio cannot be mistaken for a cohort result.
 MIN_COMPARABLE_SUITE_MEMBERS = 2
+GPU_ADAPTER_IDENTITIES: dict[str, dict[str, Any]] = {}
 
 
 def target_profile_for_backend(backend: str) -> str:
@@ -449,6 +450,14 @@ def benchmark_environment() -> dict[str, Any]:
     runner_id = os.environ.get("MIGRATION_BENCHMARK_RUNNER_ID", "").strip()
     if runner_id:
         environment["runner_id"] = runner_id
+    requested_adapter = os.environ.get("MIGRATION_TARGET_GPU_ADAPTER_INDEX")
+    if requested_adapter is not None:
+        environment["gpu_adapter_index"] = int(requested_adapter)
+    if GPU_ADAPTER_IDENTITIES:
+        environment["gpu_adapters"] = [
+            GPU_ADAPTER_IDENTITIES[key]
+            for key in sorted(GPU_ADAPTER_IDENTITIES)
+        ]
     return environment
 
 
@@ -1150,6 +1159,12 @@ def run_timed_side(
         if set(payload) != {"identity", "results", "timings_ns", "telemetry", "execution"}:
             raise RuntimeError(f"{side} benchmark adapter emitted invalid timing envelope")
         identity = payload["identity"]
+        if side == "target" and backend == "gpu":
+            backend_state = identity.get("backend_state", {})
+            selected_adapter = backend_state.get("selected_gpu_adapter")
+            if isinstance(selected_adapter, dict):
+                adapter_key = json.dumps(selected_adapter, sort_keys=True)
+                GPU_ADAPTER_IDENTITIES[adapter_key] = selected_adapter
         if side == "source":
             if (
                 identity.get("side") != "source"
@@ -1659,6 +1674,7 @@ def identity(
     timeout: int,
     started_at: str,
     target_profiles: list[str] | tuple[str, ...] | None = None,
+    source_subject_requested: bool = True,
 ) -> dict[str, Any]:
     assets = [
         item
@@ -1687,7 +1703,9 @@ def identity(
             for path in input_paths
         ],
         "assets": assets,
-        "oracles": parity_identity["oracles"],
+        "oracles": (
+            parity_identity["oracles"] if source_subject_requested else []
+        ),
         # The parity preflight may select only the profiles declared by the
         # public operation. Use the selected workloads' subject union so the
         # result identity names every timed profile without adding undeclared
@@ -1858,9 +1876,13 @@ def workload_subjects_for_profile(
             "benchmark subject contract declares no target profile requested by "
             "the active backend selection"
         )
-    baseline_id = benchmark_source_subject_id()
+    source_subjects = (
+        [{"kind": "oracle", "id": benchmark_source_subject_id()}]
+        if "pillow" in {subject["id"] for subject in declared}
+        else []
+    )
     return [
-        {"kind": "oracle", "id": baseline_id},
+        *source_subjects,
         *(
             {"kind": "target_profile", "id": profile}
             for profile in selected_targets
@@ -1910,8 +1932,8 @@ def validate_frozen_subject_contract(
                 f"benchmark input declares unknown subject kind {kind!r}"
             )
         validated.append({"kind": kind, "id": subject_id})
-    if oracle_count != 1:
-        raise ValueError("benchmark input must declare exactly one Pillow oracle subject")
+    if oracle_count > 1:
+        raise ValueError("benchmark input may declare at most one Pillow oracle subject")
     if target_count == 0:
         raise ValueError("benchmark input must declare at least one target profile")
     return validated
@@ -2103,6 +2125,7 @@ def validate_selected_workloads(
 
 
 def run(args: argparse.Namespace) -> int:
+    GPU_ADAPTER_IDENTITIES.clear()
     benchmark_started_at = now()
     attestation_output = getattr(args, "attestation_output", None)
     producer_output = getattr(args, "producer_attestation_output", None)
@@ -2208,6 +2231,16 @@ def run(args: argparse.Namespace) -> int:
                     f"{case_id}"
                 )
             workload_cases[workload_id] = dict(cases_by_id[case_id])
+            declares_oracle = any(
+                subject["kind"] == "oracle" for subject in workload["subjects"]
+            )
+            if not declares_oracle and workload_cases[workload_id].get(
+                "verification"
+            ) != "expected-output":
+                raise ValueError(
+                    f"{workload_id}: oracle-free benchmark requires a recorded "
+                    "target-output parity case"
+                )
             parity_case_ids.append(case_id)
             requested_profiles = {
                 parity_profile_for_subject(profile)
@@ -2411,12 +2444,19 @@ def run(args: argparse.Namespace) -> int:
         case_id = workload_cases[workload_id]["case_id"]
         gate = workload["measurement"]["correctness_gate"]
         if workload["input"]["kind"] == "parity_case":
-            # Keep measurements as execution-only evidence when parity did
-            # not cover every requested profile. Any executed parity failure
-            # still blocks timing for this correctness-gated workload.
-            eligible = parity_timing_allowed(
-                parity_outcome_by_workload.get(workload_id, "not_proven")
+            parity_outcome = parity_outcome_by_workload.get(
+                workload_id, "not_proven"
             )
+            if workload_cases[workload_id].get("verification") == "expected-output":
+                # Target-only modes have no live source result to compare.
+                # Their recorded expected-output contract must pass for every
+                # requested target profile before any timing is collected.
+                eligible = parity_outcome == "pass"
+            else:
+                # Keep ordinary measurements as execution-only evidence when
+                # parity did not cover every requested profile. Any executed
+                # parity failure still blocks timing for this workload.
+                eligible = parity_timing_allowed(parity_outcome)
         else:
             eligible = gate in {"successful_execution", "not_applicable"}
         if not eligible:
@@ -2467,7 +2507,15 @@ def run(args: argparse.Namespace) -> int:
                 in values
             }
 
-        if not PARALLEL_CPU_PROFILE:
+        source_case_ids = {
+            workload_cases[workload["workload_id"]]["case_id"]
+            for workload in sample_workloads
+            if any(subject["kind"] == "oracle" for subject in workload["subjects"])
+        }
+        source_timing_cases = [
+            case for case in timing_cases if case["case_id"] in source_case_ids
+        ]
+        if not PARALLEL_CPU_PROFILE and source_timing_cases:
             source_sample_kwargs: dict[str, Any] = {}
             if raw_samples is not None:
                 source_workloads_by_case: dict[str, list[str]] = {}
@@ -2490,7 +2538,7 @@ def run(args: argparse.Namespace) -> int:
             source_receipt = run_timed_side(
                 "source",
                 manifest,
-                timing_cases,
+                source_timing_cases,
                 repeat,
                 args.timeout,
                 backend="cpu",
@@ -2798,6 +2846,30 @@ def run(args: argparse.Namespace) -> int:
                 "comparisons": [],
             })
             continue
+        suite_member_ids = {member["workload_id"] for member in suite["members"]}
+        suite_has_oracle = any(
+            any(subject["kind"] == "oracle" for subject in workload["subjects"])
+            for workload in selected_workloads
+            if workload["workload_id"] in suite_member_ids
+        )
+        if not suite_has_oracle:
+            suite_target_ids = {
+                subject["id"]
+                for workload in selected_workloads
+                if workload["workload_id"] in suite_member_ids
+                for subject in workload["subjects"]
+                if subject["kind"] == "target_profile"
+            }
+            suites.append({
+                "suite_id": suite["suite_id"],
+                "members": suite["members"],
+                "subjects": [
+                    subject for subject in suite_subjects
+                    if subject["id"] in suite_target_ids
+                ],
+                "comparisons": [],
+            })
+            continue
         baseline_subject_id = benchmark_source_subject_id()
         oracle_subject = next(
             item for item in suite_subjects if item["id"] == baseline_subject_id
@@ -2990,6 +3062,11 @@ def run(args: argparse.Namespace) -> int:
             for subject_kind, subject_id in result_subject_order
             if subject_kind == "target_profile"
         ],
+        source_subject_requested=any(
+            subject["kind"] == "oracle"
+            for workload in selected_workloads
+            for subject in workload["subjects"]
+        ),
     )
     result_identity["finished_at"] = now()
     measured = sum(

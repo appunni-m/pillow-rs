@@ -17,11 +17,14 @@ import argparse
 import base64
 import copy
 import hashlib
+import io
 import json
+import os
 import random
 import re
 import struct
 import sys
+import tempfile
 
 # Fixture generation is an explicit, reproducible operation. Do not leave
 # Python bytecode caches alongside the generator or its imported helpers.
@@ -62,10 +65,16 @@ except ModuleNotFoundError:
 
 try:
     from migration_parity.pipeline_contract import (
+        DIRECT_CPU_DRAW_OPS,
+        PIPELINE_MUTATING_OPS,
+        PIPELINE_RESULT_OPS,
         workflow_pipeline_observation_gaps,
     )
 except ModuleNotFoundError:
     from scripts.migration_parity.pipeline_contract import (
+        DIRECT_CPU_DRAW_OPS,
+        PIPELINE_MUTATING_OPS,
+        PIPELINE_RESULT_OPS,
         workflow_pipeline_observation_gaps,
     )
 
@@ -77,6 +86,11 @@ except ModuleNotFoundError:
 try:
     from migration_parity.target_output_contracts import (
         brightness_target_output_cases,
+        brightness_core_only_matrix_cases,
+        chops_invert_core_only_matrix_cases,
+        chops_constant_core_only_matrix_cases,
+        chops_offset_core_only_matrix_cases,
+        crop_core_only_matrix_cases,
         crop_core_only_target_output_cases,
         CROP_PILLOW_MODE_CASES,
         crop_pillow_mode_parity_cases,
@@ -89,18 +103,35 @@ try:
         CHOPS_INVERT_PILLOW_MODES,
         chops_invert_target_output_cases,
         chops_duplicate_target_output_cases,
+        chops_duplicate_core_only_matrix_cases,
         chops_constant_target_output_cases,
         chops_binary_target_output_cases,
         chops_logical_target_output_cases,
         CHOPS_OFFSET_PILLOW_MODES,
         chops_offset_target_output_cases,
         core_only_frombytes_cases,
+        core_only_frombytes_matrix_cases,
+        core_only_getbbox_cases,
+        core_only_getbbox_matrix_cases,
+        core_only_l1_rawmode_cases,
         get_child_images_target_output_cases,
+        rotate_direct_target_output_cases,
+        putdata_core_only_matrix_cases,
+        REDUCE_CORE_ONLY_MODES,
+        REDUCE_MATRIX_FACTORS,
+        reduce_core_only_matrix_cases,
+        resize_core_only_matrix_cases,
         sharpness_core_only_cases,
+        sharpness_core_only_matrix_cases,
     )
 except ModuleNotFoundError:
     from scripts.migration_parity.target_output_contracts import (
         brightness_target_output_cases,
+        brightness_core_only_matrix_cases,
+        chops_invert_core_only_matrix_cases,
+        chops_constant_core_only_matrix_cases,
+        chops_offset_core_only_matrix_cases,
+        crop_core_only_matrix_cases,
         crop_core_only_target_output_cases,
         CROP_PILLOW_MODE_CASES,
         crop_pillow_mode_parity_cases,
@@ -113,14 +144,47 @@ except ModuleNotFoundError:
         CHOPS_INVERT_PILLOW_MODES,
         chops_invert_target_output_cases,
         chops_duplicate_target_output_cases,
+        chops_duplicate_core_only_matrix_cases,
         chops_constant_target_output_cases,
         chops_binary_target_output_cases,
         chops_logical_target_output_cases,
         CHOPS_OFFSET_PILLOW_MODES,
         chops_offset_target_output_cases,
         core_only_frombytes_cases,
+        core_only_frombytes_matrix_cases,
+        core_only_getbbox_cases,
+        core_only_getbbox_matrix_cases,
+        core_only_l1_rawmode_cases,
         get_child_images_target_output_cases,
+        rotate_direct_target_output_cases,
+        putdata_core_only_matrix_cases,
+        REDUCE_CORE_ONLY_MODES,
+        REDUCE_MATRIX_FACTORS,
+        reduce_core_only_matrix_cases,
+        resize_core_only_matrix_cases,
         sharpness_core_only_cases,
+        sharpness_core_only_matrix_cases,
+    )
+
+try:
+    from migration_parity.mode_size_matrix import (
+        MODE_SIZE_INPUT_VARIANTS,
+        MODE_SIZE_INPUT_VARIANTS_BY_SIZE,
+        MODE_SIZE_MATRIX_SHARD_SURFACES,
+        MODE_SIZE_MATRIX_SIZES,
+        MODE_SIZE_PILLOW_MODES,
+        MODE_SIZE_PARITY_SPLIT_SIZES,
+        seeded_noise_sample,
+    )
+except ModuleNotFoundError:
+    from scripts.migration_parity.mode_size_matrix import (
+        MODE_SIZE_INPUT_VARIANTS,
+        MODE_SIZE_INPUT_VARIANTS_BY_SIZE,
+        MODE_SIZE_MATRIX_SHARD_SURFACES,
+        MODE_SIZE_MATRIX_SIZES,
+        MODE_SIZE_PILLOW_MODES,
+        MODE_SIZE_PARITY_SPLIT_SIZES,
+        seeded_noise_sample,
     )
 
 try:
@@ -1349,6 +1413,10 @@ def mode_slug(value: str) -> str:
     """Keep Pillow's case-distinct premultiplied modes distinct in case IDs."""
 
     return {
+        "I;16": "i16",
+        "I;16L": "i16l",
+        "I;16B": "i16b",
+        "I;16N": "i16n",
         "La": "la-premultiplied",
         "RGBa": "rgba-premultiplied",
     }.get(value, slug(value))
@@ -2115,15 +2183,23 @@ def merge_workflow_aliases(
 
     unique: dict[str, dict[str, Any]] = {}
     aliases: dict[str, str] = {}
+    ordered: list[dict[str, Any]] = []
     for case in cases:
+        # Matrix variants have unique IDs and distinct image dimensions or
+        # pixels. Serializing each entire workflow merely to prove that these
+        # large cases differ creates avoidable CPU and memory pressure.
+        if ".matrix-size-" in case.get("case_id", ""):
+            ordered.append(case)
+            continue
         signature = case_signature(case)
         if signature not in unique:
             unique[signature] = case
+            ordered.append(case)
             continue
         retained = unique[signature]
         aliases[case["case_id"]] = retained["case_id"]
         retained["covers"] = list(dict.fromkeys([*retained["covers"], *case["covers"]]))
-    return list(unique.values()), aliases
+    return ordered, aliases
 
 
 def requirement_priority(requirement_id: str, prefix: str) -> tuple[int, int, str]:
@@ -2238,6 +2314,10 @@ def requirement_mode(requirement: dict[str, Any]) -> str | None:
         "f": "F",
         "hsv": "HSV",
         "i": "I",
+        "i16": "I;16",
+        "i16b": "I;16B",
+        "i16l": "I;16L",
+        "i16n": "I;16N",
         "l": "L",
         "la": "LA",
         "la-premultiplied": "La",
@@ -2246,8 +2326,34 @@ def requirement_mode(requirement: dict[str, Any]) -> str | None:
         "rgb": "RGB",
         "rgba": "RGBA",
         "rgb-premultiplied": "RGBa",
+        "rgba-premultiplied": "RGBa",
         "ycbcr": "YCbCr",
     }.get(value, value.upper())
+
+
+def numpy_array_mode(array: Any) -> str | None:
+    """Infer the Pillow mode represented by matrix NumPy array layouts."""
+
+    if not isinstance(array, dict) or array.get("protocol") != "numpy-array":
+        return None
+    shape = array.get("shape")
+    typestr = array.get("typestr")
+    if not isinstance(shape, list) or not isinstance(typestr, str):
+        return None
+    if len(shape) == 2:
+        return {
+            "|b1": "1",
+            "|u1": "L",
+            "<u2": "I;16",
+            ">u2": "I;16B",
+            "<i4": "I",
+            ">i4": "I",
+            "<f4": "F",
+            ">f4": "F",
+        }.get(typestr)
+    if len(shape) == 3 and typestr == "|u1":
+        return {3: "RGB", 4: "RGBA"}.get(shape[2])
+    return None
 
 
 def requirement_format(requirement: dict[str, Any]) -> str | None:
@@ -21592,7 +21698,7 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "resize",
-            "requirement_suffix": "mode.rgba",
+            "requirement_suffix": "mode.rgba-premultiplied",
             "name": "rgb-premultiplied-convolution",
             "mode": "RGBa",
             "edge": "nonzero-pixel",
@@ -21607,7 +21713,7 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "resize",
-            "requirement_suffix": "mode.rgba",
+            "requirement_suffix": "mode.rgba-premultiplied",
             "name": "rgb-premultiplied-nearest",
             "observe_result": "tobytes",
             "mode": "RGBa",
@@ -21682,7 +21788,7 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "resize",
-            "requirement_suffix": "mode.i",
+            "requirement_suffix": "mode.i16n",
             "name": "i16n-frombytes-nearest",
             "scenario_inline_image": "i16n-frombytes",
             "observe_result": "tobytes",
@@ -21694,7 +21800,7 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "resize",
-            "requirement_suffix": "mode.i",
+            "requirement_suffix": "mode.i16n",
             "name": "i16n-frombytes-bilinear",
             "scenario_inline_image": "i16n-frombytes",
             "observe_result": "tobytes",
@@ -21706,7 +21812,7 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "resize",
-            "requirement_suffix": "mode.i",
+            "requirement_suffix": "mode.i16l",
             "name": "i16l-frombytes-bilinear",
             "scenario_inline_image": "i16l-frombytes",
             "observe_result": "tobytes",
@@ -21718,7 +21824,7 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "resize",
-            "requirement_suffix": "mode.i",
+            "requirement_suffix": "mode.i16b",
             "name": "i16b-frombytes-bilinear",
             "scenario_inline_image": "i16b-frombytes",
             "observe_result": "tobytes",
@@ -33771,6 +33877,17 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "getbbox",
             "requirement_suffix": "performance.standard",
+            "name": "performance-f-filled-1024x768",
+            "mode": "F",
+            "size": [1024, 768],
+            "edge": "uniform-fill",
+            "pixel": 1.0,
+            "additional_requirement_suffixes": ["mode.f"],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "performance.standard",
             "name": "materialized-i-filled-1024x768",
             "mode": "I",
             "size": [1024, 768],
@@ -38869,6 +38986,50 @@ def build_nuanced_cases(
             "name": "valid-rgba",
             "mode": "RGBA",
             "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.rgb",
+            "name": "photo-ycc-rawmode",
+            "mode": "RGB",
+            "mode_size_matrix": True,
+            "values": {
+                "size": literal([5, 1]),
+                "data": bytes_literal(
+                    [
+                        0, 128, 128,
+                        30, 128, 128,
+                        100, 64, 192,
+                        200, 255, 0,
+                        255, 0, 255,
+                    ]
+                ),
+                "decoder_name": literal("raw"),
+                "args": literal(["YCC;P"]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.rgba",
+            "name": "premultiplied-ycca-rawmode",
+            "mode": "RGBA",
+            "mode_size_matrix": True,
+            "values": {
+                "size": literal([5, 1]),
+                "data": bytes_literal(
+                    [
+                        11, 22, 33, 0,
+                        25, 10, 40, 64,
+                        32, 64, 96, 128,
+                        64, 128, 128, 255,
+                        1, 0, 1, 1,
+                    ]
+                ),
+                "decoder_name": literal("raw"),
+                "args": literal(["YCCA;P"]),
+            },
         },
         {
             "surface": "PIL.Image",
@@ -44109,6 +44270,8 @@ def build_nuanced_cases(
             scenario_outline_empty=spec.get("outline_empty", False),
             scenario_comparisons=spec.get("comparisons"),
         )
+        if spec.get("mode_size_matrix"):
+            case["_mode_size_matrix"] = True
         independent_steps = spec.get("independent_steps_after_call", [])
         if independent_steps:
             call_index = next(
@@ -44198,6 +44361,10 @@ def build_nuanced_cases(
     cases.extend(chops_clipped_dimensions_parity_cases(surface_id))
     cases.extend(native_blend_mode_parity_cases(surface_id))
     cases.extend(putdata_materialized_parity_cases(surface_id))
+    cases.extend(putdata_pillow_mode_size_parity_cases(surface_id))
+    cases.extend(putdata_i16_mode_size_parity_cases(surface_id))
+    cases.extend(effect_noise_size_matrix_parity_cases(surface_id))
+    cases.extend(fromarray_resize_matrix_parity_cases(surface_id))
     cases.extend(alpha_composite_pixel_parity_cases(surface_id))
     cases.extend(composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
@@ -44524,6 +44691,462 @@ def putdata_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         make_case("1", (67, 19), "backend-full-mode1-noise-67x19-bytes", 20260950),
         make_case("P", (67, 19), "backend-full-p-noise-67x19-bytes", 20260951),
     ]
+
+
+def putdata_i16_mode_size_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover typed numeric PutData across I;16 modes, sizes, and data patterns."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    modes = ("I;16", "I;16L", "I;16B", "I;16N")
+    size_patterns = {
+        (1, 1): ("varied", "boundary"),
+        (17, 19): ("varied", "checkerboard", "boundary"),
+        (257, 193): ("varied", "seeded-noise"),
+        (1024, 768): ("varied",),
+        (1025, 769): ("seeded-noise",),
+        (2048, 1): ("varied", "checkerboard", "boundary", "seeded-noise"),
+        (2049, 1): ("varied", "checkerboard", "boundary", "seeded-noise"),
+        (1, 2048): ("varied", "checkerboard", "boundary", "seeded-noise"),
+        (1, 2049): ("varied", "checkerboard", "boundary", "seeded-noise"),
+    }
+    boundary_values = (0, 1, 255, 256, 257, 32767, 32768, 65534, 65535)
+    cases: list[dict[str, Any]] = []
+
+    for mode in modes:
+        mode_id = mode_slug(mode)
+        for (width, height), variants in size_patterns.items():
+            seed = int.from_bytes(
+                hashlib.sha256(
+                    f"putdata-i16-matrix:{mode}:{width}x{height}".encode("ascii")
+                ).digest()[:4],
+                "big",
+            )
+            for variant in variants:
+                values: list[int] = []
+                for index in range(width * height):
+                    if variant == "boundary":
+                        sample = boundary_values[index % len(boundary_values)]
+                    elif variant == "checkerboard":
+                        sample = 0xEEEE if index & 1 else 0x1111
+                    elif variant == "seeded-noise":
+                        sample = seeded_noise_sample(index, seed)
+                    else:
+                        sample = (index * 40503 + (index >> 2) * 97 + seed) & 0xFFFF
+                    values.append(sample)
+
+                variant_id = (
+                    "" if variant == "varied" else f".matrix-input-{variant}"
+                )
+                cases.append(
+                    {
+                        "case_id": (
+                            f"{surface_id}.putdata.matrix-mode.{mode_id}{variant_id}."
+                            f"matrix-size-{width}x{height}"
+                        ),
+                        "surface": surface_id,
+                        "operation": "putdata",
+                        "covers": [
+                            "PIL.Image.Image.putdata.behavior.default",
+                            f"PIL.Image.Image.putdata.mode.{mode_id}",
+                            "PIL.Image.Image.putdata.performance.standard",
+                        ],
+                        "assets": [],
+                        "steps": [
+                            {
+                                "step_id": "setup-image",
+                                "surface": "PIL.Image",
+                                "operation": "new",
+                                "receiver": None,
+                                "arguments": {
+                                    "mode": literal(mode),
+                                    "size": literal([width, height]),
+                                    "color": literal(0x5AA5),
+                                },
+                            },
+                            {
+                                "step_id": "call",
+                                "surface": surface_id,
+                                "operation": "putdata",
+                                "receiver": binding("setup-image"),
+                                "arguments": {
+                                    "data": literal(
+                                        {"protocol": "list", "items": values}
+                                    )
+                                },
+                            },
+                            {
+                                "step_id": "observe-receiver",
+                                "surface": surface_id,
+                                "operation": "tobytes",
+                                "receiver": binding("setup-image"),
+                                "arguments": {},
+                            },
+                        ],
+                        "observations": ["call", "observe-receiver"],
+                    }
+                )
+
+    return cases
+
+
+def putdata_pillow_mode_size_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover non-I;16 Pillow PutData modes with varied sizes and sample patterns."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    channel_counts = {
+        "LA": 2,
+        "La": 2,
+        "PA": 2,
+        "RGB": 3,
+        "RGBA": 4,
+        "RGBa": 4,
+        "RGBX": 4,
+        "CMYK": 4,
+        "YCbCr": 3,
+        "LAB": 3,
+        "HSV": 3,
+    }
+    modes = (
+        "1", "L", "LA", "La", "P", "PA", "RGB", "RGBA", "RGBa", "RGBX",
+        "CMYK", "YCbCr", "LAB", "HSV", "I", "F",
+    )
+    size_patterns = {
+        (1, 1): ("varied", "boundary"),
+        (17, 19): ("varied", "checkerboard", "boundary", "impulse"),
+        (65, 47): ("varied", "seeded-noise"),
+        # Keep this odd vector-tail size represented for every Pillow mode,
+        # including the modes that do not use the byte-packed PutData path.
+        (257, 193): ("varied",),
+        (2048, 1): ("varied", "checkerboard", "boundary", "seeded-noise"),
+        (2049, 1): ("varied", "checkerboard", "boundary", "seeded-noise"),
+        (1, 2048): ("varied", "checkerboard", "boundary", "seeded-noise"),
+        (1, 2049): ("varied", "checkerboard", "boundary", "seeded-noise"),
+    }
+    byte_boundaries = (0, 1, 127, 128, 254, 255)
+    integer_boundaries = (-(1 << 31), -1, 0, 1, (1 << 31) - 1)
+    float_boundaries = (-255.5, -1.0, -0.0, 0.5, 1.0, 255.5)
+    cases: list[dict[str, Any]] = []
+
+    for mode in modes:
+        mode_id = mode_slug(mode)
+        channels = channel_counts.get(mode, 1)
+        seed = int.from_bytes(
+            hashlib.sha256(f"putdata-mode-matrix:{mode}".encode("ascii")).digest()[:4],
+            "big",
+        )
+        for (width, height), variants in size_patterns.items():
+            for variant in variants:
+                values: list[Any] = []
+                for index in range(width * height):
+                    sample_values: list[int | float] = []
+                    for channel in range(channels):
+                        if mode == "I":
+                            if variant == "boundary":
+                                sample = integer_boundaries[index % len(integer_boundaries)]
+                            elif variant == "checkerboard":
+                                sample = (1 << 31) - 1 if (index + channel) & 1 else -(1 << 31)
+                            elif variant == "impulse":
+                                sample = (1 << 31) - 1 if index == 0 else 0
+                            elif variant == "seeded-noise":
+                                sample = seeded_noise_sample(index, seed, channel)
+                            else:
+                                sample = (index * 65537 + seed + channel * 257) & 0x7FFFFFFF
+                        elif mode == "F":
+                            if variant == "boundary":
+                                sample = float_boundaries[index % len(float_boundaries)]
+                            elif variant == "checkerboard":
+                                sample = 255.5 if (index + channel) & 1 else -1.0
+                            elif variant == "impulse":
+                                sample = 255.5 if index == 0 else 0.0
+                            elif variant == "seeded-noise":
+                                raw = seeded_noise_sample(index, seed, channel)
+                                sample = (raw - 32768) / 257.0
+                            else:
+                                raw = (index * 40503 + seed + channel * 97) & 0xFFFF
+                                sample = (raw - 32768) / 257.0
+                        else:
+                            if variant == "boundary":
+                                sample = byte_boundaries[(index + channel) % len(byte_boundaries)]
+                            elif variant == "checkerboard":
+                                sample = 255 if (index + channel) & 1 else 0
+                            elif variant == "impulse":
+                                sample = 255 if index == 0 else 0
+                            elif variant == "seeded-noise":
+                                sample = seeded_noise_sample(index, seed, channel) & 0xFF
+                            else:
+                                sample = (index * 73 + seed + channel * 41 + (index >> 3)) & 0xFF
+                        sample_values.append(sample)
+                    values.append(sample_values if channels > 1 else sample_values[0])
+
+                cases.append(
+                    {
+                        "case_id": (
+                            f"{surface_id}.putdata.matrix-mode.{mode_id}."
+                            f"matrix-input-{variant}."
+                            f"matrix-size-{width}x{height}"
+                        ),
+                        "surface": surface_id,
+                        "operation": "putdata",
+                        "covers": [
+                            "PIL.Image.Image.putdata.behavior.default",
+                            f"PIL.Image.Image.putdata.mode.{mode_id}",
+                            "PIL.Image.Image.putdata.performance.standard",
+                        ],
+                        "assets": [],
+                        "steps": [
+                            {
+                                "step_id": "setup-image",
+                                "surface": "PIL.Image",
+                                "operation": "new",
+                                "receiver": None,
+                                "arguments": {
+                                    "mode": literal(mode),
+                                    "size": literal([width, height]),
+                                    "color": literal(0),
+                                },
+                            },
+                            {
+                                "step_id": "call",
+                                "surface": surface_id,
+                                "operation": "putdata",
+                                "receiver": binding("setup-image"),
+                                "arguments": {
+                                    "data": literal({"protocol": "list", "items": values})
+                                },
+                            },
+                            {
+                                "step_id": "observe-receiver",
+                                "surface": surface_id,
+                                "operation": "tobytes",
+                                "receiver": binding("setup-image"),
+                                "arguments": {},
+                            },
+                        ],
+                        "observations": ["call", "observe-receiver"],
+                    }
+                )
+
+    return cases
+
+
+def effect_noise_size_matrix_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Vary EffectNoise dimensions and sigma across its native L strategy."""
+    if surface_id != "PIL.Image":
+        return []
+
+    sigmas = (0.0, 1.0, 10.0, 1000.0, 1_000_000.0)
+    cases: list[dict[str, Any]] = []
+    for width, height in MODE_SIZE_MATRIX_SIZES:
+        size_id = f"{width}x{height}"
+        for sigma in sigmas:
+            sigma_id = str(sigma).replace(".", "p")
+            cases.append(
+                {
+                    "case_id": (
+                        "PIL.Image.effect_noise.mode.l.matrix-input-sigma-"
+                        f"{sigma_id}.matrix-size-{size_id}"
+                    ),
+                    "surface": "PIL.Image",
+                    "operation": "effect_noise",
+                    "covers": [
+                        "PIL.Image.effect_noise.behavior.default",
+                        "PIL.Image.effect_noise.mode.l",
+                        "PIL.Image.effect_noise.parameter.size",
+                        "PIL.Image.effect_noise.parameter.sigma",
+                        "PIL.Image.effect_noise.performance.standard",
+                    ],
+                    "assets": [],
+                    "steps": [
+                        {
+                            "step_id": "call",
+                            "surface": "PIL.Image",
+                            "operation": "effect_noise",
+                            "receiver": None,
+                            "arguments": {
+                                "size": literal([width, height]),
+                                "sigma": literal(sigma),
+                            },
+                        }
+                    ],
+                    "observations": ["call"],
+                }
+            )
+    return cases
+
+
+def fromarray_resize_matrix_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Route representative array dtypes and sizes through typed Resize."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    mode_specs = (
+        ("1", "|b1", 1, "bool"),
+        ("L", "|u1", 1, "u8"),
+        ("I;16", "<u2", 1, "u16le"),
+        ("I;16B", ">u2", 1, "u16be"),
+        ("I", "<i4", 1, "i32"),
+        ("F", "<f4", 1, "f32"),
+        ("RGB", "|u1", 3, "u8"),
+        ("RGBA", "|u1", 4, "u8"),
+    )
+    size_patterns = {
+        (17, 19): ("varied", "boundary"),
+        (257, 193): ("varied", "seeded-noise"),
+        (1024, 768): ("varied",),
+        (1025, 769): ("seeded-noise",),
+    }
+    resize_mode_ids = {
+        "I;16": "i16",
+        "I;16L": "i16l",
+        "I;16B": "i16b",
+        "I;16N": "i16n",
+    }
+    fromarray_mode_requirements = {
+        "L": "PIL.Image.fromarray.mode.l",
+        "RGB": "PIL.Image.fromarray.mode.rgb",
+        "RGBA": "PIL.Image.fromarray.mode.rgba",
+    }
+    cases: list[dict[str, Any]] = []
+
+    for mode, typestr, channels, sample_kind in mode_specs:
+        for (width, height), variants in size_patterns.items():
+            # Full-resolution dtype coverage is already in the direct raster
+            # matrix; add one byte RGB fromarray path per material-size tier.
+            if width >= 1024 and mode != "RGB":
+                continue
+            for variant in variants:
+                seed = int.from_bytes(
+                    hashlib.sha256(
+                        f"resize-fromarray:{mode}:{width}x{height}".encode("ascii")
+                    ).digest()[:4],
+                    "big",
+                )
+                count = width * height
+                if sample_kind in {"bool", "u8"}:
+                    if sample_kind == "bool":
+                        payload = bytes(
+                            (index + seed) & 1 for index in range(count)
+                        )
+                    else:
+                        byte_values = (0, 1, 127, 128, 254, 255)
+
+                        def byte_sample(index: int) -> int:
+                            pixel, lane = divmod(index, channels)
+                            if variant == "boundary":
+                                return byte_values[(pixel + lane) % len(byte_values)]
+                            if variant == "seeded-noise":
+                                return seeded_noise_sample(pixel, seed, lane) & 0xFF
+                            return (pixel * 37 + lane * 71 + seed) & 0xFF
+
+                        payload = bytes(
+                            byte_sample(index) for index in range(count * channels)
+                        )
+                else:
+                    if sample_kind in {"u16le", "u16be"}:
+                        bounds = (0, 1, 255, 256, 32767, 32768, 65534, 65535)
+
+                        def sample(index: int) -> int:
+                            if variant == "boundary":
+                                return bounds[index % len(bounds)]
+                            if variant == "seeded-noise":
+                                return seeded_noise_sample(index, seed)
+                            return (index * 40503 + (index >> 2) * 97 + seed) & 0xFFFF
+
+                        values = [sample(index) for index in range(count)]
+                        endian = "<" if sample_kind == "u16le" else ">"
+                        payload = struct.pack(f"{endian}{count}H", *values)
+                    elif sample_kind == "i32":
+                        bounds = (-2**31, -100000, -1, 0, 1, 100000, 2**31 - 1)
+
+                        def sample(index: int) -> int:
+                            if variant == "boundary":
+                                return bounds[index % len(bounds)]
+                            if variant == "seeded-noise":
+                                return seeded_noise_sample(index, seed) - 32768
+                            return ((index * 65599 + seed) % 2_000_001) - 1_000_000
+
+                        values = [sample(index) for index in range(count)]
+                        payload = struct.pack(f"<{count}i", *values)
+                    else:
+                        bounds = (-1000.0, -1.0, 0.0, 0.5, 1.0, 1000.0)
+
+                        def sample(index: int) -> float:
+                            if variant == "boundary":
+                                return bounds[index % len(bounds)]
+                            if variant == "seeded-noise":
+                                return seeded_noise_sample(index, seed) / 32768.0 - 1.0
+                            return ((index * 31 + seed) % 2001 - 1000) / 256.0
+
+                        values = [sample(index) for index in range(count)]
+                        payload = struct.pack(f"<{count}f", *values)
+
+                shape = [height, width]
+                if channels > 1:
+                    shape.append(channels)
+                output_size = [max(width // 2, 1), max(height // 2, 1)]
+                variant_id = (
+                    "" if variant == "varied" else f".matrix-input-{variant}"
+                )
+                case_id = (
+                    f"{surface_id}.resize.fromarray-"
+                    f"{resize_mode_ids.get(mode, mode_slug(mode))}{variant_id}."
+                    f"matrix-size-{width}x{height}"
+                )
+                covers = [
+                    "PIL.Image.Image.resize.behavior.default",
+                    "PIL.Image.Image.resize.mode."
+                    f"{resize_mode_ids.get(mode, mode_slug(mode))}",
+                    "PIL.Image.Image.resize.performance.standard",
+                ]
+                fromarray_mode_requirement = fromarray_mode_requirements.get(mode)
+                if fromarray_mode_requirement is not None:
+                    covers.append(fromarray_mode_requirement)
+                cases.append(
+                    {
+                        "case_id": case_id,
+                        "surface": surface_id,
+                        "operation": "resize",
+                        "covers": covers,
+                        "assets": [],
+                        "steps": [
+                            {
+                                "step_id": "setup-image",
+                                "surface": "PIL.Image",
+                                "operation": "fromarray",
+                                "receiver": None,
+                                "arguments": {
+                                    "obj": literal(
+                                        {
+                                            "protocol": "numpy-array",
+                                            "shape": shape,
+                                            "typestr": typestr,
+                                            "data_base64": base64.b64encode(payload).decode("ascii"),
+                                        }
+                                    ),
+                                },
+                            },
+                            {
+                                "step_id": "call",
+                                "surface": surface_id,
+                                "operation": "resize",
+                                "receiver": binding("setup-image"),
+                                "arguments": {"size": literal(output_size)},
+                            },
+                            {
+                                "step_id": "observe-result",
+                                "surface": surface_id,
+                                "operation": "tobytes",
+                                "receiver": binding("call"),
+                                "arguments": {},
+                            },
+                        ],
+                        "observations": ["setup-image", "call", "observe-result"],
+                    }
+                )
+
+    return cases
 
 
 def putdata_sequence_contract_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -44863,6 +45486,60 @@ def putdata_sequence_contract_parity_cases(surface_id: str) -> list[dict[str, An
             palette_alpha=True,
         ),
     ]
+
+    i16_numeric_modes = (
+        ("I;16", "i16"),
+        ("I;16L", "i16l"),
+        ("I;16B", "i16b"),
+        ("I;16N", "i16n"),
+    )
+    i16_numeric_boundaries = [
+        -2_147_483_648,
+        -65_537,
+        -65_536,
+        -257,
+        -256,
+        -1,
+        0,
+        1,
+        255,
+        256,
+        257,
+        32_767,
+        32_768,
+        65_535,
+        65_536,
+        65_537,
+        2_147_483_647,
+    ]
+    for mode, mode_slug in i16_numeric_modes:
+        cases.extend(
+            [
+                make_case(
+                    f"{mode_slug}-numeric-int-boundaries",
+                    mode,
+                    [len(i16_numeric_boundaries), 1],
+                    0,
+                    literal(i16_numeric_boundaries),
+                ),
+                make_case(
+                    f"{mode_slug}-numeric-partial-row",
+                    mode,
+                    [4, 1],
+                    0x5AA5,
+                    literal([256, 65_535]),
+                ),
+                make_case(
+                    f"{mode_slug}-numeric-scale-offset",
+                    mode,
+                    [4, 1],
+                    0,
+                    literal([-128, -1, 0, 127]),
+                    scale=2,
+                    offset=1,
+                ),
+            ]
+        )
 
     source_step = {
         "step_id": "setup-source",
@@ -50501,17 +51178,46 @@ def ensure_pipeline_execution_observations(case: dict[str, Any]) -> None:
     steps = case.get("steps")
     if not isinstance(steps, list):
         raise ValueError(f"{case.get('case_id')}: case has no workflow steps")
+    observations = case.setdefault("observations", [])
+    if not isinstance(observations, list):
+        raise ValueError(f"{case.get('case_id')}: observations must be an array")
+    observed_ids = set(observations)
+    already_materialized = True
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        key = (step.get("surface"), step.get("operation"))
+        if key in DIRECT_CPU_DRAW_OPS:
+            already_materialized = False
+            break
+        if key not in PIPELINE_RESULT_OPS or key[0] == "PIL.ImageFilter":
+            continue
+        if (
+            key in PIPELINE_MUTATING_OPS
+            or step.get("step_id") not in observed_ids
+        ):
+            already_materialized = False
+            break
+    if already_materialized:
+        return
+
+    # A mutating operation can already be followed by an observed terminal
+    # boundary on the same image. In that case the explicit observation is
+    # enough to execute pending work; adding a second ``tobytes`` step changes
+    # target-only expected-output contracts without increasing backend
+    # coverage. Keep the graph check as the source of truth for those cases.
+    observation_gaps = workflow_pipeline_observation_gaps(case)
+    if not observation_gaps:
+        return
+
     step_by_id = {
         step.get("step_id"): step
         for step in steps
         if isinstance(step, dict) and isinstance(step.get("step_id"), str)
     }
 
-    observations = case.setdefault("observations", [])
-    if not isinstance(observations, list):
-        raise ValueError(f"{case.get('case_id')}: observations must be an array")
     needed: dict[str, int] = {}
-    for operation_id, target_id in workflow_pipeline_observation_gaps(case):
+    for operation_id, target_id in observation_gaps:
         if target_id is None:
             raise ValueError(
                 f"{case.get('case_id')}: cannot resolve image mutated by "
@@ -50552,7 +51258,10 @@ def _patterned_pixel(mode: str, index: int, seed: int) -> Any:
         return value
     if mode in {"LA", "PA"}:
         return (value, (index * 41 + seed * 3) % 256)
-    if mode in {"RGB", "YCbCr", "HSV"}:
+    if mode == "La":
+        alpha = (index * 41 + seed * 3) % 256
+        return (value % (alpha + 1), alpha)
+    if mode in {"RGB", "LAB", "YCbCr", "HSV"}:
         return (
             value,
             (index * 47 + seed * 3) % 256,
@@ -50576,11 +51285,74 @@ def _patterned_pixel(mode: str, index: int, seed: int) -> Any:
     raise ValueError(f"no mode-correct parity pattern for {mode!r}")
 
 
+def _matrix_patterned_pixel(
+    mode: str,
+    index: int,
+    seed: int,
+    width: int,
+    variant: str,
+) -> Any:
+    """Return one valid sample for a mode/size matrix input variant."""
+
+    if variant == "varied":
+        return _patterned_pixel(mode, index, seed)
+    if variant == "seeded-noise":
+        noise_sample = seeded_noise_sample(index, seed)
+        return _patterned_pixel(mode, noise_sample, seed ^ noise_sample)
+    if variant == "checkerboard":
+        row, column = divmod(index, width)
+        phase = (row + column + (seed & 1)) & 1
+        return _patterned_pixel(mode, phase, seed)
+    if variant == "impulse":
+        if index == 0:
+            return 1 if mode == "1" else _patterned_pixel(mode, 0, seed)
+        if mode in {"1", "L", "P", "I", "I;16", "I;16L", "I;16B", "I;16N"}:
+            return 0
+        if mode in {"LA", "La", "PA"}:
+            return (0, 0)
+        if mode in {"RGB", "LAB", "YCbCr", "HSV"}:
+            return (0, 0, 0)
+        if mode in {"RGBA", "RGBX", "RGBa", "CMYK"}:
+            return (0, 0, 0, 0)
+        if mode == "F":
+            return 0.0
+        raise ValueError(f"no impulse pattern for {mode!r}")
+    if variant != "boundary":
+        raise ValueError(f"unknown mode-size input variant: {variant!r}")
+
+    phase = (index + seed) & 3
+    byte_samples = (0, 1, 254, 255)
+    if mode == "1":
+        return phase & 1
+    if mode in {"L", "P"}:
+        return byte_samples[phase]
+    if mode in {"LA", "PA"}:
+        return byte_samples[phase], byte_samples[(phase + 1) & 3]
+    if mode == "La":
+        alpha = byte_samples[(phase + 1) & 3]
+        return min(byte_samples[phase], alpha), alpha
+    if mode in {"RGB", "LAB", "YCbCr", "HSV"}:
+        return tuple(byte_samples[(phase + lane) & 3] for lane in range(3))
+    if mode in {"RGBA", "RGBX", "RGBa", "CMYK"}:
+        lanes = [byte_samples[(phase + lane) & 3] for lane in range(4)]
+        if mode == "RGBa":
+            lanes[:3] = [min(lane, lanes[3]) for lane in lanes[:3]]
+        return tuple(lanes)
+    if mode == "I":
+        return (-1024, -1, 0, 1024)[phase]
+    if mode.startswith("I;16"):
+        return (0, 1, 65534, 65535)[phase]
+    if mode == "F":
+        return (-1.0, 0.0, 1.0, 255.0)[phase]
+    raise ValueError(f"no boundary pattern for mode {mode!r}")
+
+
 def _patterned_pixels(
     mode: str,
     size: Any,
     *,
     seed_text: str,
+    variant: str = "varied",
 ) -> list[Any]:
     """Return a small, deterministic, mode-correct nonuniform pixel pattern."""
 
@@ -50595,7 +51367,7 @@ def _patterned_pixels(
         raise ValueError(f"refusing to inline a large parity pattern: {size!r}")
     seed = int.from_bytes(hashlib.sha256(seed_text.encode("utf-8")).digest()[:2], "big")
     return [
-        _patterned_pixel(mode, index, seed)
+        _matrix_patterned_pixel(mode, index, seed, width, variant)
         for index in range(width * height)
     ]
 
@@ -50605,6 +51377,7 @@ def _patterned_raw_bytes(
     size: list[int],
     *,
     seed_text: str,
+    variant: str = "varied",
 ) -> bytes | None:
     """Encode byte-addressed modes for a reusable content-addressed asset."""
 
@@ -50616,35 +51389,90 @@ def _patterned_raw_bytes(
         raise ValueError(f"cannot pattern an image with invalid size: {size!r}")
     width, height = size
     seed = int.from_bytes(hashlib.sha256(seed_text.encode("utf-8")).digest()[:2], "big")
+    pixel_count = width * height
+    # Keep large-image sample generation bounded. A deterministic 4096-pixel
+    # tile retains broad value variation while exercising the full dimensions.
+    tile_pixel_count = (
+        min(pixel_count, 4096)
+        if variant in {"varied", "seeded-noise"}
+        else pixel_count
+    )
+
+    def pixels() -> range:
+        return range(tile_pixel_count)
+
+    def repeat_pixel_tile(tile: bytes, bytes_per_pixel: int) -> bytes:
+        if tile_pixel_count == pixel_count:
+            return tile
+        repeats, remainder = divmod(pixel_count, tile_pixel_count)
+        return tile * repeats + tile[: remainder * bytes_per_pixel]
+
     if mode == "1":
         row_bytes = (width + 7) // 8
         raw = bytearray(row_bytes * height)
-        for index in range(width * height):
-            if _patterned_pixel(mode, index, seed):
+        pixel_tile = tuple(
+            _matrix_patterned_pixel(mode, index, seed, width, variant)
+            for index in pixels()
+        )
+        for index in range(pixel_count):
+            if pixel_tile[index % tile_pixel_count]:
                 row, column = divmod(index, width)
                 raw[row * row_bytes + column // 8] |= 1 << (7 - column % 8)
         return bytes(raw)
     if mode in {"L", "P"}:
-        return bytes(
-            _patterned_pixel(mode, index, seed)
-            for index in range(width * height)
+        tile = bytes(
+            _matrix_patterned_pixel(mode, index, seed, width, variant)
+            for index in pixels()
         )
+        return repeat_pixel_tile(tile, 1)
     if mode in {
         "LA",
+        "La",
         "PA",
         "RGB",
         "RGBA",
         "RGBX",
         "RGBa",
         "CMYK",
+        "LAB",
         "YCbCr",
         "HSV",
     }:
-        return bytes(
+        tile = bytes(
             channel
-            for index in range(width * height)
-            for channel in _patterned_pixel(mode, index, seed)
+            for index in pixels()
+            for channel in _matrix_patterned_pixel(mode, index, seed, width, variant)
         )
+        pixel_size = len(_matrix_patterned_pixel(mode, 0, seed, width, variant))
+        return repeat_pixel_tile(tile, pixel_size)
+    if mode.startswith("I;16"):
+        endian = {"I;16B": ">", "I;16L": "<"}.get(mode, "=")
+        tile = b"".join(
+            struct.pack(
+                f"{endian}H",
+                _matrix_patterned_pixel(mode, index, seed, width, variant),
+            )
+            for index in pixels()
+        )
+        return repeat_pixel_tile(tile, 2)
+    if mode == "I":
+        tile = b"".join(
+            struct.pack(
+                "=i",
+                _matrix_patterned_pixel(mode, index, seed, width, variant),
+            )
+            for index in pixels()
+        )
+        return repeat_pixel_tile(tile, 4)
+    if mode == "F":
+        tile = b"".join(
+            struct.pack(
+                "=f",
+                _matrix_patterned_pixel(mode, index, seed, width, variant),
+            )
+            for index in pixels()
+        )
+        return repeat_pixel_tile(tile, 4)
     return None
 
 
@@ -50659,6 +51487,38 @@ def _write_content_addressed_asset(data: bytes, assets_root: Path) -> tuple[str,
     else:
         asset_path.write_bytes(data)
     return relative.as_posix(), digest
+
+
+_PATTERN_ASSET_CACHE: dict[
+    tuple[Path, str, tuple[int, int], str, str], tuple[str, str]
+] = {}
+
+
+def _write_pattern_asset(
+    mode: str,
+    size: list[int],
+    *,
+    seed_text: str,
+    variant: str,
+    assets_root: Path,
+) -> tuple[str, str] | None:
+    """Reuse deterministic mode/size/input assets across operation cases."""
+
+    key = (assets_root.resolve(), mode, (size[0], size[1]), seed_text, variant)
+    cached = _PATTERN_ASSET_CACHE.get(key)
+    if cached is not None:
+        return cached
+    data = _patterned_raw_bytes(
+        mode,
+        size,
+        seed_text=seed_text,
+        variant=variant,
+    )
+    if data is None:
+        return None
+    asset = _write_content_addressed_asset(data, assets_root)
+    _PATTERN_ASSET_CACHE[key] = asset
+    return asset
 
 
 def _binding_step_ids(value: Any) -> set[str]:
@@ -50682,6 +51542,9 @@ def _seed_image_pattern(
     case: dict[str, Any],
     image_step_id: str,
     assets_root: Path,
+    *,
+    seed_context: str | None = None,
+    pattern_variant: str = "varied",
 ) -> None:
     steps = case["steps"]
     image_step = next(
@@ -50689,6 +51552,7 @@ def _seed_image_pattern(
     )
     if image_step is None:
         raise ValueError(f"{case['case_id']}: missing pattern image {image_step_id}")
+    original_operation = image_step.get("operation")
     arguments = image_step.get("arguments", {})
     mode_argument = arguments.get("mode", {})
     size_argument = arguments.get("size", {})
@@ -50696,16 +51560,25 @@ def _seed_image_pattern(
     size = size_argument.get("value")
     if not isinstance(mode, str):
         raise ValueError(f"{case['case_id']}: {image_step_id} has no literal mode")
-    seed_text = f"parity-pixel-pattern-v1:{mode}:{size}:{image_step_id}"
-    data = _patterned_raw_bytes(mode, size, seed_text=seed_text)
-    if data is not None:
-        relative, digest = _write_content_addressed_asset(data, assets_root)
+    seed_identity = seed_context if seed_context is not None else image_step_id
+    variant_context = "" if pattern_variant == "varied" else f":{pattern_variant}"
+    seed_text = (
+        f"parity-pixel-pattern-v1:{mode}:{size}:{seed_identity}{variant_context}"
+    )
+    raw_asset = _write_pattern_asset(
+        mode,
+        size,
+        seed_text=seed_text,
+        variant=pattern_variant,
+        assets_root=assets_root,
+    )
+    if raw_asset is not None:
+        relative, digest = raw_asset
         asset_id = f"parity-pattern-{image_step_id}"
         case_assets = case.setdefault("assets", [])
-        existing_asset = next(
-            (asset for asset in case_assets if asset.get("id") == asset_id),
-            None,
-        )
+        case_assets[:] = [
+            asset for asset in case_assets if asset.get("id") != asset_id
+        ]
         asset = {
             "id": asset_id,
             "kind": "ref_bytes",
@@ -50713,19 +51586,30 @@ def _seed_image_pattern(
             "sha256": digest,
             "media_type": "application/octet-stream",
         }
-        if existing_asset is None:
-            case_assets.append(asset)
-        elif existing_asset != asset:
-            raise ValueError(f"{case['case_id']}: conflicting pattern asset {asset_id}")
+        case_assets.append(asset)
         image_step["operation"] = "frombytes"
-        image_step["arguments"] = {
+        replacement_arguments = {
             "mode": mode_argument,
             "size": size_argument,
             "data": asset_value(asset_id),
         }
+        if original_operation == "frombytes":
+            replacement_arguments.update(
+                {
+                    key: value
+                    for key, value in arguments.items()
+                    if key not in {"mode", "size", "data"}
+                }
+            )
+        image_step["arguments"] = replacement_arguments
         return
 
-    pixels = _patterned_pixels(mode, size, seed_text=seed_text)
+    pixels = _patterned_pixels(
+        mode,
+        size,
+        seed_text=seed_text,
+        variant=pattern_variant,
+    )
     pattern_step_id = f"setup-pattern-{image_step_id}"
     if any(step.get("step_id") == pattern_step_id for step in steps):
         return
@@ -50739,6 +51623,573 @@ def _seed_image_pattern(
             "arguments": {"data": literal(pixels)},
         },
     )
+
+
+MODE_SIZE_MATRIX_MODES = frozenset(MODE_SIZE_PILLOW_MODES)
+RESIZE_MKS_FILTER_VARIANTS = ((6, "mks2013"), (7, "mks2021"))
+
+
+def _literal_image_mode_size(step: dict[str, Any]) -> tuple[str, tuple[int, int]] | None:
+    arguments = step.get("arguments", {})
+    mode = arguments.get("mode", {})
+    size = arguments.get("size", {})
+    if (
+        not isinstance(mode, dict)
+        or mode.get("kind") != "literal"
+        or mode.get("value") not in MODE_SIZE_MATRIX_MODES
+        or not isinstance(size, dict)
+        or size.get("kind") != "literal"
+        or not isinstance(size.get("value"), list)
+        or len(size["value"]) != 2
+        or any(type(value) is not int or value <= 0 for value in size["value"])
+    ):
+        return None
+    return mode["value"], tuple(size["value"])
+
+
+def _replace_frombytes_pattern(
+    case: dict[str, Any],
+    step: dict[str, Any],
+    mode: str,
+    size: tuple[int, int],
+    role: int,
+    assets_root: Path,
+    pattern_variant: str,
+) -> None:
+    width, height = size
+    size_value = step.get("arguments", {}).get("size")
+    if isinstance(size_value, dict) and size_value.get("kind") == "literal":
+        size_value["value"] = [width, height]
+    seed_context = f"mode-size-matrix:{width}x{height}:role-{role}"
+    variant_context = "" if pattern_variant == "varied" else f":{pattern_variant}"
+    raw_asset = _write_pattern_asset(
+        mode,
+        [width, height],
+        seed_text=(
+            f"parity-pixel-pattern-v1:{mode}:[{width}, {height}]:"
+            f"{seed_context}{variant_context}"
+        ),
+        variant=pattern_variant,
+        assets_root=assets_root,
+    )
+    if raw_asset is None:
+        raise ValueError(f"no byte pattern for mode-size matrix mode {mode!r}")
+    relative, digest = raw_asset
+    asset_id = f"parity-pattern-{step['step_id']}"
+    assets = case.setdefault("assets", [])
+    assets[:] = [asset for asset in assets if asset.get("id") != asset_id]
+    assets.append(
+        {
+            "id": asset_id,
+            "kind": "ref_bytes",
+            "path": relative,
+            "sha256": digest,
+            "media_type": "application/octet-stream",
+        }
+    )
+    step.setdefault("arguments", {})["data"] = asset_value(asset_id)
+
+
+def _mode_size_case(
+    case: dict[str, Any],
+    size: tuple[int, int],
+    assets_root: Path,
+    pattern_variant: str,
+) -> dict[str, Any] | None:
+    template_sources = _mode_size_template_sources(case)
+    if template_sources is None:
+        return None
+    image_sources = [source[0] for source in template_sources]
+
+    matrix_case = copy.deepcopy(case)
+    width, height = size
+    variant_suffix = (
+        "" if pattern_variant == "varied" else f".matrix-input-{pattern_variant}"
+    )
+    matrix_case["case_id"] = (
+        f"{case['case_id']}{variant_suffix}.matrix-size-{width}x{height}"
+    )
+    source_modes: dict[str, str] = {}
+    source_roles: dict[str, int] = {}
+    for role, source in enumerate(
+        step for step in matrix_case["steps"]
+        if step.get("surface") == "PIL.Image"
+        and step.get("operation") in {"new", "frombytes"}
+    ):
+        parsed = _literal_image_mode_size(source)
+        if parsed is None:
+            return None
+        mode, _ = parsed
+        source_modes[source["step_id"]] = mode
+        source_roles[source["step_id"]] = role
+        if case.get("operation") == "new":
+            source["arguments"]["size"]["value"] = [width, height]
+            color = source["arguments"].get("color")
+            if isinstance(color, dict) and color.get("kind") == "literal":
+                seed_text = (
+                    f"mode-size-new:{case['case_id']}:{mode}:{width}x{height}:"
+                    f"{role}:{pattern_variant}"
+                )
+                seed = int.from_bytes(
+                    hashlib.sha256(seed_text.encode("utf-8")).digest()[:2],
+                    "big",
+                )
+                color["value"] = _matrix_patterned_pixel(
+                    mode,
+                    role,
+                    seed,
+                    width,
+                    pattern_variant,
+                )
+        else:
+            source["arguments"]["size"]["value"] = [width, height]
+            _seed_image_pattern(
+                matrix_case,
+                source["step_id"],
+                assets_root,
+                seed_context=f"mode-size-matrix:{width}x{height}:role-{role}",
+                pattern_variant=pattern_variant,
+            )
+
+    for call in matrix_case["steps"]:
+        if (
+            call.get("surface") != "PIL.Image.Image"
+            or call.get("operation") != "frombytes"
+        ):
+            continue
+        receiver = call.get("receiver", {}).get("step_id")
+        mode = source_modes.get(receiver)
+        role = source_roles.get(receiver)
+        if mode is None or role is None:
+            return None
+        _replace_frombytes_pattern(
+            matrix_case,
+            call,
+            mode,
+            size,
+            role,
+            assets_root,
+            pattern_variant,
+        )
+
+    return matrix_case
+
+
+def _mode_size_template_sources(
+    case: dict[str, Any],
+) -> list[tuple[dict[str, Any], str, tuple[int, int]]] | None:
+    """Return same-sized literal Pillow raster constructors for a matrix case."""
+
+    steps = case.get("steps", [])
+    image_sources = [
+        step
+        for step in steps
+        if step.get("surface") == "PIL.Image"
+        and step.get("operation") in {"new", "frombytes"}
+    ]
+    if case.get("operation") == "new":
+        image_sources = [
+            step
+            for step in image_sources
+            if step.get("surface") == case.get("surface")
+            and step.get("operation") == "new"
+        ]
+    elif any(
+        step.get("surface") == "PIL.Image"
+        and step.get("operation") in {"open", "fromarray", "frombuffer"}
+        for step in steps
+    ):
+        return None
+    if not image_sources:
+        return None
+
+    parsed_sources = []
+    for step in image_sources:
+        source = _literal_image_mode_size(step)
+        if source is None:
+            return None
+        mode, size = source
+        parsed_sources.append((step, mode, size))
+    if len({source[2] for source in parsed_sources}) != 1:
+        return None
+    return parsed_sources
+
+
+def expand_mode_size_parity_cases(
+    cases: list[dict[str, Any]],
+    assets_root: Path,
+) -> tuple[list[dict[str, Any]], int]:
+    """Add mode-correct size and pixel-pattern variants for Pillow inputs."""
+
+    expanded: list[dict[str, Any]] = []
+    skipped = 0
+    selected_case_ids: set[str] = set()
+    represented_mode_requirements: set[str] = set()
+    fallback_cases_by_requirement: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
+    for case in cases:
+        case_id = case.get("case_id", "")
+        mode_size_matrix = case.pop("_mode_size_matrix", False)
+        resize_mode_matrix = (
+            case.get("surface") == "PIL.Image.Image"
+            and case.get("operation") == "resize"
+            and any(
+                requirement_id.startswith("PIL.Image.Image.resize.mode.")
+                for requirement_id in case.get("covers", [])
+            )
+        )
+        if ".matrix-size-" in case_id:
+            continue
+
+        mode_requirements = {
+            requirement_id
+            for requirement_id in case.get("covers", [])
+            if ".mode." in requirement_id
+        }
+        explicit_matrix_case = (
+            ".mode." in case_id or mode_size_matrix or resize_mode_matrix
+        )
+        if explicit_matrix_case:
+            selected_case_ids.add(case_id)
+            if _mode_size_template_sources(case) is not None:
+                represented_mode_requirements.update(mode_requirements)
+        elif (
+            mode_requirements
+            and case.get("verification") != "expected-output"
+            and _mode_size_template_sources(case) is not None
+        ):
+            for requirement_id in mode_requirements:
+                fallback_cases_by_requirement[requirement_id].append(case)
+
+    for requirement_id in sorted(fallback_cases_by_requirement):
+        if requirement_id in represented_mode_requirements:
+            continue
+        candidates = sorted(
+            fallback_cases_by_requirement[requirement_id],
+            key=lambda case: (
+                not case.get("case_id", "").endswith(".behavior.default"),
+                len(case.get("steps", [])),
+                case.get("case_id", ""),
+            ),
+        )
+        if not candidates:
+            continue
+        chosen = candidates[0]
+        selected_case_ids.add(chosen["case_id"])
+        represented_mode_requirements.update(
+            item
+            for item in chosen.get("covers", [])
+            if ".mode." in item
+        )
+
+    for case in cases:
+        case_id = case.get("case_id", "")
+        if case_id not in selected_case_ids:
+            continue
+        variants = MODE_SIZE_INPUT_VARIANTS
+        if case.get("surface") == "PIL.Image" and case.get("operation") == "new":
+            # Image.new creates a uniform fill by contract, so spatial patterns
+            # do not apply. Exercise varied and boundary fill values instead.
+            variants = ("varied", "boundary")
+        for pattern_variant in variants:
+            for size in MODE_SIZE_MATRIX_SIZES:
+                if pattern_variant not in MODE_SIZE_INPUT_VARIANTS_BY_SIZE[size]:
+                    continue
+                variant = _mode_size_case(
+                    case,
+                    size,
+                    assets_root,
+                    pattern_variant,
+                )
+                if variant is None:
+                    skipped += 1
+                else:
+                    expanded.append(variant)
+    return expanded, skipped
+
+
+IMAGE_OPEN_MODE_FORMATS = {
+    "1": "PNG",
+    "CMYK": "TIFF",
+    "F": "TIFF",
+    "I": "TIFF",
+    "L": "PNG",
+    "LA": "PNG",
+    "P": "PNG",
+    "RGB": "PNG",
+    "RGBA": "PNG",
+}
+
+
+def _encoded_image_open_asset(
+    mode: str,
+    size: tuple[int, int],
+    pattern_variant: str,
+    assets_root: Path,
+) -> dict[str, str]:
+    width, height = size
+    seed_context = f"mode-size-matrix:{width}x{height}:role-0"
+    variant_context = "" if pattern_variant == "varied" else f":{pattern_variant}"
+    raw = _patterned_raw_bytes(
+        mode,
+        [width, height],
+        seed_text=(
+            f"parity-pixel-pattern-v1:{mode}:[{width}, {height}]:"
+            f"{seed_context}{variant_context}"
+        ),
+        variant=pattern_variant,
+    )
+    if raw is None:
+        raise ValueError(f"Image.open matrix has no raw pattern for mode {mode!r}")
+
+    # Pillow is used here only to create deterministic, lossless encoded input
+    # fixtures. Runtime decoding remains the public oracle/target behavior.
+    from PIL import Image as PillowImage
+
+    image = PillowImage.frombytes(mode, size, raw)
+    if mode == "P":
+        image.putpalette([lane for value in range(256) for lane in (value,) * 3])
+    image_format = IMAGE_OPEN_MODE_FORMATS[mode]
+    options: dict[str, Any] = {"format": image_format}
+    if image_format == "PNG":
+        options["compress_level"] = 6
+    else:
+        options["compression"] = "raw"
+    encoded = io.BytesIO()
+    image.save(encoded, **options)
+    relative, digest = _write_content_addressed_asset(
+        encoded.getvalue(),
+        assets_root,
+    )
+    media_type = "image/png" if image_format == "PNG" else "image/tiff"
+    return {
+        "id": "encoded-input",
+        "kind": "ref_bytes",
+        "path": relative,
+        "sha256": digest,
+        "media_type": media_type,
+    }
+
+
+def image_open_mode_size_parity_cases(
+    manifest: dict[str, Any],
+    assets_root: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build real mode-preserving encoded inputs for Image.open parity."""
+
+    from PIL import __version__ as pillow_version
+
+    pinned_oracle = next(
+        oracle for oracle in manifest["oracles"] if oracle["id"] == "pillow"
+    )
+    if pillow_version != pinned_oracle["version"]:
+        raise ValueError(
+            "Image.open matrix assets require the pinned Pillow encoder: "
+            f"expected {pinned_oracle['version']}, found {pillow_version}"
+        )
+
+    operation = operation_index(manifest)[("PIL.Image", "open")]
+    requirement_by_mode = {
+        requirement_mode(requirement): requirement["id"]
+        for requirement in operation["requirements"]
+        if requirement["dimension"] == "mode"
+    }
+    if set(requirement_by_mode) != set(IMAGE_OPEN_MODE_FORMATS):
+        raise ValueError("Image.open mode matrix differs from its declared modes")
+
+    base_cases: list[dict[str, Any]] = []
+    matrix_cases: list[dict[str, Any]] = []
+
+    def make_case(
+        mode: str,
+        mode_id: str,
+        requirement_id: str,
+        size: tuple[int, int],
+        pattern_variant: str,
+        *,
+        base: bool = False,
+    ) -> dict[str, Any]:
+        width, height = size
+        variant_suffix = (
+            "" if pattern_variant == "varied" else f".matrix-input-{pattern_variant}"
+        )
+        case_id = (
+            f"PIL.Image.open.mode.{mode_id}"
+            if base
+            else f"PIL.Image.open.mode.{mode_id}{variant_suffix}."
+            f"matrix-size-{width}x{height}"
+        )
+        return {
+            "case_id": case_id,
+            "surface": "PIL.Image",
+            "operation": "open",
+            "covers": [requirement_id],
+            "assets": [
+                _encoded_image_open_asset(
+                    mode,
+                    size,
+                    pattern_variant,
+                    assets_root,
+                )
+            ],
+            "steps": [
+                {
+                    "step_id": "call",
+                    "surface": "PIL.Image",
+                    "operation": "open",
+                    "receiver": None,
+                    "arguments": {
+                        "fp": asset_value("encoded-input"),
+                    },
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        }
+
+    for mode, requirement_id in requirement_by_mode.items():
+        mode_id = requirement_id.rsplit(".mode.", 1)[1]
+        base_cases.append(
+            make_case(
+                mode,
+                mode_id,
+                requirement_id,
+                (7, 11),
+                "varied",
+                base=True,
+            )
+        )
+        for size in MODE_SIZE_MATRIX_SIZES:
+            for pattern_variant in MODE_SIZE_INPUT_VARIANTS_BY_SIZE[size]:
+                matrix_cases.append(
+                    make_case(
+                        mode,
+                        mode_id,
+                        requirement_id,
+                        size,
+                        pattern_variant,
+                    )
+                )
+    return base_cases, matrix_cases
+
+
+def regenerate_image_open_mode_size_inputs(
+    manifest: dict[str, Any],
+    output_root: Path,
+    assets_root: Path,
+) -> dict[str, int]:
+    """Refresh only the indexed Image.open mode input documents."""
+
+    base_cases, matrix_cases = image_open_mode_size_parity_cases(
+        manifest,
+        assets_root,
+    )
+    base_path = output_root / "inputs/parity/pil-image.json"
+    base_document = json.loads(base_path.read_text(encoding="utf-8"))
+    base_document["cases"] = [
+        case
+        for case in base_document["cases"]
+        if not case["case_id"].startswith("PIL.Image.open.mode.")
+    ] + base_cases
+    write_json(base_path, base_document)
+
+    matrix_path = output_root / "inputs/parity/pil-image-mode-size-matrix.json"
+    matrix_document = json.loads(matrix_path.read_text(encoding="utf-8"))
+    matrix_document["cases"] = [
+        case
+        for case in matrix_document["cases"]
+        if not (
+            case["case_id"].startswith("PIL.Image.open.mode.")
+            and ".matrix-size-" in case["case_id"]
+        )
+    ] + matrix_cases
+    write_json(matrix_path, matrix_document)
+    return {
+        "image_open_mode_cases": len(base_cases),
+        "image_open_mode_size_matrix_cases": len(matrix_cases),
+        "image_open_mode_matrix_documents": 1,
+    }
+
+
+def resize_mks_filter_matrix_cases(
+    cases: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Replay each Pillow Resize mode/size/pattern input with Pillow 13 MKS."""
+
+    expanded: list[dict[str, Any]] = []
+    resample_requirement = "PIL.Image.Image.resize.parameter.resample"
+    for case in cases:
+        if (
+            case.get("surface") != "PIL.Image.Image"
+            or case.get("operation") != "resize"
+            or case.get("verification") == "expected-output"
+            or ".matrix-size-" not in case.get("case_id", "")
+        ):
+            continue
+        mode_requirements = [
+            requirement_id
+            for requirement_id in case.get("covers", [])
+            if requirement_id.startswith("PIL.Image.Image.resize.mode.")
+        ]
+        source = next(
+            (
+                step
+                for step in case["steps"]
+                if step.get("surface") == "PIL.Image"
+                and step.get("operation") in {"new", "frombytes", "fromarray"}
+            ),
+            None,
+        )
+        if source is None:
+            input_mode = None
+        elif source.get("operation") == "fromarray":
+            array = _literal_workflow_value(source.get("arguments", {}).get("obj"))
+            input_mode = numpy_array_mode(array)
+        else:
+            input_mode = source.get("arguments", {}).get("mode", {}).get("value")
+        expected_mode = (
+            requirement_mode({"id": mode_requirements[0], "dimension": "mode"})
+            if len(mode_requirements) == 1
+            else None
+        )
+        if expected_mode != input_mode:
+            raise ValueError(
+                f"{case['case_id']}: Resize mode requirement {mode_requirements} "
+                f"does not match literal input mode {input_mode!r}"
+            )
+        for filter_code, filter_name in RESIZE_MKS_FILTER_VARIANTS:
+            variant = copy.deepcopy(case)
+            matrix_prefix, _, matrix_size = variant["case_id"].rpartition(
+                ".matrix-size-"
+            )
+            if not matrix_prefix:
+                raise ValueError(
+                    f"{variant['case_id']}: missing matrix-size suffix"
+                )
+            variant["case_id"] = (
+                f"{matrix_prefix}.resample-{filter_name}.matrix-size-"
+                f"{matrix_size}"
+            )
+            resize_call = next(
+                step
+                for step in variant["steps"]
+                if step.get("surface") == "PIL.Image.Image"
+                and step.get("operation") == "resize"
+            )
+            resize_call["arguments"]["resample"] = {
+                "kind": "literal",
+                "value": filter_code,
+            }
+            if resample_requirement not in variant["covers"]:
+                variant["covers"].append(resample_requirement)
+            expanded.append(variant)
+    return expanded
 
 
 def _insert_observation_after(
@@ -51057,6 +52508,47 @@ def indexed_generated_asset_paths(
     return referenced
 
 
+def retained_unindexed_generated_asset_paths(
+    input_root: Path,
+    manifest: dict[str, Any],
+) -> set[str]:
+    """Keep generated assets referenced by ignored, unindexed input snapshots."""
+
+    indexed_paths = {
+        relative
+        for lane_paths in manifest["input_index"].values()
+        for relative in lane_paths
+    }
+    indexed_paths.add(CRASH_QUARANTINE_RELATIVE)
+    referenced: set[str] = set()
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            asset_path = value.get("path")
+            if (
+                value.get("kind") in {"ref", "ref_bytes"}
+                and isinstance(asset_path, str)
+                and asset_path.startswith("generated/")
+            ):
+                referenced.add(asset_path.removeprefix("generated/"))
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    for lane in ("parity", "coverage", "benchmark"):
+        lane_root = input_root / "inputs" / lane
+        if not lane_root.is_dir():
+            continue
+        for path in lane_root.rglob("*.json"):
+            relative = path.relative_to(input_root).as_posix()
+            if relative in indexed_paths:
+                continue
+            visit(json.loads(path.read_text(encoding="utf-8")))
+    return referenced
+
+
 def prune_unreferenced_generated_assets(
     assets_root: Path,
     referenced_paths: set[str],
@@ -51074,32 +52566,103 @@ def prune_unreferenced_generated_assets(
             path.unlink()
 
 
+def _serialized_json_digest(payload: dict[str, Any]) -> tuple[int, str]:
+    digest = hashlib.sha256()
+    size = 0
+    encoder = json.JSONEncoder(indent=2, sort_keys=False)
+    for chunk in encoder.iterencode(payload):
+        encoded = chunk.encode("utf-8")
+        digest.update(encoded)
+        size += len(encoded)
+    digest.update(b"\n")
+    return size + 1, digest.hexdigest()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps(payload, indent=2, sort_keys=False) + "\n"
-    if len(text.encode("utf-8")) > MAX_INPUT_JSON_BYTES:
+    serialized_size, serialized_digest = _serialized_json_digest(payload)
+    if serialized_size > MAX_INPUT_JSON_BYTES:
         externalized = _externalize_large_inline_assets(
             payload, path.parents[2] / "assets"
         )
-        text = json.dumps(payload, indent=2, sort_keys=False) + "\n"
-        if len(text.encode("utf-8")) > MAX_INPUT_JSON_BYTES:
+        serialized_size, serialized_digest = _serialized_json_digest(payload)
+        if serialized_size > MAX_INPUT_JSON_BYTES:
             raise ValueError(
                 f"{path}: input exceeds the {MAX_INPUT_JSON_BYTES}-byte size limit "
                 f"after externalizing {externalized} large assets"
             )
-    encoded = text.encode("utf-8")
-    if path.is_file() and path.read_bytes() == encoded:
+    if (
+        path.is_file()
+        and path.stat().st_size == serialized_size
+        and _file_sha256(path) == serialized_digest
+    ):
         return
-    path.write_bytes(encoded)
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    os.close(descriptor)
+    temporary_path = Path(temporary_name)
+    try:
+        with temporary_path.open("w", encoding="utf-8", newline="\n") as output:
+            json.dump(payload, output, indent=2, sort_keys=False)
+            output.write("\n")
+        mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
+        os.chmod(temporary_path, mode)
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
-def benchmark_subjects() -> list[dict[str, str]]:
+def benchmark_subjects(
+    operation: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    benchmark = operation.get("benchmark") if operation is not None else None
+    profiles = (
+        benchmark.get("target_profiles", BENCHMARK_TARGET_PROFILES)
+        if benchmark is not None
+        else BENCHMARK_TARGET_PROFILES
+    )
     return [
         {"kind": "oracle", "id": "pillow"},
-        *(
-            {"kind": "target_profile", "id": profile}
-            for profile in BENCHMARK_TARGET_PROFILES
-        ),
+        *({"kind": "target_profile", "id": profile} for profile in profiles),
+    ]
+
+
+def target_only_benchmark_subjects(
+    operation: dict[str, Any] | None = None,
+    case: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    """Return target profiles for cases verified by recorded outputs only."""
+
+    benchmark = operation.get("benchmark") if operation is not None else None
+    profiles = (
+        benchmark.get("target_profiles", BENCHMARK_TARGET_PROFILES)
+        if benchmark is not None
+        else BENCHMARK_TARGET_PROFILES
+    )
+    if operation is not None and operation.get("id") == "reduce" and case is not None:
+        mode_ids = {
+            requirement_id.rsplit(".mode.", 1)[1]
+            for requirement_id in case.get("covers", [])
+            if ".mode." in requirement_id
+        }
+        core_only_mode_ids = {
+            mode_id for _mode, mode_id, _sample_kind in REDUCE_CORE_ONLY_MODES
+        }
+        if mode_ids & core_only_mode_ids:
+            profiles = [profile for profile in profiles if profile != "python-gpu"]
+    return [
+        {"kind": "target_profile", "id": profile}
+        for profile in profiles
     ]
 
 
@@ -53237,17 +54800,24 @@ def _workflow_benchmark_context(
     width, height = 0, 0
     mode = "unknown"
     for step in workflow.get("steps", []):
-        if step.get("operation") != "new":
-            continue
         arguments = step.get("arguments", {})
-        size = _literal_workflow_value(arguments.get("size"))
-        if isinstance(size, list) and len(size) == 2 and all(
-            isinstance(value, int) and not isinstance(value, bool) for value in size
-        ):
-            width, height = size
+        if step.get("operation") == "new":
+            size = _literal_workflow_value(arguments.get("size"))
+            if isinstance(size, list) and len(size) == 2 and all(
+                isinstance(value, int) and not isinstance(value, bool) for value in size
+            ):
+                width, height = size
+        elif step.get("operation") == "fromarray":
+            array = _literal_workflow_value(arguments.get("obj"))
+            shape = array.get("shape") if isinstance(array, dict) else None
+            if isinstance(shape, list) and len(shape) >= 2:
+                height, width = shape[0], shape[1]
         candidate_mode = _literal_workflow_value(arguments.get("mode"))
         if isinstance(candidate_mode, str):
             mode = candidate_mode
+        elif step.get("operation") == "fromarray":
+            array = _literal_workflow_value(arguments.get("obj"))
+            mode = numpy_array_mode(array) or mode
         break
 
     if width == 0 or height == 0 or mode == "unknown":
@@ -58184,6 +59754,7 @@ def _benchmark_success_workflow(workload_id: str) -> dict[str, Any] | None:
     return None
 
 
+# VERIFY: source=pending; parity=pending; benchmark=n/a
 def build_inputs(
     manifest: dict[str, Any],
     output_root: Path,
@@ -58197,6 +59768,7 @@ def build_inputs(
     generated = {"parity": set(), "coverage": set(), "benchmark": set()}
     case_by_requirement: dict[str, str] = {}
     all_cases_by_id: dict[str, dict[str, Any]] = {}
+    all_case_ids: set[str] = set()
     all_case_aliases: dict[str, str] = {}
     counts = {
         "parity_cases": 0,
@@ -58204,6 +59776,7 @@ def build_inputs(
         "benchmark_workloads": 0,
         "benchmark_suites": 0,
     }
+    indexed_parity_case_count = 0
     crash_quarantine_cases = build_crash_quarantine_cases(
         manifest,
         operations,
@@ -58254,6 +59827,31 @@ def build_inputs(
                 if "benchmark" in requirement["lanes"]:
                     benchmark_requirements.append((operation, requirement))
 
+        image_open_matrix_cases: list[dict[str, Any]] = []
+        if surface_id == "PIL.Image":
+            image_open_base_cases, image_open_matrix_cases = (
+                image_open_mode_size_parity_cases(manifest, active_assets_root)
+            )
+            image_open_mode_requirements = {
+                requirement["id"]
+                for operation in surface["operations"]
+                if operation["id"] == "open"
+                for requirement in operation["requirements"]
+                if requirement["dimension"] == "mode"
+            }
+            retained_candidates: list[dict[str, Any]] = []
+            for case in parity_candidates:
+                remaining_covers = [
+                    requirement_id
+                    for requirement_id in case["covers"]
+                    if requirement_id not in image_open_mode_requirements
+                ]
+                if remaining_covers:
+                    case["covers"] = remaining_covers
+                    retained_candidates.append(case)
+            parity_candidates = retained_candidates
+            parity_candidates.extend(image_open_base_cases)
+
         crop_cases_by_requirement: dict[str, dict[str, Any]] = {}
         if surface_id == "PIL.Image.Image":
             crop_cases_by_requirement = {
@@ -58275,6 +59873,7 @@ def build_inputs(
         parity_cases, local_case_by_requirement, duplicate_count = (
             merge_duplicate_cases(parity_candidates)
         )
+        parity_cases.extend(image_open_matrix_cases)
         for requirement_id, case_id in local_case_by_requirement.items():
             if requirement_id in case_by_requirement:
                 raise ValueError(f"requirement mapped twice: {requirement_id}")
@@ -58290,23 +59889,104 @@ def build_inputs(
             # public Python facade and are selected by the ordinary coverage
             # plans for this operation.
             nuanced_cases.extend(core_only_frombytes_cases())
+            frombytes_matrix_cases = core_only_frombytes_matrix_cases(
+                active_assets_root
+            )
+            nuanced_cases.extend(frombytes_matrix_cases)
+            counts["core_only_frombytes_mode_size_matrix_cases"] = len(
+                frombytes_matrix_cases
+            )
         if surface_id == "PIL.ImageEnhance.Sharpness":
             # Every native-only exact-mode Sharpness route gets a recorded
             # output contract through the public Python facade.
             nuanced_cases.extend(sharpness_core_only_cases())
+            sharpness_matrix_cases = sharpness_core_only_matrix_cases(
+                active_assets_root
+            )
+            nuanced_cases.extend(sharpness_matrix_cases)
+            counts["sharpness_target_only_mode_size_matrix_cases"] = len(
+                sharpness_matrix_cases
+            )
         if surface_id == "PIL.ImageEnhance.Brightness":
             # Native Brightness routes without a Pillow output contract have
             # fixed expected results through the public Python facade.
             nuanced_cases.extend(brightness_target_output_cases())
+            brightness_matrix_cases = brightness_core_only_matrix_cases(
+                active_assets_root
+            )
+            nuanced_cases.extend(brightness_matrix_cases)
+            counts["brightness_target_only_mode_size_matrix_cases"] = len(
+                brightness_matrix_cases
+            )
         if surface_id == "PIL.ImageChops":
             # Core-only Chops routes use native-mode outputs.
             nuanced_cases.extend(chops_binary_target_output_cases())
             nuanced_cases.extend(chops_logical_target_output_cases())
             nuanced_cases.extend(chops_invert_target_output_cases())
+            invert_matrix_cases = chops_invert_core_only_matrix_cases(
+                active_assets_root
+            )
+            nuanced_cases.extend(invert_matrix_cases)
+            counts["chops_invert_core_only_mode_size_matrix_cases"] = len(
+                invert_matrix_cases
+            )
             nuanced_cases.extend(chops_duplicate_target_output_cases())
+            core_only_duplicate_matrix_cases = (
+                chops_duplicate_core_only_matrix_cases(active_assets_root)
+            )
+            nuanced_cases.extend(core_only_duplicate_matrix_cases)
+            counts.setdefault("core_only_mode_size_matrix_cases", 0)
+            counts["core_only_mode_size_matrix_cases"] += len(
+                core_only_duplicate_matrix_cases
+            )
             nuanced_cases.extend(chops_constant_target_output_cases())
+            constant_matrix_cases = chops_constant_core_only_matrix_cases(
+                active_assets_root
+            )
+            nuanced_cases.extend(constant_matrix_cases)
+            counts["chops_constant_core_only_mode_size_matrix_cases"] = len(
+                constant_matrix_cases
+            )
             nuanced_cases.extend(chops_offset_target_output_cases())
+            offset_matrix_cases = chops_offset_core_only_matrix_cases(
+                active_assets_root
+            )
+            nuanced_cases.extend(offset_matrix_cases)
+            counts["chops_offset_core_only_mode_size_matrix_cases"] = len(
+                offset_matrix_cases
+            )
         if surface_id == "PIL.Image.Image":
+            # GetBBox covers every exact Mode; the five internal typed
+            # carriers use explicit target-only results and the same varied
+            # size matrix as Pillow modes.
+            nuanced_cases.extend(core_only_getbbox_cases())
+            getbbox_core_only_matrix = core_only_getbbox_matrix_cases(
+                active_assets_root
+            )
+            nuanced_cases.extend(getbbox_core_only_matrix)
+            counts["getbbox_core_only_mode_size_matrix_cases"] = len(
+                getbbox_core_only_matrix
+            )
+            # Native PutData writes use recorded outputs for the five
+            # CoreOnly sample layouts, with the same sizes and input patterns
+            # as the rest of the mode matrix.
+            putdata_core_only_cases = putdata_core_only_matrix_cases(
+                active_assets_root
+            )
+            nuanced_cases.extend(putdata_core_only_cases)
+            counts["putdata_core_only_mode_size_matrix_cases"] = len(
+                putdata_core_only_cases
+            )
+            reduce_core_only_cases = reduce_core_only_matrix_cases(
+                active_assets_root
+            )
+            nuanced_cases.extend(reduce_core_only_cases)
+            counts["reduce_core_only_mode_size_matrix_cases"] = len(
+                reduce_core_only_cases
+            )
+            rotate_direct_cases = rotate_direct_target_output_cases()
+            nuanced_cases.extend(rotate_direct_cases)
+            counts["rotate_direct_target_output_cases"] = len(rotate_direct_cases)
             nuanced_cases.extend(get_child_images_target_output_cases())
             crop_generic_mode_ids = {
                 case["case_id"] for case in crop_cases_by_requirement.values()
@@ -58318,6 +59998,17 @@ def build_inputs(
             # The typed Crop extension has fixed native-sample contracts for
             # the five internal pixel carriers.
             nuanced_cases.extend(crop_core_only_target_output_cases())
+            crop_matrix_cases = crop_core_only_matrix_cases(active_assets_root)
+            nuanced_cases.extend(crop_matrix_cases)
+            counts["crop_core_only_mode_size_matrix_cases"] = len(
+                crop_matrix_cases
+            )
+            resize_matrix_cases = resize_core_only_matrix_cases(active_assets_root)
+            nuanced_cases.extend(resize_matrix_cases)
+            counts.setdefault("resize_core_only_mode_size_matrix_cases", 0)
+            counts["resize_core_only_mode_size_matrix_cases"] += len(
+                resize_matrix_cases
+            )
             # The full-size native F resize parity case is the exact public
             # workflow used by its standard benchmark workload. Carry that
             # requirement onto the case so evidence admission can prove the
@@ -58601,6 +60292,19 @@ def build_inputs(
         counts["nuanced_parity_cases"] += added_nuanced_cases
 
         strengthen_pixel_parity_cases(parity_cases, operations, active_assets_root)
+        mode_size_cases, skipped_mode_size_cases = expand_mode_size_parity_cases(
+            parity_cases,
+            active_assets_root,
+        )
+        parity_cases.extend(mode_size_cases)
+        counts.setdefault("mode_size_matrix_cases", 0)
+        counts["mode_size_matrix_cases"] += len(mode_size_cases)
+        if surface_id == "PIL.Image.Image":
+            resize_mks_cases = resize_mks_filter_matrix_cases(parity_cases)
+            parity_cases.extend(resize_mks_cases)
+            counts["resize_mks_filter_matrix_cases"] = len(resize_mks_cases)
+        counts.setdefault("mode_size_matrix_skipped", 0)
+        counts["mode_size_matrix_skipped"] += skipped_mode_size_cases
         if surface_id == "PIL.Image.Image":
             # These protocol contracts stay in the canonical parity corpus,
             # while remaining outside managed backend coverage selection.
@@ -58629,20 +60333,150 @@ def build_inputs(
                     f"parity case {case['case_id']} declares target profiles"
                 )
             case_id = case["case_id"]
-            if case_id in all_cases_by_id:
+            if case_id in all_case_ids:
                 raise ValueError(f"parity case mapped twice: {case_id}")
-            all_cases_by_id[case_id] = case
+            all_case_ids.add(case_id)
+            # Matrix cases are written to parity shards below but are never
+            # referenced by coverage or benchmark workflows. Keep only
+            # addressable workflow cases in this global pipeline lookup map.
+            if ".matrix-size-" not in case_id:
+                all_cases_by_id[case_id] = case
 
-        parity_relative = f"inputs/parity/{storage_slug}.json"
-        parity_path = output_root / parity_relative
-        write_json(
-            parity_path,
-            {
-                "schema": "migration-parity/parity-input@3",
-                "cases": parity_cases,
-            },
-        )
-        generated["parity"].add(parity_relative)
+        matrix_cases = [
+            case
+            for case in parity_cases
+            if ".matrix-size-" in case.get("case_id", "")
+        ]
+        target_output_matrix_documents: list[
+            tuple[tuple[int, int], str, str, str, list[dict[str, Any]]]
+        ] = []
+        if surface_id in {
+            "PIL.Image",
+            "PIL.ImageChops",
+            "PIL.Image.Image",
+            "PIL.ImageEnhance.Brightness",
+            "PIL.ImageEnhance.Sharpness",
+        }:
+            for size in MODE_SIZE_MATRIX_SIZES:
+                size_cases = [
+                    case
+                    for case in matrix_cases
+                    if case.get("verification") == "expected-output"
+                    and case.get("case_id", "").endswith(
+                        f".matrix-size-{size[0]}x{size[1]}"
+                    )
+                ]
+                grouped_cases: dict[
+                    tuple[str, str, str], list[dict[str, Any]]
+                ] = defaultdict(list)
+                for case in size_cases:
+                    mode_requirement = next(
+                        (
+                            requirement_id
+                            for requirement_id in case.get("covers", [])
+                            if ".mode." in requirement_id
+                        ),
+                        None,
+                    )
+                    if mode_requirement is None:
+                        raise ValueError(
+                            f"{case['case_id']}: target-only matrix case lacks a mode contract"
+                        )
+                    mode = mode_requirement.rsplit(".mode.", 1)[1]
+                    factor = next(
+                        (
+                            segment
+                            for segment in case["case_id"].split(".")
+                            if segment.startswith("factor-")
+                        ),
+                        "",
+                    )
+                    grouped_cases[(mode, case["operation"], factor)].append(case)
+                for (mode, operation, factor), cases in grouped_cases.items():
+                    target_output_matrix_documents.append(
+                        (size, mode, operation, factor, cases)
+                    )
+        target_output_matrix_ids = {
+            case["case_id"]
+            for _, _, _, _, cases in target_output_matrix_documents
+            for case in cases
+        }
+        matrix_cases = [
+            case
+            for case in matrix_cases
+            if case["case_id"] not in target_output_matrix_ids
+        ]
+        mode_size_matrix_documents: list[
+            tuple[tuple[int, int], list[dict[str, Any]]]
+        ] = []
+        if surface_id in MODE_SIZE_MATRIX_SHARD_SURFACES:
+            for size in MODE_SIZE_PARITY_SPLIT_SIZES:
+                size_cases = [
+                    case
+                    for case in matrix_cases
+                    if case.get("verification") != "expected-output"
+                    and case.get("case_id", "").endswith(
+                        f".matrix-size-{size[0]}x{size[1]}"
+                    )
+                ]
+                mode_size_matrix_documents.append((size, size_cases))
+            mode_size_matrix_ids = {
+                case["case_id"]
+                for _, cases in mode_size_matrix_documents
+                for case in cases
+            }
+            matrix_cases = [
+                case
+                for case in matrix_cases
+                if case["case_id"] not in mode_size_matrix_ids
+            ]
+        base_cases = [
+            case
+            for case in parity_cases
+            if ".matrix-size-" not in case.get("case_id", "")
+        ]
+        parity_documents = [
+            (f"inputs/parity/{storage_slug}.json", base_cases),
+            (
+                f"inputs/parity/{storage_slug}-mode-size-matrix.json",
+                matrix_cases,
+            ),
+        ]
+        if surface_id in MODE_SIZE_MATRIX_SHARD_SURFACES:
+            for size, cases in mode_size_matrix_documents:
+                parity_documents.append(
+                    (
+                        f"inputs/parity/{storage_slug}-mode-size-matrix-"
+                        f"{size[0]}x{size[1]}.json",
+                        cases,
+                    )
+                )
+        if surface_id in {
+            "PIL.Image",
+            "PIL.ImageChops",
+            "PIL.Image.Image",
+            "PIL.ImageEnhance.Brightness",
+            "PIL.ImageEnhance.Sharpness",
+        }:
+            for size, mode, operation, factor, cases in target_output_matrix_documents:
+                factor_suffix = f"-{factor}" if factor else ""
+                parity_documents.append(
+                    (
+                        f"inputs/parity/{storage_slug}-mode-size-target-output-"
+                        f"{size[0]}x{size[1]}-{mode}-{operation}{factor_suffix}.json",
+                        cases,
+                    )
+                )
+        for parity_relative, cases in parity_documents:
+            write_json(
+                output_root / parity_relative,
+                {
+                    "schema": "migration-parity/parity-input@3",
+                    "cases": cases,
+                },
+            )
+            generated["parity"].add(parity_relative)
+            indexed_parity_case_count += len(cases)
         counts["parity_cases"] += len(parity_cases)
         counts.setdefault("duplicate_parity_cases", 0)
         counts["duplicate_parity_cases"] += duplicate_count
@@ -58700,26 +60534,55 @@ def build_inputs(
         workloads: list[dict[str, Any]] = []
         members: list[dict[str, Any]] = []
         for operation, requirement in benchmark_requirements:
+            if (
+                requirement.get("dimension") == "mode"
+                and "target_output" in requirement.get("lanes", [])
+            ):
+                # Target-only mode rows receive their own matrix workloads
+                # below, which use recorded outputs and omit the Pillow
+                # oracle. Do not bind them to the operation's standard
+                # Pillow-comparison workflow here.
+                continue
             case_id = case_by_requirement.get(requirement["id"])
             if case_id is None:
                 raise ValueError(
                     f"benchmark requirement lacks correctness case: "
                     f"{requirement['id']}"
                 )
-            workload_id = (
+            standard_workload_id = (
                 f"{storage_slug}.{slug(operation['id'])}.standard"
             )
-            if workload_id in BENCHMARK_DEFAULT_EXCLUSIONS:
+            if standard_workload_id in BENCHMARK_DEFAULT_EXCLUSIONS:
                 # Keep the operation's behavior/coverage case indexed in the
                 # parity corpus, but do not put a known setup/error workflow
                 # in a timed-success denominator.
                 continue
-            case_id = BENCHMARK_CASE_OVERRIDES.get(workload_id, case_id)
-            pipeline_workload = BENCHMARK_PIPELINE_WORKLOADS.get(workload_id)
+            requirement_suffix = requirement["id"].removeprefix(
+                f"{operation_prefix(surface_id, operation['id'])}."
+            )
+            workload_id = (
+                standard_workload_id
+                if requirement_suffix == "performance.standard"
+                else f"{standard_workload_id}.requirement-{slug(requirement_suffix)}"
+            )
+            case_id = (
+                BENCHMARK_CASE_OVERRIDES.get(standard_workload_id, case_id)
+                if workload_id == standard_workload_id
+                else case_id
+            )
+            pipeline_workload = (
+                BENCHMARK_PIPELINE_WORKLOADS.get(standard_workload_id)
+                if workload_id == standard_workload_id
+                else None
+            )
             if pipeline_workload is not None:
                 case_id = pipeline_workload["case_id"]
             case_id = case_aliases.get(case_id, case_id)
-            workflow_override = _benchmark_success_workflow(workload_id)
+            workflow_override = (
+                _benchmark_success_workflow(standard_workload_id)
+                if workload_id == standard_workload_id
+                else None
+            )
             materialized_getchannel = (
                 workload_id == "pil-image-image.getchannel.standard"
             )
@@ -58739,6 +60602,10 @@ def build_inputs(
             # after image/data setup, so large byte transport is visible.
             isolated_putdata = (
                 workload_id == "pil-image-image.putdata.standard"
+            )
+            isolated_getbbox = (
+                operation["id"] == "getbbox"
+                and requirement["dimension"] == "mode"
             )
             # Measure sequence creation after image setup; the returned
             # values are the operation's output and remain inside timing.
@@ -58865,27 +60732,32 @@ def build_inputs(
                 {
                     "workload_id": workload_id,
                     "covers": [requirement["id"]],
-                    "subjects": [
-                        {"kind": "oracle", "id": "pillow"},
-                        *(
-                            {
-                                "kind": "target_profile",
-                                "id": profile,
-                            }
-                            for profile in BENCHMARK_TARGET_PROFILES
-                            if profile == "python-cpu"
-                            or (
-                                not isolated_display
-                                and workload_id
-                                not in BENCHMARK_CPU_ONLY_WORKLOAD_IDS
-                            )
-                        ),
-                    ],
+                    "subjects": (
+                        benchmark_subjects(operation)
+                        if operation["id"] == "getbbox"
+                        else [
+                            {"kind": "oracle", "id": "pillow"},
+                            *(
+                                {
+                                    "kind": "target_profile",
+                                    "id": profile,
+                                }
+                                for profile in BENCHMARK_TARGET_PROFILES
+                                if profile == "python-cpu"
+                                or (
+                                    not isolated_display
+                                    and workload_id
+                                    not in BENCHMARK_CPU_ONLY_WORKLOAD_IDS
+                                )
+                            ),
+                        ]
+                    ),
                     "input": input_spec,
                     "measurement": {
                         "boundary": (
                             "observed_steps"
                             if materialized_getchannel
+                            or isolated_getbbox
                             or isolated_display
                             or materialized_sharpness
                             or materialized_reduce
@@ -58927,6 +60799,8 @@ def build_inputs(
                             if materialized_convert
                             else ["call", "observe-receiver"]
                             if isolated_putdata
+                            else ["call"]
+                            if isolated_getbbox
                             else ["setup-sharpness-2", "call", "observe-result"]
                             if materialized_sharpness
                             else ["call", "observe-receiver"]
@@ -60261,6 +62135,7 @@ def build_inputs(
                     (operation, requirement)
                     for operation, requirement in benchmark_requirements
                     if operation["id"] == "getbbox"
+                    and requirement["id"].endswith(".performance.standard")
                 ),
                 None,
             )
@@ -60270,6 +62145,7 @@ def build_inputs(
                     "rgb-blank-1024x768",
                     "rgb-filled-1024x768",
                     "rgb-noise-1024x768",
+                    "f-filled-1024x768",
                 ):
                     workload_id = (
                         f"{storage_slug}.getbbox.materialized.{slug(name)}"
@@ -60283,7 +62159,7 @@ def build_inputs(
                         {
                             "workload_id": workload_id,
                             "covers": [requirement["id"]],
-                            "subjects": benchmark_subjects(),
+                            "subjects": benchmark_subjects(operation),
                             "input": {
                                 "kind": "parity_case",
                                 "case_id": case_id,
@@ -60495,6 +62371,144 @@ def build_inputs(
                         }
                     )
                     members.append({"workload_id": workload_id, "weight": 1})
+        mode_size_workloads: list[dict[str, Any]] = []
+        mode_size_members: list[dict[str, Any]] = []
+        target_only_mode_size_workloads: list[dict[str, Any]] = []
+        target_only_mode_size_members: list[dict[str, Any]] = []
+        counts.setdefault("mode_size_benchmark_cases_missing_requirement", 0)
+        benchmark_requirements_by_operation: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = defaultdict(list)
+        for operation, requirement in benchmark_requirements:
+            benchmark_requirements_by_operation[operation["id"]].append(
+                (operation, requirement)
+            )
+        for case in parity_cases:
+            case_id = case.get("case_id", "")
+            matrix_size = next(
+                (
+                    f"{width}x{height}"
+                    for width, height in MODE_SIZE_MATRIX_SIZES
+                    if case_id.endswith(f".matrix-size-{width}x{height}")
+                ),
+                None,
+            )
+            if matrix_size is None:
+                continue
+            matches = benchmark_requirements_by_operation.get(
+                case.get("operation", ""), []
+            )
+            if not matches:
+                continue
+            operation = matches[0][0]
+            result_shape = operation.get("source", {}).get("result", {}).get("shape")
+            if result_shape != "image" and operation["id"] not in {"putdata", "getbbox"}:
+                continue
+            benchmark_requirement_ids = {
+                requirement["id"]
+                for requirement in operation["requirements"]
+                if "benchmark" in requirement["lanes"]
+            }
+            case_benchmark_requirements = [
+                requirement_id
+                for requirement_id in case.get("covers", [])
+                if requirement_id in benchmark_requirement_ids
+            ]
+            if not case_benchmark_requirements:
+                case_benchmark_requirements = [
+                    requirement["id"]
+                    for _operation, requirement in matches
+                    if requirement["id"].endswith(".performance.standard")
+                ]
+                if not case_benchmark_requirements:
+                    counts["mode_size_benchmark_cases_missing_requirement"] += 1
+                    continue
+            target_only = case.get("verification") == "expected-output"
+            workload_id = (
+                f"{storage_slug}."
+                f"{'target-only-mode-size' if target_only else 'mode-size'}."
+                f"{slug(operation['id'])}.{slug(case_id)}"
+            )
+            context_variant = (
+                f"target-only-mode-size-matrix-{matrix_size}"
+                if target_only
+                else f"mode-size-matrix-{matrix_size}"
+            )
+            if operation["id"] == "resize" and not target_only:
+                resize_filter = next(
+                    (
+                        name
+                        for _code, name in RESIZE_MKS_FILTER_VARIANTS
+                        if f".resample-{name}." in case_id
+                    ),
+                    None,
+                )
+                if resize_filter is not None:
+                    context_variant = (
+                        f"mode-size-matrix-{resize_filter}-{matrix_size}"
+                    )
+            workload = {
+                "workload_id": workload_id,
+                "covers": case_benchmark_requirements,
+                "subjects": (
+                    target_only_benchmark_subjects(operation, case)
+                    if target_only
+                    else benchmark_subjects(operation)
+                ),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": {
+                    "boundary": (
+                        "observed_steps"
+                        if operation["id"] == "putdata"
+                        or operation["id"] == "getbbox"
+                        or (
+                            target_only
+                            and surface_id == "PIL.ImageEnhance.Sharpness"
+                        )
+                        else "whole_workflow"
+                    ),
+                    "step_ids": (
+                        ["call", "observe-receiver"]
+                        if operation["id"] == "putdata"
+                        else ["call"]
+                        if operation["id"] == "getbbox"
+                        else [
+                            "enhancer",
+                            "result-sharpened",
+                            "observe-result",
+                        ]
+                        if target_only
+                        and surface_id == "PIL.ImageEnhance.Sharpness"
+                        else []
+                    ),
+                    "metrics": operation["benchmark"]["metrics"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "concurrency": 1,
+                    "cache_state": "warm",
+                    "correctness_gate": "parity_pass",
+                },
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant=context_variant,
+                    surface=surface_id,
+                    operation=operation["id"],
+                ),
+            }
+            if target_only:
+                target_only_mode_size_workloads.append(workload)
+                target_only_mode_size_members.append(
+                    {"workload_id": workload_id, "weight": 1}
+                )
+            else:
+                mode_size_workloads.append(workload)
+                mode_size_members.append({"workload_id": workload_id, "weight": 1})
+
+        workloads.extend(mode_size_workloads)
+        workloads.extend(target_only_mode_size_workloads)
+        counts.setdefault("target_only_benchmark_workloads", 0)
+        counts["target_only_benchmark_workloads"] += len(
+            target_only_mode_size_workloads
+        )
         benchmark_relative = f"inputs/benchmark/{storage_slug}.json"
         benchmark_path = output_root / benchmark_relative
         workload_by_id = {
@@ -60533,6 +62547,35 @@ def build_inputs(
                     "members": [member],
                 }
             )
+        if mode_size_members:
+            suites.append(
+                {
+                    "suite_id": f"{storage_slug}.mode-size-matrix-suite",
+                    "description": (
+                        "Pillow mode-specific image operations across tiny, "
+                        "odd, vector-boundary, VGA, and HD sizes using "
+                        "deterministic varied, checkerboard, boundary, "
+                        "origin-impulse, and seeded-noise pixels as declared "
+                        "for each size; Resize also covers Pillow 13 MKS2013 "
+                        "and MKS2021 filters across its Pillow mode matrix; "
+                        "benchmark subjects are selected independently by "
+                        "target profile and CPU architecture."
+                    ),
+                    "members": mode_size_members,
+                }
+            )
+        if target_only_mode_size_members:
+            suites.append(
+                {
+                    "suite_id": f"{storage_slug}.target-only-mode-size-matrix-suite",
+                    "description": (
+                        "Target-only image workloads verified against recorded "
+                        "outputs. They are timed for the selected Rust profiles "
+                        "without invoking Pillow or creating a Pillow speed ratio."
+                    ),
+                    "members": target_only_mode_size_members,
+                }
+            )
         write_json(
             benchmark_path,
             {
@@ -60544,6 +62587,13 @@ def build_inputs(
         generated["benchmark"].add(benchmark_relative)
         counts["benchmark_workloads"] += len(workloads)
         counts["benchmark_suites"] += len(suites)
+
+    if indexed_parity_case_count != counts["parity_cases"]:
+        raise ValueError(
+            "parity input index does not contain every generated case: "
+            f"indexed={indexed_parity_case_count}, "
+            f"generated={counts['parity_cases']}"
+        )
 
     pipeline_relative = "inputs/benchmark/pipeline-operations.json"
     pipeline_case_pool = dict(all_cases_by_id)
@@ -60601,6 +62651,9 @@ def build_inputs(
                 f"extra={sorted(generated[lane] - indexed[lane])}"
             )
     referenced_assets = indexed_generated_asset_paths(output_root, manifest)
+    referenced_assets.update(
+        retained_unindexed_generated_asset_paths(output_root, manifest)
+    )
     prune_unreferenced_generated_assets(active_assets_root, referenced_assets)
     generated_assets = active_assets_root / "generated"
     available_assets = {
@@ -60616,6 +62669,427 @@ def build_inputs(
     return counts
 
 
+def build_target_output_matrix_inputs(
+    manifest: dict[str, Any],
+    output_root: Path,
+    assets_root: Path,
+) -> dict[str, int]:
+    """Regenerate target-only mode/size parity shards and benchmark rows."""
+
+    matrix_specs = (
+        (
+            "PIL.Image",
+            "frombytes",
+            ("",),
+            lambda mode_id, _factor: core_only_frombytes_matrix_cases(
+                assets_root, mode_id
+            ),
+        ),
+        (
+            "PIL.ImageChops",
+            "invert",
+            ("",),
+            lambda mode_id, _factor: chops_invert_core_only_matrix_cases(
+                assets_root, mode_id
+            ),
+        ),
+        (
+            "PIL.ImageChops",
+            "duplicate",
+            ("",),
+            lambda mode_id, _factor: chops_duplicate_core_only_matrix_cases(
+                assets_root, mode_id
+            ),
+        ),
+        (
+            "PIL.ImageChops",
+            "constant",
+            ("",),
+            lambda mode_id, _factor: chops_constant_core_only_matrix_cases(
+                assets_root, mode_id
+            ),
+        ),
+        (
+            "PIL.ImageChops",
+            "offset",
+            ("",),
+            lambda mode_id, _factor: chops_offset_core_only_matrix_cases(
+                assets_root, mode_id
+            ),
+        ),
+        (
+            "PIL.Image.Image",
+            "crop",
+            ("",),
+            lambda mode_id, _factor: crop_core_only_matrix_cases(
+                assets_root, mode_id
+            ),
+        ),
+        (
+            "PIL.Image.Image",
+            "getbbox",
+            ("",),
+            lambda mode_id, _factor: core_only_getbbox_matrix_cases(
+                assets_root, mode_id
+            ),
+        ),
+        (
+            "PIL.Image.Image",
+            "putdata",
+            ("",),
+            lambda mode_id, _factor: putdata_core_only_matrix_cases(
+                assets_root, mode_id
+            ),
+        ),
+        (
+            "PIL.Image.Image",
+            "resize",
+            ("",),
+            lambda mode_id, _factor: resize_core_only_matrix_cases(
+                assets_root, mode_id
+            ),
+        ),
+        (
+            "PIL.Image.Image",
+            "reduce",
+            tuple(REDUCE_MATRIX_FACTORS),
+            lambda mode_id, factor: reduce_core_only_matrix_cases(
+                assets_root, mode_id, factor
+            ),
+        ),
+        (
+            "PIL.ImageEnhance.Brightness",
+            "enhance",
+            ("factor-zero", "factor-identity", "factor-double"),
+            lambda mode_id, factor: brightness_core_only_matrix_cases(
+                assets_root,
+                mode_id,
+                {factor.removeprefix("factor-")},
+            ),
+        ),
+        (
+            "PIL.ImageEnhance.Sharpness",
+            "enhance",
+            ("factor-sharpened",),
+            lambda mode_id, _factor: sharpness_core_only_matrix_cases(
+                assets_root, mode_id
+            ),
+        ),
+    )
+    operations = operation_index(manifest)
+    indexed_parity = set(manifest["input_index"]["parity"])
+    generated_documents: set[str] = set()
+    selected_surfaces = {surface_id for surface_id, *_rest in matrix_specs}
+    surface_slugs = {
+        surface["id"]: surface["storage_slug"]
+        for surface in manifest["surfaces"]
+        if surface["id"] in selected_surfaces
+    }
+    benchmark_documents: dict[str, dict[str, Any]] = {}
+    matrix_workloads: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    matrix_members: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    counts = {
+        "target_output_matrix_cases": 0,
+        "target_output_matrix_documents": 0,
+        "target_output_matrix_benchmark_workloads": 0,
+        "target_output_matrix_benchmark_documents": 0,
+    }
+    expected_cases_per_mode = sum(
+        len(variants) for variants in MODE_SIZE_INPUT_VARIANTS_BY_SIZE.values()
+    )
+
+    for surface_id, operation_id, factors, factory in matrix_specs:
+        storage_slug = surface_slugs[surface_id]
+        operation = operations[(surface_id, operation_id)]
+        benchmark_relative = f"inputs/benchmark/{storage_slug}.json"
+        if benchmark_relative not in benchmark_documents:
+            benchmark_path = output_root / benchmark_relative
+            benchmark_document = json.loads(
+                benchmark_path.read_text(encoding="utf-8")
+            )
+            old_matrix_prefix = f"{storage_slug}.target-only-mode-size."
+            old_matrix_ids = {
+                workload["workload_id"]
+                for workload in benchmark_document["workloads"]
+                if workload.get("workload_id", "").startswith(old_matrix_prefix)
+            }
+            benchmark_document["workloads"] = [
+                workload
+                for workload in benchmark_document["workloads"]
+                if workload.get("workload_id") not in old_matrix_ids
+            ]
+            benchmark_document["suites"] = [
+                {
+                    **suite,
+                    "members": [
+                        member
+                        for member in suite.get("members", [])
+                        if member.get("workload_id") not in old_matrix_ids
+                    ],
+                }
+                for suite in benchmark_document["suites"]
+                if suite.get("suite_id")
+                != f"{storage_slug}.target-only-mode-size-matrix-suite"
+                and any(
+                    member.get("workload_id") not in old_matrix_ids
+                    for member in suite.get("members", [])
+                )
+            ]
+            benchmark_documents[benchmark_relative] = benchmark_document
+
+        mode_requirements = [
+            requirement
+            for requirement in operation["requirements"]
+            if requirement["dimension"] == "mode"
+            and "target_output" in requirement["lanes"]
+        ]
+        for requirement in mode_requirements:
+            if "benchmark" not in requirement["lanes"]:
+                raise ValueError(
+                    f"{requirement['id']}: target matrix mode lacks benchmark support"
+                )
+            mode_id = requirement["id"].rsplit(".mode.", 1)[1]
+            for factor in factors:
+                cases = factory(mode_id, factor)
+                expected_case_count = expected_cases_per_mode + (
+                    4 if operation_id == "putdata" else 0
+                )
+                if len(cases) != expected_case_count:
+                    raise ValueError(
+                        f"{surface_id}.{operation_id}.{mode_id}.{factor}: "
+                        f"expected {expected_case_count} matrix points, "
+                        f"found {len(cases)}"
+                    )
+                cases_by_size: dict[
+                    tuple[int, int], list[dict[str, Any]]
+                ] = defaultdict(list)
+                for case in cases:
+                    if case.get("verification") != "expected-output":
+                        raise ValueError(
+                            f"{case.get('case_id')}: target matrix requires recorded output"
+                        )
+                    if case.get("operation") != operation_id:
+                        raise ValueError(
+                            f"{case.get('case_id')}: unexpected matrix operation"
+                        )
+                    if requirement["id"] not in case.get("covers", []):
+                        raise ValueError(
+                            f"{case.get('case_id')}: mode contract is not recorded"
+                        )
+                    case_id = case["case_id"]
+                    size = next(
+                        (
+                            point
+                            for point in MODE_SIZE_MATRIX_SIZES
+                            if case_id.endswith(
+                                f".matrix-size-{point[0]}x{point[1]}"
+                            )
+                        ),
+                        None,
+                    )
+                    if size is None:
+                        raise ValueError(
+                            f"{case_id}: target matrix case has no size suffix"
+                        )
+                    cases_by_size[size].append(case)
+
+                for size, size_cases in sorted(cases_by_size.items()):
+                    factor_suffix = f"-{factor}" if factor else ""
+                    relative = (
+                        f"inputs/parity/{storage_slug}-mode-size-target-output-"
+                        f"{size[0]}x{size[1]}-{mode_id}-{operation_id}"
+                        f"{factor_suffix}.json"
+                    )
+                    write_json(
+                        output_root / relative,
+                        {
+                            "schema": "migration-parity/parity-input@3",
+                            "cases": size_cases,
+                        },
+                    )
+                    generated_documents.add(relative)
+                    counts["target_output_matrix_documents"] += 1
+
+                benchmark_requirement_ids = {
+                    item["id"]
+                    for item in operation["requirements"]
+                    if "benchmark" in item["lanes"]
+                }
+                for case in cases:
+                    if (
+                        operation.get("source", {}).get("result", {}).get("shape")
+                        != "image"
+                        and operation_id not in {"putdata", "getbbox"}
+                    ):
+                        raise ValueError(
+                            f"{case['case_id']}: target matrix result cannot be benchmarked"
+                        )
+                    covered_benchmarks = [
+                        requirement_id
+                        for requirement_id in case.get("covers", [])
+                        if requirement_id in benchmark_requirement_ids
+                    ]
+                    if not covered_benchmarks:
+                        raise ValueError(
+                            f"{case['case_id']}: target matrix case lacks a benchmark contract"
+                        )
+                    size = next(
+                        point
+                        for point in MODE_SIZE_MATRIX_SIZES
+                        if case["case_id"].endswith(
+                            f".matrix-size-{point[0]}x{point[1]}"
+                        )
+                    )
+                    workload_id = (
+                        f"{storage_slug}.target-only-mode-size."
+                        f"{slug(operation_id)}.{slug(case['case_id'])}"
+                    )
+                    step_ids: list[str] = []
+                    boundary = "whole_workflow"
+                    if operation_id == "putdata":
+                        boundary = "observed_steps"
+                        step_ids = ["call", "observe-receiver"]
+                    elif operation_id == "getbbox":
+                        boundary = "observed_steps"
+                        step_ids = ["call"]
+                    elif surface_id == "PIL.ImageEnhance.Sharpness":
+                        boundary = "observed_steps"
+                        step_ids = ["enhancer", "result-sharpened"]
+                    workload = {
+                        "workload_id": workload_id,
+                        "covers": covered_benchmarks,
+                        "subjects": target_only_benchmark_subjects(operation, case),
+                        "input": {
+                            "kind": "parity_case",
+                            "case_id": case["case_id"],
+                        },
+                        "measurement": {
+                            "boundary": boundary,
+                            "step_ids": step_ids,
+                            "metrics": operation["benchmark"]["metrics"],
+                            "warmup_iterations": 5,
+                            "measurement_iterations": 20,
+                            "samples": 5,
+                            "concurrency": 1,
+                            "cache_state": "warm",
+                            "correctness_gate": "parity_pass",
+                        },
+                        "context": _workflow_benchmark_context(
+                            case,
+                            variant=(
+                                "target-only-mode-size-matrix-"
+                                f"{size[0]}x{size[1]}"
+                            ),
+                            surface=surface_id,
+                            operation=operation_id,
+                        ),
+                    }
+                    matrix_workloads[benchmark_relative].append(workload)
+                    matrix_members[benchmark_relative].append(
+                        {"workload_id": workload_id, "weight": 1}
+                    )
+                counts["target_output_matrix_cases"] += len(cases)
+                print(
+                    "Generated target-only matrix: "
+                    f"{surface_id}.{operation_id}.{mode_id}.{factor or 'default'} "
+                    f"({len(cases)} cases)",
+                    flush=True,
+                )
+
+    if "PIL.Image" in surface_slugs:
+        l1_cases_by_size: dict[tuple[int, int], list[dict[str, Any]]] = defaultdict(list)
+        for case in core_only_l1_rawmode_cases():
+            size = next(
+                (
+                    point
+                    for point in MODE_SIZE_MATRIX_SIZES
+                    if case["case_id"].endswith(
+                        f".matrix-size-{point[0]}x{point[1]}"
+                    )
+                ),
+                None,
+            )
+            if size is None:
+                raise ValueError(
+                    f"{case['case_id']}: L;1 output case has no size suffix"
+                )
+            l1_cases_by_size[size].append(case)
+        storage_slug = surface_slugs["PIL.Image"]
+        for size, size_cases in sorted(l1_cases_by_size.items()):
+            relative = (
+                f"inputs/parity/{storage_slug}-mode-size-target-output-"
+                f"{size[0]}x{size[1]}-l-frombytes.json"
+            )
+            write_json(
+                output_root / relative,
+                {"schema": "migration-parity/parity-input@3", "cases": size_cases},
+            )
+            generated_documents.add(relative)
+            counts["target_output_matrix_cases"] += len(size_cases)
+            counts["target_output_matrix_documents"] += 1
+
+    for surface_id, storage_slug in surface_slugs.items():
+        indexed_documents = {
+            path
+            for path in indexed_parity
+            if path.startswith(
+                f"inputs/parity/{storage_slug}-mode-size-target-output-"
+            )
+        }
+        generated_surface_documents = {
+            path
+            for path in generated_documents
+            if path.startswith(
+                f"inputs/parity/{storage_slug}-mode-size-target-output-"
+            )
+        }
+        if indexed_documents != generated_surface_documents:
+            raise ValueError(
+                f"{surface_id}: target matrix index mismatch; "
+                f"missing={sorted(indexed_documents - generated_surface_documents)[:5]}, "
+                f"unindexed={sorted(generated_surface_documents - indexed_documents)[:5]}"
+            )
+
+    for benchmark_relative, benchmark_document in benchmark_documents.items():
+        storage_slug = benchmark_relative.removeprefix(
+            "inputs/benchmark/"
+        ).removesuffix(".json")
+        added_workloads = matrix_workloads[benchmark_relative]
+        workload_ids = {
+            workload["workload_id"] for workload in benchmark_document["workloads"]
+        }
+        added_workload_ids = {
+            workload["workload_id"] for workload in added_workloads
+        }
+        if workload_ids & added_workload_ids:
+            raise ValueError(
+                f"{storage_slug}: duplicate target-only matrix benchmark workload"
+            )
+        benchmark_document["workloads"].extend(added_workloads)
+        members = matrix_members[benchmark_relative]
+        if members:
+            benchmark_document["suites"].append(
+                {
+                    "suite_id": (
+                        f"{storage_slug}.target-only-mode-size-matrix-suite"
+                    ),
+                    "description": (
+                        "Target-only image workloads verified against recorded "
+                        "outputs. They are timed for CPU, SIMD, and GPU profiles "
+                        "without invoking Pillow or creating a Pillow speed ratio; "
+                        "CPU architecture selectors replay the same inputs."
+                    ),
+                    "members": members,
+                }
+            )
+        write_json(output_root / benchmark_relative, benchmark_document)
+        counts["target_output_matrix_benchmark_workloads"] += len(
+            added_workloads
+        )
+        counts["target_output_matrix_benchmark_documents"] += 1
+
+    return counts
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -60630,18 +63104,49 @@ def main() -> None:
         default=DEFAULT_OUTPUT_ROOT,
         help="Fixture root receiving indexed input documents.",
     )
+    parser.add_argument(
+        "--target-output-matrix-only",
+        action="store_true",
+        help=(
+            "Regenerate only the CoreOnly mode/size parity shards and their "
+            "target-only benchmark workloads."
+        ),
+    )
+    parser.add_argument(
+        "--image-open-mode-size-matrix-only",
+        action="store_true",
+        help=(
+            "Regenerate only the encoded Image.open mode cases and their "
+            "varied-size parity matrix."
+        ),
+    )
     args = parser.parse_args()
+    if args.target_output_matrix_only and args.image_open_mode_size_matrix_only:
+        parser.error("select only one focused matrix generator")
     manifest = load_manifest(args.manifest.resolve())
     output_root = args.output_root.resolve()
     assets_root = prepare_asset_overlay(
         output_root / "assets",
         FIXTURE_ROOT / "assets",
     )
-    counts = build_inputs(
-        manifest,
-        output_root,
-        assets_root,
-    )
+    if args.target_output_matrix_only:
+        counts = build_target_output_matrix_inputs(
+            manifest,
+            output_root,
+            assets_root,
+        )
+    elif args.image_open_mode_size_matrix_only:
+        counts = regenerate_image_open_mode_size_inputs(
+            manifest,
+            output_root,
+            assets_root,
+        )
+    else:
+        counts = build_inputs(
+            manifest,
+            output_root,
+            assets_root,
+        )
     print(json.dumps(counts, sort_keys=True))
 
 

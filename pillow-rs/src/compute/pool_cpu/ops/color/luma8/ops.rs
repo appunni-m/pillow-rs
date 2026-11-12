@@ -1,4 +1,6 @@
 //! L-mode support declaration and architecture selection for RemapPalette.
+
+pub(crate) use super::convert::SUPPORT as CONVERT_SUPPORT;
 // TODO(pillow-rs#3ptb): record Default/vector architecture selection receipts
 // for L-to-P, including fallback when an implementation is unavailable.
 

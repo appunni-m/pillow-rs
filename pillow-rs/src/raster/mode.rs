@@ -79,6 +79,7 @@ impl Mode {
     /// Internal storage identities have no Pillow spelling and therefore
     /// cannot be constructed from this input. Core operation APIs should take
     /// the resulting enum directly instead of accepting mode strings.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub fn from_pillow_name(name: &str) -> Option<Self> {
         match name {
@@ -110,6 +111,7 @@ impl Mode {
     ///
     /// These names are not Pillow modes. Keep them limited to APIs that
     /// explicitly support the corresponding `NO_PILLOW_SUPPORT` raster.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub fn from_rust_name(name: &str) -> Option<Self> {
         // NO_PILLOW_SUPPORT: these exact raster identities are Rust extensions.
@@ -128,6 +130,7 @@ impl Mode {
     /// Pillow-owned modes have their established spelling in [`Self::pillow_name`].
     /// These names are reserved for explicitly documented `NO_PILLOW_SUPPORT`
     /// host APIs.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn rust_name(self) -> Option<&'static str> {
         match self {
@@ -163,6 +166,7 @@ impl Mode {
     ///
     /// Keep support classification on the typed identity instead of inferring
     /// it from whether a formatting name happens to be present.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn is_pillow_mode(self) -> bool {
         match self {
@@ -195,6 +199,7 @@ impl Mode {
     }
 
     /// Returns whether Pillow spells this mode with one character.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn is_single_character_pillow_mode(self) -> bool {
         matches!(
@@ -204,6 +209,7 @@ impl Mode {
     }
 
     /// Returns the Pillow spelling for modes with a Pillow representation.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn pillow_name(self) -> Option<&'static str> {
         match self {
@@ -236,6 +242,7 @@ impl Mode {
     }
 
     /// Returns the number of sample bands represented by this identity.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn band_count(self) -> usize {
         match self {
@@ -268,6 +275,7 @@ impl Mode {
     }
 
     /// Returns Pillow's physical bytes per pixel for modes with a byte layout.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub(crate) const fn pillow_pixel_size(self) -> Option<usize> {
         match self {
@@ -295,6 +303,7 @@ impl Mode {
     }
 
     /// Returns native byte-carrier bytes per pixel where raw byte strategies apply.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub(crate) const fn byte_carrier_pixel_width(self) -> Option<usize> {
         match self {
@@ -320,6 +329,7 @@ impl Mode {
     }
 
     /// Returns the number of Pillow physical byte lanes omitted by the carrier.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub(crate) const fn hidden_pixel_lane_count(self) -> Option<usize> {
         match self {
@@ -347,6 +357,7 @@ impl Mode {
     }
 
     /// Returns the physical byte offset of one omitted lane in the Pillow pixel.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub(crate) const fn hidden_pixel_lane_offset(self, lane: usize) -> Option<usize> {
         match (self.hidden_pixel_lane_count(), lane) {
@@ -358,6 +369,7 @@ impl Mode {
     }
 
     /// Returns a byte-carrier byte's position in the Pillow physical pixel.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub(crate) const fn byte_carrier_physical_offset(self, byte: usize) -> Option<usize> {
         match (
@@ -375,6 +387,7 @@ impl Mode {
     }
 
     /// Returns Pillow's public band count, or zero for internal-only modes.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn pillow_band_count(self) -> usize {
         if self.is_pillow_mode() {
@@ -388,6 +401,7 @@ impl Mode {
     ///
     /// This describes the band name, not alpha semantics: the `A` band in Lab
     /// is a color axis, while the `A` band in LA/RGBA is alpha.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn uppercase_a_band_index(self) -> Option<usize> {
         match self {
@@ -417,6 +431,7 @@ impl Mode {
     }
 
     /// Whether this identity includes alpha, including premultiplied alpha.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn has_alpha(self) -> bool {
         matches!(

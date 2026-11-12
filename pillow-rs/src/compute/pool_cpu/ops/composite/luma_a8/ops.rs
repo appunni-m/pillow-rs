@@ -12,6 +12,8 @@ use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
 
 pub(crate) const MODE: Mode = Mode::ImageLumaA8;
 
+super::super::helpers::declare_composite_module_support!(ImageLumaA8, luma_mask(2, 8));
+
 const INPUTS: &[InputContract] = &[InputContract::SameModeSecondaryImage {
     mode: Mode::ImageLumaA8,
     rejection_reason: "images do not match",

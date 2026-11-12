@@ -162,6 +162,11 @@ pub enum InputContract {
         /// Number of byte bands in this exact mode's native representation.
         channels: u8,
     },
+    /// Point from native signed I32 values to L with one byte entry per clamped sample.
+    PointI32LutEntries {
+        /// Number of entries covering the clamped `0..=65535` I32 domain.
+        entries: usize,
+    },
     /// PointFloat receives exactly 256 f64 entries for each source band.
     PointFloatLutEntries {
         /// Number of byte bands in this exact mode's native representation.

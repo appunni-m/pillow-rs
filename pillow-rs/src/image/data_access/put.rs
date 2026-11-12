@@ -2,6 +2,7 @@ use super::{
     Arc, Bytes, Image, PilError, PipelineOp, PutDataInput, PutDataValue, PutDataValueKind,
     is_l16_identity, materialization_cache, putdata_byte_width, putdata_bytes,
     putdata_hidden_lane_bytes, putdata_hidden_lanes, unsupported_putdata_mode,
+    uses_native_value_at_putdata,
 };
 use crate::compute::PipelineOperationTelemetryCapture;
 use crate::image::PutDataExecutionContext;
@@ -71,13 +72,15 @@ impl Image {
         Ok(true)
     }
 
-    /// Normalizes one value per pixel and queues exact Pillow `putdata` bytes.
+    /// Normalizes one value per pixel through the mode's PutData strategy.
     ///
     /// Pillow 12.2's `_imaging.c:_putdata` applies `scale` and `offset` only to
     /// single-band, signed-integer, and float images. Its multiband `getink`
     /// path instead treats integers as little-endian packed pixels and ignores
-    /// scaling. Keeping that distinction here gives each backend the same
-    /// normalized logical bytes and physical-lane payload when supported.
+    /// scaling. CoreOnly high-depth modes write clamped `u16` or cast `f32`
+    /// components directly into native storage, without a byte projection;
+    /// these tuple writes also leave `scale` and `offset` unapplied. The
+    /// target-output matrix records this `NO_PILLOW_SUPPORT` extension.
     ///
     /// # Errors
     ///
@@ -92,20 +95,21 @@ impl Image {
         self.validate_putdata_length(values.len())?;
 
         let image_mode = self.mode_identity()?;
-        if is_l16_identity(image_mode) {
-            // Keep I;16 out of the byte-oriented deferred path. Its
-            // generic fallback widens to RGBA8 and loses the 16-bit sample.
-            let mut context = self.putdata_execution_context();
-            for (pixel_index, value) in values.iter().enumerate() {
-                self.putdata_value_at_with_context(
-                    pixel_index,
-                    value,
-                    scale,
-                    offset,
-                    &mut context,
-                )?;
+        if uses_native_value_at_putdata(image_mode) {
+            if is_l16_identity(image_mode) {
+                let mut context = self.putdata_execution_context();
+                for (pixel_index, value) in values.iter().enumerate() {
+                    self.putdata_value_at_with_context(
+                        pixel_index,
+                        value,
+                        scale,
+                        offset,
+                        &mut context,
+                    )?;
+                }
+                return Ok(());
             }
-            return Ok(());
+            return self.putdata_core_only_native_values(image_mode, values);
         }
         let data = putdata_bytes(image_mode, values, scale, offset)?;
         let hidden_lanes = putdata_hidden_lane_bytes(image_mode, values)?;
@@ -121,11 +125,67 @@ impl Image {
         Ok(())
     }
 
+    fn putdata_core_only_native_values(
+        &mut self,
+        mode: Mode,
+        values: &[PutDataValue],
+    ) -> Result<(), PilError> {
+        // TODO(pillow-rs#3ptb): verify all five native bulk outputs, ordered
+        // prefix writes on invalid values, and fallback receipts in the frozen
+        // CPU parity matrix.
+        if values.is_empty() {
+            return Ok(());
+        }
+
+        let mut context = self.putdata_execution_context();
+        context.operation_receipts.capture();
+        let first = crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::native_value_at_input(
+            mode,
+            &values[0],
+        )?;
+        let requested_backend = context.requested_backend;
+        let selection = self.putdata_value_at_selection(mode, &mut context)?;
+        self.load()?;
+        context.operation_receipts.capture();
+
+        let mut completed = 0;
+        let result = match self {
+            Image::Loaded(data) => {
+                let result = crate::compute::pool_cpu::ops::put::ops::execute_core_only_put_data_values(
+                    Arc::make_mut(&mut data.image),
+                    values,
+                    first,
+                    selection,
+                    &mut completed,
+                );
+                if completed != 0 {
+                    data.known_zero_fill = false;
+                }
+                result
+            }
+            _ => Err(PilError::InternalError(
+                "native putdata did not materialize writable storage".into(),
+            )),
+        };
+
+        if completed != 0 {
+            crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
+                "PutData",
+                requested_backend,
+                0,
+                "native CoreOnly PutData writes update host storage synchronously",
+                selection,
+                context.operation_receipts,
+            );
+        }
+        result
+    }
+
     /// Returns the host-language value shape required by the current mode.
     ///
     /// This is the core-owned mode policy for `putdata`. A binding may still
-    /// need to inspect Python protocol behavior, but it does not need to
-    /// duplicate the list of numeric and multiband mode names.
+    /// need to inspect host-language protocol behavior, but it does not need
+    /// to duplicate the mode's scalar or component shape.
     pub fn putdata_value_kind(&self) -> Result<PutDataValueKind, PilError> {
         let image_mode = self.mode_identity()?;
         if matches!(
@@ -141,6 +201,24 @@ impl Image {
                 | Mode::ImageF32
         ) {
             return Ok(PutDataValueKind::Numeric);
+        }
+        match image_mode {
+            Mode::ImageLumaA16 => {
+                return Ok(PutDataValueKind::NativeU16Components { channels: 2 });
+            }
+            Mode::ImageRgb16 => {
+                return Ok(PutDataValueKind::NativeU16Components { channels: 3 });
+            }
+            Mode::ImageRgba16 => {
+                return Ok(PutDataValueKind::NativeU16Components { channels: 4 });
+            }
+            Mode::ImageRgb32F => {
+                return Ok(PutDataValueKind::FloatComponents { channels: 3 });
+            }
+            Mode::ImageRgba32F => {
+                return Ok(PutDataValueKind::FloatComponents { channels: 4 });
+            }
+            _ => {}
         }
         let channels =
             putdata_byte_width(image_mode).ok_or_else(|| unsupported_putdata_mode(image_mode))?;
@@ -212,6 +290,17 @@ impl Image {
                     .collect::<Vec<_>>();
                 self.putdata_values(&values, scale, offset)
             }
+            PutDataValueKind::NativeU16Components { .. } => {
+                let values = values
+                    .iter()
+                    .copied()
+                    .map(PutDataValue::Packed)
+                    .collect::<Vec<_>>();
+                self.putdata_values(&values, scale, offset)
+            }
+            PutDataValueKind::FloatComponents { .. } => Err(PilError::TypeError(
+                "floating multiband putdata requires component tuples".into(),
+            )),
         }
     }
 
@@ -439,6 +528,11 @@ impl Image {
                     value, scale, offset,
                 )?,
             )
+        } else if uses_native_value_at_putdata(image_mode) {
+            crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::native_value_at_input(
+                image_mode,
+                value,
+            )?
         } else {
             putdata_byte_width(image_mode).ok_or_else(|| unsupported_putdata_mode(image_mode))?;
             let bytes = putdata_bytes(image_mode, std::slice::from_ref(value), scale, offset)?;

@@ -17,6 +17,8 @@ enabled.
 | Build npm package | `make build-wasm-release` | Compiles the shared Node/browser WASM artifact |
 | One parity case | `make migration-parity-case CASE_ID=<id>` | Runs the selected input against source and target |
 | Same cases on CPU, SIMD, and GPU | Set `MIGRATION_TARGET_BACKEND=cpu`, `simd`, or `gpu` and run `make migration-parity-test` with the same `MIGRATION_PARITY_CASE_IDS` | The runner selects the backend; parity inputs and requirements are backend-neutral |
+| CPU architecture parity matrix | `make migration-parity-test-cpu-architectures` | Replays the same selected parity inputs under each configured CPU architecture selector |
+| GPU adapter parity matrix | `make migration-parity-test-gpu-adapters` | Enumerates native WGPU adapters and replays the same parity inputs on each physical adapter; set `MIGRATION_GPU_ADAPTER_INDICES='0 2'` to select a subset |
 | GPU batch admission fault contract | `make migration-parity-test-gpu-fault-contract` | Runs the generated target-only contract on GPU with the test-api build feature |
 | Aggregate backend parity | `MIGRATION_PARITY_OUTPUTS='build/migration-parity/cpu.json build/migration-parity/simd.json' make migration-parity-aggregate` | Joins each parity receipt to its recorded target profile; repeated result paths are supported |
 | Review repetitive cases | `make migration-parity-reduction MIGRATION_REDUCTION_ARGS='--candidates <pairs.json> --output-dir <directory>'` | Measures removal batches and binary restoration against separate CPU/SIMD/GPU baselines; see [coverage](COVERAGE.md#reduce-repetitive-parity-inputs) |
@@ -34,6 +36,8 @@ enabled.
 | Operation source crosswalk | `make operation-source-crosswalk` | Generates the ignored manifest→Python→PyO3→backend crosswalk and Rust module inventory; input declarations never count as execution |
 | Implementation structure | `make implementation-structure-inventory` / `make implementation-structure-audit` | Inventories maintained paths and audits additions and moves against the shared guide |
 | Full operation and pipeline benchmark | `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark` | Benchmarks every declared operation and pipeline workload against Pillow, CPU, SIMD, and GPU; see the protocol |
+| CPU architecture benchmark matrix | `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark-cpu-architectures` | Reuses the correctness-gated inputs for each CPU architecture selector and writes a separate result and parity artifact per selector; use `MIGRATION_BENCHMARK_ARGS='--workload-id <id>'` and `MIGRATION_CPU_BENCHMARK_ARCHITECTURES` to narrow a large sweep |
+| GPU adapter benchmark matrix | `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark-gpu-adapters` | Reuses the correctness-gated inputs for each enumerated physical WGPU adapter, recording adapter identity in each separate result; `MIGRATION_GPU_ADAPTER_INDICES` selects a subset |
 | Selected Pillow-SIMD workloads | `PILLOW_ORACLE_PYTHON=<pillow-python> PILLOW_SIMD_PYTHON=<pillow-simd-python> .venv/bin/python scripts/run_pillow_simd_benchmark.py --workload-id <id>` | Runs only the named full-size parity-backed x86 workload, with separate result and parity artifacts; repeat `--workload-id` for additional cases |
 | Parallel CPU comparison | `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark-parallel-cpu` | Builds the opt-in Rayon feature and compares Parallel CPU with ordinary Pillow across the same full workload set |
 | Benchmark smoke test | `make bench MIGRATION_BENCHMARK_PROFILE=quick` | Runs the maintained smoke cohort; see the protocol |
@@ -54,6 +58,15 @@ Documentation builds require `make docs-setup` once. They do not execute
 benchmarks. `make docs-serve DOCS_PORT=8001` changes the preview port; stop with
 Ctrl-C. CPU/GPU parity and coverage require the dependencies described in
 [Contributing](../CONTRIBUTING.md).
+
+The CPU architecture sweep accepts `MIGRATION_BENCHMARK_PROFILE`,
+`MIGRATION_BENCHMARK_ARGS`, and `MIGRATION_CPU_BENCHMARK_ARCHITECTURES`. Its
+default architecture list is the same one used by CPU architecture parity.
+The GPU adapter sweep uses the same selected case/workload inputs on every
+native WGPU adapter; `MIGRATION_GPU_ADAPTER_INDICES` can restrict the inventory.
+Select a focused profile or exact IDs before starting a large sweep. The
+benchmark artifacts record physical adapter identity and remain separate per
+adapter.
 
 Each specialized target accepts its documented selectors and output paths.
 Do not run two campaigns against the same mutable Python installation or output

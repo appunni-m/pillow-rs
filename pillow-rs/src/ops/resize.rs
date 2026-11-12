@@ -27,6 +27,7 @@ pub struct ThumbnailPlan {
 
 impl ThumbnailPlan {
     /// Returns the target size selected by preflight.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
     pub const fn output_size(self) -> (u32, u32) {
         self.dimensions
     }
@@ -39,6 +40,7 @@ pub(crate) const RESAMPLE_GUIDANCE: &str = concat!(
     "Image.Resampling.MKS2013 (6) or Image.Resampling.MKS2021 (7)"
 );
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
 fn unknown_resample(value: impl std::fmt::Display) -> PilError {
     PilError::ValueError(format!(
         "Unknown resampling filter ({}). {}",
@@ -46,6 +48,7 @@ fn unknown_resample(value: impl std::fmt::Display) -> PilError {
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn parse_resample_name(name: &str) -> Result<ResampleFilter, PilError> {
     match name {
         "BICUBIC" | "bicubic" => Ok(ResampleFilter::Bicubic),
@@ -54,11 +57,14 @@ fn parse_resample_name(name: &str) -> Result<ResampleFilter, PilError> {
         "LANCZOS" | "lanczos" => Ok(ResampleFilter::Lanczos),
         "BOX" | "box" => Ok(ResampleFilter::Box),
         "HAMMING" | "hamming" => Ok(ResampleFilter::Hamming),
+        "MKS2013" | "mks2013" => Ok(ResampleFilter::Mks2013),
+        "MKS2021" | "mks2021" => Ok(ResampleFilter::Mks2021),
         other => Err(unknown_resample(other)),
     }
 }
 
 /// Check Pillow's cumulative boxed-nearest coordinates for an identity axis.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn nearest_box_axis_maps_identity(
     source_size: u32,
     output_size: u32,
@@ -90,6 +96,7 @@ fn nearest_box_axis_maps_identity(
 }
 
 /// Parses a public Pillow resampling value.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn parse_resample_input(input: Option<ResampleInput>) -> Result<ResampleFilter, PilError> {
     match input {
         None => Ok(ResampleFilter::Bicubic),
@@ -100,6 +107,8 @@ pub fn parse_resample_input(input: Option<ResampleInput>) -> Result<ResampleFilt
             3 => Ok(ResampleFilter::Bicubic),
             4 => Ok(ResampleFilter::Box),
             5 => Ok(ResampleFilter::Hamming),
+            6 => Ok(ResampleFilter::Mks2013),
+            7 => Ok(ResampleFilter::Mks2021),
             other => Err(unknown_resample(other)),
         },
         Some(ResampleInput::Name(name)) => parse_resample_name(&name),
@@ -114,6 +123,7 @@ pub fn parse_resample_input(input: Option<ResampleInput>) -> Result<ResampleFilt
 /// # Errors
 ///
 /// Returns [`PilError::ValueError`] when `s` is not a supported filter name.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn parse_resample(s: Option<&str>) -> Result<ResampleFilter, PilError> {
     parse_resample_input(s.map(|name| ResampleInput::Name(name.to_owned())))
 }
@@ -127,6 +137,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError::ValueError`] for invalid dimensions or unknown filters.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn resize(
         &self,
         size: (i64, i64),
@@ -156,6 +167,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] for invalid dimensions, filter, gap, or source bounds.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn resize_with_options(
         &self,
         size: (i64, i64),
@@ -235,6 +247,7 @@ impl Image {
         ))
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[inline(always)]
     fn identity_boxed_nearest_resize(
         &self,
@@ -262,6 +275,7 @@ impl Image {
         Ok(None)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn resize_with_filter(
         &self,
         (w, h): (u32, u32),
@@ -284,6 +298,7 @@ impl Image {
     ///
     /// Returns the same size and geometry errors as the initial phase of
     /// [`Self::thumbnail`].
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn prepare_thumbnail(&self, size: (i64, i64)) -> Result<Option<ThumbnailPlan>, PilError> {
         let source_size = self.size()?;
         if size.0 >= i64::from(source_size.0)
@@ -303,6 +318,7 @@ impl Image {
     /// Reports whether a Pillow-style thumbnail request reaches its resize path.
     ///
     /// Known-size lazy sources stay unmaterialized during this geometry check.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn thumbnail_needs_resize(&self, size: (i64, i64)) -> Result<bool, PilError> {
         Ok(self.prepare_thumbnail(size)?.is_some())
     }
@@ -317,6 +333,7 @@ impl Image {
     /// Returns [`PilError::ValueError`] for invalid computed dimensions or
     /// [`PilError::ZeroDivisionError`] when aspect-ratio calculation divides by
     /// zero. Requests that already contain the source return without resizing.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn thumbnail(
         &mut self,
         size: (i64, i64),
@@ -333,6 +350,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] for invalid geometry, filters, or reduction gaps.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn thumbnail_with_options(
         &mut self,
         size: (i64, i64),
@@ -355,6 +373,7 @@ impl Image {
     ///
     /// Returns [`PilError`] for an invalid filter, reduction gap, or source
     /// image that cannot be resized.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn thumbnail_with_plan(
         &mut self,
         plan: ThumbnailPlan,
@@ -411,6 +430,7 @@ impl Image {
         self.thumbnail_with_filter(dimensions, &mut filter, mode, reducing_gap)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn thumbnail_with_filter(
         &mut self,
         (w, h): (u32, u32),
@@ -435,6 +455,7 @@ impl Image {
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn thumbnail_dimensions(
         size: (i64, i64),
         (source_width, source_height): (u32, u32),
@@ -506,6 +527,7 @@ impl Image {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn thumbnail_dimensions_zero_width(size: (i64, i64)) -> Result<(u32, u32), PilError> {
         // Pillow's preserve_aspect_ratio computes an aspect of 0.0 for a
         // zero-width, nonempty source and evaluates x / y before choosing its
@@ -524,6 +546,7 @@ impl Image {
         Ok((1, thumbnail_bound(size.1)))
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn thumbnail_height_for_width(
         width: u32,
         (source_width, source_height): (u32, u32),
@@ -551,6 +574,7 @@ impl Image {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn validate_resize_box(
     bounds: (f64, f64, f64, f64),
     size: (u32, u32),
@@ -558,6 +582,7 @@ fn validate_resize_box(
     crate::compute::pool_cpu::ops::resize::helpers::boxed_crop::validate_bounds(bounds, size)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn positive_dimensions(size: (i64, i64), message: &str) -> Result<(u32, u32), PilError> {
     if size.0 <= 0 || size.1 <= 0 {
         return Err(PilError::ValueError(message.into()));
@@ -569,10 +594,12 @@ fn positive_dimensions(size: (i64, i64), message: &str) -> Result<(u32, u32), Pi
     Ok((width, height))
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn thumbnail_bound(value: i64) -> u32 {
     value.min(i64::from(u32::MAX)) as u32
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn round_aspect(number: f64, key: impl Fn(f64) -> f64) -> u32 {
     let floor = number.floor();
     let ceil = number.ceil();

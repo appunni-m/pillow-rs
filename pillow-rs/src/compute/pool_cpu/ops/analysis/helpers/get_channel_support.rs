@@ -66,6 +66,7 @@ pub(crate) enum OutputKind {
     F32,
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn inputs(bands: u8) -> &'static [InputContract] {
     match bands {
         1 => GET_CHANNEL_1,
@@ -76,6 +77,7 @@ fn inputs(bands: u8) -> &'static [InputContract] {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn output(kind: OutputKind) -> OutputModeRule {
     match kind {
         OutputKind::Preserve => OutputModeRule::Preserve,
@@ -85,6 +87,7 @@ fn output(kind: OutputKind) -> OutputModeRule {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn mode_route(
     mode: Mode,
     bands: u8,
@@ -154,6 +157,7 @@ pub(crate) fn mode_route(
 
 macro_rules! declare_get_channel_route {
     ($mode:ident, $bands:literal, $support:ident, $route:ident, $output:ident $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
         pub(crate) fn get_channel_mode_route() ->
             $crate::compute::registry::support::OperationModeRoute
         {

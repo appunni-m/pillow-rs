@@ -750,6 +750,12 @@ fn gpu_transform_op_is_safe(
     data: &[f64],
     filter: &ResampleFilter,
 ) -> bool {
+    if !matches!(
+        filter,
+        ResampleFilter::Nearest | ResampleFilter::Bilinear | ResampleFilter::Bicubic
+    ) {
+        return false;
+    }
     let shape_valid = match method {
         TransformMethod::Affine | TransformMethod::Perspective | TransformMethod::Quad => {
             data.len()

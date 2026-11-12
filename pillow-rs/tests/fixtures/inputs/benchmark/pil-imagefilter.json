@@ -801,8 +801,8 @@
       },
       "context": {
         "size": [
-          16,
-          16
+          3,
+          3
         ],
         "mode": "RGB",
         "chain_length": 2,

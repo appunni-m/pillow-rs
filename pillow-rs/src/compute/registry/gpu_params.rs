@@ -482,6 +482,8 @@ fn transform_params(op: &PipelineOp) -> Option<Vec<u32>> {
                 ResampleFilter::Lanczos => 3,
                 ResampleFilter::Box => 4,
                 ResampleFilter::Hamming => 5,
+                ResampleFilter::Mks2013 => 6,
+                ResampleFilter::Mks2021 => 7,
             };
             vec![*w, *h, a, b, c, d, e, f, fill_color, filter_code]
         }

@@ -32,6 +32,104 @@ cache state, and repeat policy. The reference standard policy is:
 | correctness gate | `parity_pass` for parity-backed inputs; `successful_execution` for benchmark-only workflows |
 | target subjects | Pillow oracle, `python-cpu`, `python-simd`, `python-gpu` |
 
+Recorded target-output cases for internal modes that Pillow cannot construct
+use target subjects only. The benchmark runner requires the expected-output
+parity case to pass for every selected target profile before it collects a
+sample. These workloads do not invoke Pillow and do not produce a Pillow speed
+ratio; compare their CPU architecture runs or inspect each backend's execution
+receipt independently.
+
+## Image mode and size inputs
+
+The generated mode/size matrix uses eligible literal-source image workflows
+at 38 sizes: 1×1, 1×17, 17×1, 2×2, 3×5, 5×7, 8×8, 15×17, 16×16, 17×19,
+31×33, 32×32, 33×25, 48×33, 63×65, 64×64, 65×47, 127×129, 128×128, 129×65,
+255×257, 256×192, 257×193, 320×240, 512×384, 513×385, 640×480, 1024×768,
+1025×769, 1280×720, 1600×900, 1920×1080, 1080×1920, and 1921×1080.
+It also includes 2048×1, 2049×1, 1×2048, and 1×2049 to isolate aligned and
+one-sample-tail scans along long rows and columns.
+Matrix sources can be resized down or up. Factory-only inputs without a
+downstream raster operation stay in their source-specific workflows; the
+`Image.fromarray` dtype matrix below enters this matrix through Resize. The
+sizes cover single-pixel and tiny neighborhoods, one-row/column cases, odd
+dimensions, vector-width tails, long-axis scans, VGA, HD, Full HD in both
+orientations, and an odd-width near-Full-HD workload. Inputs use
+deterministic varied, checkerboard, boundary-value, origin-impulse, and
+seeded-noise patterns across 115 shared size/pattern pairs. The four long-axis
+sizes each use varied, checkerboard, boundary-value, and seeded-noise patterns.
+Odd sizes just above the
+256×192, 512×384, and 1024×768 tiers exercise row, column, and vector tails;
+the 257×193 input also uses checkerboard and seeded-noise data, while the
+513×385 and 1025×769 inputs include seeded noise. The new 1600×900 and Full HD
+sizes use one varied pattern to bound the material-size asset and
+recorded-output footprint. Direct `Image.new` cases use varied and
+boundary fill values because that API creates a uniform image. Case IDs
+identify size and input variant, while benchmark context records mode and
+dimensions. Every matrix benchmark points to its matching parity case, and the
+default benchmark selection exposes the same workload inputs to CPU, SIMD, and
+GPU subjects. The CPU architecture benchmark target replays each selected
+workload for every configured selector. The five CoreOnly modes use every size
+point and its declared pattern set for Duplicate, Resize, Crop, Offset, and
+Invert. CoreOnly Brightness has separate zero, identity, and double factors for
+every input. These recorded outputs are indexed by size, mode, operation, and
+factor. Large Image and ImageChops parity inputs are also split by size so each
+indexed document stays below the 90 MiB input limit. Resize additionally runs
+MKS2013 and MKS2021 over every declared size/pattern input in all 20 Pillow
+modes.
+
+The matrix spans the 25 Rust `Mode` identities: 20 Pillow raster modes and five
+internal `NO_PILLOW_SUPPORT` modes. Each operation contributes only the
+mode/input combinations declared by its support contract; Rust-only modes use
+recorded expected outputs where Pillow cannot construct the input. PutData's
+typed numeric `I;16`, `I;16L`, `I;16B`, and `I;16N` paths also have direct
+mode-specific inputs at five representative sizes and the four long-axis sizes,
+with boundary, checkerboard, varied, and seeded-noise samples. Direct inputs
+cover all 20 Pillow modes, and each case has a matching benchmark workload
+measuring the public mutator and receiver output. The
+`Image.fromarray` inputs also feed Resize for eight inferred modes/dtypes at
+small and vector-tail sizes; RGB has varied and seeded-noise 1024×768 and
+1025×769 source arrays. Pillow 13 MKS2013/MKS2021 variants reuse those inputs,
+and each case has a matching benchmark workflow. The five CoreOnly PutData
+writers also have 575 recorded-output cases across the declared size/pattern
+matrix. Those inputs exercise native u16 clamping, f32 narrowing, RGB/RGBA
+tuple arities, and multiband scale/offset handling without a Pillow oracle. The
+current indexed snapshot contains 143,865 size-matrix parity cases and 168,922
+parity cases total across 3,818 indexed parity documents. It has 95,561 matrix
+benchmark workflows: 84,271 with Pillow comparisons and 11,290 target-only
+workflows. Each applicable matrix benchmark declares CPU, SIMD, and GPU target
+profiles. The encoded `Image.open` mode matrix adds 1,035 parity inputs across
+nine modes and 38 size/pattern points; it stays outside backend benchmarks
+because image-slash-star owns this codec path rather than a compute pool.
+Resize's MKS2013/MKS2021
+matrix contributes 8,574 parity cases and matching benchmark workflows across
+all 20 Pillow modes. The indexed benchmark corpus contains 96,427 workloads
+total. The same matrix inputs feed CPU, SIMD, and GPU target profiles;
+target-only cases use target profiles without a Pillow comparison.
+Requirement-specific benchmark workloads have distinct IDs, while specialized
+material workflows are emitted once per operation. Architecture selectors and
+physical GPU adapters replay these same workload inputs and are identified in
+their run receipts. The 95,561 matrix-workload total includes 95,209
+mode/size workflows and 352 32×24 pipeline-operation matrix workflows.
+The target-only matrix contains 11,290 cases across Image.frombytes, ImageChops,
+Crop, PutData, Resize, Brightness, and Sharpness. The 72 extra parity JSON
+documents and five benchmark trial documents on disk are unindexed and excluded
+from these counts; their mapping is tracked in the CPU refactor plan.
+
+The matrix crosses each eligible operation/mode/size/pattern input with its
+declared backend profiles. CPU parity and benchmark targets can replay the
+same indexed inputs under each of the nine architecture selectors (`default`,
+`neon`, `sse2`, `sse3`, `ssse3`, `avx`, `avx2`, `avx_fma`, and `avx2_fma`), and
+the run artifacts identify that selector. This keeps the stimulus identical
+while measuring each implementation path. GPU architecture means the physical
+WGPU adapter/model. `make migration-parity-test-gpu-adapters` and
+`make migration-parity-benchmark-gpu-adapters` enumerate native adapters and
+replay the same selected inputs once per adapter. The `adapters.json` sidecar
+maps each adapter index to its reported name, vendor/device IDs, device type,
+WGPU backend, and driver. Set `MIGRATION_GPU_ADAPTER_INDICES="0 2"` to select a
+subset. The normal single-profile GPU run keeps WGPU's automatic adapter
+selection. Adapter-specific benchmark receipts include the selected physical
+adapter identity; GPU results are not merged across adapters.
+
 The CPU, SIMD, and GPU subjects use the Python and core default Cargo features;
 the core default excludes Rayon `parallel`. These profiles differ by the
 runtime backend request, not by a separately compiled feature set. Rayon work

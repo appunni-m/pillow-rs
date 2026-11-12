@@ -1,6 +1,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::imageops::ImageOpsColor;
+use crate::ops::transpose::TransposeInput;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::Mode;
 
@@ -47,11 +48,14 @@ fn unknown_resample_filter(value: impl std::fmt::Display) -> PilError {
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn unsupported_rotate_resample(code: i64) -> PilError {
     let name = match code {
         1 => Some("LANCZOS"),
         4 => Some("BOX"),
         5 => Some("HAMMING"),
+        6 => Some("MKS2013"),
+        7 => Some("MKS2021"),
         _ => None,
     };
     match name {
@@ -60,6 +64,25 @@ fn unsupported_rotate_resample(code: i64) -> PilError {
         )),
         None => unknown_resample_filter(code),
     }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+pub(crate) fn validate_rotate_filter(filter: ResampleFilter) -> Result<(), PilError> {
+    let code = match filter {
+        ResampleFilter::Nearest => 0,
+        ResampleFilter::Lanczos => 1,
+        ResampleFilter::Bilinear => 2,
+        ResampleFilter::Bicubic => 3,
+        ResampleFilter::Box => 4,
+        ResampleFilter::Hamming => 5,
+        ResampleFilter::Mks2013 => 6,
+        ResampleFilter::Mks2021 => 7,
+    };
+    normalize_rotate(
+        RotateResampleInput::Code(code),
+        RotateExpandInput::Boolean(false),
+    )
+    .map(|_| ())
 }
 
 /// Host-neutral boolean input for Pillow's rotate wrapper.
@@ -174,15 +197,16 @@ impl PreparedRotate {
 
 /// Validates Pillow-compatible rotate arguments and returns the effective
 /// expansion flag.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub fn normalize_rotate(
     resample: RotateResampleInput,
     expand: RotateExpandInput,
 ) -> Result<bool, PilError> {
-    normalize_rotate_at_angle(1.0, resample, expand)
+    normalize_rotate_filter(resample, expand)
 }
 
-fn normalize_rotate_at_angle(
-    angle: f64,
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn normalize_rotate_filter(
     resample: RotateResampleInput,
     expand: RotateExpandInput,
 ) -> Result<bool, PilError> {
@@ -190,19 +214,17 @@ fn normalize_rotate_at_angle(
         RotateExpandInput::Boolean(value) => value,
         RotateExpandInput::Integer(value) => value != 0,
     };
-    if angle % 360.0 != 0.0 {
-        match resample {
-            RotateResampleInput::None => return Err(unknown_resample_filter("None")),
-            RotateResampleInput::Code(code) if !matches!(code, 0 | 2 | 3) => {
-                return Err(unsupported_rotate_resample(code));
-            }
-            RotateResampleInput::Name(value)
-                if !matches!(value.as_str(), "NEAREST" | "BILINEAR" | "BICUBIC") =>
-            {
-                return Err(unknown_resample_filter(value));
-            }
-            _ => {}
+    match resample {
+        RotateResampleInput::None => return Err(unknown_resample_filter("None")),
+        RotateResampleInput::Code(code) if !matches!(code, 0 | 2 | 3) => {
+            return Err(unsupported_rotate_resample(code));
         }
+        RotateResampleInput::Name(value)
+            if !matches!(value.as_str(), "NEAREST" | "BILINEAR" | "BICUBIC") =>
+        {
+            return Err(unknown_resample_filter(value));
+        }
+        _ => {}
     }
     Ok(expand)
 }
@@ -284,6 +306,7 @@ impl Image {
     }
 
     /// Applies the Pillow-compatible Rotate contract before queuing rotation.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn rotate_with_input(
         &self,
         angle: f64,
@@ -293,6 +316,9 @@ impl Image {
         translate: RotatePointInput,
         fillcolor: ImageOpsColor,
     ) -> Result<Image, PilError> {
+        if let Some(output) = rotate_fast_path(self, angle, &expand, &center, &translate)? {
+            return Ok(output);
+        }
         let prepared =
             self.prepare_rotate_with_input(angle, resample, expand, center, translate, fillcolor)?;
         Ok(self.enqueue_rotate(prepared))
@@ -375,6 +401,58 @@ impl Image {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn rotate_fast_path(
+    image: &Image,
+    angle: f64,
+    expand: &RotateExpandInput,
+    center: &RotatePointInput,
+    translate: &RotatePointInput,
+) -> Result<Option<Image>, PilError> {
+    // Pillow 13.0 resolves these shortcuts before it forwards a filter to
+    // Transform: https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L2303-L2375
+    // TODO(pillow-rs#3ptb): run target-only direct-entry cases across CPU
+    // Architecture selectors after the CPU source matrix is frozen.
+    if point_requests_transform(center) || point_requests_transform(translate) {
+        return Ok(None);
+    }
+
+    let angle = angle.rem_euclid(360.0);
+    let transpose = match angle {
+        0.0 => return Ok(Some(image.copy())),
+        180.0 => 3,
+        90.0 if expand_requested(expand) || is_square(image.size()?) => 2,
+        270.0 if expand_requested(expand) || is_square(image.size()?) => 4,
+        _ => return Ok(None),
+    };
+    image
+        .transpose_with_input(TransposeInput::Index(transpose))
+        .map(Some)
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn point_requests_transform(input: &RotatePointInput) -> bool {
+    match input {
+        RotatePointInput::Default => false,
+        RotatePointInput::Values(values) => !values.is_empty(),
+        RotatePointInput::Invalid { .. } => true,
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn expand_requested(input: &RotateExpandInput) -> bool {
+    match input {
+        RotateExpandInput::Boolean(value) => *value,
+        RotateExpandInput::Integer(value) => *value != 0,
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn is_square((width, height): (u32, u32)) -> bool {
+    width == height
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn normalize_rotate_request(
     angle: f64,
     resample: RotateResampleInput,
@@ -396,13 +474,10 @@ fn normalize_rotate_request(
     let normalized_angle = angle % 360.0;
     let requested_nearest = rotate_uses_nearest(&resample);
     let requested_filter = rotate_filter(&resample);
-    // Pillow skips resampling-name validation only for an exact multiple of
-    // 360 degrees. Route every other angle through the public normalizer.
-    let expand = if normalized_angle % 360.0 != 0.0 {
-        normalize_rotate(resample, expand)?
-    } else {
-        normalize_rotate_at_angle(normalized_angle, resample, expand)?
-    };
+    // No-point identity/discrete fast paths are handled before this function.
+    // Any request reaching preparation invokes Transform and validates its
+    // narrower resampling-filter contract.
+    let expand = normalize_rotate(resample, expand)?;
     Ok((
         normalized_angle,
         expand,

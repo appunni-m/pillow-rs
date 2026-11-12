@@ -127,17 +127,17 @@ fn wrap_prepared_palette(
     raster: DynamicImage,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
-    metadata: crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata,
+    metadata: crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata,
 ) -> Result<Image, PilError> {
     let (source_format, info, exif) = match metadata {
-        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSource
-        | crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded => {
+        crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSource
+        | crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSourceLoaded => {
             (image.source_format(), image.image_info(), image.exif_metadata())
         }
-        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::ExifOnly => {
+        crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::ExifOnly => {
             (None, None, image.exif_metadata())
         }
-        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::Drop => {
+        crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::Drop => {
             (None, None, None)
         }
     };
@@ -145,7 +145,7 @@ fn wrap_prepared_palette(
         Mode::ImagePalette8 => {
             if matches!(
                 metadata,
-                crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded
+                crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSourceLoaded
             ) {
                 return Ok(Image::Loaded(LoadedData {
                     image: Arc::new(raster),

@@ -1,6 +1,6 @@
 //! RGBX mode strategy: transform RGB and preserve X in LAB's auxiliary lane.
 
-use crate::compute::pool_cpu::ops::color::convert::helpers::physical_lanes;
+use crate::compute::pool_cpu::ops::color::helpers::convert::physical_lanes;
 use crate::compute::pool_cpu::ops::color::helpers::lab_kernel;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, ImageBuffer, Mode, RgbaImage};

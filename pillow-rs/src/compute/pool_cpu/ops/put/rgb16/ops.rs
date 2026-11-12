@@ -26,5 +26,5 @@ declare_alpha_data_strategies! {
     ImageRgb16, ImageRgba16, 0, 4;
 }
 super::super::helpers::scalar_write_support::declare_scalar_write_support!(
-    ImageRgb16, false, false, false,
+    ImageRgb16, true, false, false,
 );

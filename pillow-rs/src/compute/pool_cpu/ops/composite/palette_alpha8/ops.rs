@@ -7,6 +7,8 @@ use std::sync::Arc;
 
 pub(crate) const MODE: Mode = Mode::ImagePaletteAlpha8;
 
+super::super::helpers::declare_composite_module_support!(ImagePaletteAlpha8, luma_mask(2, 1));
+
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
