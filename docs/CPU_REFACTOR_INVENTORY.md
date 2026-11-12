@@ -10284,3 +10284,25 @@ an unimplemented route remain pending; wrong errors, rejections, and completed
 outputs remain mismatches. VERIFY markers were updated on these runner
 functions. This is source-review evidence only; no contract tests or CPU parity
 run occurred.
+
+2026-11-13 F32 rank comparator source follow-up: compared the active exact-F
+Default rank owner and content guard with the preserved CPU implementation, and
+compared the vector window selector with the preserved SIMD order-statistic
+kernel. NaN samples and mixed positive/negative zero make vector min/max or
+compare-exchange ordering unsafe, so their non-Default requests use the
+same-mode Default selector. Infinities with a single zero sign retain the IEEE
+total order needed by the vector path. Added twelve public `Image.filter`
+workflows covering MaxFilter, MinFilter, MedianFilter, and RankFilter against
+three raw F32 patterns: distinct NaN payloads, mixed signed zero, and
+vector-compatible infinities. Each case observes output bytes and is replayed
+by the CPU architecture selector matrix. The pending `pillow-rs#brg0` TODO now
+tracks the broader parity investigation. Removed the local TODO after recording
+the scoped receipt. Regenerated the checked-in input index, which now contains
+all twelve workflows and 176,667 total parity cases. `make fmt clippy docs-lint` passed, and
+the CPU architecture parity matrix passed all twelve cases on each of the nine
+declared selectors (108 executions, zero failures or infrastructure errors).
+On this arm64 host, Neon executed the vector path; x86 selectors correctly
+fell back to Default with `unavailable_hardware`, so native x86 execution is
+still unverified. VERIFY tags now record these scoped receipts. No benchmark
+or coverage ran; the broader CPU parity campaign and source-to-requirement
+mapping remain open.

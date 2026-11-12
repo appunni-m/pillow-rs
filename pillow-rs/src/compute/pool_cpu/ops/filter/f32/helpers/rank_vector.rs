@@ -7,6 +7,7 @@ const LANES: usize = 8;
 const MAX_AREA: usize = 81;
 pub(in crate::compute::pool_cpu::ops::filter::f32) const MAX_SIZE: u32 = 9;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
 #[inline]
 fn sort_vectors(values: &mut [f32x8]) {
     for pass in 0..values.len() {
@@ -21,6 +22,7 @@ fn sort_vectors(values: &mut [f32x8]) {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
 #[inline]
 fn sample_window_vector(
     raw: &[u8],
@@ -50,6 +52,7 @@ fn sample_window_vector(
     f32x8::from(values)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
 #[inline]
 fn store_vector(output_row: &mut [u8], x_start: usize, active: usize, values: f32x8) {
     for (lane, value) in values.to_array().into_iter().enumerate().take(active) {
@@ -58,6 +61,7 @@ fn store_vector(output_row: &mut [u8], x_start: usize, active: usize, values: f3
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
 fn filter_row(
     raw: &[u8],
     output_row: &mut [u8],
@@ -113,6 +117,7 @@ fn filter_row(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter::f32) fn execute(
     raw: &[u8],
     width: u32,

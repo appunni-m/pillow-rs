@@ -565,6 +565,7 @@ pub(crate) fn filter_native_byte_rank_window_guard(
     checked_native_bytes_guard(input, channels)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
 pub(crate) fn filter_f32_rank_window_guard(
     input: StrategyInputs,
     max_size: u32,

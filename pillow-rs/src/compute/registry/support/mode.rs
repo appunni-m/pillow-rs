@@ -339,7 +339,7 @@ impl ModeSupport {
     }
 
     /// Assesses known metadata without treating unknown guards as a fallback.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
     pub fn assess(
         self,
         ctx: &ExecutionContext,
@@ -392,7 +392,7 @@ impl ModeSupport {
     }
 
     /// Selects only from this declaration using captured capabilities and source facts.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pass@f32-rank-comparator-cpu-architecture-matrix-20261113; benchmark=pending
     pub(crate) fn select(
         self,
         ctx: &ExecutionContext,

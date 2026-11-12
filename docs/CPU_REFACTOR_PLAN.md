@@ -7193,3 +7193,22 @@ wrong-error, or wrong-rejection differences remain failures. Updated VERIFY
 dates on the classifier and added a source marker to the comparison-record
 function. This confirms runner source behavior only; its focused contracts and
 the full CPU parity campaign remain pending. No validation command ran.
+
+2026-11-13 F32 rank comparator source follow-up: source-reviewed the exact-mode
+support, content classification, request guard, Default partition selector,
+and vector order-statistic path against the preserved CPU/SIMD implementations.
+Added twelve input-only public workflows for MaxFilter, MinFilter, MedianFilter,
+and RankFilter over NaN payloads, mixed signed zero, and vector-compatible
+infinities. Non-Default requests should fall back to Default for NaN and mixed
+signed-zero inputs; infinity-only ordering stays eligible for the declared
+vector path. The source-derived expectations were confirmed by the following
+runtime receipts. Cleared the family TODO and added VERIFY markers to the
+reviewed F32 selection functions. Regenerated the indexed parity inputs; the corpus now
+contains 176,667 cases, including all twelve workflows. The combined
+`make fmt clippy docs-lint` checks passed. All twelve cases passed on each of
+the nine declared CPU
+architecture selectors (108 executions, zero failures or infrastructure
+errors). On this arm64 host, Neon executed the vector path; x86 selectors fell
+back to Default with `unavailable_hardware`, so native x86 execution is still
+unverified. Function VERIFY tags identify these scoped receipts. No benchmark
+or coverage ran. Finish the broader source-to-requirement mapping before Stage 6.
