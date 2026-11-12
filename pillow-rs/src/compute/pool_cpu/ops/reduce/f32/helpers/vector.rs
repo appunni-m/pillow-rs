@@ -6,7 +6,7 @@ use wide::f32x8;
 
 const LANES: usize = 8;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbaImage,
     x_factor: u32,
@@ -41,7 +41,7 @@ pub(crate) fn execute(
     super::super::helpers::storage::finish_output(output_width, output_height, output)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_row(
     source: &[f32],
     source_top: usize,
@@ -65,7 +65,7 @@ fn reduce_row(
     quartets.map(average_quartet)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn average_quartet(quartet: f32) -> f32 {
     let mut sum = 0.0f64;

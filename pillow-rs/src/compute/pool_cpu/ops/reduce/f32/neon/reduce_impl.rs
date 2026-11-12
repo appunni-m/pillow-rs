@@ -6,7 +6,7 @@ use crate::raster::{DynamicImage, RgbaImage};
 const OUTPUT_LANES: usize = 8;
 const NEON_LANES: usize = 4;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-reduce-neon-pillow; benchmark=pending
 pub(crate) fn execute(
     input: &RgbaImage,
     x_factor: u32,
@@ -22,10 +22,10 @@ pub(crate) fn execute(
     {
         return reduce_even_two_by_two(input, output_width, output_height);
     }
-    super::super::kernels::vector::execute(input, x_factor, y_factor)
+    super::super::helpers::vector::execute(input, x_factor, y_factor)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@f32-reduce-neon-pillow; benchmark=pending
 fn reduce_even_two_by_two(
     input: &RgbaImage,
     output_width: u32,
@@ -49,7 +49,7 @@ fn reduce_even_two_by_two(
     super::super::helpers::storage::finish_output(output_width, output_height, output)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@f32-reduce-neon-pillow; benchmark=pending
 #[allow(unsafe_code)]
 fn reduce_row(
     source: &[f32],

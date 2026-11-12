@@ -5416,9 +5416,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   `-- reduce_impl.rs
 |   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- storage.rs
-|   |   |   |       |   |   |-- kernels/
-|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   |-- storage.rs
 |   |   |   |       |   |   |   `-- vector.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- neon/

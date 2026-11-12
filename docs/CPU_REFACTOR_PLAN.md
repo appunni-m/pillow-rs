@@ -132,11 +132,15 @@ both Pillow 13 MKS filters. The encoded `Image.open` matrix has
 1,035 cases across nine modes and 115 input points; it exercises the codec
 boundary, not a compute backend.
 
-The current generated index contains 176,721 parity cases across 4,730 indexed
-parity documents and 103,945 benchmark workloads. It includes the regular-
-polygon mode requirements and 66 F32 rank workflows for NaN payloads, mixed
-signed zero, and vector-compatible infinities over 3×3, 5×5, 9×9, and 11×11
-windows. All 66 passed for each of the nine CPU architecture selectors (594
+The pre-GetData snapshot contained 176,721 parity cases across 4,730 indexed
+parity documents and 103,945 benchmark workloads. The latest GetData matrix
+adds 1,150 target-only cases and 1,150 indexed benchmark workloads. The current
+manifest indexes 5,110 parity documents and 105,095 benchmark workloads; the
+176,721-case total is historical and is not the current case count. The index
+includes the regular-polygon mode requirements and 66 F32 rank workflows for
+NaN payloads, mixed signed zero, and vector-compatible infinities over 3×3,
+5×5, 9×9, and 11×11 windows. All 66 passed for each of the nine CPU
+architecture selectors (594
 executions). On this arm64 host, Neon executed the vector path for 16 eligible
 cases and selected Default for the NaN, mixed-zero, and size-11 cases; x86
 selectors selected Default with `unavailable_hardware`, so native x86
@@ -156,19 +160,50 @@ and f32 results retain native sample types; GPU workloads remain excluded
 where no typed admission exists.
 
 The matrix generator and its manifest/index, asset, profile, and workload-ID
-checks completed in the latest committed checkpoint. `make quality` passed at
-that checkpoint and included all 4,730 indexed parity documents. The current
-regular-polygon specification and input generation completed successfully,
-and focused parity/benchmark results are summarized above. Push-time checks on
-2026-11-12 passed: `make quality`, `make docs-lint`, `make fmt clippy`, and the
+checks completed in the latest committed checkpoint. `make quality` passed on
+the 2026-11-12 checkpoint and included its 4,730 indexed parity documents.
+The current regular-polygon specification and input generation completed
+successfully, and focused parity/benchmark results are summarized above.
+Push-time checks on 2026-11-12 passed: `make quality`, `make docs-lint`,
+`make fmt clippy`, and the
 implementation-structure/repository-map audit. Clippy reported existing
 diagnostics but exited successfully. Full CPU parity and benchmark campaigns
 remain gated on Stage 5 source closure. No coverage was collected.
 
+The 2026-11-13 GetData checkpoint passed its focused 20-case CPU-default parity
+run, `make fmt`, `make clippy`, `make docs-lint`, `make checkstyle`, and the
+large-file and diff checks. Its attempted `make quality` run did not finish:
+the target started full parity-input regeneration across the 13 GB local input
+tree and was interrupted. Do not count that invocation as a quality pass. The
+full frozen CPU parity and CPU benchmark campaigns remain gated on Stage 5
+source closure; no coverage was collected.
+
+2026-11-13 push checkpoint for the F32 Reduce helper placement: the structure
+audit and full structure inventory passed with zero unclassified paths;
+`repo-map-update` and `repo-map-check` passed; `make fmt`, `make docs-lint`,
+and `SCCACHE_NO_DAEMON=1 make clippy` passed. Clippy reported existing warning
+diagnostics. `make build-parity-cpu-architecture` passed. Pillow parity case
+`PIL.Image.Image.reduce.mode.f.matrix-size-1280x720` passed 1/1 under CPU NEON;
+its execution receipt records `selected_architecture=neon`. This case exercises
+the guarded NEON 2x2 implementation. The shared portable vector helper was not
+executed on this ARM host; x86 and Wasm runtime paths remain unverified. No
+benchmark or coverage ran. Stage 5 and the complete CPU parity campaign remain
+open.
+
+2026-11-13 CPU path correction: moved the portable F32 Reduce vector helper
+from `reduce/f32/kernels/vector.rs` to `reduce/f32/helpers/vector.rs` and
+updated the AVX, SSE2, NEON, and Wasm SIMD128 leaves to call that mode-local
+helper. The arithmetic, guard, and fallback are unchanged; function VERIFY
+markers record the source review, with parity and benchmark still pending. The
+empty Chops LAB kernel directory was removed. The four remaining `kernels`
+groups are beneath shared helper scopes, outside the exact family/mode/arch
+path. No build, formatting, lint, test, parity, benchmark, or coverage ran;
+Stage 5 remains open.
+
 The generated public-contract page is stale: it records manifest SHA-256
 `3e36271fae8f7f25405a2ff961ea338992b7f3b80679c4b8460ed2c8ef56bc4a`, while the
 current manifest hashes to
-`33c286c55abec55ecd00a4c6df9c1989362b9ead3904927f50bb8829f34833cf`. Parity,
+`aea5f40d617175d88bc18ab2515bac729e44b6c097024fc9b41724bb18ae6445`. Parity,
 benchmark, coverage, and target-output evidence pages also contain older
 status data. TODO(pillow-rs#3ptb): after Stage 5 closes, regenerate the public
 contract and refresh evidence views from the current frozen input index; keep
@@ -1114,7 +1149,7 @@ matrix; each operation's support view must come from its own declarations.
 
 | Coverage area | Existing evidence | Required for CPU acceptance |
 | --- | --- | --- |
-| Input corpus | Current generated Pillow 13.0 index: 176,721 total cases across 4,730 parity documents and 103,945 benchmark workloads; manifest SHA-256 `33c286c55abec55ecd00a4c6df9c1989362b9ead3904927f50bb8829f34833cf`. The latest full CPU execution remains the older 25,021-case selection at `147add214` (`migration-parity-1f1b8167163a424bbafdf84b592cba20`): 24,916 passed, 105 failed, zero infrastructure errors. The 66 F32 workflows have a separate focused 9-selector receipt; that does not execute the current full denominator. | Fix remaining failures, complete the support-derived operation × Mode × Architecture corpus, then execute each CPU selector against Pillow 13.0. |
+| Input corpus | Current generated index: 5,110 parity documents and 105,095 indexed benchmark workloads; manifest SHA-256 `aea5f40d617175d88bc18ab2515bac729e44b6c097024fc9b41724bb18ae6445`. The pre-GetData snapshot had 176,721 cases across 4,730 parity documents and 103,945 workloads. GetData added 1,150 target-only cases; the total case count has not been recomputed. The latest full CPU execution remains the older 25,021-case selection at `147add214` (`migration-parity-1f1b8167163a424bbafdf84b592cba20`): 24,916 passed, 105 failed, zero infrastructure errors. The 66 F32 workflows have a separate focused 9-selector receipt; that does not execute the current full denominator. | Fix remaining failures, complete the support-derived operation × Mode × Architecture corpus, then execute each CPU selector against Pillow 13.0. |
 | Recorded differences | The 105 failures in the latest full report include ImageDraw rounded_rectangle (15), ImageOps colorize (14), Image.frombytes (14), GetBBox and Histogram (8 each), Convert (7), and the remaining endpoints listed in the inventory. Pad, Resize, and Thumbnail have no failures in this run. Focused typed-u16 GetBBox (8/8) and masked-LA Histogram (9/9 including a guard) now pass; the full-corpus count has not been refreshed after either fix. Report: `build/migration-parity/pillow13-cpu-post-pad-resize-thumbnail/parity-result.json`. | Fix each remaining observed public output/error/status mismatch; preserve the case set and comparisons. Keep image-slash-star encoding work outside pillow-rs. |
 | Mode identity stimulus | Current inputs include all 20 Pillow spellings and five internal high-depth Mode identities. All 231 recorded target outputs passed on the default CPU profile. This does not prove every operation/mode route or any non-default architecture. | Finish the support-derived denominator for every operation and mode, then collect output and exact identity evidence on every CPU Architecture selector. |
 | Mode strategies | The current corpus includes selected accepted and rejected mode routes, but does not contain one case for every `OperationId` × `Mode` outcome. The full operation/mode support cross-product remains unverified. | For every operation, exercise each exact mode’s declared output or rejection, including metadata, fault order, native CoreOnly outputs, and relevant target-mode transitions. |
@@ -1125,7 +1160,7 @@ There is no defensible operation × Mode × Architecture coverage percentage yet
 The support declarations enumerate the required combinations, but the parity
 corpus is not generated from that denominator. The 2026-11-10 matrix run proves
 outcomes only for its frozen 25,002 case IDs; it does not close missing support
-rows or represent the current 176,721-case input index. Keep its report and
+rows or represent the current 5,110-document input index. Keep its report and
 receipts as historical full-run evidence, not as proof of complete strategy
 coverage. Historical focused counts must not be added to the current
 denominator.

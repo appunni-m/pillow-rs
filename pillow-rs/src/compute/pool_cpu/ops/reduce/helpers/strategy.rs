@@ -73,7 +73,7 @@ pub(crate) const fn native_byte_architectures(
 }
 
 /// Declares F32 reducers for architectures with the eight-lane float kernel.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@f32-reduce-neon-pillow; benchmark=pending
 pub(crate) const fn native_f32_architectures(
     operation: OperationId,
     mode: crate::raster::Mode,

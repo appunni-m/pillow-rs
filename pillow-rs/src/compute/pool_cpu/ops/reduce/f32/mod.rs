@@ -2,7 +2,6 @@
 pub(crate) mod avx;
 pub(crate) mod default;
 pub(crate) mod helpers;
-pub(crate) mod kernels;
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 pub(crate) mod neon;
 pub(crate) mod ops;

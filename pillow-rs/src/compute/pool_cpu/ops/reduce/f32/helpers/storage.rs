@@ -6,7 +6,7 @@ use crate::ops::pil_resize::f32_samples_from_le_bytes;
 use crate::raster::{DynamicImage, RgbaImage};
 use std::borrow::Cow;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@f32-reduce-neon-pillow; benchmark=pending
 pub(crate) fn source_samples(image: &RgbaImage) -> Result<Cow<'_, [f32]>, PilError> {
     let source_bytes = CheckedDims::new(image.width(), image.height(), 4)?.total_bytes();
     if image.as_raw().len() != source_bytes {
@@ -23,12 +23,12 @@ pub(crate) fn source_samples(image: &RgbaImage) -> Result<Cow<'_, [f32]>, PilErr
     Ok(samples)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@f32-reduce-neon-pillow; benchmark=pending
 pub(crate) fn output_capacity(width: u32, height: u32) -> Result<usize, PilError> {
     Ok(CheckedDims::new(width, height, 4)?.total_bytes())
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@f32-reduce-neon-pillow; benchmark=pending
 pub(crate) fn append_samples(output: &mut Vec<u8>, samples: &[f32]) {
     #[cfg(target_endian = "little")]
     output.extend_from_slice(bytemuck::cast_slice(samples));
@@ -38,7 +38,7 @@ pub(crate) fn append_samples(output: &mut Vec<u8>, samples: &[f32]) {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@f32-reduce-neon-pillow; benchmark=pending
 pub(crate) fn finish_output(
     width: u32,
     height: u32,

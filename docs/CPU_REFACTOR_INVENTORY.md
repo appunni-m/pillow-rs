@@ -10320,9 +10320,47 @@ selected Default for incompatible values or the size-11 window. On arm64, x86
 selectors correctly fell back with `unavailable_hardware`, so native x86
 execution is still unverified. The focused size/window TODO is complete; the
 broader `pillow-rs#brg0` investigation and native x86 run remain open. The
-current generated input index contains 176,721 parity cases. Receipts and
-selector run IDs are recorded in the F32 rank entry in
+generated input index at this F32 checkpoint contained 176,721 parity cases.
+The later GetData matrix added 1,150 target-only cases; the total case count
+has not been recomputed. Receipts and selector run IDs are recorded in the F32
+rank entry in
 [`CPU_REFACTOR_PLAN.md`](CPU_REFACTOR_PLAN.md). `make migration-parity-inputs-check`
 and `make fmt clippy docs-lint` passed; Clippy reported the repository's
 existing warning diagnostics. No benchmark or coverage ran; the broader CPU
 parity campaign and source-to-requirement mapping remain open.
+
+2026-11-13 maintained CPU structure source audit: 1,856 active `mod.rs` files
+contain only module declarations, exports, documentation, or target-specific
+declaration attributes; none contain function or type bodies. No active
+`pool_cpu` source imports the preserved `legacy` tree or contains Rayon
+scheduling code. Parallel references in active CPU source are comments marking
+the later `pool_parallel` stage. No mode-string parser, host-architecture probe,
+or `ExecutionContext::new` call appears in active `pool_cpu`. Its only
+`DynamicImage` color conversion is the declared P-mode Equalize expansion to
+RGB, which matches that operation's fixed RGB output. No active Rust unit-test
+annotations were found in the tracked `pillow-rs`, `pillow-rs-py`, or
+`pillow-rs-js` source trees outside legacy; the `imageops/tests` and
+`put/tests` directories under CPU ops have no files. This source scan does not
+prove target-specific module reachability
+or dead-code absence. `pool_cpu/ops/mod.rs` keeps those compiler-backed
+questions pending for Stage 6. No build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage command ran for this audit.
+
+The same placement audit found the F32 Reduce vector helper nested at
+`f32/kernels/vector.rs`, one level outside the approved mode/architecture path.
+Moved it unchanged to `f32/helpers/vector.rs`; the AVX, SSE2, NEON, and Wasm
+SIMD128 wrappers now call the mode-local helper, and their VERIFY source dates
+were updated. Removed an empty `chops/lab8/default/kernels` directory. The
+remaining `kernels` directories live beneath shared helper scopes and therefore
+do not add a folder to the exact mode/architecture path. The changed caller
+implementations remain parity- and benchmark-pending. This is source review
+only; no validation command ran.
+
+Push verification for the F32 Reduce placement on 2026-11-13: the required
+structure audit/inventory, repository-map update/check, formatting, docs lint,
+Clippy, and architecture-hook build passed. The Clippy retry used
+`SCCACHE_NO_DAEMON=1` after the daemon startup failed once. Pillow CPU parity
+passed for `PIL.Image.Image.reduce.mode.f.matrix-size-1280x720`; the receipt
+selects NEON and the guarded NEON 2x2 kernel. The moved shared vector helper
+still has parity pending because this host did not enter its helper path. No
+benchmark ran; AVX/SSE2 and Wasm execution remain pending. Stage 5 is open.
