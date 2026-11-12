@@ -33,6 +33,7 @@ impl PyImage {
             .to_owned())
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=pending
     #[getter]
     fn bands(&self) -> PyResult<usize> {
         self.inner

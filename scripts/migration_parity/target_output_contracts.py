@@ -853,6 +853,155 @@ def core_only_getbbox_matrix_cases(
     return expanded
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=n/a
+def _core_only_getdata_bytes(mode: str, source: bytes) -> bytes:
+    """Return GetData's byte projection in logical sample-band order."""
+
+    if mode in {"ImageLumaA16", "ImageRgb16", "ImageRgba16"}:
+        samples = np.frombuffer(source, dtype=np.dtype("=u2"))
+        values = ((samples.astype(np.uint32) + 128) // 257).astype(np.uint8)
+    elif mode in {"ImageRgb32F", "ImageRgba32F"}:
+        samples = np.frombuffer(source, dtype=np.dtype("=f4"))
+        clamped = np.where(
+            samples < np.float32(1.0),
+            np.fmax(samples, np.float32(0.0)),
+            np.float32(1.0),
+        )
+        scaled = np.multiply(clamped, np.float32(255.0), dtype=np.float32)
+        rounded = np.floor(
+            np.add(scaled, np.float32(0.5), dtype=np.float32)
+        )
+        values = rounded.astype(np.uint8)
+    else:
+        raise ValueError(f"GetData has no CoreOnly projection for {mode}")
+
+    return values.tobytes()
+
+
+# VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=n/a
+def _core_only_getdata_expectation(
+    mode: str,
+    source: bytes,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    """Encode typed GetData pixels compactly for target-only comparisons."""
+
+    projected = _core_only_getdata_bytes(mode, source)
+    return {
+        "kind": "packed_pixels",
+        "mode": mode,
+        "size": [width, height],
+        "bands": CORE_ONLY_CHANNELS[mode],
+        "data": base64.b64encode(projected).decode("ascii"),
+    }
+
+
+# VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=n/a
+def core_only_getdata_cases() -> list[dict[str, Any]]:
+    """Record GetData and flattened-data outputs for all CoreOnly carriers."""
+
+    cases: list[dict[str, Any]] = []
+    for operation in ("getdata", "get_flattened_data"):
+        for mode, mode_id, raw in CORE_ONLY_RAW_MODES:
+            encoded = base64.b64encode(raw).decode("ascii")
+            cases.append(
+                {
+                    "case_id": (
+                        f"PIL.Image.Image.{operation}.expected-output.{mode_id}"
+                    ),
+                    "surface": "PIL.Image.Image",
+                    "operation": operation,
+                    "verification": "expected-output",
+                    "covers": [
+                        f"PIL.Image.Image.{operation}.mode.{mode_id}"
+                    ],
+                    "assets": [
+                        {
+                            "id": "raw-mode-data",
+                            "kind": "inline",
+                            "encoding": "base64",
+                            "data": encoded,
+                            "sha256": hashlib.sha256(raw).hexdigest(),
+                            "media_type": "application/octet-stream",
+                        }
+                    ],
+                    "steps": [
+                        {
+                            "step_id": "image",
+                            "surface": "PIL.Image",
+                            "operation": "frombytes",
+                            "receiver": None,
+                            "arguments": {
+                                "mode": {"kind": "literal", "value": mode},
+                                "size": {"kind": "literal", "value": [1, 1]},
+                                "data": {
+                                    "kind": "asset",
+                                    "asset_id": "raw-mode-data",
+                                },
+                            },
+                        },
+                        {
+                            "step_id": "call",
+                            "surface": "PIL.Image.Image",
+                            "operation": operation,
+                            "receiver": {"kind": "binding", "step_id": "image"},
+                            "arguments": {},
+                        },
+                    ],
+                    "observations": ["call"],
+                    "target_expectation": {
+                        "observations": [
+                            {
+                                "step_id": "call",
+                                "value": _core_only_getdata_expectation(
+                                    mode, raw, 1, 1
+                                ),
+                            }
+                        ]
+                    },
+                }
+            )
+    return cases
+
+
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+def core_only_getdata_matrix_cases(
+    assets_root: Path,
+    operation: str,
+    selected_mode_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Expand CoreOnly GetData outputs across the size/pattern matrix."""
+
+    base_cases = {
+        case["covers"][0].rsplit(".", 1)[-1]: case
+        for case in core_only_getdata_cases()
+        if case["operation"] == operation
+    }
+    expanded: list[dict[str, Any]] = []
+    for mode, mode_id, _raw in CORE_ONLY_RAW_MODES:
+        if selected_mode_id is not None and mode_id != selected_mode_id:
+            continue
+        base_case = base_cases[mode_id]
+        sample_kind = _core_only_sample_kind(mode)
+        for variant, width, height in _core_only_matrix_points():
+            source = _core_only_matrix_input(mode, sample_kind, width, height, variant)
+            case = _target_only_matrix_case(
+                base_case,
+                source,
+                width,
+                height,
+                variant,
+                assets_root,
+                case_suffix=mode_id,
+            )
+            case["target_expectation"]["observations"][0]["value"] = (
+                _core_only_getdata_expectation(mode, source, width, height)
+            )
+            expanded.append(case)
+    return expanded
+
+
 def _core_only_sample_kind(mode: str) -> str:
     if mode in {"ImageLumaA16", "ImageRgb16", "ImageRgba16"}:
         return "u16n"

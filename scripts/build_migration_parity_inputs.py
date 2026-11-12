@@ -113,6 +113,8 @@ try:
         core_only_frombytes_matrix_cases,
         core_only_getbbox_cases,
         core_only_getbbox_matrix_cases,
+        core_only_getdata_cases,
+        core_only_getdata_matrix_cases,
         core_only_l1_rawmode_cases,
         get_child_images_target_output_cases,
         rotate_direct_target_output_cases,
@@ -154,6 +156,8 @@ except ModuleNotFoundError:
         core_only_frombytes_matrix_cases,
         core_only_getbbox_cases,
         core_only_getbbox_matrix_cases,
+        core_only_getdata_cases,
+        core_only_getdata_matrix_cases,
         core_only_l1_rawmode_cases,
         get_child_images_target_output_cases,
         rotate_direct_target_output_cases,
@@ -59979,7 +59983,7 @@ def _benchmark_success_workflow(workload_id: str) -> dict[str, Any] | None:
     return None
 
 
-# VERIFY: source=pending; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
 def build_inputs(
     manifest: dict[str, Any],
     output_root: Path,
@@ -60191,6 +60195,11 @@ def build_inputs(
             nuanced_cases.extend(getbbox_core_only_matrix)
             counts["getbbox_core_only_mode_size_matrix_cases"] = len(
                 getbbox_core_only_matrix
+            )
+            getdata_core_only_cases = core_only_getdata_cases()
+            nuanced_cases.extend(getdata_core_only_cases)
+            counts["getdata_core_only_target_output_cases"] = len(
+                getdata_core_only_cases
             )
             # Native PutData writes use recorded outputs for the five
             # CoreOnly sample layouts, with the same sizes and input patterns
@@ -62894,6 +62903,7 @@ def build_inputs(
     return counts
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 def build_target_output_matrix_inputs(
     manifest: dict[str, Any],
     output_root: Path,
@@ -62956,6 +62966,22 @@ def build_target_output_matrix_inputs(
             ("",),
             lambda mode_id, _factor: core_only_getbbox_matrix_cases(
                 assets_root, mode_id
+            ),
+        ),
+        (
+            "PIL.Image.Image",
+            "getdata",
+            ("",),
+            lambda mode_id, _factor: core_only_getdata_matrix_cases(
+                assets_root, "getdata", mode_id
+            ),
+        ),
+        (
+            "PIL.Image.Image",
+            "get_flattened_data",
+            ("",),
+            lambda mode_id, _factor: core_only_getdata_matrix_cases(
+                assets_root, "get_flattened_data", mode_id
             ),
         ),
         (
@@ -63032,34 +63058,6 @@ def build_target_output_matrix_inputs(
             benchmark_document = json.loads(
                 benchmark_path.read_text(encoding="utf-8")
             )
-            old_matrix_prefix = f"{storage_slug}.target-only-mode-size."
-            old_matrix_ids = {
-                workload["workload_id"]
-                for workload in benchmark_document["workloads"]
-                if workload.get("workload_id", "").startswith(old_matrix_prefix)
-            }
-            benchmark_document["workloads"] = [
-                workload
-                for workload in benchmark_document["workloads"]
-                if workload.get("workload_id") not in old_matrix_ids
-            ]
-            benchmark_document["suites"] = [
-                {
-                    **suite,
-                    "members": [
-                        member
-                        for member in suite.get("members", [])
-                        if member.get("workload_id") not in old_matrix_ids
-                    ],
-                }
-                for suite in benchmark_document["suites"]
-                if suite.get("suite_id")
-                != f"{storage_slug}.target-only-mode-size-matrix-suite"
-                and any(
-                    member.get("workload_id") not in old_matrix_ids
-                    for member in suite.get("members", [])
-                )
-            ]
             benchmark_documents[benchmark_relative] = benchmark_document
 
         mode_requirements = [
@@ -63144,7 +63142,12 @@ def build_target_output_matrix_inputs(
                     if (
                         operation.get("source", {}).get("result", {}).get("shape")
                         != "image"
-                        and operation_id not in {"putdata", "getbbox"}
+                        and operation_id not in {
+                            "putdata",
+                            "getbbox",
+                            "getdata",
+                            "get_flattened_data",
+                        }
                     ):
                         raise ValueError(
                             f"{case['case_id']}: target matrix result cannot be benchmarked"
@@ -63174,7 +63177,11 @@ def build_target_output_matrix_inputs(
                     if operation_id == "putdata":
                         boundary = "observed_steps"
                         step_ids = ["call", "observe-receiver"]
-                    elif operation_id == "getbbox":
+                    elif operation_id in {
+                        "getbbox",
+                        "getdata",
+                        "get_flattened_data",
+                    }:
                         boundary = "observed_steps"
                         step_ids = ["call"]
                     elif surface_id == "PIL.ImageEnhance.Sharpness":
@@ -63280,32 +63287,56 @@ def build_target_output_matrix_inputs(
             "inputs/benchmark/"
         ).removesuffix(".json")
         added_workloads = matrix_workloads[benchmark_relative]
-        workload_ids = {
-            workload["workload_id"] for workload in benchmark_document["workloads"]
-        }
         added_workload_ids = {
             workload["workload_id"] for workload in added_workloads
         }
-        if workload_ids & added_workload_ids:
+        if len(added_workload_ids) != len(added_workloads):
             raise ValueError(
                 f"{storage_slug}: duplicate target-only matrix benchmark workload"
             )
-        benchmark_document["workloads"].extend(added_workloads)
+        workload_positions = {
+            workload["workload_id"]: index
+            for index, workload in enumerate(benchmark_document["workloads"])
+        }
+        for workload in added_workloads:
+            # Existing workload IDs carry reviewed measurement boundaries;
+            # this generator adds newly indexed contracts without rewriting them.
+            if workload["workload_id"] in workload_positions:
+                continue
+            workload_positions[workload["workload_id"]] = len(
+                benchmark_document["workloads"]
+            )
+            benchmark_document["workloads"].append(workload)
         members = matrix_members[benchmark_relative]
         if members:
-            benchmark_document["suites"].append(
-                {
-                    "suite_id": (
-                        f"{storage_slug}.target-only-mode-size-matrix-suite"
-                    ),
+            suite_id = f"{storage_slug}.target-only-mode-size-matrix-suite"
+            matrix_suite = next(
+                (
+                    suite
+                    for suite in benchmark_document["suites"]
+                    if suite.get("suite_id") == suite_id
+                ),
+                None,
+            )
+            if matrix_suite is None:
+                matrix_suite = {
+                    "suite_id": suite_id,
                     "description": (
                         "Target-only image workloads verified against recorded "
                         "outputs. They are timed for CPU, SIMD, and GPU profiles "
                         "without invoking Pillow or creating a Pillow speed ratio; "
                         "CPU architecture selectors replay the same inputs."
                     ),
-                    "members": members,
+                    "members": [],
                 }
+                benchmark_document["suites"].append(matrix_suite)
+            member_ids = {
+                member["workload_id"] for member in matrix_suite.get("members", [])
+            }
+            matrix_suite["members"].extend(
+                member
+                for member in members
+                if member["workload_id"] not in member_ids
             )
         write_json(output_root / benchmark_relative, benchmark_document)
         counts["target_output_matrix_benchmark_workloads"] += len(

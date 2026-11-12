@@ -156,6 +156,8 @@ TARGET_OUTPUT_MATRIX_OPERATIONS = {
     "PIL.Image.Image": {
         "crop": ("",),
         "getbbox": ("",),
+        "getdata": ("",),
+        "get_flattened_data": ("",),
         "reduce": tuple(REDUCE_MATRIX_FACTORS),
         "resize": ("",),
         "putdata": ("",),
@@ -180,6 +182,10 @@ TARGET_OUTPUT_MATRIX_MODES = {
     "PIL.Image.Image": {
         "crop": tuple(mode_id for _mode, mode_id, *_ in CROP_CORE_ONLY_MODES),
         "getbbox": tuple(mode_id for _mode, mode_id, *_ in CORE_ONLY_RAW_MODES),
+        "getdata": tuple(mode_id for _mode, mode_id, *_ in CORE_ONLY_RAW_MODES),
+        "get_flattened_data": tuple(
+            mode_id for _mode, mode_id, *_ in CORE_ONLY_RAW_MODES
+        ),
         "putdata": tuple(mode_id for _mode, mode_id, *_ in CORE_ONLY_RAW_MODES),
         "reduce": tuple(
             mode_id for _mode, mode_id, _sample_kind in REDUCE_CORE_ONLY_MODES
@@ -1001,6 +1007,7 @@ def looks_like_error(edge: str) -> bool:
     )
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
 def operation_requirements(
     endpoint: Endpoint,
     parameters: list[dict[str, Any]],
@@ -1116,6 +1123,16 @@ def operation_requirements(
             *MODE_SIZE_PILLOW_MODES,
             *(mode for mode, _mode_id, _raw in CORE_ONLY_RAW_MODES),
         ]
+    elif endpoint.source_path in {
+        "PIL.Image.Image.getdata",
+        "PIL.Image.Image.get_flattened_data",
+    }:
+        # GetData exposes one byte per logical band for internal carriers;
+        # keep their exact typed identities as target-only output contracts.
+        supported_modes = [
+            *supported_modes,
+            *(mode for mode, _mode_id, _raw in CORE_ONLY_RAW_MODES),
+        ]
     if (
         endpoint.surface == "PIL.ImageEnhance"
         and endpoint.operation in {"Brightness", "Color", "Contrast", "Sharpness"}
@@ -1228,6 +1245,18 @@ def operation_requirements(
                 ),
                 mode_slug(str(mode)),
             )
+        elif endpoint.source_path in {
+            "PIL.Image.Image.getdata",
+            "PIL.Image.Image.get_flattened_data",
+        }:
+            mode_id = next(
+                (
+                    mode_id
+                    for mode_name, mode_id, _raw in CORE_ONLY_RAW_MODES
+                    if mode_name == mode
+                ),
+                mode_slug(str(mode)),
+            )
         else:
             mode_id = (
                 mode_slug(str(mode))
@@ -1250,6 +1279,13 @@ def operation_requirements(
             endpoint.source_path == "PIL.Image.Image.getbbox"
             and any(mode_name == mode for mode_name, _mode_id, _raw in CORE_ONLY_RAW_MODES)
         )
+        getdata_core_only_output = (
+            endpoint.source_path in {
+                "PIL.Image.Image.getdata",
+                "PIL.Image.Image.get_flattened_data",
+            }
+            and any(mode_name == mode for mode_name, _mode_id, _raw in CORE_ONLY_RAW_MODES)
+        )
         reduce_core_only_output = (
             endpoint.source_path == "PIL.Image.Image.reduce"
             and any(
@@ -1266,6 +1302,7 @@ def operation_requirements(
             if crop_core_only_output
             or putdata_core_only_output
             or getbbox_core_only_output
+            or getdata_core_only_output
             or reduce_core_only_output
             else ["parity", "benchmark", "coverage"]
             if getbbox_pillow_mode
@@ -1277,6 +1314,8 @@ def operation_requirements(
             description = f"Native typed PutData output for {mode_id} (NO_PILLOW_SUPPORT)."
         elif getbbox_core_only_output:
             description = f"Native typed GetBBox output for {mode_id} (NO_PILLOW_SUPPORT)."
+        elif getdata_core_only_output:
+            description = f"Native GetData output for {mode_id} (NO_PILLOW_SUPPORT)."
         elif reduce_core_only_output:
             description = f"Native typed Reduce output for {mode_id} (NO_PILLOW_SUPPORT)."
         elif getbbox_pillow_mode:

@@ -1,5 +1,22 @@
 # CPU refactor source and evidence inventory
 
+2026-11-13 GetData wrapper review: `Image.getdata()` and
+`get_flattened_data()` now use the Rust-backed image `bands` property,
+derived from its exact `raster::Mode`, for tuple shaping. The Pillow string
+band helper remains only for the explicit raw-byte `ImagingCore` adapter.
+Target-only GetData and flattened-data inputs are now defined for all five
+CoreOnly modes across the shared size/pattern matrix, with corresponding
+benchmark workload generation. Their recorded outputs pack the projected
+byte samples with explicit mode, size, and band metadata so large matrix cases
+stay within the input JSON limit while still comparing every returned value.
+The matrix generator completed and added 1,150 tracked GetData benchmark rows
+(five modes × two methods × 115 size/pattern points). A focused CPU-default
+run passed 20 varied/boundary cases at 1×1 across all five modes and both
+methods (`migration-parity-dee7a1fa052b47138d0e3c735ad78c01`, manifest SHA-256
+`aea5f40d617175d88bc18ab2515bac729e44b6c097024fc9b41724bb18ae6445`). Full
+CPU architecture receipts and performance measurements remain TODO in
+`pillow-rs#3ptb`; source-to-operation closure remains open.
+
 2026-11-12 Quantize supplied-palette source follow-up: the PyO3 boundary now
 accepts this binding's typed P carrier directly and adapts a foreign
 Pillow-compatible ImagingCore carrier by copying only its attached palette

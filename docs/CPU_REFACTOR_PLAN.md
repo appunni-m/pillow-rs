@@ -180,6 +180,27 @@ The Rust source inventory still has 113 OperationId values × 25 exact modes
 and composed routes remains open. CPU source closure remains open, so parity
 and benchmark campaigns remain gated until source review is complete.
 
+2026-11-13 GetData wrapper source correction: Python `Image.getdata()` and
+`get_flattened_data()` now use the Rust-backed image's `bands` property,
+which reads `raster::Mode::band_count()`, instead of inferring tuple width
+from the Pillow mode string. `_image_data_bands()` remains only at the
+explicit `ImagingCore(bytes, mode, size)` boundary, where raw bytes have no
+Rust image identity. Source review confirmed GetData materializes before
+reading `bands`, and the internal high-depth GetData strategies return one
+byte per logical band for their CoreOnly projection. The target-output input
+generator now defines both GetData and flattened-data cases across the existing
+CoreOnly size/pattern matrix, plus benchmark rows for those exact mode routes.
+Expected pixel bytes use a compact packed contract with mode, size, and band
+metadata; the runner compares every projected byte against the public
+GetData result. The target-only matrix generator completed and added 1,150
+tracked benchmark rows (five modes × two methods × 115 size/pattern points).
+The focused CPU-default run passed 20 varied/boundary cases at 1×1 across all
+five modes and both methods (`migration-parity-dee7a1fa052b47138d0e3c735ad78c01`,
+manifest SHA-256
+`aea5f40d617175d88bc18ab2515bac729e44b6c097024fc9b41724bb18ae6445`). Full CPU
+architecture receipts and performance measurements remain pending Stage 5
+closure; full source-to-operation closure remains open.
+
 Baseline: `3f9dfd4036caa061eabcf2255c9f34a745df9c7e`; continue from the current
 `develop` HEAD and preserve all later WIP commits. Earlier CPU family and
 direct-call source reviews covered operation/Mode/Architecture contracts,

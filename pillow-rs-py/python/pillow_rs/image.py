@@ -15,7 +15,9 @@ from ._core import Image as RustImage
 from .enums import Palette, Resampling, Transform, Transpose
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
 def _image_data_bands(mode):
+    """Return the tuple width for an explicit Pillow-mode raw-byte adapter."""
     if mode in ("1", "L", "P", "I", "F", "I;16", "I;16L", "I;16B", "I;16N"):
         return 1
     if mode in ("LA", "La", "PA"):
@@ -156,15 +158,17 @@ class _ImageDataSequence:
 
     __slots__ = ("_image", "_bands", "_size", "_band")
 
-    def __init__(self, image, mode, size, band=None):
+    # VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=pending
+    def __init__(self, image, size, band=None):
         self._image = image
-        self._bands = _image_data_bands(mode)
+        self._bands = image.bands
         self._size = size
         self._band = band
 
     def __len__(self):
         return self._size[0] * self._size[1]
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=pending
     def _materialized_values(self):
         values = self._image.getdata_formatted(self._band)
         if isinstance(values, bytes) and self._bands > 1:
@@ -202,9 +206,14 @@ class ImagingCore:
 
     __slots__ = ("_values", "mode", "size")
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
     def __init__(self, values, mode=None, size=None):
-        if isinstance(values, bytes) and mode is not None and _image_data_bands(mode) > 1:
-            values = _CompactImageDataSequence(values, _image_data_bands(mode))
+        if isinstance(values, bytes) and mode is not None:
+            # Raw host bytes carry no DynamicImage identity; use the supplied
+            # Pillow mode only at this external ImagingCore boundary.
+            bands = _image_data_bands(mode)
+            if bands > 1:
+                values = _CompactImageDataSequence(values, bands)
         self._values = values
         self.mode = mode
         self.size = size
@@ -1105,8 +1114,12 @@ class Image:
         histogram_mode = self.mode in ("1", "L", "P")
         return self._rust_image.getcolors_formatted(maxcolors, histogram_mode)
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=pending
     def getdata(self, band=None):
         """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
+        # TODO(pillow-rs#3ptb): Run the full CPU architecture receipt matrix
+        # for these modes after Stage 5 source closure. The focused 20-case
+        # CPU-default output matrix has passed.
         # Pillow loads before validating an explicit band index.
         self.load()
         if band is not None:
@@ -1117,7 +1130,7 @@ class Image:
             return ImagingCore(values, result_mode, self.size)
         mode, size = self.mode, self.size
         self._has_getdata_views = True
-        values = _ImageDataSequence(self._rust_image, mode, size)
+        values = _ImageDataSequence(self._rust_image, size)
         return ImagingCore(values, mode, size)
 
     def putdata(self, data, scale=1.0, offset=0.0):
@@ -1187,6 +1200,7 @@ class Image:
         """Return list of child images (multi-frame)."""
         return list(map(Image, self._rust_image.get_child_images()))
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=pending
     def get_flattened_data(self, band=None):
         """Return flattened pixel data matching PIL format."""
         if band is not None:
@@ -1199,7 +1213,7 @@ class Image:
         values = self._rust_image.getdata_formatted(None)
         if not isinstance(values, bytes):
             return tuple(values)
-        bands = _image_data_bands(self.mode)
+        bands = self._rust_image.bands
         if bands == 1:
             return tuple(values)
         return tuple(_iter_unpack(f"{bands}B", values))

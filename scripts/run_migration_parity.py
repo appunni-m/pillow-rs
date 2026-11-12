@@ -4916,7 +4916,111 @@ def first_unimplemented_target_step(
     return None
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=n/a
+def compare_packed_pixel_output(
+    expected: dict[str, Any],
+    actual: Any,
+    operation: str,
+    path: str,
+) -> list[dict[str, Any]]:
+    """Compare compact target-only pixel bytes with public GetData values."""
+
+    try:
+        packed = base64.b64decode(expected["data"], validate=True)
+    except (KeyError, TypeError, ValueError, binascii.Error):
+        return [_diff(path, "packed_pixels_invalid", expected, actual, "expected packed pixel bytes are invalid")]
+
+    mode = expected.get("mode")
+    size = expected.get("size")
+    bands = expected.get("bands")
+    if (
+        not isinstance(mode, str)
+        or not isinstance(size, list)
+        or len(size) != 2
+        or not all(isinstance(dimension, int) and dimension >= 0 for dimension in size)
+        or not isinstance(bands, int)
+        or bands <= 0
+        or len(packed) != size[0] * size[1] * bands
+    ):
+        return [_diff(path, "packed_pixels_invalid", expected, actual, "expected pixel shape and byte length are inconsistent")]
+
+    if operation == "getdata":
+        if not isinstance(actual, dict) or actual.get("kind") != "mask":
+            return [_diff(path, "packed_pixels_shape_mismatch", "mask", actual, "GetData did not return a mask record")]
+        metadata_diffs = []
+        for field, expected_value in (("mode", mode), ("size", size)):
+            if actual.get(field) != expected_value:
+                metadata_diffs.append(
+                    _diff(
+                        f"{path}.{field}",
+                        "packed_pixels_metadata_mismatch",
+                        expected_value,
+                        actual.get(field),
+                        "GetData metadata differs from the expected mode and size",
+                    )
+                )
+        if metadata_diffs:
+            return metadata_diffs
+        if actual.get("bytes"):
+            try:
+                observed = base64.b64decode(actual["bytes"], validate=True)
+            except (TypeError, ValueError, binascii.Error):
+                observed = None
+        else:
+            observed = _packed_u8_values(actual.get("pixels"), bands)
+    elif operation == "get_flattened_data":
+        observed = _packed_u8_values(actual, bands)
+    else:
+        return [_diff(path, "packed_pixels_operation_mismatch", "getdata or get_flattened_data", operation, "packed pixel output is only valid for GetData")]
+
+    if observed is None:
+        return [_diff(path, "packed_pixels_shape_mismatch", len(packed), None, "public pixel values do not have the declared byte shape")]
+    if observed == packed:
+        return []
+    first_mismatch = next(
+        (
+            index
+            for index, (left, right) in enumerate(zip(packed, observed))
+            if left != right
+        ),
+        min(len(packed), len(observed)),
+    )
+    expected_summary = {
+        "length": len(packed),
+        "sha256": hashlib.sha256(packed).hexdigest(),
+        "first_mismatch": first_mismatch,
+        "value": packed[first_mismatch] if first_mismatch < len(packed) else None,
+    }
+    actual_summary = {
+        "length": len(observed),
+        "sha256": hashlib.sha256(observed).hexdigest(),
+        "first_mismatch": first_mismatch,
+        "value": observed[first_mismatch] if first_mismatch < len(observed) else None,
+    }
+    return [_diff(path, "packed_pixels_mismatch", expected_summary, actual_summary, "GetData pixel bytes differ from the recorded typed projection")]
+
+
+# VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=n/a
+def _packed_u8_values(values: Any, bands: int) -> bytes | None:
+    """Pack public byte-valued pixels after validating each logical band."""
+
+    if isinstance(values, (bytes, bytearray)):
+        return bytes(values)
+    if not isinstance(values, (list, tuple)):
+        return None
+    packed = bytearray()
+    for pixel in values:
+        components = pixel if isinstance(pixel, (list, tuple)) else (pixel,)
+        if len(components) != bands:
+            return None
+        for component in components:
+            if not isinstance(component, int) or not 0 <= component <= 255:
+                return None
+            packed.append(component)
+    return bytes(packed)
+
+
+# VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=n/a
 def compare_case(
     case: dict[str, Any],
     source: dict[str, Any],
@@ -5061,14 +5165,24 @@ def compare_case(
                     )
                 continue
             step = steps[step_id]
-            diffs.extend(
-                compare_value(
-                    expected,
-                    actual.get("value"),
-                    comparison_policy(operation_index, step, case),
-                    f"{step_id}.value",
+            if isinstance(expected, dict) and expected.get("kind") == "packed_pixels":
+                diffs.extend(
+                    compare_packed_pixel_output(
+                        expected,
+                        actual.get("value"),
+                        step["operation"],
+                        f"{step_id}.value",
+                    )
                 )
-            )
+            else:
+                diffs.extend(
+                    compare_value(
+                        expected,
+                        actual.get("value"),
+                        comparison_policy(operation_index, step, case),
+                        f"{step_id}.value",
+                    )
+                )
         return ("pass" if not diffs else "fail"), diffs
     if first_unimplemented_target_step(case, source, target, operation_index):
         # Source success plus an identical observed prefix proves that the

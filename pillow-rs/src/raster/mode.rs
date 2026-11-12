@@ -242,7 +242,7 @@ impl Mode {
     }
 
     /// Returns the number of sample bands represented by this identity.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=pending
     #[must_use]
     pub const fn band_count(self) -> usize {
         match self {
