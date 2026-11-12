@@ -535,6 +535,7 @@ fn quantize_rgb_premultiplied_source(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn build_paletted_image(
     width: u32,
     height: u32,

@@ -152,6 +152,7 @@ impl PipelineOp {
     ///
     /// Parameterized forms that own different support contracts resolve to
     /// their exact operation identity before callers inspect mode support.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub fn operation_id(&self) -> OperationId {
         use OperationId as Id;
@@ -247,6 +248,7 @@ impl PipelineOp {
     }
 
     /// Returns the exhaustive support descriptor used by preparation.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub fn support(&self) -> &'static OperationSupport {
         self.operation_id().support()

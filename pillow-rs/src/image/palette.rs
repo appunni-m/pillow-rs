@@ -603,6 +603,7 @@ impl Image {
 
     /// Replaces palette metadata on an indexed image without decoding or
     /// materializing its pixel pipeline.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn replace_indexed_palette(
         &mut self,
         data: &[u8],

@@ -583,6 +583,7 @@ impl Image {
 
     /// Keeps the producer's exact raster identity aligned with declared
     /// pipeline metadata without reinterpreting its samples.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn validate_declared_pipeline_mode(
         result: Arc<DynamicImage>,
         declared_mode: Option<Mode>,
@@ -598,6 +599,7 @@ impl Image {
         Ok(result)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn evaluate_palette_cpu_operation(
         source: &Image,
         img: &DynamicImage,
@@ -651,6 +653,7 @@ impl Image {
         Ok(Some(Arc::new(result)))
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn evaluate_palette_pipeline(
         source: &Image,
         img: &DynamicImage,

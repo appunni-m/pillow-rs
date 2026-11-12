@@ -741,6 +741,7 @@ impl Image {
     ///
     /// Currently returns `Ok(Image)`; LUT validation is handled during pipeline
     /// execution.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn color3dlut(
         &self,
         input: PreparedColor3DLut,

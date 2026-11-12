@@ -7020,12 +7020,17 @@ verification ran.
 operation identities; `PipelineOp::support()` delegates directly to those
 family-owned declarations. The grouped forms are Convert/ConvertMatrix,
 Equalize/EqualizeMasked, three Pad forms, two Expand forms, and ten Draw forms.
-`Image::push_op` creates the declared output through
-`pipeline_output_metadata -> pipeline_output_mode`; a mode query replans only
-when that cached identity is absent, resolving the upstream image first. Lazy
-materialization verifies that the producer's exact `DynamicImage` variant
-matches a declared identity. PA expansion is always RGBA, while P expansion
-requires an attached palette and resolves to RGB/RGBA from its alpha table.
+The normal `Image::push_op` route creates its output through
+`pipeline_output_metadata -> pipeline_output_mode`; prefix reuse is limited to
+same-mode preserving chains. `push_mode_changing_op` is used by Color3DLut and
+seeds the cache from its typed target. The other direct cache-seeding
+constructors are the prepared Convert-to-P wrapper, Quantize-to-P output, and
+palette-only metadata layer; each stores an exact P/current `Mode` with no
+queued operation. A mode query plans when the cache has no known output
+identity, resolving the upstream image first. Lazy materialization verifies
+that the producer's exact `DynamicImage` variant matches a declared identity.
+PA expansion is always RGBA, while P expansion requires an attached palette
+and resolves to RGB/RGBA from its alpha table.
 The declared target rules are Convert/ConvertMatrix, Merge, and Color3DLut;
 PutData is the only `ByPayload` pipeline operation; and no raster-producing
 PipelineOp maps to `NoRasterResult`. The only remaining materialization

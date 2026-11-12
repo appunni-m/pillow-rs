@@ -543,6 +543,7 @@ fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMe
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn new_pipeline_node(
     source: Arc<Image>,
     ops: PipelineOps,
@@ -566,6 +567,7 @@ fn new_pipeline_node(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn append_pipeline_op(
     source: &Arc<Image>,
     ops: &PipelineOps,
@@ -770,6 +772,7 @@ impl Image {
     /// source of a new pipeline. Mode metadata and palettes are carried forward
     /// when the operation can preserve them; mode-changing operations declare
     /// a replacement output identity when the contract can resolve it.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
         let generated_icc_profile = match &op {
             PipelineOp::ConvertLab { icc_profile } => Some(Arc::clone(icc_profile)),
@@ -881,6 +884,7 @@ impl Image {
     /// A separate node is required for mode-changing operations: flattening
     /// into an existing pipeline would pass the final mode tag to operations
     /// that execute before the mode transition.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn push_mode_changing_op(
         source: &Image,
         op: PipelineOp,
