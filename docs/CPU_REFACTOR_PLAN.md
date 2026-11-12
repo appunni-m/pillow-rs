@@ -131,68 +131,38 @@ both Pillow 13 MKS filters. The encoded `Image.open` matrix has
 1,035 cases across nine modes and 115 input points; it exercises the codec
 boundary, not a compute backend.
 
-The active index contains 171,666 parity cases across 4,046 documents, of which
-146,591 carry `.matrix-size-*`. There are 29 coverage documents and 30
-benchmark documents with 78 suites; all 100,610 workload IDs are unique. The
-matrix has 99,556 mode/size workloads, including 11,977 recorded-output
-target-only workflows. Their declared target profiles are operation-specific:
-95,416 CPU-only, 805 CPU+SIMD, and 3,335 CPU+SIMD+GPU. A static join found no
-profile mismatches and no eligible matrix case without an operation benchmark
-contract. GetBBox covers all 25 `Mode` identities across 115 input points
-(2,875 workflows) and declares the CPU profile only.
+The latest generated index contains 175,041 parity cases across 4,730 indexed
+parity documents and 103,945 benchmark workloads. This supersedes the previous
+171,666-case/100,610-workload snapshot documented in older inventory entries.
+The shared matrix still uses 38 unique sizes and 115 deterministic
+size/pattern pairs; CPU selection replays each eligible case under the nine
+configured Architecture selectors. The added typed Reduce contract contributes
+2,070 target-only outputs across nine operation-specific `NO_PILLOW_SUPPORT`
+modes, 115 size/pattern points, and two factor shapes (`2×2`, `2×3`). Its u16
+and f32 results retain native sample types; GPU workloads remain excluded
+where no typed admission exists.
 
-All 1,255 manifest requirements with `dimension: mode` have indexed contract
-cases; 1,159 have size/pattern matrix inputs. All 99 benchmark-laned mode
-requirements are represented. The 96 requirements without a `.matrix-size-*`
-case are deliberately outside raster-size benchmarking: 75 CoreOnly ImageChops
-rejection contracts, two `get_child_images` list contracts, two fixed-size
-gradient factories, two ImageColor `getcolor` results, and 15 ImagePalette data
-operations.
+The matrix generator and its manifest/index, asset, profile, and workload-ID
+checks completed in the latest committed checkpoint. `make quality` passed at
+that checkpoint and included all 4,730 indexed parity documents. This is
+specification/static evidence only; it does not prove CPU behavior, and full
+CPU parity and benchmarks remain gated on Stage 5 source closure. No coverage
+was collected.
 
-The CPU architecture and GPU adapter runners reuse these backend-neutral
-inputs. CPU selection uses the nine configured architecture selectors; GPU
-selection uses the configured physical WGPU adapter indices. A distinct
-`PIL.Image.frombytes.code_path.rawmode-l1` target-output contract now covers 112
-recorded outputs across 38 indexed shards. This raw `L;1` decoder extension is
-not `Mode::One`. The previously unique 1024×768 filled-F GetBBox workflow is
-now indexed as parity and CPU benchmark input. Thirty-four unindexed historical
-CoreOnly shards contain 315 case IDs already represented in the active index
-(195 identical case objects and 120 with older assets or outputs). Five
-unindexed benchmark documents contain 12 workflows: 11 IDs are already active
-and the unique F workflow is now indexed. Preserve these historical documents
-while their differing expected outputs/assets are reviewed; do not delete them
-automatically. TODO(pillow-rs#3ptb): review the 34 duplicate CoreOnly shards
-and 11 duplicate benchmark workflows for useful historical differences before
-retiring those unindexed documents.
-
-The input generator completed successfully, including manifest/index and
-referenced-asset checks; the profile and workload-ID audits also passed. No
-Rust build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
-campaign ran. The public-contract page was regenerated from the current
-manifest and indexed inputs. Parity, benchmark, coverage, and target-output
-evidence pages still use an older status report and are stale. TODO(pillow-rs#3ptb):
-refresh those evidence pages after current-input evidence is available; do not
-present the stale report as current.
+The generated public-contract page is stale: it records manifest SHA-256
+`3e36271fae8f7f25405a2ff961ea338992b7f3b80679c4b8460ed2c8ef56bc4a`, while the
+current manifest hashes to
+`ecee1f2bf82a45475195753fb1e9fa5186b6928b4e1ab3ef2623ad53503e433b`. Parity,
+benchmark, coverage, and target-output evidence pages also contain older
+status data. TODO(pillow-rs#3ptb): after Stage 5 closes, regenerate the public
+contract and refresh evidence views from the current frozen input index; keep
+the older unindexed CoreOnly shards and duplicate benchmark documents
+preserved until their differing assets and outputs are reviewed.
 
 The Rust source inventory still has 113 OperationId values × 25 exact modes
 (2,825 source-mode outcomes); mapping that denominator to public requirements
 and composed routes remains open. CPU source closure remains open, so parity
 and benchmark campaigns remain gated until source review is complete.
-
-Pending generator delta (source defined, not yet regenerated): the shared
-matrix generator now specifies 2,070 target-only Reduce outcomes: nine
-operation-specific `NO_PILLOW_SUPPORT` modes × 115 size/pattern inputs × two
-factor shapes (`2×2`, `2×3`). The four Pillow-named I;16 modes are included
-because Pillow 13.0 rejects Reduce for I16 storage; the other five are internal
-high-depth modes. The expected outputs retain native u16/f32 samples, with
-u16 half-up averaging and f64-accumulated f32 averaging. These inputs will be
-reused for CPU and supported SIMD benchmark profiles; GPU is excluded for
-these modes because the declared typed GPU admissions do not support Reduce.
-The active index counts above still describe the last generated corpus. The
-new case/workload IDs, asset shards, manifest joins, and profile counts remain
-pending until source review closes and the generator is run. TODO(pillow-rs#3ptb):
-finish source review, regenerate and validate the matrix once, inspect the
-resulting frozen case/workload IDs, then begin CPU verification.
 
 Baseline: `3f9dfd4036caa061eabcf2255c9f34a745df9c7e`; continue from the current
 `develop` HEAD and preserve all later WIP commits. Earlier CPU family and
@@ -7044,3 +7014,16 @@ selected kernel, including direct-destination and mesh paths. Wrapper input
 order, empty-mesh palette retention, sampler parity, fallback receipts, and
 complete mode/architecture parity remain open. Source review only; no
 verification ran.
+
+2026-11-12 lazy Mode resolver follow-up: read `Image::mode_identity`,
+`known_pipeline_op_mode_with_expansion`, pipeline output planning, and
+`Image::palette_expansion_mode` together. PA expansion is already statically
+RGBA without consulting palette metadata; P with an attached palette resolves
+to RGB or RGBA from its alpha table. Identified fallback cases include P
+palette-dependent transitions without an attached palette and rejected raw
+pipeline descriptors without a declared rejected output; full
+`Planned(None)` call-edge enumeration remains open. Kept materialization
+fallback because output identity or execution-time error may depend on facts
+unavailable from the lazy graph. Updated the inventory to distinguish reviewed
+behavior from the incomplete enumeration. No source code or runtime
+validation changed.

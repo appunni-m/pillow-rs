@@ -7,6 +7,15 @@ lazy output modes now come from operation support contracts without
 wrapper cache overrides; mode metadata remains source-reviewed and
 runtime-unvalidated.
 
+Latest generated matrix checkpoint (`5e64d7a59`, 2026-11-12): 175,041 parity
+cases across 4,730 indexed parity documents, 103,945 benchmark workloads, and
+2,070 native typed Reduce target-output cases. The generator/input contract
+checks and `make quality` passed at that checkpoint. These supersede older
+matrix counts in the dated notes below; they are not CPU runtime evidence.
+CPU parity and benchmark campaigns remain gated on Stage 5 source closure.
+The generated public-contract page has an old manifest hash and must be
+refreshed after that gate.
+
 Focused Pillow 13 Pad verification (2026-11-10): current source passes all 292
 parity cases that call `ImageOps.pad`, including zero-axis dimensions, P-mode
 fill palettes, and named-color inputs. The CPU/default run has zero
@@ -3471,7 +3480,7 @@ an implementation.
 | `image/codec_adapter.rs`, `image/metadata.rs` | Header projection now maps every current codec `ImageMode` to the exact raster `Mode`, including internal LA16/RGB16/RGBA16 and float identities. After decoding, `DynamicImage` remains authoritative. Review format-specific header metadata and verify at the CPU gate. |
 | `ops/filter.rs` | Filter validation obtains exact `Mode` through `Image::mode_identity()`. The direct ModeFilter preflight uses its operation support descriptor; UnsharpMask, palette, PA GaussianBlur, and F32 compatibility gates remain at this host-facing boundary. Reconcile their outcomes with prepared contracts while preserving lazy error timing, then finish Pillow filter-name/mode/error ordering and the private ImagingCore compatibility review. |
 | `compute/pool_cpu/ops/filter/ops.rs`, `compute/pool_cpu/ops/filter/luma8/ops.rs` | Native-byte and typed Filter3x3/Filter5x5 Default and architecture routes have archive crosswalks recorded. Finish remaining exact-mode blur/rank kernel source reviews and review remaining mode/kernel routing. Public Python named-filter, generic Kernel, custom callback/split/merge, and direct/eager Rust caller routes now trace into their exact-mode CPU support and injected architecture context. General Gaussian/BoxBlur paths, RGBA radius-seven GaussianBlur, and L rank-window paths have source comparisons recorded. No separate SIMD registrations remain active. F32 rank vector strategy is represented in `f32/ops.rs`; third-party private ImagingCore compatibility remains TODO. |
-| `image/metadata.rs::Image::mode_identity` | The ImageOps point and module point/eval wrappers now delegate to the shared resolver. `known_pipeline_op_mode` resolves palette-unsafe P/PA transitions when an admitted support declaration provides a fixed, explicit target, or payload output identity; it keeps rejected routes and `Preserve` after palette expansion on the existing fallback. Resolve PA's expanded RGBA output and P's palette-alpha-dependent RGB/RGBA output, preserving missing-palette admission and error order, then remove materialization fallback after every valid lazy pipeline carries an exact cached `Mode` through admission and transitions. |
+| `image/metadata.rs::Image::mode_identity` | The ImageOps point and module point/eval wrappers now delegate to the shared resolver. `known_pipeline_op_mode` resolves palette-unsafe transitions when an admitted support declaration provides a fixed, explicit target, or payload output identity. `Image::palette_expansion_mode` already resolves PA to RGBA without consulting palette metadata and P with an attached palette to RGB/RGBA according to palette alpha. Identified materialization fallback cases include a palette-dependent P transition without an attached palette and rejected raw pipeline descriptors without a declared rejected output; this is not yet a complete enumeration. Next source step: enumerate every `Planned(None)` call edge across all image-producing `PipelineOp` variants, explain its output rule and error timing, and prove whether the mode can be declared without materializing. Retain fallback for any unresolved or rejected route. Do not remove materialization fallback merely to avoid decoding. |
 | `ops/param_filters.rs` | Keep parameter-filter wrappers as argument normalization and result/metadata orchestration; direct ModeFilter must enter its typed support contract and injected CPU context in `pool_cpu/ops/filter`. |
 | `pipeline/support.rs` | Replace remaining mode string metadata and compatibility parsing with typed `Mode` at host boundaries. |
 | `pipeline.rs` | Merge now stores exact typed `Mode`; remove the GPU source-mode snapshot after GPU parameter encoding uses the prepared mode transition. |
@@ -9932,18 +9941,18 @@ integer averaging; f32 accumulates in f64, divides by the actual block area,
 then stores f32. The 38-size/115-pattern-point matrix uses factors 2×2 and
 2×3, defining 2,070 target-only cases. Target-only benchmarks omit GPU for
 these modes because the GPU I;16 geometry admission excludes Reduce and no
-internal high-depth multichannel transport is declared. The active manifest
-and input index have not yet been regenerated; case IDs, shard totals, profile
-joins, CPU execution, and benchmark results remain pending. This was source
-review only; no generator, validation, build, lint, test, parity, benchmark, or
-coverage command ran. The source review covered `_core_only_matrix_pixel`,
+internal high-depth multichannel transport is declared. The generated matrix
+was included in checkpoint `5e64d7a59`: its case/asset/index checks passed,
+and `make quality` passed with all 4,730 indexed parity documents. CPU target
+execution and benchmark evidence remain pending after Stage 5 source closure.
+The source review covered `_core_only_matrix_pixel`,
 `_core_only_matrix_cycle`, `_core_only_matrix_input`, shared matrix points,
 content-addressed asset writing, native result recording,
 `_reduce_native_samples`, target-output case construction, typed u16/f32 Reduce
 helpers, the four I;16 plus five internal typed mode owners, and their exact
 Default result constructors. Per-function `VERIFY` markers record source review
-on these functions; parity remains pending until the inputs are generated and
-executed, and target-case helpers have no benchmark evidence.
+on these functions; expected-output parity and benchmark evidence remain
+pending until the affected CPU lanes are executed after Stage 5 source closure.
 
 2026-11-12 F32 Reduce path source review: reviewed its support declaration,
 architecture strategy construction and execution, scalar byte-carrier path,
