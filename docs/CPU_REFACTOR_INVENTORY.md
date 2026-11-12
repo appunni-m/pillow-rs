@@ -28,6 +28,9 @@ against Pillow, not a previous target benchmark; no prior target baseline was
 available. The result validator was updated to accept and validate optional
 strategy-fallback telemetry. Focused evidence does not close Stage 5 or
 establish full CPU parity/performance; the broader CPU matrix remains open.
+The architecture selector and injected-context policy received a source review
+on 2026-11-12; per-function markers record that review, while exact/lower
+architecture and fallback receipts remain pending.
 Push-time checks (2026-11-12) passed: `make quality`, `make docs-lint`,
 `make fmt clippy`, and the implementation-structure/repository-map audit.
 Clippy reported existing diagnostics but exited successfully; file/function

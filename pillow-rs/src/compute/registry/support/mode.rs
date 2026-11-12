@@ -321,6 +321,7 @@ impl ModeSupport {
     }
 
     /// Resolves this declaration once, before preparing a serial algorithm.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn select_serial(
         self,
         ctx: &ExecutionContext,
@@ -338,6 +339,7 @@ impl ModeSupport {
     }
 
     /// Assesses known metadata without treating unknown guards as a fallback.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn assess(
         self,
         ctx: &ExecutionContext,
@@ -390,6 +392,7 @@ impl ModeSupport {
     }
 
     /// Selects only from this declaration using captured capabilities and source facts.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn select(
         self,
         ctx: &ExecutionContext,

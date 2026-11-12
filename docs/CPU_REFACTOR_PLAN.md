@@ -7056,3 +7056,17 @@ planner is a separate caller of `known_pipeline_op_mode`; its current
 string-to-Mode conversion and missing palette-expansion input stay assigned to
 the later GPU stage. Updated the source TODO and inventory. No runtime
 validation ran.
+
+2026-11-12 CPU architecture selector source review: inspected
+`Architecture` naming/folder policy, process-wide capability capture and host
+preference, `ExecutionContext` routing and lower-architecture eligibility,
+`ImplementationSupport` construction, and `ModeSupport` assessment/selection.
+The selector prioritizes the requested architecture, then considers only
+declared architectures permitted by the injected context; it checks build
+availability, captured hardware requirements, and request guards before
+selecting a strategy. A selected strategy retains its guard, while fallback
+records the first applicable reason. Source VERIFY markers now record this
+review for the 19 relevant functions. No behavior changed; exact/lower,
+hardware/build-unavailable, guard, and Default-fallback receipts remain TODO
+for Stage 7. No build, formatter, checkstyle, lint, test, parity, benchmark,
+or coverage command ran.

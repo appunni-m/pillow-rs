@@ -212,6 +212,7 @@ pub struct ImplementationSupport {
 
 impl ImplementationSupport {
     /// Binds a CPU implementation identity to its precise build and request contract.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub const fn cpu(
         operation: OperationId,
         mode: Mode,
@@ -238,6 +239,7 @@ impl ImplementationSupport {
 /// specialized siblings and permitted lower-architecture fallbacks.
 // TODO(pillow-rs#3ptb): verify exact/lower architecture selection and fallback
 // reasons across each operation's declared strategy set in the frozen parity.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn prioritized_implementations<'a>(
     architectures: &'a [ImplementationSupport],
     requested: Architecture,

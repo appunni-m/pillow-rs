@@ -35,12 +35,14 @@ impl Architecture {
     ///
     /// Portable builds detect host capabilities at this boundary. Leaf
     /// implementations receive the resulting value and never probe again.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub fn detected_host() -> Self {
         CpuCapabilities::host().preferred()
     }
 
     /// Returns the directory name for the architecture-specific implementation.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn folder(self) -> &'static str {
         match self {
@@ -56,6 +58,7 @@ impl Architecture {
     }
 
     /// Returns a stable diagnostic name for the selected CPU architecture.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -73,6 +76,7 @@ impl Architecture {
     }
 
     /// Whether this selected architecture includes FMA3.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn has_fma(self) -> bool {
         matches!(self, Self::AvxFma | Self::Avx2Fma)
@@ -124,11 +128,13 @@ impl CpuCapabilities {
         wasm_simd128: false,
     };
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn host() -> Self {
         static HOST: OnceLock<CpuCapabilities> = OnceLock::new();
         *HOST.get_or_init(Self::detect)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     const fn supports(self, architecture: Architecture) -> bool {
         match architecture {
             Architecture::Default => true,
@@ -144,6 +150,7 @@ impl CpuCapabilities {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn preferred(self) -> Architecture {
         if self.avx2 {
             if self.fma {
@@ -172,6 +179,7 @@ impl CpuCapabilities {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn detect() -> Self {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
@@ -224,6 +232,7 @@ impl ExecutionContext {
     ///
     /// The compatibility SIMD request denotes CPU execution with the centrally
     /// selected host architecture. Ordinary CPU remains explicitly serial Default.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(crate) fn for_routed_backend(backend: Backend) -> Self {
         let requested_architecture = test_architecture();
         let (backend, architecture) = match backend {
@@ -245,6 +254,7 @@ impl ExecutionContext {
     /// Strategy admission checks [`Self::supports_architecture`] before optional
     /// instructions execute. An unavailable requested architecture is retained
     /// so the prepared plan can explain its explicit Default fallback.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub fn new(backend: Backend, architecture: Architecture) -> Self {
         Self {
@@ -255,12 +265,14 @@ impl ExecutionContext {
     }
 
     /// Returns the selected execution backend.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn backend(self) -> Backend {
         self.backend
     }
 
     /// Returns the selected CPU architecture.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn architecture(self) -> Architecture {
         self.architecture
@@ -270,6 +282,7 @@ impl ExecutionContext {
     ///
     /// Required instruction sets are checked independently after this policy
     /// relation; AVX2 alone does not establish SSSE3 or FMA availability.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn permits_architecture(self, implementation: Architecture) -> bool {
         match self.architecture {
@@ -336,6 +349,7 @@ impl ExecutionContext {
     }
 
     /// Whether the captured host supports the exact required instructions.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     #[must_use]
     pub const fn supports_architecture(self, architecture: Architecture) -> bool {
         self.capabilities.supports(architecture)
