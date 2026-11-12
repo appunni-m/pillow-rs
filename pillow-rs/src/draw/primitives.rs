@@ -2,6 +2,7 @@ use super::{
     Draw, DrawBoxInput, DrawCurveJointPlan, DrawPointsInput, RegularPolygonCircle,
     RegularPolygonSides, normalize_draw_point_input, normalize_draw_points,
     normalize_draw_points_f64, normalize_rounded_rectangle_box, pillow_path_coordinate_to_i32,
+    round_two_decimals_to_i32,
 };
 use crate::error::PilError;
 use crate::image::Image;
@@ -279,6 +280,7 @@ impl Draw {
     ///
     /// Currently returns `Ok(())`; deferred pipeline execution reports later
     /// materialization failures.
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
     pub fn polygon(
         &mut self,
         points: &[(i32, i32)],
@@ -305,12 +307,14 @@ impl Draw {
     }
 
     /// Validate the coordinate input used by Pillow's intermediate polygon mask.
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_polygon_mask_input(&self, input: DrawPointsInput) -> Result<(), PilError> {
         normalize_draw_points(input, false).map(|_| ())
     }
 
     /// Draw a polygon outline using Pillow's already-transformed signed C width.
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pending
     #[doc(hidden)]
     pub fn polygon_outline_with_input(
         &mut self,
@@ -338,6 +342,7 @@ impl Draw {
     }
 
     /// Normalizes and draws a Python-facing polygon coordinate sequence.
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
     pub fn polygon_with_input(
         &mut self,
         input: DrawPointsInput,
@@ -365,6 +370,10 @@ impl Draw {
     /// Keeping geometry separate lets the Python facade preserve Pillow's
     /// order: compute vertices first, then dispatch through the public
     /// overridable `ImageDraw.polygon` method.
+    // TODO(pillow-rs#3ptb): parity-check non-finite center/radius inputs,
+    // coordinates beyond C-int range, and custom numeric subclasses converted
+    // to f64 by the adapter.
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
     pub fn regular_polygon_vertices(
         &self,
         bounding_circle: RegularPolygonCircle,
@@ -372,10 +381,16 @@ impl Draw {
         rotation: f64,
     ) -> Result<Vec<(i32, i32)>, PilError> {
         let n_sides = match n_sides {
-            RegularPolygonSides::Value(value) if value > 2 => usize::try_from(value)
-                .map_err(|_| PilError::ValueError("n_sides should be an int > 2".into()))?,
-            RegularPolygonSides::Value(_) | RegularPolygonSides::Invalid => {
+            RegularPolygonSides::Value(value) if value > 2 => {
+                usize::try_from(value).map_err(|_| {
+                    PilError::OverflowError("Python int too large to convert to C ssize_t".into())
+                })?
+            }
+            RegularPolygonSides::Value(_) => {
                 return Err(PilError::ValueError("n_sides should be an int > 2".into()));
+            }
+            RegularPolygonSides::Invalid => {
+                return Err(PilError::TypeError("n_sides should be an int".into()));
             }
         };
         let (cx, cy, radius) = match bounding_circle {
@@ -387,21 +402,37 @@ impl Draw {
                 ));
             }
         };
+        if radius <= 0.0 {
+            return Err(PilError::ValueError(
+                "bounding_circle radius should be > 0".into(),
+            ));
+        }
 
-        // Match PIL's _compute_regular_polygon_vertices exactly: start from
+        // Port PIL's _compute_regular_polygon_vertices formula: start from
         // (radius, 0), rotate by (270 - 0.5*degrees-per-side + rotation),
         // round each coordinate to two decimals, then truncate to integers.
         let n = n_sides as f64;
         let degrees_per_side = 360.0 / n;
         let start_angle = 270.0 - 0.5 * degrees_per_side + rotation;
-        let mut points = Vec::with_capacity(n_sides);
-        for index in 0..n_sides {
-            let angle = start_angle + degrees_per_side * index as f64;
-            let angle = if angle > 360.0 { angle - 360.0 } else { angle };
-            let theta = (360.0 - angle).to_radians();
-            let x = ((radius * theta.cos() + cx) * 100.0).round() / 100.0;
-            let y = ((radius * theta.sin() + cy) * 100.0).round() / 100.0;
-            points.push((x as i32, y as i32));
+        let mut points = Vec::new();
+        points.try_reserve_exact(n_sides).map_err(|_| {
+            PilError::MemoryError("unable to allocate regular polygon vertices".into())
+        })?;
+        let mut angle = start_angle;
+        for _ in 0..n_sides {
+            let radians = (360.0 - angle).to_radians();
+            if radians.is_infinite() {
+                return Err(PilError::ValueError("math domain error".into()));
+            }
+            let cosine = radians.cos();
+            let sine = radians.sin();
+            let x = radius * cosine + cx;
+            let y = radius * sine + cy;
+            points.push((round_two_decimals_to_i32(x), round_two_decimals_to_i32(y)));
+            angle += degrees_per_side;
+            if angle > 360.0 {
+                angle -= 360.0;
+            }
         }
         Ok(points)
     }
@@ -410,6 +441,7 @@ impl Draw {
     ///
     /// Vertex generation, Pillow's two-decimal rounding, and side-count
     /// validation live in core so every binding uses the same geometry.
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub fn regular_polygon(
         &mut self,
         bounding_circle: RegularPolygonCircle,

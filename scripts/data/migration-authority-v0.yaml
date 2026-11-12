@@ -1492,7 +1492,27 @@ modules:
     - name: regular_polygon
       signature: 'regular_polygon(self, bounding_circle, n_sides: int, rotation: float=0,
         fill=None, outline=None, width: int=1) -> None'
-      supported_modes: *id003
+      supported_modes:
+      - '1'
+      - L
+      - LA
+      - La
+      - P
+      - PA
+      - RGB
+      - RGBA
+      - RGBa
+      - RGBX
+      - CMYK
+      - YCbCr
+      - LAB
+      - HSV
+      - I
+      - F
+      - I;16
+      - I;16L
+      - I;16B
+      - I;16N
       param_variants: []
       edge_cases: []
       status: implemented

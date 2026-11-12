@@ -44,7 +44,8 @@ pub(crate) fn alpha_blend_enabled(op: &PipelineOp) -> bool {
     }
 }
 
-pub(crate) fn draw_op_on_canvas<C: DrawCanvas + ConfigureDrawCanvas, const FLOAT_MODE: bool>(
+// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+pub(crate) fn draw_op_on_canvas<C: DrawCanvas + ConfigureDrawCanvas>(
     canvas: &mut C,
     op: &PipelineOp,
 ) -> Result<(), PilError> {
@@ -52,7 +53,7 @@ pub(crate) fn draw_op_on_canvas<C: DrawCanvas + ConfigureDrawCanvas, const FLOAT
     if draw_arc_operation(canvas, op) {
         return Ok(());
     }
-    draw_primitive_operation::<C, FLOAT_MODE>(canvas, op)
+    draw_primitive_operation(canvas, op)
 }
 
 fn draw_arc_operation<C: DrawCanvas>(canvas: &mut C, op: &PipelineOp) -> bool {
@@ -111,7 +112,8 @@ fn draw_arc_operation<C: DrawCanvas>(canvas: &mut C, op: &PipelineOp) -> bool {
     }
 }
 
-fn draw_primitive_operation<C: DrawCanvas, const FLOAT_MODE: bool>(
+// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+fn draw_primitive_operation<C: DrawCanvas>(
     canvas: &mut C,
     op: &PipelineOp,
 ) -> Result<(), PilError> {
@@ -186,15 +188,7 @@ fn draw_primitive_operation<C: DrawCanvas, const FLOAT_MODE: bool>(
             width,
             outline_width,
             ..
-        } => draw_polygon_on_canvas(
-            canvas,
-            points,
-            *fill,
-            // The archived F-mode Draw path deliberately ignores polygon outline ink.
-            if FLOAT_MODE { None } else { *outline },
-            *width,
-            *outline_width,
-        ),
+        } => draw_polygon_on_canvas(canvas, points, *fill, *outline, *width, *outline_width),
         PipelineOp::DrawPoint { points, fill, .. } => {
             let (img_w, img_h) = (canvas.width(), canvas.height());
             for &(x, y) in points.iter() {

@@ -3,10 +3,11 @@
 Status: active. The baseline inventory is captured in
 [CPU refactor inventory](CPU_REFACTOR_INVENTORY.md). The original CPU and SIMD
 trees remain preserved under pool_cpu/legacy as inert references. Maintained
-CPU source is in place, but Stage 5 source closure remains incomplete. Do not
-run builds, formatting, checkstyle, lint, tests, parity, benchmarks, or coverage
-until every required source route is implemented and reviewed. Quality,
-operation/Mode/Architecture parity, and performance gates follow source
+CPU source is in place, but Stage 5 source closure remains incomplete. Focused
+regular-polygon parity and benchmark evidence was collected as an interim
+progress check; it does not replace the full source review or CPU acceptance
+gates. Run the documented push-time checks for this checkpoint; complete the
+full operation/Mode/Architecture parity and performance gates after source
 closure.
 Baseline: `3f9dfd4036caa061eabcf2255c9f34a745df9c7e`.
 Issue: `pillow-rs#3ptb`; related parity findings: `pillow-rs#brg0`.
@@ -131,8 +132,16 @@ both Pillow 13 MKS filters. The encoded `Image.open` matrix has
 1,035 cases across nine modes and 115 input points; it exercises the codec
 boundary, not a compute backend.
 
-The latest generated index contains 175,041 parity cases across 4,730 indexed
-parity documents and 103,945 benchmark workloads. This supersedes the previous
+The latest committed index contains 175,041 parity cases across 4,730 indexed
+parity documents and 103,945 benchmark workloads. The current regular-polygon
+specification regenerates to 176,654 cases across the same 4,730 documents and
+103,945 workloads. It adds per-mode requirements and mode-shaped coverage for
+all 20 Pillow modes. A frozen focused selection of 192 regular-polygon cases
+passed under each of nine CPU architecture selectors (1,728 passes total).
+One standard 16×16 RGB workload was measured for Default and NEON: Default was
+8.3% faster than Pillow, while NEON was 4.8% slower, within the stated 1–5%
+allowance. These focused results do not replace the full matrix. This
+supersedes the previous
 171,666-case/100,610-workload snapshot documented in older inventory entries.
 The shared matrix still uses 38 unique sizes and 115 deterministic
 size/pattern pairs; CPU selection replays each eligible case under the nine
@@ -144,15 +153,18 @@ where no typed admission exists.
 
 The matrix generator and its manifest/index, asset, profile, and workload-ID
 checks completed in the latest committed checkpoint. `make quality` passed at
-that checkpoint and included all 4,730 indexed parity documents. This is
-specification/static evidence only; it does not prove CPU behavior, and full
-CPU parity and benchmarks remain gated on Stage 5 source closure. No coverage
-was collected.
+that checkpoint and included all 4,730 indexed parity documents. The current
+regular-polygon specification and input generation completed successfully,
+and focused parity/benchmark results are summarized above. Push-time checks on
+2026-11-12 passed: `make quality`, `make docs-lint`, `make fmt clippy`, and the
+implementation-structure/repository-map audit. Clippy reported existing
+diagnostics but exited successfully. Full CPU parity and benchmark campaigns
+remain gated on Stage 5 source closure. No coverage was collected.
 
 The generated public-contract page is stale: it records manifest SHA-256
 `3e36271fae8f7f25405a2ff961ea338992b7f3b80679c4b8460ed2c8ef56bc4a`, while the
 current manifest hashes to
-`ecee1f2bf82a45475195753fb1e9fa5186b6928b4e1ab3ef2623ad53503e433b`. Parity,
+`33c286c55abec55ecd00a4c6df9c1989362b9ead3904927f50bb8829f34833cf`. Parity,
 benchmark, coverage, and target-output evidence pages also contain older
 status data. TODO(pillow-rs#3ptb): after Stage 5 closes, regenerate the public
 contract and refresh evidence views from the current frozen input index; keep

@@ -756,6 +756,6 @@ pub use rounded_rectangle::{
 pub use geometry::outline_curve_points;
 pub(crate) use geometry::{
     DrawCanvas, blend_u8, bresenham_line, for_each_bresenham_point, for_each_polygon_fill_span,
-    pil_blend, plot, scanline_polygon_fill, wide_line_polygon_points,
+    pil_blend, plot, round_two_decimals_to_i32, scanline_polygon_fill, wide_line_polygon_points,
     wide_line_polygon_points_signed,
 };

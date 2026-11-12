@@ -4,7 +4,7 @@ scope:
   mode: full
   inventory:
     authority: scripts/migration_parity_inventory.py
-    revision: sha256:6658418089b52e3f9a6a2eed27f3f98a54beaa76732949e74d5da897910557f9+inventory-rule@2
+    revision: sha256:cc75fd3626cdceddc4531291bf7b3347075cb2412b29ecc2ca9626b6f91081fe+inventory-rule@2
     command_id: inventory
 oracles:
 - id: pillow
@@ -24291,9 +24291,21 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.p
       dimension: mode
       description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -24309,9 +24321,75 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.rgba-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.cmyk
       dimension: mode
       description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageDraw.ImageDraw.regular_polygon.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
       lanes:
       - parity
       - coverage

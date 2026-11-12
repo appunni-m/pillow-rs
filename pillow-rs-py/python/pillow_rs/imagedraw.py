@@ -264,6 +264,7 @@ class ImageDraw:
         if fill is not None or outline is not None:
             self._draw_fill_outline(self._draw.ellipse, xy, fill, outline, width)
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
     def polygon(self, xy, fill=None, outline=None, width: int = 1):
         fill, outline = self._palette_fill_outline(fill, outline)
         if fill is not None:
@@ -462,6 +463,7 @@ class ImageDraw:
         if fill is not None or outline is not None:
             self._mutate(self._draw.shape, shape, fill, outline)
 
+    # VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         """Draw a regular polygon. Vertex computation done in Rust."""
         points = self._draw.regular_polygon_vertices(

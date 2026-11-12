@@ -29,6 +29,14 @@ ARCHITECTURE_NAMES = frozenset(
         "wasm_simd128",
     }
 )
+STRATEGY_FALLBACK_REASONS = frozenset(
+    {
+        "missing_specialization",
+        "unavailable_build",
+        "unavailable_hardware",
+        "ineligible_request",
+    }
+)
 
 
 def exact(value: Any, keys: set[str], label: str) -> None:
@@ -294,9 +302,13 @@ def execution_receipt(
             has_architecture = (
                 isinstance(item, dict) and "selected_architecture" in item
             )
+            has_strategy_fallbacks = (
+                isinstance(item, dict) and "strategy_fallbacks" in item
+            )
             optional_keys = (
                 ({"source"} if has_source else set())
                 | ({"selected_architecture"} if has_architecture else set())
+                | ({"strategy_fallbacks"} if has_strategy_fallbacks else set())
             )
             if selected_step_ids is None:
                 exact(item, telemetry_keys | optional_keys, telemetry_label)
@@ -330,6 +342,21 @@ def execution_receipt(
                         raise ValueError(
                             f"{telemetry_label}.selected_architecture: "
                             "unknown architecture"
+                        )
+            if has_strategy_fallbacks and item["strategy_fallbacks"] is not None:
+                fallbacks = item["strategy_fallbacks"]
+                if not isinstance(fallbacks, list):
+                    raise ValueError(
+                        f"{telemetry_label}.strategy_fallbacks: expected string array or null"
+                    )
+                for fallback_index, fallback in enumerate(fallbacks):
+                    fallback_label = (
+                        f"{telemetry_label}.strategy_fallbacks[{fallback_index}]"
+                    )
+                    string(fallback, fallback_label)
+                    if fallback not in STRATEGY_FALLBACK_REASONS:
+                        raise ValueError(
+                            f"{fallback_label}: unknown strategy fallback reason"
                         )
             for field in (
                 "vector_block_count",

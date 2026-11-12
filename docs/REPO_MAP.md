@@ -7797,6 +7797,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |   |-- custom_font_mask.rs
 |       |   |-- floodfill.rs
 |       |   |-- input.rs
+|       |   |-- regular_polygon.rs
 |       |   |-- rounded_rectangle.rs
 |       |   |-- text_layout.rs
 |       |   `-- text_lines.rs

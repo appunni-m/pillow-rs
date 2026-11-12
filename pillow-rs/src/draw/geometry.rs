@@ -224,6 +224,59 @@ pub(crate) fn round_down(f: f64) -> i32 {
     }
 }
 
+/// Applies Pillow's `round(value, 2)` followed by integer truncation.
+// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+pub(crate) fn round_two_decimals_to_i32(value: f64) -> i32 {
+    if !value.is_finite() {
+        return value as i32;
+    }
+    if value >= f64::from(i32::MAX) + 1.0 {
+        return i32::MAX;
+    }
+    if value <= f64::from(i32::MIN) - 1.0 {
+        return i32::MIN;
+    }
+
+    let bits = value.abs().to_bits();
+    let exponent = ((bits >> 52) & 0x7ff) as i32;
+    let fraction = bits & ((1_u64 << 52) - 1);
+    let (mantissa, binary_exponent) = if exponent == 0 {
+        (u128::from(fraction), -1074)
+    } else {
+        (u128::from((1_u64 << 52) | fraction), exponent - 1023 - 52)
+    };
+    let scaled_numerator = mantissa * 25;
+    let scaled_exponent = binary_exponent + 2;
+    let rounded_hundredths = if scaled_exponent >= 0 {
+        scaled_numerator << scaled_exponent as u32
+    } else {
+        round_binary_fraction(scaled_numerator, (-scaled_exponent) as u32)
+    };
+    let whole = (rounded_hundredths / 100) as i128;
+    let signed = if value.is_sign_negative() {
+        -whole
+    } else {
+        whole
+    };
+    signed.clamp(i128::from(i32::MIN), i128::from(i32::MAX)) as i32
+}
+
+// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+fn round_binary_fraction(numerator: u128, shift: u32) -> u128 {
+    if shift >= 128 {
+        return 0;
+    }
+    let denominator = 1_u128 << shift;
+    let quotient = numerator >> shift;
+    let remainder = numerator & (denominator - 1);
+    let halfway = denominator >> 1;
+    if remainder > halfway || (remainder == halfway && quotient & 1 == 1) {
+        quotient + 1
+    } else {
+        quotient
+    }
+}
+
 /// Construct Pillow's four-edge polygon for a wide line segment.
 ///
 /// This is scalar geometry/control-plane work shared by CPU and SIMD.  The

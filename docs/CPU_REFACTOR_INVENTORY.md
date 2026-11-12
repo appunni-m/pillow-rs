@@ -7,12 +7,31 @@ lazy output modes now come from operation support contracts without
 wrapper cache overrides; mode metadata remains source-reviewed and
 runtime-unvalidated.
 
-Latest generated matrix checkpoint (`5e64d7a59`, 2026-11-12): 175,041 parity
+Latest committed matrix checkpoint (`5e64d7a59`, 2026-11-12): 175,041 parity
 cases across 4,730 indexed parity documents, 103,945 benchmark workloads, and
-2,070 native typed Reduce target-output cases. The generator/input contract
+2,070 native typed Reduce target-output cases. Its generator/input contract
 checks and `make quality` passed at that checkpoint. These supersede older
-matrix counts in the dated notes below; they are not CPU runtime evidence.
-CPU parity and benchmark campaigns remain gated on Stage 5 source closure.
+committed matrix counts in the dated notes below; they are not CPU runtime
+evidence. The current regular-polygon specification generates 176,654 parity
+cases with the same 4,730 documents and 103,945 benchmark workloads. It adds
+all 20 Pillow modes and 100 mode-shaped regular-polygon coverage inputs.
+Focused regular-polygon verification (2026-11-12) froze 192 cases
+(`regular-polygon-prepush-case-ids.txt`, SHA-256
+`76e669af01eac94ce01e69f71fd182f5844eafa139c1d3f0f490dc5612a179dc`) and
+passed all 192 on each of nine CPU architecture selectors: Default, NEON,
+SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA (1,728 passes total).
+The focused standard benchmark passed its parity gate for Default and NEON on
+the 16×16 RGB workload. Median target latency was 0.024375 ms for Default
+versus Pillow's 0.026583 ms (8.3% faster), and 0.027209 ms for NEON versus
+Pillow's 0.025958 ms (4.8% slower, within the 1–5% allowance). This compares
+against Pillow, not a previous target benchmark; no prior target baseline was
+available. The result validator was updated to accept and validate optional
+strategy-fallback telemetry. Focused evidence does not close Stage 5 or
+establish full CPU parity/performance; the broader CPU matrix remains open.
+Push-time checks (2026-11-12) passed: `make quality`, `make docs-lint`,
+`make fmt clippy`, and the implementation-structure/repository-map audit.
+Clippy reported existing diagnostics but exited successfully; file/function
+size checks reported no limit violations. No coverage ran.
 The generated public-contract page has an old manifest hash and must be
 refreshed after that gate.
 
@@ -6129,11 +6148,12 @@ Regular Draw width source migration follow-up (2026-11-06): `rectangle`,
 native calls. The wrapper checks `width != 0` after the fill call, and the
 active outline binding parses a signed C int; Pillow-facing Python signatures
 are unchanged. `circle` continues through overridable `ellipse`. The
-`regular_polygon` path still lacks Pillow's temporary mask and `width * 2 - 1`
-operation before outline drawing. TODO(pillow-rs#3ptb): finish polygon width
-staging and verify pixels, mutation, callback order, and faults for all these
-paths. Source-only; no build, formatter, checkstyle, lint, tests, parity,
-benchmark, or coverage ran.
+This follow-up's `regular_polygon` sentence was incorrect: Pillow's
+`regular_polygon` computes its vertices and calls public `self.polygon`, so it
+inherits the polygon width staging described below. That staging was completed
+in the next entry; output, callback, and fault parity remains pending. Source-
+only; no build, formatter, checkstyle, lint, tests, parity, benchmark, or
+coverage ran.
 
 Regular Draw polygon width source completion (2026-11-06): the Python facade
 now stages polygon fill before outline comparison. One-pixel outlines take the
@@ -6152,6 +6172,39 @@ are unchanged. Source-only; no build, formatter, checkstyle, lint, tests,
 parity, benchmark, or coverage ran. CPU output, callback, mutation, and fault
 parity, including the minimum-vertex error, remains pending. References:
 [Pillow 12.2 polygon](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L2766-L2805), [its `_draw_polygon` binding](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c), and [`ImagingDrawPolygon`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Draw.c#L3601-L3756).
+
+Regular Draw regular-polygon route audit (2026-11-12): Pillow 13.0 confirms
+`regular_polygon` computes the points and then calls public `self.polygon`,
+preserving subclass dispatch and inheriting the fill/mask/width call order. The
+Rust facade follows this route: it asks core for vertices, then calls
+`self.polygon`; direct Rust `Draw::regular_polygon` uses the core polygon width
+strategy. The Draw operation entry classifies all 25 exact modes, routes each
+supported mode through its typed owner, selects Default or declared SIMD
+architectures from the injected context, and uses serial support for the four
+I;16 aliases; the five internal high-depth modes explicitly reject. Serial and
+SIMD polygon writers both use native mode layouts, with F32 outlines passed to
+the native writer and the same mask-clipped wide-stroke rule. Pillow 13.0's polygon writer selects
+native 8-bit, 16-bit, or 32-bit storage kernels, so the regular-polygon
+authority and fixture matrix now enumerate all 20 Pillow modes instead of
+inheriting the seven-mode text list. Separate cases preserve `LA`/`La`,
+`RGBA`/`RGBa`, and the four `I;16` byte-order identities; coverage shapes are
+generated for every Pillow mode. VERIFY markers record source review and the
+focused parity/benchmark evidence on functions whose selected paths ran;
+untested branches remain pending. The PyO3 input adapter now checks side
+type/range before the circle, validates list/tuple and numeric components,
+rejects nonpositive radii before rotation validation, and only then narrows the
+typed inputs for core. Core geometry now uses Pillow's repeated angle
+accumulation, performs two-decimal ties-to-even rounding before integer
+truncation, rejects nonpositive direct-Rust radii, and uses fallible vertex
+allocation. Infinite rotation now returns Pillow's `math domain error` when
+the computed radians reach `cos`; this is source-reviewed and parity-pending.
+TODO(pillow-rs#3ptb): parity-check nonpositive-radius validation, remaining
+validation/angle/rounding boundaries, NaN/infinite coordinate inputs,
+coordinates beyond C-int range, and stateful sequence/numeric subclasses; add
+the full regular-polygon size and benchmark matrix to the shared matrix. The
+focused mode/architecture cases and one standard Default/NEON benchmark are
+recorded above; they do not close the full CPU matrix or Stage 5 source review.
+References: [Pillow 13.0 `ImageDraw.py`](https://raw.githubusercontent.com/python-pillow/Pillow/13.0.0/src/PIL/ImageDraw.py#L322-L356), [regular-polygon input validation and geometry](https://raw.githubusercontent.com/python-pillow/Pillow/13.0.0/src/PIL/ImageDraw.py#L815-L930), and [Pillow 13.0 polygon storage-kernel selection](https://raw.githubusercontent.com/python-pillow/Pillow/13.0.0/src/libImaging/Draw.c#L529-L553).
 
 Draw path-input source migration (2026-11-06): the Python binding now flattens
 `ImagePath.Path`, native float32 buffers, and Pillow-compatible numeric,

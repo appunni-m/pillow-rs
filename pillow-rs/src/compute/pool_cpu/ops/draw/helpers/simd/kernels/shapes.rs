@@ -390,6 +390,7 @@ fn polygon_fill_intervals(
     rows
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
 pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_polygon_native(
     img: &DynamicImage,
     points: &[(i32, i32)],

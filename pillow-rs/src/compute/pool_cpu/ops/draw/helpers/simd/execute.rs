@@ -154,6 +154,7 @@ fn simd_draw_rectangle(
 /// Draw a polygon through Pillow's scalar scanline geometry and native SIMD
 /// span writes. The kernel keeps Pillow's fill mask for polygon strokes and
 /// preserves the ordered edge writes for alpha-blended RGB layouts.
+// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
 fn simd_draw_polygon(
     img: &DynamicImage,
     op: &PipelineOp,
@@ -170,16 +171,11 @@ fn simd_draw_polygon(
     else {
         return Err(PilError::ValueError("expected DrawPolygon op".into()));
     };
-    // Pillow's floating-point ImagingDraw polygon path stores the fill sample
-    // but ignores the outline. Keep the SIMD adapter aligned with this exact-
-    // mode Draw behavior instead of painting an extra stroke that becomes
-    // observable only after materialization.
-    let outline = if layout.float_mode { None } else { *outline };
     simd_draw_polygon_native(
         img,
         points,
         *fill,
-        outline,
+        *outline,
         *width,
         *outline_width,
         *alpha_blend_rgb,

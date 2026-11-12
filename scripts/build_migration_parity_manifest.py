@@ -1197,6 +1197,10 @@ def operation_requirements(
             )
         elif endpoint.source_path == "PIL.Image.Image.resize":
             mode_id = mode_slug(str(mode))
+        elif endpoint.source_path == "PIL.ImageDraw.ImageDraw.regular_polygon":
+            # This endpoint includes both premultiplied and byte-order mode
+            # identities, so plain slug() would collapse LA/La and RGBA/RGBa.
+            mode_id = mode_slug(str(mode))
         elif endpoint.source_path == "PIL.Image.Image.reduce":
             mode_id = next(
                 (

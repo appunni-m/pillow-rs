@@ -6,6 +6,7 @@ use pyo3::{Py, Python, pyclass, pymethods};
 pub(super) mod custom_font_mask;
 mod floodfill;
 mod input;
+mod regular_polygon;
 mod rounded_rectangle;
 mod text_lines;
 
@@ -377,29 +378,26 @@ impl PyDraw {
         text_color_mask_impl(&mut self.draw, xy, color, coverage)
     }
 
-    #[pyo3(signature = (bounding_circle, n_sides, rotation=0.0))]
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+    #[pyo3(signature = (bounding_circle, n_sides, rotation))]
     fn regular_polygon_vertices(
         &self,
         bounding_circle: &Bound<'_, PyAny>,
         n_sides: &Bound<'_, PyAny>,
-        rotation: f64,
+        rotation: &Bound<'_, PyAny>,
     ) -> PyResult<Vec<(i32, i32)>> {
-        let circle = if let Ok((x, y, radius)) = bounding_circle.extract::<(f64, f64, f64)>() {
-            pillow_rs::RegularPolygonCircle::Flat(x, y, radius)
-        } else if let Ok(((x, y), radius)) = bounding_circle.extract::<((f64, f64), f64)>() {
-            pillow_rs::RegularPolygonCircle::Nested(x, y, radius)
-        } else {
-            pillow_rs::RegularPolygonCircle::Invalid
-        };
-        let sides = n_sides.extract::<i64>().map_or(
-            pillow_rs::RegularPolygonSides::Invalid,
-            pillow_rs::RegularPolygonSides::Value,
-        );
+        let (circle, sides, rotation) = regular_polygon::regular_polygon_inputs(
+            n_sides.py(),
+            bounding_circle,
+            n_sides,
+            rotation,
+        )?;
         self.draw
             .regular_polygon_vertices(circle, sides, rotation)
             .map_err(map_error)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
     fn polygon(
         &mut self,
         xy: &Bound<'_, PyAny>,
@@ -427,6 +425,7 @@ impl PyDraw {
             .map_err(map_error)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pending
     #[pyo3(name = "_prepare_polygon_mask_input")]
     fn prepare_polygon_mask_input(&self, xy: &Bound<'_, PyAny>) -> PyResult<()> {
         self.draw
@@ -434,6 +433,7 @@ impl PyDraw {
             .map_err(map_error)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pending
     #[pyo3(name = "_polygon_outline")]
     fn polygon_outline(
         &mut self,

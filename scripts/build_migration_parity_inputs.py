@@ -2382,6 +2382,32 @@ def requirement_variant(requirement: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+def coverage_draw_inks(mode: str) -> tuple[Any, Any]:
+    """Return mode-shaped fill and outline inks for ImageDraw coverage."""
+
+    if mode == "1":
+        return 1, 0
+    if mode in {"L", "P", "I", "I;16", "I;16L", "I;16B", "I;16N"}:
+        return 201, 73
+    if mode == "F":
+        return 201.5, 73.25
+    if mode in {"LA", "La", "PA"}:
+        return [37, 173], [73, 255]
+    if mode == "RGB":
+        return [37, 211, 89], [255, 255, 255]
+    if mode == "RGBA":
+        return [37, 211, 89, 173], [255, 255, 255, 255]
+    if mode == "RGBa":
+        return [37, 83, 89, 173], [73, 97, 101, 255]
+    if mode == "RGBX":
+        return [37, 211, 89, 255], [255, 255, 255, 255]
+    if mode == "CMYK":
+        return [13, 77, 149, 201], [255, 255, 255, 255]
+    if mode in {"YCbCr", "LAB", "HSV"}:
+        return [37, 128, 211], [255, 255, 255]
+    raise ValueError(f"unsupported ImageDraw coverage mode: {mode}")
+
+
 inspect_missing = object()
 
 
@@ -19948,6 +19974,25 @@ def build_nuanced_cases(
                 "n_sides": literal(2),
             },
         },
+        *(
+            {
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "regular_polygon",
+                "requirement_suffix": f"mode.{mode_slug(mode)}",
+                "name": f"mode-{mode_slug(mode)}",
+                "mode": mode,
+                "size": [16, 16],
+                "observe_receiver": True,
+                "values": {
+                    "bounding_circle": literal([8, 8, 6]),
+                    "n_sides": literal(5),
+                    "rotation": literal(15),
+                    "fill": literal(fill),
+                },
+            }
+            for mode in MODE_SIZE_PILLOW_MODES
+            for fill, _outline in (coverage_draw_inks(mode),)
+        ),
         {
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "rectangle",
@@ -28970,7 +29015,7 @@ def build_nuanced_cases(
                 "surface": "PIL.ImageDraw.ImageDraw",
                 "operation": "regular_polygon",
                 "requirement_suffix": "behavior.default",
-                "name": f"coverage-batch-draw-regular-polygon-{mode.lower()}-{index}",
+                "name": f"coverage-batch-draw-regular-polygon-{mode_slug(mode)}-{index}",
                 "mode": mode,
                 "size": [24, 24],
                 "observe_receiver": True,
@@ -28978,16 +29023,8 @@ def build_nuanced_cases(
                     "bounding_circle": literal(circle),
                     "n_sides": literal(n_sides),
                     "rotation": literal(rotation),
-                    "fill": literal(
-                        201 if mode == "L" else [37, 211, 89]
-                        if mode == "RGB"
-                        else [37, 211]
-                    ),
-                    "outline": literal(
-                        73 if mode == "L" else [255, 255, 255]
-                        if mode == "RGB"
-                        else [255, 255]
-                    ),
+                    "fill": literal(fill),
+                    "outline": literal(outline),
                 },
             }
             for index, (circle, n_sides, rotation) in enumerate(
@@ -28999,7 +29036,8 @@ def build_nuanced_cases(
                     ([14, 10, 6], 8, 400),
                 )
             )
-            for mode in ("L", "RGB", "LA")
+            for mode in MODE_SIZE_PILLOW_MODES
+            for fill, outline in (coverage_draw_inks(mode),)
         ),
         *(
             {

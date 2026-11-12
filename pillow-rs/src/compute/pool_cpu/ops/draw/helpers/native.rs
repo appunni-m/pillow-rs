@@ -4,6 +4,7 @@ use crate::raster::{ImageBuffer, Luma, Pixel};
 
 use super::{Luma16Canvas, NativeByteCanvas, draw_op_on_canvas};
 
+// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
 pub(crate) fn execute_byte_buffer<P, const CHANNELS: usize, const HIDDEN_LANES: usize>(
     image: &ImageBuffer<P, Vec<u8>>,
     ops: &[PipelineOp],
@@ -11,9 +12,10 @@ pub(crate) fn execute_byte_buffer<P, const CHANNELS: usize, const HIDDEN_LANES: 
 where
     P: Pixel<Subpixel = u8>,
 {
-    execute_byte_buffer_with_mode::<P, CHANNELS, HIDDEN_LANES, false>(image, ops)
+    execute_native_buffer::<P, CHANNELS, HIDDEN_LANES>(image, ops)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pending
 pub(crate) fn execute_float_buffer<P, const CHANNELS: usize, const HIDDEN_LANES: usize>(
     image: &ImageBuffer<P, Vec<u8>>,
     ops: &[PipelineOp],
@@ -21,15 +23,11 @@ pub(crate) fn execute_float_buffer<P, const CHANNELS: usize, const HIDDEN_LANES:
 where
     P: Pixel<Subpixel = u8>,
 {
-    execute_byte_buffer_with_mode::<P, CHANNELS, HIDDEN_LANES, true>(image, ops)
+    execute_native_buffer::<P, CHANNELS, HIDDEN_LANES>(image, ops)
 }
 
-fn execute_byte_buffer_with_mode<
-    P,
-    const CHANNELS: usize,
-    const HIDDEN_LANES: usize,
-    const FLOAT_MODE: bool,
->(
+// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+fn execute_native_buffer<P, const CHANNELS: usize, const HIDDEN_LANES: usize>(
     image: &ImageBuffer<P, Vec<u8>>,
     ops: &[PipelineOp],
 ) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
@@ -49,7 +47,7 @@ where
             &mut hidden_lane_update_error,
         );
         for op in ops {
-            draw_op_on_canvas::<_, FLOAT_MODE>(&mut canvas, op)?;
+            draw_op_on_canvas(&mut canvas, op)?;
         }
     }
     if let Some(error) = hidden_lane_update_error {
@@ -63,6 +61,7 @@ where
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pending
 pub(crate) fn execute_luma16_buffer<const DECLARED_BIG_ENDIAN: bool>(
     image: &ImageBuffer<Luma<u16>, Vec<u16>>,
     ops: &[PipelineOp],
@@ -71,7 +70,7 @@ pub(crate) fn execute_luma16_buffer<const DECLARED_BIG_ENDIAN: bool>(
     {
         let mut canvas = Luma16Canvas::<DECLARED_BIG_ENDIAN>::new(&mut output);
         for op in ops {
-            draw_op_on_canvas::<_, false>(&mut canvas, op)?;
+            draw_op_on_canvas(&mut canvas, op)?;
         }
     }
     Ok(output)
