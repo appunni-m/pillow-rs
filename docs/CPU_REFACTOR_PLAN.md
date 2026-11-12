@@ -7182,3 +7182,14 @@ add counted body lines. The automated size gate still reruns after source
 closure. VERIFY markers record source review only; parity and benchmark
 evidence are still pending. No build, formatting, checkstyle, lint, test,
 parity, benchmark, or coverage command ran for this source-only follow-up.
+
+2026-11-13 parity missing-implementation classification source audit: the
+parity runner recognizes a target `NotImplementedError` as pending only when
+the reference step succeeded and every earlier observed step has the same
+status and value/error under the declared comparison policy. The target error
+remains in the comparison record. A target-only expected-output workflow that
+reaches an unimplemented route is also `not_run`; ordinary completed-result,
+wrong-error, or wrong-rejection differences remain failures. Updated VERIFY
+dates on the classifier and added a source marker to the comparison-record
+function. This confirms runner source behavior only; its focused contracts and
+the full CPU parity campaign remain pending. No validation command ran.

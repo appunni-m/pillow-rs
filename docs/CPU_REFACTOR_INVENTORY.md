@@ -10274,3 +10274,13 @@ lines. This follow-up adds only comments and docs, and the automated size gate
 still reruns after source closure. Parity and benchmark tags remain pending.
 No build, formatting, checkstyle, lint, test, parity, benchmark, or coverage
 command ran for this source-only follow-up.
+
+2026-11-13 parity missing-implementation classification source audit: a
+target `NotImplementedError` becomes `not_run` only if the Pillow/reference
+step succeeded and all observed prefix steps agree under the declared error
+and value comparison policies. Comparison records retain the full target
+observation, including the exception. Target-only expected-output cases with
+an unimplemented route remain pending; wrong errors, rejections, and completed
+outputs remain mismatches. VERIFY markers were updated on these runner
+functions. This is source-review evidence only; no contract tests or CPU parity
+run occurred.

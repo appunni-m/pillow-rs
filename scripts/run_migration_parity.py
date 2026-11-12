@@ -4835,7 +4835,7 @@ def compare_error(source: dict[str, Any], target: dict[str, Any], opdef: dict[st
     return []
 
 
-# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
 def target_not_implemented_steps(target: dict[str, Any]) -> set[str]:
     """Return observed workflow steps whose target route is not implemented."""
 
@@ -4860,7 +4860,7 @@ def target_not_implemented_steps(target: dict[str, Any]) -> set[str]:
     return step_ids
 
 
-# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
 def first_unimplemented_target_step(
     case: dict[str, Any],
     source: dict[str, Any],
@@ -4916,7 +4916,7 @@ def first_unimplemented_target_step(
     return None
 
 
-# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
 def compare_case(
     case: dict[str, Any],
     source: dict[str, Any],
@@ -5257,6 +5257,7 @@ def parity_summary(
     }
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=n/a; benchmark=n/a
 def comparison_record(
     case: dict[str, Any],
     source: dict[str, Any],
