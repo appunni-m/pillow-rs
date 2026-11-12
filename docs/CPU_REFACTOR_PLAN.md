@@ -7021,10 +7021,14 @@ verification ran.
 RGBA without consulting palette metadata; P with an attached palette resolves
 to RGB or RGBA from its alpha table. Identified fallback cases include P
 palette-dependent transitions without an attached palette and rejected raw
-pipeline descriptors without a declared rejected output, plus PutData
-descriptors whose payload mode has no matching `ByPayload` result. Full
-`Planned(None)` call-edge enumeration remains open. Kept materialization
-fallback because output identity or execution-time error may depend on facts
-unavailable from the lazy graph. Updated the inventory to distinguish reviewed
-behavior from the incomplete enumeration. No source code or runtime
-validation changed.
+pipeline descriptors without a declared rejected output, PutData descriptors
+whose payload mode has no matching `ByPayload` result, and upstream pipelines
+whose mode remains unresolved. The rule review found that target-bearing
+pipeline contracts are Convert/ConvertMatrix, Merge, and Color3DLut, all
+handled by `target_mode_for_pipeline_op`; PutData is the sole `ByPayload`
+pipeline operation; and `NoRasterResult` is not declared by the raster-producing
+`PipelineOp` variants. The defensive target/payload mismatch branches remain
+source-contract risks. Kept materialization fallback because output identity
+or execution-time error may depend on facts unavailable from the lazy graph.
+The complete variant-to-support caller audit and focused parity remain open.
+Updated the source TODO and inventory. No runtime validation ran.
