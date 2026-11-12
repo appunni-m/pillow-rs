@@ -7021,7 +7021,8 @@ verification ran.
 RGBA without consulting palette metadata; P with an attached palette resolves
 to RGB or RGBA from its alpha table. Identified fallback cases include P
 palette-dependent transitions without an attached palette and rejected raw
-pipeline descriptors without a declared rejected output; full
+pipeline descriptors without a declared rejected output, plus PutData
+descriptors whose payload mode has no matching `ByPayload` result. Full
 `Planned(None)` call-edge enumeration remains open. Kept materialization
 fallback because output identity or execution-time error may depend on facts
 unavailable from the lazy graph. Updated the inventory to distinguish reviewed
