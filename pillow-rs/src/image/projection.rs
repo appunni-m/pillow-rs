@@ -24,6 +24,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization or mode-specific projection
     /// fails.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn getprojection(&self) -> Result<ProjectionAxes, PilError> {
         if let Some(projection) = self.try_getprojection_putpixel_pipeline()? {
             return Ok(projection);
@@ -56,6 +57,7 @@ impl Image {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn try_getprojection_eager_backend(
         &self,
         image: &DynamicImage,

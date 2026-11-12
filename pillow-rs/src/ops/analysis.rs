@@ -116,6 +116,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization fails.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn getextrema(&self) -> Result<Vec<(u8, u8)>, PilError> {
         let mode = self.mode_identity()?;
         OperationId::GetExtremaBytes

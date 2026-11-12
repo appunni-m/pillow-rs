@@ -101,7 +101,7 @@ impl Image {
     /// Pillow's `Image.quantize(palette=...)` preserves the reference palette
     /// and uses its entries as destination colors; an absent table uses the
     /// source-mode L or WEB palette instead.
-    // VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
     fn quantize_to_palette(
         &self,
         palette_image: Option<&Image>,
@@ -144,7 +144,7 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when `colors` is outside 1..=256, or
     /// another [`PilError`] when materialization fails.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn quantize(
         &self,
         colors: u32,

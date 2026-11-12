@@ -77,6 +77,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization is needed to determine band
     /// count and that materialization fails.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn split(&self) -> Result<Vec<Image>, PilError> {
         let cached_at_entry = self.is_materialized();
         let mode = self.mode_identity()?;

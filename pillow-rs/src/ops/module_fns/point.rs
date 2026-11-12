@@ -12,7 +12,7 @@ fn exact_mode(image: &Image) -> Result<Mode, PilError> {
     image.mode_identity()
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn cpu_point_context(image: &Image) -> Result<(Option<Backend>, ExecutionContext), PilError> {
     // PointScalar, PointFloat, and PointModeOutput are CPU-owned. A SIMD
     // request is resolved by the injected context to CPU plus the detected

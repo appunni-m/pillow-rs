@@ -384,6 +384,7 @@ impl Image {
         self.putdata_l16_bytes_with_count(data, data.len(), scale, offset)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn putdata_l16_bytes_with_count(
         &mut self,
         data: &[u8],
@@ -432,6 +433,7 @@ impl Image {
     /// matching strategy or report the Default fallback. A pinned GPU request
     /// uses CPU Default; an unpinned GPU preference can use an active SIMD
     /// architecture for this synchronous host-write path.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_execution_context(&self) -> PutDataExecutionContext {
         let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
@@ -443,6 +445,7 @@ impl Image {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn putdata_value_at_selection(
         &self,
         mode: Mode,
@@ -477,6 +480,7 @@ impl Image {
     ///
     /// Returns [`PilError::TypeError`] when `value` is incompatible with the
     /// image mode or `pixel_index` is outside the image.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn putdata_value_at(
         &mut self,
         pixel_index: usize,
@@ -493,6 +497,7 @@ impl Image {
     /// The binding creates one context per host sequence and passes it through
     /// each synchronous write after coercing that value without holding the
     /// image borrow. A changed exact mode refreshes the cached mode strategy.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_value_at_with_context(
         &mut self,
@@ -591,6 +596,7 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when the target transition is not
     /// supported by the current mode, and propagates materialization errors.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn imaging_core_setmode(&mut self, target: Mode) -> Result<(), PilError> {
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let source = self.mode_identity()?;
@@ -630,6 +636,7 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when the source, band, dimensions, or
     /// stored sample layout does not match the destination.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn imaging_core_putband(&mut self, source: &Image, band: i32) -> Result<(), PilError> {
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let source_mode = source.mode_identity()?;
@@ -679,6 +686,7 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when the destination mode or band is
     /// unsupported, and propagates materialization errors.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn imaging_core_fillband(&mut self, band: i32, value: i32) -> Result<(), PilError> {
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let mode = self.mode_identity()?;

@@ -138,6 +138,7 @@ pub enum FloodFillError<E> {
 
 /// Selects the exact CPU mode strategy from the image's stored raster identity
 /// and routed execution context.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn prepare_floodfill(image: &Image) -> Result<PreparedFloodFill, PilError> {
     let mode = image.mode_identity()?;

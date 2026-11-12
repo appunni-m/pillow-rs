@@ -37,6 +37,7 @@ pub(super) fn try_convert_to_luma16(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_declared_source_strategy(image: &Image, target_mode: Mode) -> Result<Image, PilError> {
     let (source, mut operation_receipts) = image.materialized_shared_for_ops_with_receipts()?;
     let operation = crate::pipeline::PipelineOp::Convert {

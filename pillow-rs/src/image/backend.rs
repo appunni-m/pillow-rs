@@ -139,6 +139,11 @@ impl Image {
     /// An image-pinned GPU request falls back to CPU Default. For an unpinned
     /// operation, an active SIMD compatibility request supplies the CPU
     /// architecture when GPU is preferred but has no operation strategy.
+    // TODO(pillow-rs#3ptb): Stage 7 must verify backend, architecture, selected
+    // strategy, and fallback receipts for direct eager routes across the
+    // frozen CPU mode/architecture matrix; this source audit is not runtime
+    // evidence.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn cpu_arch_execution_route(
         &self,
     ) -> Result<
@@ -154,6 +159,7 @@ impl Image {
 
     /// Resolves one CPU-owned operation's route and whether its backend is an
     /// explicit request rather than an automatic preference.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn cpu_arch_execution_route_with_policy(
         &self,
     ) -> Result<
@@ -189,6 +195,7 @@ impl Image {
     }
 
     /// Resolves the requested backend without choosing a CPU architecture.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn requested_backend_route(
         &self,
     ) -> Result<Option<crate::compute::Backend>, PilError> {
@@ -196,6 +203,7 @@ impl Image {
             .map(|(requested_backend, _, _)| requested_backend)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn backend_request_policy(
         &self,
     ) -> Result<
@@ -228,6 +236,7 @@ impl Image {
     ///
     /// Direct host operations that historically ignored backend-state errors
     /// retain CPU Default when routing policy cannot be inspected.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn cpu_arch_execution_route_advisory(
         &self,
     ) -> (
@@ -240,6 +249,7 @@ impl Image {
 
     /// Advisory CPU route that also retains whether the route is explicitly
     /// pinned or is the only active backend.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn cpu_arch_execution_route_advisory_with_policy(
         &self,
     ) -> (
@@ -263,6 +273,7 @@ impl Image {
 impl Image {
     /// Try applying ImageOps.grayscale immediately for the bounded native-RGB
     /// CPU/SIMD path. Other inputs keep the ordinary lazy pipeline semantics.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn try_grayscale_eager_rgb(&self) -> Result<Option<Image>, PilError> {
         let Image::Loaded(data) = self else {
             return Ok(None);

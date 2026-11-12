@@ -26,7 +26,7 @@ pub(super) fn palette_alpha_for_convert(img: &Image) -> Option<Vec<u8>> {
     img.palette_alpha().filter(|alpha| !alpha.is_empty())
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn convert_prepared_palette(
     image: &Image,
     source_mode: Mode,

@@ -39,6 +39,7 @@ impl Image {
 
     /// Computes a masked histogram, applying a native `I`/`F` range only when
     /// no mask is present.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn histogram_with_mask_and_extrema(
         &self,
         mask: Option<&Image>,

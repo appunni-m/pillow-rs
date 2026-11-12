@@ -9,6 +9,7 @@ use crate::image::{Image, PalettedData};
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn cpu_only_filter_route(
     image: &Image,
     operation: &'static str,
@@ -372,6 +373,7 @@ impl Image {
     ///
     /// This entry point preserves the exact raster mode and native samples;
     /// ordinary [`Image::expand`] continues to add a caller-selected fill.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn imaging_core_expand(&self, xmargin: i32, ymargin: i32) -> Result<Image, PilError> {
         // TODO(pillow-rs#3ptb): freeze callback outcomes for negative margins
@@ -453,6 +455,7 @@ impl Image {
             .crop_unsigned((margin, margin, right, bottom))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn imaging_core_palette_rankfilter(&self, size: u32, rank: u32) -> Result<Image, PilError> {
         let (requested_backend, context, fallback_reason) =
             cpu_only_filter_route(self, "ImagingCorePaletteRankFilter")?;
@@ -563,6 +566,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization, blur execution, allocation
     /// checks, or raw image reconstruction fails.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn unsharp_mask(
         &self,
         radius: f32,
@@ -653,6 +657,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization, allocation checks, or raw image
     /// reconstruction fails.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn mode_filter(&self, size: u32) -> Result<Image, PilError> {
         self.validate_filter("Mode")?;
         // Pillow's modefilter uses `size / 2` as its radius.  Positive even

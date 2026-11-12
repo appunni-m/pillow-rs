@@ -7128,3 +7128,30 @@ or public manifest references. Seventeen active registry-dispatched
 280 generic source-unreached candidates remain under inert `pool_cpu/legacy`.
 These static graph limits do not establish runtime reachability. Stage 5
 source closure and full CPU acceptance remain open under `pillow-rs#3ptb`.
+
+2026-11-13 direct eager-route/context source audit: reviewed every maintained
+`cpu_arch_execution_route*` call site outside `pool_cpu/legacy`, plus the
+draw-owned context adapter and prepared GetProjection PutPixel terminal. The
+review covered pixel and data reads/writes, channel identity/eager-child paths,
+statistics and analysis, projection, fusion admission, conversion, quantize,
+CPU-only filters, split, drawing, flood fill, and Transform. Mode selectors use
+the exact `DynamicImage::mode()` for materialized algorithms; pre-materialized
+mutation/Transform entry points carry the exact typed wrapper Mode and then
+validate the materialized raster before executing. The same `ExecutionContext`
+flows into family selection/preparation, is captured once in callback-oriented
+PutData and Transform paths, and is reused for each MESH record. Copy-only
+GetChannel/Split routes intentionally do not choose a pixel architecture;
+their non-identity ExtractBand children defer to ordinary pipeline dispatch.
+The GetProjection PutPixel fusion path captures a prepared context and passes
+it to its CPU Default/architecture terminal selector. Existing GPU-only
+terminal eligibility/context TODOs remain assigned to later GPU work.
+
+Added source-only VERIFY markers to the reviewed route callers and helpers. The
+direct route helper now has a Stage 7 TODO for receipts across the frozen CPU
+mode/architecture matrix. No route caller was left unreviewed; existing
+per-path parity and backend TODOs remain attached to their operation owners.
+This audit does not establish output, fault-order, fallback-receipt, or latency
+parity. Stage 5 still has family/helper/call-graph source review and exact
+function/file-size proof outstanding. `make docs-lint`, `make fmt`, and
+`make clippy` passed on 2026-11-13; Clippy reported the repository's existing
+warning diagnostics. No tests, parity, benchmark, or coverage command ran.

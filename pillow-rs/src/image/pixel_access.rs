@@ -37,6 +37,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError::IndexError`] when coordinates are outside the image.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn getpixel(&self, x: u32, y: u32) -> Result<(u8, u8, u8, u8), PilError> {
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let img = self.materialized_shared()?;
@@ -73,6 +74,7 @@ impl Image {
     /// loaded `RGB` image backed by three-byte RGB pixels. Callers can then
     /// preserve deferred decoding and pipeline execution on their ordinary
     /// materialization path. Coordinates are checked before reading a pixel.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[doc(hidden)]
     #[inline]
     pub fn getpixel_rgb_if_loaded(&self, x: u32, y: u32) -> Result<Option<[u8; 3]>, PilError> {
@@ -107,6 +109,7 @@ impl Image {
     }
 
     /// Returns one pixel with Pillow's mode-specific scalar or tuple shape.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn getpixel_formatted(&self, x: u32, y: u32) -> Result<FormattedPixelValue, PilError> {
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let img = self.materialized_shared()?;
@@ -331,6 +334,7 @@ impl Image {
     /// conversion here so `putpixel` preserves Pillow's modulo-65536 behavior
     /// for negative and over-range values without routing the value through the
     /// eight-bit `PipelineOp::PutPixel` representation.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn putpixel_l16(&mut self, x: u32, y: u32, value: i64) -> Result<(), PilError> {
         let (width, height) = self.size()?;
         if x >= width || y >= height {
@@ -353,6 +357,7 @@ impl Image {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn putpixel_sample_at(
         &mut self,
         mode: Mode,

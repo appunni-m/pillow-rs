@@ -349,6 +349,7 @@ impl Image {
     }
 
     /// Allocates the MESH destination and captures its backend and architecture route.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_mesh_public(
         &self,
@@ -360,6 +361,7 @@ impl Image {
     }
 
     /// Allocates an exact-mode destination and captures its backend/architecture context.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_output_public(
         &self,
@@ -383,6 +385,7 @@ impl Image {
     }
 
     /// Starts a MESH accumulator from the destination allocated before callbacks.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_mesh_from_output_public(
         &self,
@@ -413,6 +416,7 @@ impl Image {
     }
 
     /// Applies one QUAD-shaped MESH record to the reusable destination.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn apply_transform_mesh_record_public(
         &self,
@@ -483,6 +487,7 @@ impl Image {
     }
 
     /// Executes the built-in Transform method with a previously resolved fill.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn transform_prepared_public(
         &self,
@@ -531,6 +536,7 @@ impl Image {
 
     /// Executes a non-MESH host Transform into the destination prepared before
     /// Python method-data callbacks ran.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn transform_prepared_output_public(
         &self,

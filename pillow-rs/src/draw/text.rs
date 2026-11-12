@@ -431,6 +431,7 @@ impl Draw {
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn text_with_options_inner(
         &mut self,
         x: i32,
@@ -478,6 +479,7 @@ impl Draw {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn text_with_options_inner_selected(
         &mut self,
         x: i32,
@@ -518,6 +520,7 @@ impl Draw {
         Ok(((width, height), selection))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn text_render_and_compose(
         &mut self,
         x: i32,

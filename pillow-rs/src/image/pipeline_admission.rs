@@ -13,6 +13,7 @@ impl Image {
     /// already validated pixel writes over an in-memory source. `thumbnail()`
     /// can keep those writes in the same backend batch when that backend has a
     /// matching fusion.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn has_deferable_rgb_putpixel_prefix(&self) -> bool {
         let Image::Pipeline {
             source,
@@ -61,6 +62,7 @@ impl Image {
 
     /// Check the CPU architecture strategy's fusion admission for this lazy
     /// write prefix and requested thumbnail.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn can_defer_rgb_putpixel_thumbnail(
         &self,
         width: u32,

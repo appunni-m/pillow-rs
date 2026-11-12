@@ -27,6 +27,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when the mode, matrix, dither option, or source
     /// image data is invalid.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn convert(
         &self,
         mode: Mode,
@@ -201,6 +202,7 @@ fn try_convert_prestandard(
     super::luma16::try_convert_to_luma16(image, source_mode, target_mode)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_matrix_conversion(
     image: &Image,
     target_mode: Mode,
@@ -217,6 +219,7 @@ fn execute_matrix_conversion(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_matrix_conversion_from_source(
     image: &Image,
     materialized: &DynamicImage,

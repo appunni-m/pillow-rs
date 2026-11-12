@@ -28,6 +28,7 @@ impl Draw {
     ///
     /// Returns [`PilError::ValueError`] when the bitmap mode is not a valid
     /// mask mode, and propagates mode, size, or pixel-data errors.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn bitmap(
         &mut self,
         x: i32,

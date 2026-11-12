@@ -37,6 +37,7 @@ impl Image {
 
     /// Computes entropy from the selected native histogram, ignoring extrema
     /// when a mask is present.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn entropy_with_mask_and_extrema(
         &self,
         mask: Option<&Image>,

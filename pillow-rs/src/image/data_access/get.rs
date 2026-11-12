@@ -162,6 +162,7 @@ impl Image {
     /// images. The returned slice is a view of the image; bindings must copy
     /// it before returning so later image mutation cannot change a GetData
     /// snapshot.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn getdata_band_view(&self, band: i32) -> Result<Option<&[u8]>, PilError> {
         if band != 0 {
             return Ok(None);
@@ -219,6 +220,7 @@ impl Image {
     /// the mode or the requested band is out of range, and
     /// [`PilError::InternalError`] when the output length is incorrect. Other
     /// errors can occur while loading or materializing the image.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn getdata_band_into(&self, band: i32, output: &mut [u8]) -> Result<(), PilError> {
         let mode = self.mode_identity()?;
         let expected = self.getdata_band_len_for_mode(mode, band)?;
@@ -239,6 +241,7 @@ impl Image {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn write_getdata_band_into(
         &self,
         mode: Mode,
@@ -274,6 +277,7 @@ impl Image {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn selected_getdata_route(
         &self,
     ) -> Result<
@@ -286,6 +290,7 @@ impl Image {
         self.cpu_arch_execution_route()
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn try_getdata_band_simd_sink(
         &self,
         band: u8,
@@ -325,6 +330,7 @@ impl Image {
         Ok(handled.is_some())
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn try_getdata_band_backend(
         &self,
         mode: Mode,
@@ -368,6 +374,7 @@ impl Image {
         Ok(true)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn write_getdata_band_cpu(
         &self,
         band: usize,
@@ -421,6 +428,7 @@ impl Image {
     /// The byte extraction and logical band count are core behavior. Host
     /// bindings should only convert [`FormattedImageData`] into their native
     /// list/tuple representation.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn getdata_formatted(&self, band: Option<i32>) -> Result<FormattedImageData, PilError> {
         let mode = self.mode_identity()?;
         if matches!(

@@ -6,6 +6,7 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn try_convert_scalar_to_rgbx(
     image: &Image,
     source_mode: Mode,

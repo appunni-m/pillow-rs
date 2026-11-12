@@ -111,6 +111,7 @@ fn getchannel_band_count(support: ModeSupport) -> usize {
         .expect("GetChannel support must declare the exact source-mode band count")
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn eager_getchannel_tiny_rgb(
     image: &DynamicImage,
@@ -148,6 +149,7 @@ fn eager_getchannel_tiny_rgb(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn eager_getchannel_identity_copy(
     image: &Image,
     channel: i32,
@@ -177,6 +179,7 @@ fn checked_channel_index(channel: i32, bands: usize) -> Result<usize, PilError> 
         .ok_or_else(|| PilError::ValueError("band index out of range".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn eager_getchannel_shared_buffer_identity(
     image: &Image,
     route: OperationModeRoute,
@@ -214,6 +217,7 @@ fn eager_getchannel_shared_buffer_identity(
     .map(Some)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn eager_getchannel_tiny_rgb_child(
     image: &Image,
     route: OperationModeRoute,
@@ -261,6 +265,7 @@ fn eager_getchannel_tiny_rgb_child(
     Ok(Some(result))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn concrete_identity_source(image: &Image, cached_at_entry: bool) -> Option<(&DynamicImage, bool)> {
     match image {
         Image::Loaded(data) => Some((data.image.as_ref(), true)),
@@ -275,6 +280,7 @@ fn concrete_identity_source(image: &Image, cached_at_entry: bool) -> Option<(&Dy
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn eager_route_guards_pass(
     guards: &[OperationRouteGuard],
     loaded_image: bool,
@@ -307,6 +313,7 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when `channel` is out of range, or
     /// another [`PilError`] when materialization fails.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn getchannel(&self, channel: i32) -> Result<Image, PilError> {
         let cached_at_entry = self.is_materialized();
         let mode = self.mode_identity()?;
@@ -326,6 +333,7 @@ impl Image {
         self.getchannel_materialized_child(route, channel, bands)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn getchannel_identity_copy(
         &self,
         channel: i32,
@@ -357,6 +365,7 @@ impl Image {
         eager_getchannel_identity_copy(self, channel, bands)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn getchannel_materialized_child(
         &self,
         route: OperationModeRoute,
@@ -396,6 +405,7 @@ impl Image {
         self.queue_getchannel_child(route, backend_channel)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn queue_getchannel_child(
         &self,
         route: OperationModeRoute,

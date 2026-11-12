@@ -10234,3 +10234,20 @@ operation-family owners. Four shader candidates remain for the later GPU
 review. Static mapping does not prove compiler reachability or runtime use.
 Stage 5 source closure and CPU acceptance remain open; no benchmark or coverage
 was collected.
+
+2026-11-13 direct eager-route/context source audit: reviewed every maintained
+`cpu_arch_execution_route*` call site outside `pool_cpu/legacy`, plus the Draw
+context adapter and prepared GetProjection PutPixel terminal. Exact typed mode
+is passed to each family selector; materialized paths use `DynamicImage::mode`,
+and callback-oriented PutData/Transform retain and reuse their injected
+`ExecutionContext`. GetChannel/Split identity-copy paths do not execute a pixel
+kernel; deferred child extraction uses ordinary pipeline dispatch. The
+GetProjection PutPixel fusion captures a context for its CPU terminal, while
+GPU terminal admission/context remains a later GPU item. Source-review markers
+now cover the audited wrappers, selectors, and context helpers. Stage 7 still
+needs frozen CPU mode/architecture output, error-order, fallback-receipt, and
+latency evidence. Stage 5 family/helper source closure and function/file-size
+proof remain pending. Existing per-path parity and backend TODOs remain with
+their operation owners. `make docs-lint`, `make fmt`, and `make clippy` passed
+on 2026-11-13; Clippy reported the repository's existing warning diagnostics.
+No tests, parity, benchmark, or coverage command ran.

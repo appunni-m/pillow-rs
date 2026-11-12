@@ -49,6 +49,7 @@ impl Image {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn stat_formatted_with_image_mask(&self, mask: &Image) -> Result<StatResult, PilError> {
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let image = self.materialized_shared()?;
@@ -109,6 +110,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization fails.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn stat(&self) -> Result<Vec<Vec<f64>>, PilError> {
         let mode = self.mode_identity()?;
         OperationId::Stat.support().for_mode(mode).validate_mode()?;
@@ -171,6 +173,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when mode detection or materialization fails.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[allow(clippy::type_complexity)]
     pub fn getcolors(
         &self,
@@ -229,6 +232,7 @@ impl Image {
 
     /// Applies Pillow's signed `maxcolors` argument semantics for bindings.
     /// Negative limits still load and validate the image, then return `None`.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn getcolors_with_signed_limit(
         &self,
         maxcolors: i32,
@@ -332,6 +336,7 @@ impl Image {
     }
 
     /// Returns extrema using Pillow's one-pair versus per-band result shape.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn getextrema_formatted(&self) -> Result<FormattedExtrema, PilError> {
         let (width, height) = self.size()?;
         let mode = self.mode_identity()?;

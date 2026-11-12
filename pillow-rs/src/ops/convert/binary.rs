@@ -5,6 +5,7 @@ use crate::image::Image;
 use crate::pipeline::{DitherMethod, PipelineOp};
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn convert_to_binary(
     image: &Image,
     dither: Option<DitherMethod>,
