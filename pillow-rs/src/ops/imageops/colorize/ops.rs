@@ -90,6 +90,7 @@ pub trait ImageOpsColorizeCallbacks: crate::ops::imageops::ImageOpsLutCallbacks 
 // lookup and truthiness, ImageColor resolver, color-index, arithmetic,
 // Convert/Point faults, subclass Convert mode overrides, and final
 // mode/output/selection receipts.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn colorize_with_callbacks<C: ImageOpsColorizeCallbacks>(
     callbacks: &mut C,

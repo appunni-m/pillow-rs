@@ -5082,6 +5082,18 @@ Autocontrast host cutoff arithmetic (2026-11-03): the PyO3 adapter now invokes P
   Exact color parsing, output, errors, and architecture receipts remain pending.
   Source-only; no build, formatter, checkstyle, lint, tests, parity, benchmark,
   or coverage ran. Source: [Pillow 12.2 ImageOps.colorize](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageOps.py#L1992-L2010).
+- ImageOps Colorize mode-boundary source review (2026-11-12): Python's
+  callback performs the public `image.mode == "L"` rich comparison, preserving
+  subclasses and wrapper callback order. Core validates the typed
+  `Mode::ImageLuma8` operation contract only after that succeeds. On rejection,
+  the callback computes `str(image.mode)` solely for the public error message;
+  that string is not parsed or used for strategy selection. Direct Rust
+  Colorize continues to use `Image::mode_identity()` and typed support. This
+  resolves the apparent string-mode exception from the source scan without
+  moving Python protocol behavior into a mode selector. Mode/error source
+  review is recorded; callback, output, and selected/fallback receipt parity
+  remain pending. No build, formatter, checkstyle, lint, tests, parity,
+  benchmark, or coverage ran.
 - Direct Convert-to-LAB matrix source recheck (2026-11-04): traced every
   mode-owned source Default entry. All 23 supported non-LAB/non-La rows feed
   native-derived RGB samples to the shared LAB kernel and write only the final

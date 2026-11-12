@@ -153,6 +153,7 @@ def pad(
     )
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):
     return _core.ops_imageops_colorize_with_callbacks(
         image, black, white, mid, blackpoint, midpoint, whitepoint

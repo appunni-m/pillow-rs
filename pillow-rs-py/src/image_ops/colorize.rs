@@ -13,6 +13,7 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
     type Range = Bound<'py, PyAny>;
     type Iterator = Bound<'py, PyIterator>;
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn image_mode_is_luma(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
         Ok(image
             .getattr("mode")?
@@ -20,6 +21,7 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
             .is_truthy()?)
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn image_mode_name(&mut self, image: &Self::Image) -> Result<String, Self::Error> {
         image.getattr("mode")?.str()?.extract().map_err(Into::into)
     }
@@ -142,6 +144,7 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_imageops_colorize_with_callbacks(
     py: Python<'_>,
