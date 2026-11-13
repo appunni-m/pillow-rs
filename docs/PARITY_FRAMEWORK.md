@@ -1,25 +1,28 @@
 # Reusable parity framework
 
-Status: reusable internal framework for projects that need repeatable behavior
-parity or fault-contract verification. The PostgreSQL-backed implementation in
-this repository is the first reference implementation. The model is designed
-for cross-project use, while its schema and adapter API remain under active
-development until validated with an unrelated project.
+Status: project-neutral working standard for repeatable behavior parity and
+fault-contract verification. The relational model and adapter contracts are
+intended for reuse across projects, languages, and runtime types. The
+implementation in this repository is the first reference implementation; its
+schema and adapter API remain under active development until validated with an
+unrelated project.
 
-This guide defines the project-neutral model and adapter boundary. The current
-Python/PostgreSQL reference implementation, its database lifecycle, and the
-first project integration are documented in the
+This guide defines the project-neutral model, storage boundary, and project
+adapter contract. The current Python/PostgreSQL reference implementation, its
+database lifecycle, and the first project integration are documented in the
 [PostgreSQL parity store guide](PARITY_STORE.md).
 
-The framework's data model is reusable across languages and project types.
 The checked-in implementation is currently a repository-local Python package
 backed by PostgreSQL; it is not yet a separately versioned package for other
-repositories to install. Python adapters can use the typed interfaces here;
-other languages can keep thin project adapters and use this relational
-contract through a project-owned bridge. Validate the design with a second,
-unrelated project before extracting and versioning a shared package. This guide
-does not claim a published cross-language wire protocol or replace any
-project's existing parity result format.
+repositories to install. The model does not require Python or PostgreSQL:
+projects may implement the adapter in their existing language and connect it
+to a conforming relational-store adapter. PostgreSQL is the only engine
+implemented here today. MySQL is a valid backend target for the same contract,
+but is not supported by this repository until a MySQL adapter passes the
+storage conformance checks described below. Validate the project boundary with
+a second, unrelated project before extracting and versioning a shared package.
+This guide does not claim a published cross-language wire protocol or replace
+any project's existing parity result format.
 
 ## Purpose
 
@@ -164,54 +167,55 @@ semantics, API-specific normalization, or project error mappings.
 ### Minimal integration API
 
 The shared store deliberately stops at typed case and evidence records. A
-project integration supplies a project-owned importer and two injected runtime
-strategies:
+project integration supplies a project-owned importer, runtime strategies,
+comparator, and an implementation of the evidence-store port. The language-
+neutral interface is:
 
-```python
-class ProjectExecutor:
-    identity: ImplementationIdentity
+```text
+SpecificationImporter
+  validate(source_documents, pinned_snapshot) -> SpecificationSnapshot
+  stream_cases(snapshot, selection, batch_limits) -> CaseBatch
 
-    def execute_batch(self, cases: Sequence[CaseRecord]) -> Mapping[str, ExecutionRecord]:
-        # Call this project's public oracle or target interface.
-        ...
+ProjectExecutor
+  identity -> ImplementationIdentity
+  execute_batch(cases: CaseBatch) -> one ExecutionRecord per selected case
 
+ProjectComparator
+  identity -> ComparatorIdentity
+  compare(case, optional_source_execution, target_execution)
+      -> ComparisonDecision
 
-class ProjectComparator:
-    identity: ImplementationIdentity
-
-    def compare(
-        self,
-        case: CaseRecord,
-        source: ExecutionRecord | None,
-        target: ExecutionRecord,
-    ) -> ComparisonDecision:
-        # Apply this project's current result and fault-contract rules.
-        ...
+EvidenceStore
+  migrate()
+  import_snapshot(snapshot, case_batches)
+  select_batch(project, snapshot, profile, cursor, count_limit, byte_limit)
+  persist_executions_and_comparisons(batch, records)
+  find_compatible_execution(identity, case_digest)
+  summarize(selection) -> case-level evidence and derived counts
 ```
 
-The executor and comparator own policy. The shared coordinator owns only
+The executor and comparator own project policy. The shared coordinator owns
 profile selection, bounded batches, identity-compatible execution reuse, and
-typed persistence:
+typed persistence. The project selects a concrete `EvidenceStore`
+implementation through configuration; the coordinator does not call a
+database driver directly. A concrete store may expose more efficient methods
+while preserving the same transaction, selection, identity, and evidence
+guarantees.
 
-```python
-store = PostgresStore.connect(dsn)
-try:
-    store.migrate()
-    import_project_specification(store)  # project-owned importer
-    summary = run_target_profile(
-        store,
-        project_id="example-project",
-        specification_digest=specification_digest,
-        profile_id="release-x86_64",
-        source=reference_executor,  # omit for target-only contracts
-        target=target_executor,
-        comparator=project_comparator,
-        host_description=host_identity,
-        maximum_cases=128,
-        maximum_estimated_bytes=32 * 1024 * 1024,
-    )
-finally:
-    store.close()
+```text
+store = configured_evidence_store.open()
+store.migrate()
+snapshot = importer.validate(project_sources, pinned_snapshot)
+store.import_snapshot(snapshot, importer.stream_cases(snapshot, selection, limits))
+result = coordinator.run_profile(
+    store=store,
+    snapshot=snapshot,
+    profile=selected_profile,
+    source=reference_executor,       # absent for recorded-output contracts
+    target=candidate_executor,
+    comparator=project_comparator,
+    batch_limits={case_count, estimated_bytes},
+)
 ```
 
 `execute_batch` receives only a selected bounded group and returns exactly one
@@ -220,15 +224,15 @@ and can split that work into an internal hydrator and oracle/target clients.
 The coordinator verifies the case set and every execution identity before
 writing results. `ComparisonDecision` is the project's typed comparator
 result; the coordinator binds it to persisted run and execution IDs. It does
-not rewrite a project's external report. The current reference implementation
-exposes these records from `scripts/parity_store`.
+not rewrite a project's external report. The current Python reference exposes
+these records from `scripts/parity_store`.
 
 The project importer is equally narrow: it validates project-authored inputs,
-registers project/operation/requirement/profile records, and calls
-`insert_cases` in bounded transactions. It can read JSON, YAML, binary files,
-database fixtures, or generated inputs. Source format is not stored as a
-serialized case document in PostgreSQL; the importer maps each case to typed
-rows and stores binary content by digest.
+registers project/operation/requirement/profile records, and streams cases in
+bounded transactions. It can read JSON, YAML, binary files, database fixtures,
+or generated inputs. Source format is not stored as a serialized case document
+in the relational evidence store; the importer maps each case to typed rows
+and stores binary content by digest.
 
 ## Reuse from another project
 
@@ -243,7 +247,7 @@ project parity inputs and pinned specification
     -> reference BatchExecutor (when available)
     -> candidate BatchExecutor for each target profile
     -> project Comparator
-    -> shared campaign coordinator and PostgreSQL store
+    -> shared campaign coordinator and configured relational evidence store
     -> project report or existing parity receipt
 ```
 
@@ -257,15 +261,16 @@ rules, and report presentation. An image library may use dimensions such as
 dimensions and profile attributes. No project should need a project-named SQL
 column or migration for them.
 
-For example, an HTTP client project can map a request into a generic workflow:
+For example, an HTTP client project can map a request into a generic workflow
+without adding HTTP-specific fields to the shared schema:
 
-```python
-CaseStep(
-    step_id="request",
-    surface_id="HttpClient",
-    operation_id="request",
-    arguments={"method": "GET", "path": "/health"},
-)
+```text
+CaseStep {
+  step_id: "request",
+  surface_id: "HttpClient",
+  operation_id: "request",
+  arguments: { method: "GET", path: "/health" }
+}
 ```
 
 The case can declare dimensions such as `protocol_version="2"` and
@@ -280,7 +285,7 @@ Adopt incrementally:
 
 1. Pin the existing specification and input digests. Keep its current files as
    the reviewed authority; JSON may remain an input format, but input documents
-   and serialized case envelopes are not stored as JSON/JSONB in PostgreSQL.
+   and serialized case envelopes are not stored in relational JSON/JSONB fields.
 2. Map one real case, including only the assets and observations it uses, to
    typed records. Store large binary content once as compressed blobs and
    reference it by digest.
@@ -304,19 +309,20 @@ The reference package is currently repository-local at
 `scripts/parity_store/`, with PostgreSQL migrations alongside it. Another
 repository should pin or vendor that implementation as a unit, including its
 migrations; it should not copy only the SQL tables or write a second partial
-store client. The Python coordinator can drive any target that the project's
-adapter can call. A stable package release or cross-language wire protocol is
-not defined yet. Validate this boundary with an unrelated project before
-freezing either interface. This keeps current project adapters thin while
+store client. The current Python coordinator can drive any target that the
+project's adapter can call. A stable package release or cross-language wire
+protocol is not defined yet. Validate this boundary with an unrelated project
+before freezing either interface. This keeps project adapters thin while
 leaving package extraction and schema compatibility policy for the later
 standardization step.
 
-Projects can share one PostgreSQL database when they use the same migration
-set: `project_id` scopes project data, while the migration ledger and physical
-tables are shared by the database. Coordinate schema upgrades across every
-consumer of that database. If a project needs an incompatible migration set,
-give it an isolated database until the consumers can move together. A shared
-`project_id` is a data namespace, not a substitute for database access control.
+Projects can share one database instance when they use the same engine adapter
+and migration set: `project_id` scopes project data, while the migration
+ledger and physical tables are shared by the database. Coordinate schema
+upgrades across every consumer of that database. If a project needs an
+incompatible migration set, give it an isolated database until the consumers
+can move together. A shared `project_id` is a data namespace, not a substitute
+for database access control.
 
 The current shared coordinator covers reference parity, recorded-output
 contracts, and fault contracts. Coverage and benchmark execution retain their
@@ -356,6 +362,35 @@ Database rows should not embed executable code, shell fragments, SQL fragments,
 or implicit project behavior. All queries use parameters. Migrations are
 ordered, checksummed, and applied before import or execution. A project can
 rebuild its database from pinned specification inputs and artifact sources.
+
+### Database engine portability
+
+The shared contract is relational and does not require one database vendor.
+Its required capabilities are transactions, referential and uniqueness
+constraints, indexed typed columns, parameterized queries, bounded reads,
+incremental writes, and binary large-object storage. Engine-specific SQL and
+types belong behind the evidence-store adapter and its migration set.
+
+The conceptual schema uses a binary-payload field. A PostgreSQL adapter may
+map it to `BYTEA`; a MySQL adapter may map it to an appropriate `BLOB` type.
+These are implementation mappings, not differences in the evidence model.
+Keep case dimensions and structured values relational in either engine. Do
+not use JSON/JSONB columns, vendor JSON operators, or serialized case documents
+as a shortcut for storing or querying project meaning. Authored inputs may
+use JSON, YAML, source code, binary files, or generated recipes; the importer
+validates them and emits typed rows. Large assets and outputs are compressed,
+content-addressed binary blobs referenced from those rows.
+
+Run each engine in a pinned Docker Compose service for reproducible local and
+CI development. Bind local ports to loopback, keep credentials outside version
+control, and keep development data in a named volume. Each engine adapter must
+pass the same storage conformance suite: migration from an empty database,
+typed-value round trips, blob digest/compression round trips, bounded batch
+selection, transaction rollback, idempotent persistence, and identity-safe
+reuse/resumption. Do not claim an engine is supported until that suite passes.
+The checked-in implementation currently provides the PostgreSQL adapter only;
+this contract allows a future MySQL adapter without changing project case or
+comparator semantics.
 
 ## Execution, batching, and resumption
 
@@ -458,7 +493,8 @@ Adoption sequence:
    importing the full corpus.
 6. Add project-specific fields only to the authored specification or adapter.
    Propose a generic schema migration only when the missing concept applies to
-   more than one project.
+   more than one project. Keep database-specific DDL in the engine adapter and
+   prove it against the shared storage conformance suite.
 
 This keeps each project free to preserve its existing public report and test
 commands while sharing the storage, asset, batching, identity, and recovery
@@ -488,14 +524,14 @@ unrelated project and review:
 5. which schema fields are truly universal and which should move to the
    adapter;
 6. the cost of maintaining a shared package, schema migration policy, and
-   compatible PostgreSQL versions.
+   compatible versions of each supported database engine.
 
 Only after that review should the project team freeze a reusable package API,
 version the framework contract, and define compatibility guarantees. Until
 then, treat the schema and interfaces as a reference design and preserve each
 project's existing public parity result contract.
 
-## Current reference implementation
+## Current reference implementation: pillow-rs and PostgreSQL
 
 The first implementation is in `scripts/parity_store/`, backed by PostgreSQL
 in Docker. The Pillow adapter imports the pinned fixture manifest, runs the
