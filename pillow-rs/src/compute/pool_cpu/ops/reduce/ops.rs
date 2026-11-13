@@ -60,7 +60,7 @@ enum ReduceStrategy<'a> {
     ImageRgba32F(super::rgba32f::ops::Strategy<'a>),
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> crate::compute::registry::support::ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -94,7 +94,7 @@ fn classify_mode(mode: Mode) -> crate::compute::registry::support::ModeSupport {
 pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Reduce, &[], classify_mode);
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     factors: (u32, u32),
@@ -190,7 +190,7 @@ pub(crate) fn prepare<'a>(
 }
 
 impl PreparedReduce<'_> {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &crate::compute::registry::support::StrategySelection {
         match &self.strategy {
             ReduceStrategy::One(strategy) => strategy.selection(),
@@ -221,7 +221,7 @@ impl PreparedReduce<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let Self {
             image,
@@ -266,7 +266,7 @@ impl PreparedReduce<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

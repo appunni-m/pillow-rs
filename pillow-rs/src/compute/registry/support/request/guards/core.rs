@@ -46,7 +46,7 @@ pub(crate) fn thumbnail_i32_stream_guard(input: StrategyInputs) -> GuardAssessme
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn reduce_f32_vector_guard(input: StrategyInputs) -> GuardAssessment {
     let (x_factor, y_factor) = match input.request {
         RequestFacts::Reduce { x_factor, y_factor } => (x_factor, y_factor),

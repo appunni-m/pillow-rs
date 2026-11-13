@@ -7,7 +7,7 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn output_sample_capacity(
     width: u32,
     height: u32,
@@ -28,7 +28,7 @@ fn output_sample_capacity(
         .ok_or_else(|| PilError::DimensionError("typed reducer sample count overflow".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Reduces unsigned 16-bit native samples with nearest, half-up integer rounding.
 pub(crate) fn reduce_u16<P>(
     image: &ImageBuffer<P, Vec<u16>>,
@@ -77,7 +77,7 @@ where
     })
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Reduces native f32 channels using f64 accumulation, without changing layout.
 pub(crate) fn reduce_f32<P>(
     image: &ImageBuffer<P, Vec<f32>>,

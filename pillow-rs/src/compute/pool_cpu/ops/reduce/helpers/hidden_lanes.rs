@@ -10,6 +10,7 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, buffer::HiddenPixelLanes};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Preserves copied lanes or installs Rust's zero padding after reduction.
 pub(crate) fn finish(
     source: &DynamicImage,
@@ -50,6 +51,7 @@ pub(crate) fn finish(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn invalid_lane_output() -> PilError {
     PilError::InternalError("Reduce physical lane output was invalid".into())
 }

@@ -10383,3 +10383,26 @@ fixture-reference completeness checks remain mapped with zero unresolved
 edges. This static source inventory did not build or execute image code; no
 formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
 CPU Stage 5 remains open.
+
+2026-11-13 focused Reduce source review: the family entry was traced across
+all 25 `Mode` cases in support classification and all 25 `DynamicImage` cases
+in prepared routing/execution; output mode is declared preserved, and the
+post-reducer physical-lane helper keeps only identity-copy source lanes while
+zeroing unspecified reduced lanes. Reviewed the identity-only `One` strategy,
+the `ImageI32` scalar carrier path, the complete `ImageF32` Default/portable
+vector/AVX/SSE2/NEON/Wasm strategy chain and its materialized shape guard, and
+the nine native typed u16/f32 CoreOnly owners. The nine extensions are marked
+`cpu_core_only` with adjacent `NO_PILLOW_SUPPORT` comments; their Default
+reducers keep exact typed samples and exact output variants, using u128
+half-up averages for u16 and f64 accumulation for typed f32. The archived I32/F32
+reducer still routes I/F through thumbnail helpers selected by an explicit mode
+string; the new strategies select from typed `Mode` and preserve the exact
+output variants.
+Per-function source markers were refreshed or added for the reviewed paths;
+parity remains pending except the previously recorded NEON F32 2x2 subpath.
+This does not complete the Reduce-family source audit: the remaining byte-mode
+support declarations, native-byte/RGB helper algorithms, and their Default and
+architecture leaves still need a complete source review. Full mode ×
+architecture parity and performance remain deferred to the Stage 7/8 gates.
+This entry records source review only; the documentation, format, and lint
+gates for this push are tracked separately from the Stage 7/8 verification.

@@ -3,7 +3,7 @@
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &crate::raster::RgbaImage,
     x_factor: u32,

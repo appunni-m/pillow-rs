@@ -5,11 +5,12 @@ use crate::compute::helpers::resampling::rounding::round_up;
 use crate::error::PilError;
 use crate::raster::RgbaImage;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn scalar_index(x: u32, y: u32, width: u32) -> usize {
     (y as usize * width as usize + x as usize) * 4
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn read_i32(source: &[u8], index: usize) -> i32 {
     i32::from_le_bytes(
         source[index..index + 4]
@@ -18,7 +19,7 @@ fn read_i32(source: &[u8], index: usize) -> i32 {
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn read_f32(source: &[u8], index: usize) -> f32 {
     f32::from_le_bytes(
         source[index..index + 4]
@@ -27,11 +28,12 @@ fn read_f32(source: &[u8], index: usize) -> f32 {
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn output_bytes(width: u32, height: u32) -> Result<Vec<u8>, PilError> {
     CheckedDims::new(width, height, 4).map(|dimensions| dimensions.alloc_buffer())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_i32_2x2(
     source: &[u8],
     source_width: u32,
@@ -57,6 +59,7 @@ fn reduce_i32_2x2(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_i32_interior_sum(
     source: &[u8],
     width: u32,
@@ -117,6 +120,7 @@ fn reduce_i32_interior_sum(
     sum
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_i32_edge_sum(
     source: &[u8],
     width: u32,
@@ -137,6 +141,7 @@ fn reduce_i32_edge_sum(
     sum
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_i32_general(
     source: &[u8],
     source_width: u32,
@@ -183,6 +188,7 @@ fn reduce_i32_general(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Reduces the signed scalar samples stored in the I-mode four-byte carrier.
 pub(crate) fn reduce_i32(
     image: &RgbaImage,
@@ -213,7 +219,7 @@ pub(crate) fn reduce_i32(
         .ok_or_else(|| PilError::InternalError("failed to construct I Reduce output".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_f32_2x2(
     source: &[u8],
     source_width: u32,
@@ -238,7 +244,7 @@ fn reduce_f32_2x2(
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_f32_interior_sum(
     source: &[u8],
     width: u32,
@@ -296,7 +302,7 @@ fn reduce_f32_interior_sum(
     sum
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_f32_edge_sum(
     source: &[u8],
     width: u32,
@@ -317,7 +323,7 @@ fn reduce_f32_edge_sum(
     sum
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_f32_general(
     source: &[u8],
     source_width: u32,
@@ -365,7 +371,7 @@ fn reduce_f32_general(
 }
 
 /// Reduces the float scalar samples stored in the F-mode four-byte carrier.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn reduce_f32(
     image: &RgbaImage,
     x_factor: u32,

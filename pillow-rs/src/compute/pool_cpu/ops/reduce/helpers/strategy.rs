@@ -9,7 +9,7 @@ use crate::compute::{
 };
 use crate::error::PilError;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn select_mode(
     support: ModeSupport,
     input: StrategyInputs,
@@ -25,7 +25,7 @@ pub(crate) fn select_mode(
 }
 
 /// Declares portable wide-lane and AVX2 reducers with one request contract.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn native_byte_architectures(
     operation: OperationId,
     mode: crate::raster::Mode,
@@ -73,7 +73,7 @@ pub(crate) const fn native_byte_architectures(
 }
 
 /// Declares F32 reducers for architectures with the eight-lane float kernel.
-// VERIFY: source=reviewed@2026-11-12; parity=pass@f32-reduce-neon-pillow; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-reduce-neon-pillow; benchmark=pending
 pub(crate) const fn native_f32_architectures(
     operation: OperationId,
     mode: crate::raster::Mode,
