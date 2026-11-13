@@ -2625,13 +2625,22 @@ function callStep(wasm, step, bindings, operations, assets, owned, displayRuntim
     );
 }
 
+function float64BitsHex(value) {
+    // JSON's NaN marker must retain the payload for exact F-mode parity.
+    const bytes = new ArrayBuffer(8);
+    const view = new DataView(bytes);
+    view.setFloat64(0, value, false);
+    return view.getBigUint64(0, false).toString(16).padStart(16, '0');
+}
+
 function jsonSafe(value) {
     if (value === undefined || value === null) return value ?? null;
     if (typeof value === 'number' && !Number.isFinite(value)) {
+        if (Number.isNaN(value)) {
+            return { __pillow_rs_nan_payload_result__: float64BitsHex(value) };
+        }
         return {
-            __pillow_rs_nonfinite_result__: Number.isNaN(value)
-                ? 'NaN'
-                : value > 0 ? 'Infinity' : '-Infinity',
+            __pillow_rs_nonfinite_result__: value > 0 ? 'Infinity' : '-Infinity',
         };
     }
     if (typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') return value;
