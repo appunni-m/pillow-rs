@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from collections.abc import Iterable, Mapping, Sequence
+from contextlib import AbstractContextManager
 from datetime import datetime, timezone
 import hashlib
 from pathlib import Path
@@ -63,6 +64,52 @@ class PostgresStore:
 
     def close(self) -> None:
         self.connection.close()
+
+    def transaction(self) -> AbstractContextManager[object]:
+        """Expose transaction scope without leaking the connection to callers."""
+
+        return self.connection.transaction()
+
+    def find_execution(
+        self,
+        identity_digest: bytes,
+        project_id: str,
+        specification_digest: bytes,
+        case_id: str,
+        case_digest: bytes,
+    ) -> tuple[int, ExecutionRecord] | None:
+        return self.results.find_execution(
+            identity_digest,
+            project_id,
+            specification_digest,
+            case_id,
+            case_digest,
+        )
+
+    def record_execution(self, record: ExecutionRecord) -> int:
+        return self.results.record_execution(record)
+
+    def record_comparison(self, record: ComparisonRecord) -> bytes:
+        return self.results.record_comparison(record)
+
+    def record_run_error(
+        self,
+        run_id: str,
+        *,
+        scope: str,
+        error_kind: str,
+        message: str,
+        external_id: str | None = None,
+        batch_id: int | None = None,
+    ) -> int:
+        return self.results.record_run_error(
+            run_id,
+            scope=scope,
+            error_kind=error_kind,
+            message=message,
+            external_id=external_id,
+            batch_id=batch_id,
+        )
 
     def migrate(self) -> None:
         migration_files = sorted(_MIGRATIONS.glob("[0-9][0-9][0-9][0-9]_*.sql"))

@@ -8,8 +8,8 @@ from pathlib import Path
 import sys
 
 from scripts import run_migration_parity as parity
-from scripts.migration_parity.postgres_adapter import PROJECT_ID, import_manifest
-from scripts.migration_parity.postgres_campaign import build_pillow_adapters
+from scripts.migration_parity.pillow_fixture_adapter import PROJECT_ID, import_manifest
+from scripts.migration_parity.pillow_campaign import build_pillow_adapters
 from scripts.parity_store import PostgresStore, run_target_profile
 
 ROOT = Path(__file__).resolve().parents[1]

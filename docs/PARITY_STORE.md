@@ -24,12 +24,22 @@ ledger, not a second place to edit the specification. No manifest or workflow
 JSON is stored in PostgreSQL; there are no JSON or JSONB columns or SQL JSON
 operators.
 
-The generic package owns schema migration, typed values, blob storage,
-incremental case batches, run identity, resumability, and result persistence.
+The shared store implementation owns schema migration, typed values, blob
+storage, incremental case batches, run identity, resumability, and result
+persistence.
 Project adapters own parsing their input format, resolving project-specific
 operation names, calling each oracle and target, and applying the project's
 declared comparator. The store must not import Pillow, image-slash-star, or any
 other project implementation.
+
+The executable store boundary is `scripts/parity_store/ports.py`'s
+`EvidenceStore` protocol. Both the bounded campaign coordinator and the Pillow
+fixture importer depend on this protocol; they do not reach through it to a
+PostgreSQL connection or result-table helper. `PostgresStore` is the current
+driver-backed implementation. A future MySQL store can implement the same
+catalog, transaction, selection, execution, comparison, and completeness
+operations while keeping the Pillow importer and the shared coordinator
+unchanged.
 
 ```text
 versioned project specification and input files

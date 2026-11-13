@@ -1,4 +1,4 @@
-"""Pillow fixture adapter for the project-neutral PostgreSQL parity store."""
+"""Pillow fixture adapter for the project-neutral typed parity store."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from scripts.parity_store import (
     CaseStep,
     ExpectedObservation,
     FaultContract,
-    PostgresStore,
+    EvidenceStore,
     ObservationSelector,
     canonical_value_digest,
 )
@@ -62,7 +62,7 @@ class _HashingTextReader:
 
 
 def import_manifest(
-    store: PostgresStore,
+    store: EvidenceStore,
     manifest_path: Path,
     *,
     case_ids: Iterable[str] | None = None,
@@ -121,7 +121,7 @@ def import_manifest(
     target_definitions = {item["id"]: item for item in manifest["targets"]}
     document_digests = {path: digest for path, _schema, digest in input_docs}
 
-    with store.connection.transaction():
+    with store.transaction():
         store.register_project(PROJECT_ID, "pillow-rs")
         store.register_specification(
             PROJECT_ID, specification_digest, manifest["schema"], source_ref
@@ -192,7 +192,7 @@ def import_manifest(
                     or batch_bytes + record.estimated_bytes > MAX_IMPORT_BYTES
                 ):
                     attempted = len(batch)
-                    with store.connection.transaction():
+                    with store.transaction():
                         added = store.insert_cases(batch)
                     imported += added
                     skipped_existing += attempted - added
@@ -206,7 +206,7 @@ def import_manifest(
                 )
         if batch:
             attempted = len(batch)
-            with store.connection.transaction():
+            with store.transaction():
                 added = store.insert_cases(batch)
             imported += added
             skipped_existing += attempted - added
@@ -268,7 +268,7 @@ def _candidate_case_documents(
 
 
 def iter_profile_batches(
-    store: PostgresStore,
+    store: EvidenceStore,
     specification_digest: bytes,
     profile_id: str,
     *,
@@ -352,7 +352,7 @@ def record_to_runner_case(record: CaseRecord) -> dict[str, Any]:
 
 
 def _register_catalog(
-    store: PostgresStore,
+    store: EvidenceStore,
     manifest: dict[str, Any],
     specification_digest: bytes,
     profiles: dict[str, dict[str, Any]],

@@ -7920,12 +7920,31 @@ It is a navigation aid, not an API-support or coverage claim.
     |   |-- fault_contracts.py
     |   |-- gpu_batch_inputs.py
     |   |-- mode_size_matrix.py
+    |   |-- pillow_campaign.py
+    |   |-- pillow_fixture_adapter.py
     |   |-- pipeline_contract.py
     |   |-- quantize_inputs.py
+    |   |-- streaming_json.py
     |   `-- target_output_contracts.py
     |-- migration_parity_inventory.py
     |-- migration_producer_attestation.py
     |-- migration_producer_identity.py
+    |-- parity_store/
+    |   |-- __init__.py
+    |   |-- campaign.py
+    |   |-- compose.yaml
+    |   |-- initialize_local_env.py
+    |   |-- migrations/
+    |   |   |-- 0001_core.sql
+    |   |   |-- 0002_specification_documents.sql
+    |   |   |-- 0003_execution_outcomes.sql
+    |   |   |-- 0004_packed_numeric_arrays.sql
+    |   |   `-- 0005_run_oracle_identity.sql
+    |   |-- model.py
+    |   |-- ports.py
+    |   |-- postgres.py
+    |   |-- result_store.py
+    |   `-- values.py
     |-- prepare_pypi_release.py
     |-- profile_migration_benchmark.py
     |-- public_api_boundary_baseline.json
@@ -7952,6 +7971,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- run_migration_imagesequence_native_cases.py
     |-- run_migration_js_parity.py
     |-- run_migration_parity.py
+    |-- run_migration_parity_postgres.py
     |-- run_migration_pillow_coverage.py
     |-- run_migration_rust_coverage.py
     |-- run_pillow_simd_benchmark.py

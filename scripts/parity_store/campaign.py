@@ -16,7 +16,7 @@ from .model import (
     ExecutionRecord,
     ImplementationIdentity,
 )
-from .postgres import PostgresStore
+from .ports import EvidenceStore
 from .values import case_set_digest
 
 
@@ -55,7 +55,7 @@ class CampaignSummary:
 
 
 def run_target_profile(
-    store: PostgresStore,
+    store: EvidenceStore,
     *,
     project_id: str,
     specification_digest: bytes,
@@ -80,7 +80,7 @@ def run_target_profile(
     if maximum_cases <= 0 or maximum_estimated_bytes <= 0:
         raise ValueError("campaign batch limits must be positive")
 
-    with store.connection.transaction():
+    with store.transaction():
         selected = store.selected_case_digests(
             project_id,
             specification_digest,
@@ -95,7 +95,7 @@ def run_target_profile(
     run_id = run_id or str(uuid.uuid4())
     identities = [target.identity.identity_digest]
 
-    with store.connection.transaction():
+    with store.transaction():
         if source is not None:
             store.register_identity(source.identity)
         store.register_identity(target.identity)
@@ -128,7 +128,7 @@ def run_target_profile(
         )
         for batch_number, (cases, estimated_bytes) in enumerate(batches):
             case_ids = [case.case_id for case in cases]
-            with store.connection.transaction():
+            with store.transaction():
                 batch_id = store.start_batch(
                     run_id,
                     target.identity.identity_digest,
@@ -149,13 +149,13 @@ def run_target_profile(
                     outcomes=outcomes,
                 )
             except Exception as exc:
-                with store.connection.transaction():
+                with store.transaction():
                     store.finish_batch(
                         batch_id,
                         error_kind=type(exc).__name__,
                         error_message=str(exc),
                     )
-                    store.results.record_run_error(
+                    store.record_run_error(
                         run_id,
                         scope="batch",
                         external_id=str(batch_number),
@@ -165,13 +165,13 @@ def run_target_profile(
                     )
                 error_recorded = True
                 raise
-            with store.connection.transaction():
+            with store.transaction():
                 store.finish_batch(batch_id)
             completed_batches += 1
     except Exception as exc:
-        with store.connection.transaction():
+        with store.transaction():
             if not error_recorded:
-                store.results.record_run_error(
+                store.record_run_error(
                     run_id,
                     scope="run",
                     error_kind=type(exc).__name__,
@@ -181,12 +181,12 @@ def run_target_profile(
         raise
 
     try:
-        with store.connection.transaction():
+        with store.transaction():
             store.verify_run_profile_complete(run_id, target.identity.identity_digest)
             store.set_run_state(run_id, "completed")
     except Exception as exc:
-        with store.connection.transaction():
-            store.results.record_run_error(
+        with store.transaction():
+            store.record_run_error(
                 run_id,
                 scope="finalization",
                 error_kind=type(exc).__name__,
@@ -204,7 +204,7 @@ def run_target_profile(
 
 
 def _run_batch(
-    store: PostgresStore,
+    store: EvidenceStore,
     *,
     run_id: str,
     project_id: str,
@@ -274,22 +274,22 @@ def _run_batch(
             differences=decision.differences,
             compared_at=datetime.now(timezone.utc),
         )
-        with store.connection.transaction():
-            store.results.record_comparison(record)
+        with store.transaction():
+            store.record_comparison(record)
         outcomes[decision.outcome] += 1
 
 
 def _existing_executions(
-    store: PostgresStore,
+    store: EvidenceStore,
     executor: BatchExecutor | None,
     cases: Sequence[CaseRecord],
 ) -> dict[str, tuple[int, ExecutionRecord]]:
     if executor is None or not cases:
         return {}
     records: dict[str, tuple[int, ExecutionRecord]] = {}
-    with store.connection.transaction():
+    with store.transaction():
         for case in cases:
-            found = store.results.find_execution(
+            found = store.find_execution(
                 executor.identity.identity_digest,
                 case.project_id,
                 case.specification_digest,
@@ -303,7 +303,7 @@ def _existing_executions(
 
 
 def _execute_and_store(
-    store: PostgresStore,
+    store: EvidenceStore,
     executor: BatchExecutor,
     cases: Sequence[CaseRecord],
 ) -> dict[str, tuple[int, ExecutionRecord]]:
@@ -323,8 +323,8 @@ def _execute_and_store(
                 f"executor returned infrastructure error for {case.case_id!r}: "
                 f"{execution.reason or 'no reason supplied'}"
             )
-        with store.connection.transaction():
-            execution_id = store.results.record_execution(execution)
+        with store.transaction():
+            execution_id = store.record_execution(execution)
         result[case.case_id] = (execution_id, execution)
     return result
 

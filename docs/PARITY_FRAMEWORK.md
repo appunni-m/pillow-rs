@@ -137,7 +137,7 @@ failure into evidence that the public error contract passed.
 
 ## Responsibilities and adapter boundary
 
-The reusable storage package has no project execution hooks. Each project
+The shared storage layer has no project execution hooks. Each project
 provides the following components:
 
 1. **Specification importer** validates the pinned source documents and emits
@@ -218,6 +218,11 @@ result = coordinator.run_profile(
 )
 ```
 
+This block is the language-neutral contract shape. The executable Python
+reference has a structural protocol with concrete method boundaries described
+in the next subsection; it does not claim the Python method names are a
+cross-language wire protocol.
+
 `execute_batch` receives only a selected bounded group and returns exactly one
 typed execution per case ID. The executor handles project-specific hydration
 and can split that work into an internal hydrator and oracle/target clients.
@@ -233,6 +238,47 @@ bounded transactions. It can read JSON, YAML, binary files, database fixtures,
 or generated inputs. Source format is not stored as a serialized case document
 in the relational evidence store; the importer maps each case to typed rows
 and stores binary content by digest.
+
+### Executable Python reference ports
+
+The Python reference makes the persistence boundary executable as the
+structural `EvidenceStore` protocol in `scripts/parity_store/ports.py`. The
+shared `run_target_profile` coordinator accepts that protocol; it does not
+import `PostgresStore`, access a driver connection, or call result-table
+objects directly. A concrete store owns the SQL dialect and exposes these
+project-neutral capabilities:
+
+- **Schema and transactions:** `migrate`, `transaction`. The transaction
+  commits on normal exit and rolls back on error.
+- **Snapshot catalog:** `register_project`, `register_specification`,
+  `register_specification_documents`, `specification_documents_match`.
+- **Case catalog:** `register_operations`, `register_requirements`,
+  `register_operation_requirements`, `register_target_profile`,
+  `register_operation_support`, `existing_case_ids`, `insert_cases`.
+- **Selection:** `selected_case_digests`, `iter_case_batches`; freeze ID/digest
+  membership and yield count- and byte-bounded hydrated batches.
+- **Run lifecycle:** `register_identity`, `create_run`, `start_batch`,
+  `finish_batch`, `set_run_state`.
+- **Evidence:** `find_execution`, `record_execution`, `record_comparison`,
+  `record_run_error`; reuse only exact identities and persist typed outcomes.
+- **Integrity:** `verify_run_profile_complete`; require one applicable
+  comparison per selected case and complete, unique batch membership.
+
+These operations are methods of `EvidenceStore`, not database table names or
+SQL signatures. Implementations may use different tables, native binary types,
+or transaction APIs as long as they preserve the port's selection, identity,
+idempotency, rollback, and completeness behavior. The current
+`PostgresStore` is the first implementation. Its Pillow importer also accepts
+`EvidenceStore`, while the code that parses Pillow's manifest and constructs
+image cases remains project-owned. Another project can use the same store and
+coordinator by supplying its own importer, executor, and comparator.
+
+The protocol is a Python reference interface, not a published cross-language
+wire format. A project written in another language may implement the relational
+contract directly or bridge to a store service; both must preserve the same
+typed records and integrity rules. Do not extract a package or promise
+cross-language compatibility until a second project integration passes the
+same contracts and documents its adapter requirements.
 
 ## Reuse from another project
 

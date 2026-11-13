@@ -10,7 +10,7 @@ import platform
 from typing import Any
 
 from scripts import run_migration_parity as parity
-from scripts.migration_parity.postgres_adapter import (
+from scripts.migration_parity.pillow_fixture_adapter import (
     PROJECT_ID,
     _from_store_tree,
     _to_store_tree,

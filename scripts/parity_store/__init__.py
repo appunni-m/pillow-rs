@@ -19,6 +19,7 @@ from .model import (
 from .postgres import PostgresStore
 from .values import case_set_digest, canonical_value_digest
 from .campaign import BatchExecutor, CampaignSummary, Comparator, run_target_profile
+from .ports import EvidenceStore
 
 __all__ = [
     "AssetRecord",
@@ -37,6 +38,7 @@ __all__ = [
     "BatchExecutor",
     "CampaignSummary",
     "Comparator",
+    "EvidenceStore",
     "PostgresStore",
     "StepBinding",
     "case_set_digest",
