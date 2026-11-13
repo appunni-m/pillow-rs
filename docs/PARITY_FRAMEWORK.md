@@ -230,6 +230,100 @@ database fixtures, or generated inputs. Source format is not stored as a
 serialized case document in PostgreSQL; the importer maps each case to typed
 rows and stores binary content by digest.
 
+## Reuse from another project
+
+Keep the existing project contract and execution code. Add only an adapter
+that maps those project-owned concepts onto this shared model. A typical
+integration has these responsibilities; the paths are illustrative and should
+not force a project to reorganize its existing repository:
+
+```text
+project parity inputs and pinned specification
+    -> project importer -> CaseRecord / AssetRecord
+    -> reference BatchExecutor (when available)
+    -> candidate BatchExecutor for each target profile
+    -> project Comparator
+    -> shared campaign coordinator and PostgreSQL store
+    -> project report or existing parity receipt
+```
+
+The shared store owns typed records, migration checks, content-addressed blob
+storage, bounded selection and persistence, identity matching, resumability,
+and relational evidence. A project owns its input format, public API names,
+case generation, executable setup, isolation, output observations, comparison
+rules, and report presentation. An image library may use dimensions such as
+`mode`, `format`, and `architecture`; a protocol implementation may use
+`protocol_version`, `transport`, and `platform`. These are ordinary typed
+dimensions and profile attributes. No project should need a project-named SQL
+column or migration for them.
+
+For example, an HTTP client project can map a request into a generic workflow:
+
+```python
+CaseStep(
+    step_id="request",
+    surface_id="HttpClient",
+    operation_id="request",
+    arguments={"method": "GET", "path": "/health"},
+)
+```
+
+The case can declare dimensions such as `protocol_version="2"` and
+`platform="linux"`, then select observations such as the response status,
+headers, and body bytes. The source executor calls the pinned client or service;
+the target executor calls the candidate's public interface; the comparator
+applies that project's header and error rules. The shared coordinator does not
+know what HTTP means. The same shape works for compiler diagnostics, database
+driver rows, image pixels, or file-format metadata.
+
+Adopt incrementally:
+
+1. Pin the existing specification and input digests. Keep its current files as
+   the reviewed authority; JSON may remain an input format, but input documents
+   and serialized case envelopes are not stored as JSON/JSONB in PostgreSQL.
+2. Map one real case, including only the assets and observations it uses, to
+   typed records. Store large binary content once as compressed blobs and
+   reference it by digest.
+3. Import that case and its references in a short transaction. Do not hold a
+   database transaction open while starting a process or calling an oracle.
+4. Implement source and candidate `BatchExecutor` adapters that accept bounded
+   cases and return exactly one `ExecutionRecord` per case ID. They may call
+   Python, Rust, JavaScript, a CLI, or a remote service through project-owned
+   code; the store never launches them itself.
+5. Implement a project-owned comparator that returns a typed
+   `ComparisonDecision`. Keep normalization, tolerances, public errors, and
+   mismatch policy out of shared SQL and campaign code.
+6. Run and reload one bounded batch, inspect the case-level records, then
+   expand the import and selected profiles. The batch count and byte limits
+   bound both database reads and executor memory.
+7. Keep using the project's current public result/report format until its
+   maintainers choose to migrate that interface. The database is an evidence
+   ledger, not a replacement authoring surface or test runner.
+
+The reference package is currently repository-local at
+`scripts/parity_store/`, with PostgreSQL migrations alongside it. Another
+repository should pin or vendor that implementation as a unit, including its
+migrations; it should not copy only the SQL tables or write a second partial
+store client. The Python coordinator can drive any target that the project's
+adapter can call. A stable package release or cross-language wire protocol is
+not defined yet. Validate this boundary with an unrelated project before
+freezing either interface. This keeps current project adapters thin while
+leaving package extraction and schema compatibility policy for the later
+standardization step.
+
+Projects can share one PostgreSQL database when they use the same migration
+set: `project_id` scopes project data, while the migration ledger and physical
+tables are shared by the database. Coordinate schema upgrades across every
+consumer of that database. If a project needs an incompatible migration set,
+give it an isolated database until the consumers can move together. A shared
+`project_id` is a data namespace, not a substitute for database access control.
+
+The current shared coordinator covers reference parity, recorded-output
+contracts, and fault contracts. Coverage and benchmark execution retain their
+own project-owned inputs, runners, and evidence formats; do not put their
+measurements into parity execution rows or treat an execution duration as a
+benchmark result.
+
 ## Relational storage model
 
 A relational implementation normally needs these record groups:
