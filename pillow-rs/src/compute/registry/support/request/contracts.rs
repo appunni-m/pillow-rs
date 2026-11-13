@@ -355,6 +355,7 @@ fn assess_convert_target(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn assess_chops_binary_modes(
     input: StrategyInputs,
     contract: InputContract,

@@ -4,6 +4,7 @@ use crate::raster::{ImageBuffer, Pixel};
 
 pub(crate) type BoxBounds = Option<(f64, f64, f64, f64)>;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize<P: Pixel>(
     input: &ImageBuffer<P, Vec<P::Subpixel>>,
     destination_width: u32,

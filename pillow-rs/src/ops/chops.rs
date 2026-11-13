@@ -11,6 +11,9 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
 
+// TODO(pillow-rs#3ptb): Freeze unsupported-primary versus lazy-secondary
+// decode-failure ordering for each direct binary Chops constructor.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Validate the native byte-layout compatibility enforced by
 /// `ImagingChops` before it allocates a result image. Modes in the same byte
 /// width family are intentionally compatible (for example `P` with `L` and
@@ -22,21 +25,22 @@ fn validate_binary_operands(
     image2: &Image,
 ) -> Result<(), PilError> {
     let mode1 = image1.mode_identity()?;
-    let mode2 = image2.mode_identity()?;
     // Chops.c clips binary results to the smaller width and height; unequal
     // dimensions are valid. Backend admission still checks its own layout needs.
-    validate_binary_mode_pair(operation, mode1, mode2)
+    validate_binary_mode_pair(operation, mode1, image2)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_binary_mode_pair(
     operation: OperationId,
     mode1: Mode,
-    mode2: Mode,
+    image2: &Image,
 ) -> Result<(), PilError> {
     let mode_support = operation.support().for_mode(mode1);
-    mode_support.validate_chops_secondary_mode(|| Ok(mode2))
+    mode_support.validate_chops_secondary_mode(|| image2.mode_identity())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_logical_operands(
     operation: OperationId,
     image1: &Image,

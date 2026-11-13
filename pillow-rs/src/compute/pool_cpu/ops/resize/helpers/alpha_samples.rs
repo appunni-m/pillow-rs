@@ -26,6 +26,7 @@ struct AlphaResizePlan<'a> {
     source_is_premultiplied: bool,
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -78,6 +79,7 @@ pub(crate) fn resize<const CHANNELS: usize>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize_with_reducing_gap<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -96,14 +98,24 @@ pub(crate) fn resize_with_reducing_gap<const CHANNELS: usize>(
     else {
         return resize::<CHANNELS>(source, source_size, destination_size, filter, Some(bounds));
     };
-    let (safe_left, safe_top, safe_right, safe_bottom) = plan.safe_box;
-    let reduced_width = safe_right - safe_left;
-    let reduced_height = safe_bottom - safe_top;
-    let premultiplied = crop_and_premultiply::<CHANNELS>(
-        source,
+    let request = crate::ops::transform::validate_resize_reduce_request(
+        plan.x_factor,
+        plan.y_factor,
+        plan.safe_box,
         source_size,
-        (safe_left, safe_top, safe_right, safe_bottom),
     )?;
+    let (safe_left, safe_top, safe_right, safe_bottom) = request.coordinates;
+    // The shared Reduce validator proves these coordinates are nonnegative
+    // and bounded by source dimensions before this unsigned pixel path begins.
+    let crop = (
+        safe_left as u32,
+        safe_top as u32,
+        safe_right as u32,
+        safe_bottom as u32,
+    );
+    let reduced_width = (safe_right - safe_left) as u32;
+    let reduced_height = (safe_bottom - safe_top) as u32;
+    let premultiplied = crop_and_premultiply::<CHANNELS>(source, source_size, crop)?;
     let reduced = crate::compute::pool_cpu::ops::reduce::helpers::native_bytes::reduce_bytes::<
         CHANNELS,
         false,
@@ -111,12 +123,12 @@ pub(crate) fn resize_with_reducing_gap<const CHANNELS: usize>(
         &premultiplied,
         reduced_width,
         reduced_height,
-        plan.x_factor,
-        plan.y_factor,
+        request.x_factor,
+        request.y_factor,
     )?;
     let reduced_size = (
-        reduced_width.div_ceil(plan.x_factor),
-        reduced_height.div_ceil(plan.y_factor),
+        ceil_div(reduced_width, request.x_factor),
+        ceil_div(reduced_height, request.y_factor),
     );
     filtered_boxed::<CHANNELS>(
         &reduced,
@@ -128,6 +140,13 @@ pub(crate) fn resize_with_reducing_gap<const CHANNELS: usize>(
     )
 }
 
+// Both factors have been validated as positive by the shared Reduce contract.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+fn ceil_div(value: u32, divisor: u32) -> u32 {
+    value / divisor + u32::from(value % divisor != 0)
+}
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn crop_and_premultiply<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -151,10 +170,12 @@ fn crop_and_premultiply<const CHANNELS: usize>(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn is_empty(source_size: (u32, u32), destination_size: (u32, u32)) -> bool {
     source_size.0 == 0 || source_size.1 == 0 || destination_size.0 == 0 || destination_size.1 == 0
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn is_full_box_identity(
     source_size: (u32, u32),
     destination_size: (u32, u32),
@@ -169,6 +190,7 @@ fn is_full_box_identity(
         && bottom == source_size.1 as f32
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn has_zero_fast_path(source: &[u8], source_pixels: usize, bounds: Bounds) -> bool {
     let pixels_are_eligible = match bounds {
         None => source_pixels != 0,
@@ -177,6 +199,7 @@ fn has_zero_fast_path(source: &[u8], source_pixels: usize, bounds: Bounds) -> bo
     pixels_are_eligible && source.iter().all(|&sample| sample == 0)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn filtered_standard<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -225,6 +248,7 @@ fn filtered_standard<const CHANNELS: usize>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn filtered_standard_ordered<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -261,6 +285,7 @@ fn filtered_standard_ordered<const CHANNELS: usize>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn filtered_boxed<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -332,6 +357,7 @@ fn filtered_boxed<const CHANNELS: usize>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn filtered_standard_i32<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -384,6 +410,7 @@ fn filtered_standard_i32<const CHANNELS: usize>(
     Some(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_row_i32<const CHANNELS: usize>(
     source: &[u8],
     coefficients: &FilterCoeffs,
@@ -406,6 +433,7 @@ fn horizontal_row_i32<const CHANNELS: usize>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_rows_i32<const CHANNELS: usize>(
     intermediate: &[u8],
     output_width: usize,
@@ -437,6 +465,7 @@ fn vertical_rows_i32<const CHANNELS: usize>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn write_unpremultiplied_i32<const CHANNELS: usize>(sums: &[i32; CHANNELS], output: &mut [u8]) {
     let alpha = fixed_point_to_u8_i32(sums[CHANNELS - 1]);
     for channel in 0..CHANNELS - 1 {
@@ -445,6 +474,7 @@ fn write_unpremultiplied_i32<const CHANNELS: usize>(sums: &[i32; CHANNELS], outp
     output[CHANNELS - 1] = alpha;
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn filtered_with_coefficients<const CHANNELS: usize>(
     plan: AlphaResizePlan<'_>,
 ) -> Result<Vec<u8>, PilError> {
@@ -508,6 +538,7 @@ fn filtered_with_coefficients<const CHANNELS: usize>(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn premultiply_row<const CHANNELS: usize>(source: &[u8], output: &mut [u8]) {
     for (source_pixel, output_pixel) in source
         .chunks_exact(CHANNELS)
@@ -521,6 +552,7 @@ fn premultiply_row<const CHANNELS: usize>(source: &[u8], output: &mut [u8]) {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_row<const CHANNELS: usize>(
     source: &[u8],
     coefficients: &FilterCoeffs,
@@ -542,6 +574,7 @@ fn horizontal_row<const CHANNELS: usize>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_row_major<const CHANNELS: usize>(
     intermediate: &[u8],
     output_width: usize,
@@ -573,6 +606,7 @@ fn vertical_row_major<const CHANNELS: usize>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_transposed<const CHANNELS: usize>(
     intermediate: &[u8],
     source_height: usize,
@@ -605,6 +639,7 @@ fn vertical_transposed<const CHANNELS: usize>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_pixel<const CHANNELS: usize>(
     source: &[u8],
     source_start: usize,
@@ -626,6 +661,7 @@ fn vertical_pixel<const CHANNELS: usize>(
     output[CHANNELS - 1] = alpha;
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn unpremultiply_image<const CHANNELS: usize>(source: &[u8], output: &mut [u8]) {
     for (source_pixel, output_pixel) in source
         .chunks_exact(CHANNELS)
@@ -639,10 +675,12 @@ fn unpremultiply_image<const CHANNELS: usize>(source: &[u8], output: &mut [u8]) 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn premultiply_channel(value: u8, alpha: u8) -> u8 {
     ((u16::from(value) * u16::from(alpha) + 127) / 255) as u8
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn unpremultiply_channel(value: u8, alpha: u8) -> u8 {
     if alpha == 0 {
         return value;
@@ -650,6 +688,7 @@ fn unpremultiply_channel(value: u8, alpha: u8) -> u8 {
     (u16::from(value) * 255 / u16::from(alpha)).min(255) as u8
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn weights(coefficients: &FilterCoeffs, index: usize) -> &[i64] {
     let start = coefficients.offsets[index];
     &coefficients.weights[start..start + coefficients.count[index]]

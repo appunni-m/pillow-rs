@@ -15,6 +15,7 @@ use std::collections::HashMap;
 
 pub(crate) type GetColorsOutput = Option<Vec<(u32, FormattedPixelValue)>>;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Counts exact L, One, and P samples in ascending byte order.
 pub(crate) fn luma8(maxcolors: u32, image: &GrayImage) -> Result<GetColorsOutput, PilError> {
     let mut histogram = [0u32; 256];
@@ -41,6 +42,7 @@ pub(crate) fn luma8(maxcolors: u32, image: &GrayImage) -> Result<GetColorsOutput
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Counts native byte channels using Pillow's hash slot and probe ordering.
 pub(crate) fn byte_bands<P>(
     maxcolors: u32,
@@ -54,6 +56,7 @@ where
     byte_bands_with_table(maxcolors, image, code_mask, code_polynomial, pixel_count)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Keeps Pillow's RGB grayscale shortcut on its exact RGB8 owner.
 pub(crate) fn rgb8(maxcolors: u32, image: &RgbImage) -> Result<GetColorsOutput, PilError> {
     let (code_mask, code_polynomial) = color_table_parameters(maxcolors)?;
@@ -68,10 +71,12 @@ pub(crate) fn rgb8(maxcolors: u32, image: &RgbImage) -> Result<GetColorsOutput, 
     byte_bands_with_table(maxcolors, image, code_mask, code_polynomial, pixel_count)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn color_table_parameters(maxcolors: u32) -> Result<(u32, u32), PilError> {
     pillow_color_table_parameters(maxcolors).ok_or_else(|| PilError::MemoryError(String::new()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn image_pixel_count<P, Container>(image: &ImageBuffer<P, Container>) -> usize
 where
     P: Pixel,
@@ -87,6 +92,7 @@ where
         .unwrap_or(0)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn byte_bands_with_table<P>(
     maxcolors: u32,
     image: &ImageBuffer<P, Vec<u8>>,
@@ -126,16 +132,19 @@ where
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Counts native I samples and formats them as signed integers.
 pub(crate) fn scalar_i32(maxcolors: u32, image: &RgbaImage) -> Result<GetColorsOutput, PilError> {
     scalar(maxcolors, Mode::ImageI32, image.as_raw())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Counts native F samples and formats their original f32 values.
 pub(crate) fn scalar_f32(maxcolors: u32, image: &RgbaImage) -> Result<GetColorsOutput, PilError> {
     scalar(maxcolors, Mode::ImageF32, image.as_raw())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn scalar(maxcolors: u32, mode: Mode, bytes: &[u8]) -> Result<GetColorsOutput, PilError> {
     let (code_mask, code_polynomial) = color_table_parameters(maxcolors)?;
     let max_distinct = maxcolors as usize;
@@ -190,6 +199,7 @@ fn scalar(maxcolors: u32, mode: Mode, bytes: &[u8]) -> Result<GetColorsOutput, P
     Ok(Some(format_scalar_color_counts(counts, distinct, mode)))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn scalar_color_domain_counts(
     mode: Mode,
     bytes: &[u8],
@@ -220,6 +230,7 @@ fn scalar_color_domain_counts(
     ScalarColorDomainCounts::NotApplicable
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn count_repeated_scalar_samples(
     counts: &mut PillowColorCounts,
@@ -268,6 +279,7 @@ fn count_repeated_scalar_samples(
     true
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn format_scalar_color_counts(
     counts: PillowColorCounts,
     distinct: usize,
@@ -294,6 +306,7 @@ struct NativeColorKey {
     samples: [u32; 4],
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn u16_bands<P>(
     maxcolors: u32,
     image: &ImageBuffer<P, Vec<u16>>,
@@ -307,6 +320,7 @@ where
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn f32_bands<P>(
     maxcolors: u32,
     image: &ImageBuffer<P, Vec<f32>>,
@@ -320,6 +334,7 @@ where
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn native_bands<S, P, Key, Format>(
     maxcolors: u32,
     image: &ImageBuffer<P, Vec<S>>,

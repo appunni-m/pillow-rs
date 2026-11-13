@@ -2,6 +2,7 @@
 
 use crate::ops::pil_resize::FilterCoeffs;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn vertical_row_touches_source(
     coefficients: &FilterCoeffs,
     coefficient_source_height: usize,

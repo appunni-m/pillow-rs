@@ -1,3 +1,4 @@
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn record_vector_work(
     horizontal_blocks: u64,
     vertical_blocks: u64,

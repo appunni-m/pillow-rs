@@ -36,6 +36,7 @@ const PILLOW_COLOR_TABLE_SIZES: &[(u32, u32)] = &[
     (1073741824, 83),
 ];
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn pillow_color_table_parameters(maxcolors: u32) -> Option<(u32, u32)> {
     PILLOW_COLOR_TABLE_SIZES
         .iter()
@@ -45,6 +46,7 @@ pub(crate) fn pillow_color_table_parameters(maxcolors: u32) -> Option<(u32, u32)
 
 pub(in crate::image) const PILLOW_COLOR_DIRECT_TABLE_MAX_BYTES: usize = 8 * 1024 * 1024;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn pillow_color_direct_table_slots(code_mask: u32, pixel_count: usize) -> Option<usize> {
     let slots = usize::try_from(code_mask).ok()?.checked_add(1)?;
     if code_mask <= 1023 {
@@ -62,6 +64,7 @@ pub(crate) enum PillowColorCounts {
 }
 
 impl PillowColorCounts {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn new(code_mask: u32, sparse_capacity: usize, pixel_count: usize) -> Self {
         // Keep large tables sparse for small images or memory-heavy limits.
         // Dense slots avoid a second randomized hash probe per input pixel
@@ -80,6 +83,7 @@ impl PillowColorCounts {
         Self::Sparse(std::collections::HashMap::with_capacity(sparse_capacity))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn count(
         &mut self,
         colors: &mut usize,
@@ -108,6 +112,7 @@ impl PillowColorCounts {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn count_repeated(
         &mut self,
         colors: &mut usize,
@@ -143,6 +148,7 @@ impl PillowColorCounts {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn into_slot_order(self, distinct_colors: usize) -> Vec<(u32, (u32, u32))> {
         match self {
             Self::Direct(slots) => {
@@ -161,6 +167,7 @@ impl PillowColorCounts {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Insert one Pillow-packed pixel using the exact probe sequence used by
 /// `ImagingGetColors` in a directly indexed small table.
 fn count_pillow_color_direct(
@@ -207,6 +214,7 @@ fn count_pillow_color_direct(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Insert one Pillow-packed pixel using the exact probe sequence used by
 /// `ImagingGetColors`. Sparse storage avoids allocations proportional to
 /// large `maxcolors` values.
@@ -257,6 +265,7 @@ fn count_pillow_color_sparse(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Count scalar pixels after the prefix check has ruled out adjacent runs.
 /// Match the storage representation once instead of redispatching through the
 /// enum for every sample.
@@ -303,6 +312,7 @@ pub(crate) fn count_pillow_color_scalar_samples(
     true
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Count an adjacent run with the same Pillow probe sequence as scalar inserts.
 /// `None` asks the caller to replay the run through `count`, preserving the
 /// scalar counter-overflow behavior.
@@ -352,6 +362,7 @@ fn count_pillow_color_direct_repeated(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Count an adjacent run in sparse Pillow slots without changing slot order.
 /// `None` asks the caller to replay the run through `count` on counter overflow.
 fn count_pillow_color_sparse_repeated(
@@ -400,6 +411,7 @@ fn count_pillow_color_sparse_repeated(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn pillow_color_components(pixel: u32, bands: usize) -> FormattedPixelValue {
     let bytes = pixel.to_ne_bytes();
     match bands {
@@ -417,6 +429,7 @@ pub(crate) fn pillow_color_components(pixel: u32, bands: usize) -> FormattedPixe
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn pillow_color_pixel(components: &[u8]) -> u32 {
     let mut bytes = [0u8; 4];
     match components {

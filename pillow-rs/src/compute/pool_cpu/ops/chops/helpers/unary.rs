@@ -5,16 +5,19 @@ use crate::raster::buffer::{HiddenPixelLanes, ImageBuffer};
 use crate::raster::traits::Pixel;
 use crate::raster::{DynamicImage, GrayImage, Luma};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn constant(width: u32, height: u32, value: u8) -> DynamicImage {
     DynamicImage::ImageLuma8(GrayImage::from_pixel(width, height, Luma([value])))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn duplicate(image: &DynamicImage) -> DynamicImage {
     // NO_PILLOW_SUPPORT for internal high-depth sources: preserve their exact
     // native identity through this core-only route.
     image.clone()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn invert<P, S>(
     image: &ImageBuffer<P, Vec<S>>,
 ) -> Result<ImageBuffer<P, Vec<S>>, PilError>
@@ -34,6 +37,7 @@ where
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn carry_inverted_hidden_lanes<P, S>(
     source: &ImageBuffer<P, Vec<S>>,
     output: &mut ImageBuffer<P, Vec<S>>,
@@ -53,6 +57,7 @@ where
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Preserves an inverted three-band fallback byte when no producer sidecar
 /// was present on the source carrier.
 pub(crate) fn carry_inverted_lane_fallback(
@@ -85,22 +90,26 @@ pub(crate) fn carry_inverted_lane_fallback(
 }
 
 pub(crate) trait InvertSample: Copy {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn invert_storage(self) -> Self;
 }
 
 impl InvertSample for u8 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn invert_storage(self) -> Self {
         !self
     }
 }
 
 impl InvertSample for u16 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn invert_storage(self) -> Self {
         !self
     }
 }
 
 impl InvertSample for f32 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn invert_storage(self) -> Self {
         Self::from_bits(!self.to_bits())
     }

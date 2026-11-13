@@ -308,6 +308,7 @@ fn assess_point_i32_lut_request(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn assess_reduce_request(
     contract: InputContract,
     request: RequestFacts,

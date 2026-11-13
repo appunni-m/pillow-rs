@@ -15,6 +15,7 @@ pub(crate) struct FusedChopsOutput<I = DynamicImage> {
 }
 
 impl<I> FusedChopsOutput<I> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn map_image<T>(self, map: impl FnOnce(I) -> T) -> FusedChopsOutput<T> {
         FusedChopsOutput {
             image: map(self.image),
@@ -25,6 +26,7 @@ impl<I> FusedChopsOutput<I> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_default<P>(
     image: &ImageBuffer<P, Vec<u8>>,
     other: &ImageBuffer<P, Vec<u8>>,
@@ -55,6 +57,7 @@ where
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_vector<P>(
     image: &ImageBuffer<P, Vec<u8>>,
     other: &ImageBuffer<P, Vec<u8>>,
@@ -91,6 +94,7 @@ where
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn native_operands<'a, P>(
     image: &'a ImageBuffer<P, Vec<u8>>,
     other: &'a ImageBuffer<P, Vec<u8>>,
@@ -114,12 +118,14 @@ where
     Ok((dimensions, left, right))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn multiply_then_screen(left: u8, right: u8) -> u8 {
     let multiplied = (u32::from(left) * u32::from(right) / 255) as u8;
     (255u32 - ((255 - u32::from(multiplied)) * (255 - u32::from(right)) / 255)) as u8
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn multiply_screen_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let left = u16x16::from(u8x16::new(left));

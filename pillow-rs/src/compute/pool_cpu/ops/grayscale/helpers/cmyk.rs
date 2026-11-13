@@ -3,6 +3,7 @@
 use super::interleaved::{gather_interleaved_channel, simd_pack_u16x16};
 use wide::{u8x16, u16x16};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn block(source: &[u8]) -> [u8; 16] {
     let load = |offset| {
@@ -36,6 +37,7 @@ fn block(source: &[u8]) -> [u8; 16] {
     simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(source: &[u8]) -> (Vec<u8>, u64, u64) {
     let mut output = vec![0u8; source.len() / 4];
     let mut vector_blocks = 0u64;

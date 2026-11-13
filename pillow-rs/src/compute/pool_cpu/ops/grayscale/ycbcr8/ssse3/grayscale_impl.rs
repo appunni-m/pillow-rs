@@ -1,5 +1,6 @@
 //! Original native YCbCr deinterleave, without a leaf feature probe.
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// # Safety
 /// The prepared strategy must establish SSE2 and SSSE3. The kernel bounds every load
 /// by complete source triples and initializes output before exposing its length.

@@ -5,6 +5,7 @@ use crate::ops::pil_resize::precompute_coeffs;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbaImage,
     width: u32,
@@ -24,6 +25,7 @@ pub(crate) fn execute(
 }
 
 /// Resizes RGBX bytes into a caller-owned full-width output window.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_into_window(
     input: &RgbaImage,
     width: u32,

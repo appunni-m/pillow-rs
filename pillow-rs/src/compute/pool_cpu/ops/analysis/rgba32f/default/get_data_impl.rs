@@ -4,6 +4,7 @@ use crate::raster::FromPrimitive;
 use crate::raster::Mode;
 use crate::raster::Rgba32FImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 // NO_PILLOW_SUPPORT: this internal high-depth raster exposes native samples through GetData.
 pub(crate) fn get_data(image: &Rgba32FImage) -> Result<Vec<u8>, PilError> {
     helpers::narrow_native_samples(
@@ -16,6 +17,7 @@ pub(crate) fn get_data(image: &Rgba32FImage) -> Result<Vec<u8>, PilError> {
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 // NO_PILLOW_SUPPORT: preserve this internal mode's native sample layout for band reads.
 pub(crate) fn write_band(
     image: &Rgba32FImage,

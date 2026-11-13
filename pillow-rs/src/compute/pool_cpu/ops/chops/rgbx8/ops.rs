@@ -13,11 +13,13 @@ const CHANNELS: u8 = 4;
 
 declare_byte_binary_architectures!(MODE, CHANNELS);
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn support(operation: OperationId) -> ModeSupport {
     let architectures = architecture_for(operation);
     super::super::ops::mode_support_with_architectures(MODE, operation, architectures)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     request: super::super::ops::ChopsRequest,
@@ -88,6 +90,7 @@ pub(crate) fn execute(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_in_place(
     image: &mut DynamicImage,
     request: super::super::ops::ChopsRequest,

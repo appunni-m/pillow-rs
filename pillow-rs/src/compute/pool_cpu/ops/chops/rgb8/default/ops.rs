@@ -5,6 +5,7 @@ use crate::raster::{DynamicImage, RgbImage};
 
 use super::super::super::ops::ChopsRequest;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     request: ChopsRequest,
@@ -18,6 +19,7 @@ pub(crate) fn execute(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_binary(
     image: &DynamicImage,
     other: Option<&DynamicImage>,
@@ -32,6 +34,7 @@ fn execute_binary(
         .map(DynamicImage::ImageRgb8)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_offset(image: &DynamicImage, x: i32, y: i32) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageRgb8(buffer) = image else {
         return Err(PilError::InternalError(
@@ -42,6 +45,7 @@ fn execute_offset(image: &DynamicImage, x: i32, y: i32) -> Result<DynamicImage, 
     Ok(DynamicImage::ImageRgb8(output))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_fused(
     image: &RgbImage,
     other: &RgbImage,
@@ -50,6 +54,7 @@ pub(crate) fn execute_fused(
         .map(|output| output.map_image(DynamicImage::ImageRgb8))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_invert(image: &DynamicImage) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageRgb8(buffer) = image else {
         return Err(PilError::InternalError(

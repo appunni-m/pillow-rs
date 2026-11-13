@@ -24,6 +24,7 @@ struct Geometry {
 }
 
 impl Geometry {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn new(width: u32, height: u32, x_factor: u32, y_factor: u32) -> Self {
         let main_width = width / x_factor;
         let main_height = height / y_factor;
@@ -44,6 +45,7 @@ impl Geometry {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn block(&self, x: u32, y: u32) -> (u32, u32, u32, u32, Rounding) {
         let full_x = x < self.main_width;
         let full_y = y < self.main_height;
@@ -67,6 +69,12 @@ impl Geometry {
     }
 }
 
+// NOTE: Match Pillow's fixed-point output even when it differs from the rounded
+// arithmetic mean: for a block area greater than 2^24, the reciprocal is zero,
+// so a block filled with 1 produces 0 instead of the mathematical mean 1.
+// TODO(pillow-rs#3ptb): Add the 4,097 × 4,096 L case to frozen Reduce parity
+// and benchmark selections before those gates run.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rounding(divider: u64) -> Rounding {
     let divider = divider.max(1);
     Rounding {
@@ -75,6 +83,7 @@ fn rounding(divider: u64) -> Rounding {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn average(sum: u64, rounding: Rounding) -> u8 {
     #[expect(
@@ -91,6 +100,7 @@ fn average(sum: u64, rounding: Rounding) -> u8 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn premultiply(sample: u8, alpha: u8) -> u8 {
     let value = (u16::from(sample) * u16::from(alpha) + 127) / 255;
@@ -103,6 +113,7 @@ fn premultiply(sample: u8, alpha: u8) -> u8 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn unpremultiply(sample: u8, alpha: u8) -> u8 {
     if alpha == 0 {
@@ -118,6 +129,7 @@ fn unpremultiply(sample: u8, alpha: u8) -> u8 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn rgba_block_sums(
     source: &[u8],
@@ -142,6 +154,7 @@ fn rgba_block_sums(
     sums
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn average_rgba_block(
     source: &[u8],
@@ -170,6 +183,7 @@ fn average_rgba_block(
 /// With `false`, samples are averaged as stored, including premultiplied modes
 /// and layouts without alpha.
 /// Source: Pillow 12.2.0 `Image.reduce`.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn average_interleaved_block<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     source: &[u8],
@@ -219,6 +233,7 @@ pub(crate) struct ByteReduceContext<'a, const CHANNELS: usize, const PREMULTIPLI
 impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool>
     ByteReduceContext<'a, CHANNELS, PREMULTIPLIED>
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn new(
         source: &'a [u8],
         width: u32,
@@ -236,22 +251,27 @@ impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool>
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) const fn output_dimensions(&self) -> (u32, u32) {
         (self.output_width, self.output_height)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) const fn main_dimensions(&self) -> (u32, u32) {
         (self.geometry.main_width, self.geometry.main_height)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) const fn source(&self) -> &[u8] {
         self.source
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) const fn source_width(&self) -> u32 {
         self.geometry.width
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn full_width_rounding(&self, y: u32) -> Option<(u32, u32)> {
         let (_, _, block_width, block_height, rounding) = self.geometry.block(0, y);
         if block_width != self.geometry.x_factor || block_height == 0 {
@@ -261,6 +281,7 @@ impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool>
     }
 
     /// The AVX2 guard bounds each complete block sum to u32.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn full_width_sums(&self, x: u32, y: u32) -> Option<[u32; 4]> {
         let (source_x, source_y, block_width, block_height, _) = self.geometry.block(x, y);
         if block_width != self.geometry.x_factor || block_height == 0 {
@@ -269,6 +290,7 @@ impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool>
         Some(self.accumulate_block::<u32>(source_x, source_y, block_width, block_height))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn pixel_sums(&self, x: u32, y: u32) -> Option<([u32; 4], u32, u32)> {
         let (source_x, source_y, block_width, block_height, rounding) = self.geometry.block(x, y);
         if block_width == 0 || block_height == 0 {
@@ -290,6 +312,7 @@ impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool>
         clippy::arithmetic_side_effects,
         reason = "typed source bounds and the AVX2 factor guard bound indexing and u32 sums"
     )]
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn accumulate_block<T>(
         &self,
         source_x: u32,
@@ -329,6 +352,7 @@ impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool>
         clippy::arithmetic_side_effects,
         reason = "the checked output row bounds each native destination range"
     )]
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn write_row_range(&self, y: u32, row: &mut [u8], start_x: u32, end_x: u32) {
         for x in start_x..end_x {
             let (source_x, source_y, block_width, block_height, rounding) =
@@ -361,6 +385,7 @@ impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool>
 }
 
 /// Reduces one exact byte-layout strategy without interpreting its mode.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn reduce_bytes<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     source: &[u8],
     width: u32,

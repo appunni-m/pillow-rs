@@ -4,6 +4,7 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbImage,
     width: u32,
@@ -19,6 +20,7 @@ pub(crate) fn execute(
 }
 
 /// Filtered Resize that skips source rows proven to be all zero.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_with_sparse_rows(
     input: &RgbImage,
     width: u32,
@@ -36,6 +38,7 @@ pub(crate) fn execute_with_sparse_rows(
 }
 
 /// Boxed filtered Resize entry point for this exact mode and architecture.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_boxed(
     input: &RgbImage,
     width: u32,
@@ -53,6 +56,7 @@ pub(crate) fn execute_boxed(
 }
 
 /// Boxed filtered Resize that skips source rows proven to be all zero.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_boxed_with_sparse_rows(
     input: &RgbImage,
     width: u32,

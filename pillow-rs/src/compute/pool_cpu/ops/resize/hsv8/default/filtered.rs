@@ -8,6 +8,7 @@ use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
     byte_coefficients_fit_i32, byte_coefficients_fit_source, fixed_point_to_u8_i32,
 };
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &[u8],
     source_size: (u32, u32),
@@ -76,6 +77,7 @@ pub(crate) fn execute(
     Some(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_row(source: &[u8], coeffs: &FilterCoeffs, output_width: usize, output: &mut [u8]) {
     for output_x in 0..output_width {
         let weights = weights(coeffs, output_x);
@@ -120,6 +122,7 @@ fn horizontal_row(source: &[u8], coeffs: &FilterCoeffs, output_width: usize, out
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_row_major(
     intermediate: &[u8],
     row_stride: usize,
@@ -145,6 +148,7 @@ fn vertical_row_major(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_transposed(
     intermediate: &[u8],
     source_height: usize,
@@ -172,6 +176,7 @@ fn vertical_transposed(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn vertical_pixel(
     intermediate: &[u8],
@@ -218,6 +223,7 @@ fn vertical_pixel(
     ]
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn weights(coeffs: &FilterCoeffs, index: usize) -> &[i64] {
     let start = coeffs.offsets[index];
     &coeffs.weights[start..start + coeffs.count[index]]

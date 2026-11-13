@@ -1326,8 +1326,14 @@ def _literal_matches(value: Any, declared: list[str]) -> bool:
     return False
 
 
-def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str | None = None) -> dict[str, dict[str, Any]]:
-    """Validate every indexed active input document and its cross-references."""
+def validate_inputs(
+    manifest: dict[str, Any],
+    fixture_root: Path,
+    *,
+    lane: str | None = None,
+    retain_documents: bool = True,
+) -> dict[str, dict[str, Any]]:
+    """Validate indexed inputs, optionally retaining their decoded documents."""
 
     if lane is not None and lane not in LANES:
         raise _error("lane", "unsupported lane")
@@ -1347,6 +1353,8 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
     item_ids: set[str] = set()
     parity_case_ids: set[str] = set()
     target_output_case_ids: set[str] = set()
+    mapped_fault_requirements: set[str] = set()
+    mapped_target_output_requirements: set[str] = set()
     fault_points = {point["id"]: point for point in manifest["fault_points"]}
     fault_contracts = {
         contract["id"]: contract for contract in manifest["fault_contracts"]
@@ -1383,6 +1391,12 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
                     for case in document["cases"]
                     if case.get("verification") == "expected-output"
                 )
+                for case in document["cases"]:
+                    verification = case.get("verification", "parity")
+                    if verification == "fault-contract":
+                        mapped_fault_requirements.update(case["covers"])
+                    elif verification == "expected-output":
+                        mapped_target_output_requirements.update(case["covers"])
             elif current_lane == "coverage":
                 _validate_coverage_document(document, relative, operation_index, requirement_index, profile_ids, command_ids, component_ids, item_ids, parity_case_ids)
             else:
@@ -1398,22 +1412,9 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
                 )
             if document.get("schema") != expected_schema:
                 raise _error(relative, f"expected {expected_schema}")
-            documents[relative] = document
+            if retain_documents:
+                documents[relative] = document
     if "parity" in lanes:
-        mapped_fault_requirements: dict[str, list[str]] = {}
-        mapped_target_output_requirements: dict[str, list[str]] = {}
-        for relative in manifest["input_index"]["parity"]:
-            document = documents[relative]
-            for case in document["cases"]:
-                verification = case.get("verification", "parity")
-                if verification == "fault-contract":
-                    destination = mapped_fault_requirements
-                elif verification == "expected-output":
-                    destination = mapped_target_output_requirements
-                else:
-                    continue
-                for requirement_id in case["covers"]:
-                    destination.setdefault(requirement_id, []).append(case["case_id"])
         required_fault_requirements = {
             requirement["id"]
             for surface in manifest["surfaces"]
@@ -1423,7 +1424,7 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
             if "fault_contract" in requirement["lanes"]
         }
         missing_fault_requirements = sorted(
-            required_fault_requirements - mapped_fault_requirements.keys()
+            required_fault_requirements - mapped_fault_requirements
         )
         if missing_fault_requirements:
             raise _error(
@@ -1439,7 +1440,7 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
             if "target_output" in requirement["lanes"]
         }
         missing_target_output_requirements = sorted(
-            required_target_output_requirements - mapped_target_output_requirements.keys()
+            required_target_output_requirements - mapped_target_output_requirements
         )
         if missing_target_output_requirements:
             raise _error(

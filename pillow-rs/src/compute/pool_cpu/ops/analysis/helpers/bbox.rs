@@ -23,6 +23,7 @@ pub(crate) enum GetBBoxSupportKind {
     CoreOnly,
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn mode_support(mode: Mode, kind: GetBBoxSupportKind) -> ModeSupport {
     match kind {
         GetBBoxSupportKind::Pillow => ModeSupport::cpu(
@@ -54,6 +55,7 @@ struct Bounds {
 }
 
 impl Bounds {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn new(width: u32, height: u32) -> Self {
         Self {
             width: width as usize,
@@ -65,6 +67,7 @@ impl Bounds {
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn include(&mut self, x: u32, y: u32) {
         self.left = self.left.min(x);
         self.top = self.top.min(y);
@@ -75,6 +78,7 @@ impl Bounds {
     // Callers derive `index` from exact-size pixel iterators bounded by u32 dimensions.
     #[allow(clippy::cast_possible_truncation)]
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn include_index(&mut self, index: usize) {
         let x = (index % self.width) as u32;
         let y = (index / self.width) as u32;
@@ -82,28 +86,36 @@ impl Bounds {
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn include_row(&mut self, y: u32, left: u32, right: u32) {
         self.include(left, y);
         self.include(right, y);
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn finish(self) -> BBox {
+        if self.width == 0 {
+            return None;
+        }
         (self.left <= self.right).then_some((self.left, self.top, self.right + 1, self.bottom + 1))
     }
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn coordinate(index: usize) -> u32 {
     u32::try_from(index).expect("pixel indices are bounded by u32 image dimensions")
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn exclusive_edge(index: usize) -> u32 {
     coordinate(index)
         .checked_add(1)
         .expect("exclusive image edges fit in u32")
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn luma8(image: &GrayImage) -> BBox {
     let (width, height) = image.dimensions();
     let mut bounds = Bounds::new(width, height);
@@ -115,6 +127,7 @@ pub(crate) fn luma8(image: &GrayImage) -> BBox {
     bounds.finish()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn luma_alpha8(image: &GrayAlphaImage, alpha_only: bool) -> BBox {
     let (width, height) = image.dimensions();
     let mut bounds = Bounds::new(width, height);
@@ -132,6 +145,7 @@ pub(crate) fn luma_alpha8(image: &GrayAlphaImage, alpha_only: bool) -> BBox {
 }
 
 /// Pillow's byte RGB scan keeps a grouped early blank test and row-bound scan.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn rgb8(image: &RgbImage) -> BBox {
     if image.width() == 0 || image.height() == 0 {
         return None;
@@ -180,6 +194,7 @@ pub(crate) fn rgb8(image: &RgbImage) -> BBox {
     Some((bbox_left, coordinate(top), bbox_right, bbox_bottom))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn rgba8(image: &RgbaImage, alpha_only: bool) -> BBox {
     let (width, height) = image.dimensions();
     let mut bounds = Bounds::new(width, height);
@@ -196,6 +211,7 @@ pub(crate) fn rgba8(image: &RgbaImage, alpha_only: bool) -> BBox {
     bounds.finish()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn four_byte8(image: &RgbaImage) -> BBox {
     let (width, height) = image.dimensions();
     let mut bounds = Bounds::new(width, height);
@@ -208,6 +224,7 @@ pub(crate) fn four_byte8(image: &RgbaImage) -> BBox {
 }
 
 /// Pillow's `I` mode treats each stored four-byte signed sample as one word.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn i32_carrier(raw: &[u8], width: u32, height: u32) -> BBox {
     let (width, height) = (width as usize, height as usize);
     if width == 0 || height == 0 {
@@ -235,6 +252,7 @@ pub(crate) fn i32_carrier(raw: &[u8], width: u32, height: u32) -> BBox {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn i32_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
     let mut groups = row.chunks_exact(32);
     let (mut word0, mut word1, mut word2, mut word3) = (0u64, 0u64, 0u64, 0u64);
@@ -257,6 +275,7 @@ fn i32_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
 }
 
 /// Pillow's `F` mode predicate observes the stored word, including negative zero.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn f32_carrier(raw: &[u8], width: u32, height: u32) -> BBox {
     let (width, height) = (width as usize, height as usize);
     if width == 0 || height == 0 {
@@ -286,6 +305,7 @@ pub(crate) fn f32_carrier(raw: &[u8], width: u32, height: u32) -> BBox {
 }
 
 #[inline(always)]
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn f32_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
     let mut left = 0usize;
     let mut right = row.len() / 4;
@@ -337,6 +357,7 @@ fn f32_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
 }
 
 /// Scans native I;16 samples; byte order does not affect zero detection.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn u16_samples<const CHANNELS: usize>(
     samples: &[u16],
     width: u32,
@@ -348,6 +369,7 @@ pub(crate) fn u16_samples<const CHANNELS: usize>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn f32_samples<const CHANNELS: usize>(
     samples: &[f32],
     width: u32,
@@ -359,6 +381,7 @@ pub(crate) fn f32_samples<const CHANNELS: usize>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn scan_samples<T, const CHANNELS: usize, F>(
     samples: &[T],
     width: u32,
@@ -391,6 +414,7 @@ where
 
 macro_rules! declare_getbbox_owner {
     ($module:ident, $mode:ident, $image_ty:ty, $kind:ident $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn get_bbox_mode_support() ->
             crate::compute::registry::support::ModeSupport
         {
@@ -399,6 +423,7 @@ macro_rules! declare_getbbox_owner {
                 crate::compute::pool_cpu::ops::analysis::helpers::bbox::GetBBoxSupportKind::$kind,
             )
         }
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn execute_getbbox(
             image: &$image_ty,
             alpha_only: bool,

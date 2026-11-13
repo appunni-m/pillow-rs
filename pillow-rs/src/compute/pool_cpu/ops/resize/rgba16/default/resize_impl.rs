@@ -3,6 +3,7 @@
 use crate::pipeline::ResampleFilter;
 use crate::raster::{ImageBuffer, Rgba};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &ImageBuffer<Rgba<u16>, Vec<u16>>,
     width: u32,

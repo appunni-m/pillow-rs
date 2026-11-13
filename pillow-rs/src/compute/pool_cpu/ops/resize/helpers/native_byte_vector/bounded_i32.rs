@@ -8,6 +8,7 @@ use super::plan::{ResizeHorizontalPlan, resize_coeff_slice};
 use crate::ops::pil_resize::FilterCoeffs;
 use wide::{f64x8, i32x8};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn resize_fixed_point_i32_to_u8(sum: i32) -> u8 {
     let value = (sum + (1_i32 << 21)) >> 22;
@@ -18,6 +19,7 @@ fn resize_fixed_point_i32_to_u8(sum: i32) -> u8 {
 /// premultiplied by alpha before filtering, while alpha itself is filtered as
 /// its own native channel. The coefficient guard used by the native-byte dispatcher
 /// bounds both accumulators because each sample remains in 0..=255.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resize_horizontal_la_i32_vector_row(
     source_row: &[u8],
     coeffs: &FilterCoeffs,
@@ -92,6 +94,7 @@ fn resize_horizontal_la_i32_vector_row(
 /// LA vertical convolution with checked i32 accumulators. Restore luma only
 /// after filtering it and alpha separately, matching the generic premultiplied
 /// path's fixed-point rounding at each pass boundary.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resize_vertical_la_i32_vector_row(
     intermediate: &[u8],
     output_width: usize,
@@ -187,6 +190,7 @@ fn resize_vertical_la_i32_vector_row(
 /// Three-channel modes are stored as independent native bytes per pixel. The
 /// Resize guard admits this i32 path only when every ordered sample sum fits;
 /// other coefficient tables select the mode's Default strategy.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn resize_horizontal_hsv_i32_vector_row(
     source_row: &[u8],
     coeffs: &FilterCoeffs,
@@ -268,6 +272,7 @@ pub(super) fn resize_horizontal_hsv_i32_vector_row(
 
 /// HSV vertical convolution paired with the checked 32-bit horizontal path.
 /// The samples are read from contiguous triples without a mode conversion.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn resize_vertical_hsv_i32_vector_row(
     intermediate: &[u8],
     output_width: usize,
@@ -358,6 +363,7 @@ pub(super) fn resize_vertical_hsv_i32_vector_row(
 /// Accumulate four interleaved byte channels with bounded i32 sums. CMYK uses
 /// four independent samples; RGBA reaches this kernel only after the caller
 /// has premultiplied its native RGB channels by alpha.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[allow(clippy::arithmetic_side_effects)] // The coefficient bound guarantees SIMD sums cannot wrap.
 fn resize_horizontal_four_channel_i32_vector_row(
     source_row: &[u8],
@@ -438,6 +444,7 @@ fn resize_horizontal_four_channel_i32_vector_row(
 /// Vertical counterpart to the four-channel i32 horizontal pass. For RGBA,
 /// `premultiplied_alpha` means RGB is restored after filtering; CMYK keeps all
 /// four stored samples independent.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[allow(clippy::arithmetic_side_effects)] // The coefficient bound guarantees SIMD sums cannot wrap.
 fn resize_vertical_four_channel_i32_vector_row<const PREMULTIPLIED_ALPHA: bool>(
     intermediate: &[u8],
@@ -537,6 +544,7 @@ fn resize_vertical_four_channel_i32_vector_row<const PREMULTIPLIED_ALPHA: bool>(
     Some((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn resize_horizontal_bounded_i32_vector_row<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -572,6 +580,7 @@ pub(super) fn resize_horizontal_bounded_i32_vector_row<
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn resize_vertical_bounded_i32_vector_row<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,

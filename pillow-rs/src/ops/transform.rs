@@ -210,12 +210,43 @@ fn validate_reduce_box(
     Ok(())
 }
 
+/// Reduce arguments after their C-int conversions and source-size lookup.
+#[derive(Clone, Copy)]
+pub(crate) struct ValidatedResizeReduce {
+    pub(crate) x_factor: u32,
+    pub(crate) y_factor: u32,
+    pub(crate) coordinates: (i32, i32, i32, i32),
+    pub(crate) width: i32,
+    pub(crate) height: i32,
+}
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+pub(crate) fn validate_resize_reduce_request(
+    x_scale: i32,
+    y_scale: i32,
+    coordinates: (i32, i32, i32, i32),
+    source_size: (u32, u32),
+) -> Result<ValidatedResizeReduce, PilError> {
+    let width = reduce_c_int(i64::from(source_size.0))?;
+    let height = reduce_c_int(i64::from(source_size.1))?;
+    let (x_factor, y_factor) = validate_reduce_factors(x_scale, y_scale)?;
+    validate_reduce_box(coordinates, width, height)?;
+    Ok(ValidatedResizeReduce {
+        x_factor,
+        y_factor,
+        coordinates,
+        width,
+        height,
+    })
+}
+
 impl Image {
     /// Reduces an image using Pillow's public scalar/sequence contract.
     ///
     /// Bindings preserve sequence arity and convert integer items through their
-    /// host protocol. The core owns scale positivity, box bounds, mode
-    /// rejection, and the optional crop.
+    /// host protocol. The core owns scale positivity, box bounds, mode support,
+    /// and the optional crop.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn reduce_public(
         &self,
         factor: ReduceFactor,
@@ -242,6 +273,45 @@ impl Image {
         };
         validate_reduce_box(coordinates, width, height)?;
 
+        self.reduce_validated(x_factor, y_factor, coordinates, width, height)
+    }
+
+    /// Applies Resize's fixed-arity reduction request without allocating host
+    /// sequences.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    pub(crate) fn reduce_for_resize(
+        &self,
+        factors: (i64, i64),
+        box_coords: (i64, i64, i64, i64),
+    ) -> Result<Image, PilError> {
+        let x_scale = reduce_c_int(factors.0)?;
+        let y_scale = reduce_c_int(factors.1)?;
+        let coordinates = (
+            reduce_c_int(box_coords.0)?,
+            reduce_c_int(box_coords.1)?,
+            reduce_c_int(box_coords.2)?,
+            reduce_c_int(box_coords.3)?,
+        );
+        let request = validate_resize_reduce_request(x_scale, y_scale, coordinates, self.size()?)?;
+
+        self.reduce_validated(
+            request.x_factor,
+            request.y_factor,
+            request.coordinates,
+            request.width,
+            request.height,
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    fn reduce_validated(
+        &self,
+        x_factor: u32,
+        y_factor: u32,
+        coordinates: (i32, i32, i32, i32),
+        width: i32,
+        height: i32,
+    ) -> Result<Image, PilError> {
         if let Some(mode) = self.known_mode_identity() {
             // Reject unsupported non-identity work before queuing it, so the
             // mode error is not deferred. Factor-one boxes remain crops.

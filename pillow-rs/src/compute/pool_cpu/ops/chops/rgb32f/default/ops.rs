@@ -5,6 +5,7 @@ use crate::raster::DynamicImage;
 
 use super::super::super::ops::ChopsRequest;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     request: ChopsRequest,
@@ -17,6 +18,7 @@ pub(crate) fn execute(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_offset(image: &DynamicImage, x: i32, y: i32) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageRgb32F(buffer) = image else {
         return Err(PilError::InternalError(
@@ -29,6 +31,7 @@ fn execute_offset(image: &DynamicImage, x: i32, y: i32) -> Result<DynamicImage, 
     Ok(DynamicImage::ImageRgb32F(output))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_invert(image: &DynamicImage) -> Result<DynamicImage, PilError> {
     // NO_PILLOW_SUPPORT: native high-depth inversion extends Pillow ImageChops.
     let DynamicImage::ImageRgb32F(buffer) = image else {

@@ -4,6 +4,10 @@ use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::Mode;
 
 pub(crate) mod reducing_gap;
+pub use reducing_gap::ReducingGapCallbackPlan;
+pub use reducing_gap::ReducingGapPlan;
+#[doc(hidden)]
+pub use reducing_gap::ResizeBounds;
 use reducing_gap::apply_reducing_gap;
 
 /// Public resampling input accepted by Pillow resize-like methods.
@@ -137,7 +141,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError::ValueError`] for invalid dimensions or unknown filters.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn resize(
         &self,
         size: (i64, i64),
@@ -167,7 +171,10 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] for invalid dimensions, filter, gap, or source bounds.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // TODO(pillow-rs#3ptb): parity-check zero/negative-size factor and
+    // reducer-first fault order, typed I;16 reducing-gap output, safe-box and
+    // final-bound faults, input extraction, lazy decode, mode, and identity.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub fn resize_with_options(
         &self,
         size: (i64, i64),
@@ -196,10 +203,23 @@ impl Image {
             // filtering. Retain their ordinary backend execution boundary.
             return self.resize_with_filter((source_w, source_h), filter, mode);
         }
-        let (w, h) = positive_dimensions(size, "height and width must be > 0")?;
         if matches!(mode, Mode::One | Mode::ImagePalette8) {
             filter = ResampleFilter::Nearest;
         }
+        if (size.0 <= 0 || size.1 <= 0)
+            && let Some(gap) = reducing_gap
+            && !matches!(filter, ResampleFilter::Nearest)
+        {
+            reducing_gap::validate_reduction_before_invalid_output_size(
+                self,
+                bounds,
+                gap,
+                filter,
+                size,
+                (source_w, source_h),
+            )?;
+        }
+        let (w, h) = positive_dimensions(size, "height and width must be > 0")?;
         if let Some(identity_resize) =
             self.identity_boxed_nearest_resize(filter, (w, h), (source_w, source_h), mode, bounds)?
         {
@@ -215,15 +235,8 @@ impl Image {
                     reducing_gap::prepare(bounds, gap, filter, (w, h), (source_w, source_h))?
                         .map(|_| gap);
             } else {
-                (source, bounds) = apply_reducing_gap(
-                    source,
-                    bounds,
-                    gap,
-                    filter,
-                    mode,
-                    (w, h),
-                    (source_w, source_h),
-                )?;
+                (source, bounds) =
+                    apply_reducing_gap(source, bounds, gap, filter, (w, h), (source_w, source_h))?;
             }
         }
         let source_size = source.size()?;
@@ -247,7 +260,54 @@ impl Image {
         ))
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    /// Returns the integer reduction selected by Pillow's `reducing_gap` plan.
+    ///
+    /// This hidden binding hook lets the Python adapter dispatch an overridden
+    /// public `Image.reduce` method before the core performs the final resize.
+    /// Invalid or inapplicable plans return `None`; the ordinary resize path
+    /// remains responsible for reporting the corresponding public error.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn resize_reducing_gap_plan(
+        &self,
+        size: (i64, i64),
+        filter: Option<ResampleInput>,
+        box_coords: Option<ResizeBounds>,
+        reducing_gap: Option<f64>,
+    ) -> Option<ReducingGapCallbackPlan> {
+        let gap = reducing_gap?;
+        if gap < 1.0 {
+            return None;
+        }
+        let filter = parse_resample_input(filter).ok()?;
+        if matches!(filter, ResampleFilter::Nearest) {
+            return None;
+        }
+        if matches!(self, Image::Bytes { .. }) {
+            // The callback planner is geometry-only. Let the ordinary route
+            // materialize an encoded source before exposing a reduction plan.
+            return None;
+        }
+        let source_size = self.size().ok()?;
+        let mode = self.mode_identity().ok()?;
+        if matches!(
+            mode,
+            Mode::One | Mode::ImagePalette8 | Mode::ImageLumaA8 | Mode::ImageRgba8
+        ) {
+            // One/P force nearest. Straight-alpha resize has its own fused
+            // strategy; the Python wrapper's recursive premultiplied route is
+            // tracked separately for overridden reduce methods.
+            return None;
+        }
+        let full_box = (0.0, 0.0, f64::from(source_size.0), f64::from(source_size.1));
+        let bounds = box_coords.unwrap_or(full_box);
+        if size == (i64::from(source_size.0), i64::from(source_size.1)) && bounds == full_box {
+            return None;
+        }
+        reducing_gap::prepare_callback(bounds, gap, filter, size, source_size).ok()?
+    }
+
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[inline(always)]
     fn identity_boxed_nearest_resize(
         &self,
@@ -275,7 +335,7 @@ impl Image {
         Ok(None)
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn resize_with_filter(
         &self,
         (w, h): (u32, u32),
@@ -574,7 +634,37 @@ impl Image {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+/// Translates resize bounds after a public reducing-gap callback.
+///
+/// This state-free geometry entry point lets the host call the reducer result's
+/// own `im.resize` method after the callback without retaining the source image.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+#[doc(hidden)]
+pub fn resize_reducing_gap_bounds(
+    bounds: ResizeBounds,
+    factor: (f64, f64),
+    safe_box: ResizeBounds,
+) -> Result<ResizeBounds, PilError> {
+    if factor.0 == 0.0 || factor.1 == 0.0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
+    Ok((
+        (bounds.0 - safe_box.0) / factor.0,
+        (bounds.1 - safe_box.1) / factor.1,
+        (bounds.2 - safe_box.0) / factor.0,
+        (bounds.3 - safe_box.1) / factor.1,
+    ))
+}
+
+/// Returns the filter-support offset used by Pillow's reducing-gap safe box.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+#[doc(hidden)]
+pub fn resize_reducing_gap_filter_support(filter: ResampleFilter) -> f64 {
+    let (_, support) = crate::ops::pil_resize::filter_from_resample(filter);
+    support - 0.5
+}
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_resize_box(
     bounds: (f64, f64, f64, f64),
     size: (u32, u32),
@@ -582,7 +672,7 @@ fn validate_resize_box(
     crate::compute::pool_cpu::ops::resize::helpers::boxed_crop::validate_bounds(bounds, size)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn positive_dimensions(size: (i64, i64), message: &str) -> Result<(u32, u32), PilError> {
     if size.0 <= 0 || size.1 <= 0 {
         return Err(PilError::ValueError(message.into()));

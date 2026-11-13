@@ -6,6 +6,7 @@ use crate::raster::{GrayImage, Mode};
 use super::super::helpers::get_data::{self as helpers, GetDataOutput, GetDataRequest};
 use super::default::get_data_impl;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_get_data(
     image: &GrayImage,
     selection: StrategySelection,
@@ -24,6 +25,7 @@ pub(crate) fn execute_get_data(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn get_data_view(
     image: &GrayImage,
     selection: StrategySelection,
@@ -80,6 +82,7 @@ pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::Mode
         crate::raster::Mode::One,
     );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel(
     image: &crate::raster::GrayImage,
     x: u32,
@@ -119,6 +122,7 @@ crate::compute::pool_cpu::ops::analysis::helpers::get_data_support::declare_get_
     One, 1, Pillow, Pillow, Pillow,
 );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 crate::compute::pool_cpu::ops::analysis::helpers::projection_support::declare_projection_support!(
     One, Pillow,
 );

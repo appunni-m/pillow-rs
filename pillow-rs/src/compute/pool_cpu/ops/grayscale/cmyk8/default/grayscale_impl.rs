@@ -22,6 +22,7 @@ pub(crate) const INPUTS: &[InputContract] = &[
     SOURCE,
 ];
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare(input: &Input) -> Result<Kernel<'_>, PilError> {
     let prepared = Checked::new(input)?;
     SOURCE.validate_materialized(StrategyInputs {
@@ -34,6 +35,7 @@ pub(crate) fn prepare(input: &Input) -> Result<Kernel<'_>, PilError> {
     Ok(prepared)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(input: Kernel<'_>) -> Result<GrayImage, PilError> {
     let source = input.input;
     let (w, h) = source.dimensions();

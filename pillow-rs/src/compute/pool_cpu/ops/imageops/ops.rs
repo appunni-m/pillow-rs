@@ -41,17 +41,49 @@ const AUTOCONTRAST_INPUTS: &[InputContract] = &[
     InputContract::ImageOpsLumaMask,
 ];
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+fn unsupported_imageops_mode(mode: Mode) -> ModeSupport {
+    ModeSupport::Rejected {
+        mode,
+        reason: super::helpers::strategy::unsupported_mode_reason(mode),
+        kind: RejectionKind::OsError,
+    }
+}
+
+macro_rules! rejected_imageops_mode_pattern {
+    () => {
+        Mode::One
+            | Mode::ImageLumaA8
+            | Mode::ImageLaPremultiplied8
+            | Mode::ImagePaletteAlpha8
+            | Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8
+            | Mode::ImageYCbCr8
+            | Mode::ImageLab8
+            | Mode::ImageHsv8
+            | Mode::ImageI32
+            | Mode::ImageF32
+            | Mode::ImageI16
+            | Mode::ImageI16L
+            | Mode::ImageI16B
+            | Mode::ImageI16N
+            | Mode::ImageLumaA16
+            | Mode::ImageRgb16
+            | Mode::ImageRgba16
+            | Mode::ImageRgb32F
+            | Mode::ImageRgba32F
+    };
+}
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_autocontrast_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageLuma8 => super::luma8::ops::AUTOCONTRAST_SUPPORT,
         Mode::ImagePalette8 => super::palette8::ops::AUTOCONTRAST_SUPPORT,
         Mode::ImageRgb8 => super::rgb8::ops::AUTOCONTRAST_SUPPORT,
-        _ => ModeSupport::Rejected {
-            mode,
-            reason: super::helpers::strategy::unsupported_mode_reason(mode),
-            kind: RejectionKind::OsError,
-        },
+        rejected_imageops_mode_pattern!() => unsupported_imageops_mode(mode),
     }
 }
 
@@ -66,17 +98,13 @@ const EQUALIZE_INPUTS: &[InputContract] = &[
     InputContract::PaletteMetadata,
 ];
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_equalize_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageLuma8 => super::luma8::ops::EQUALIZE_SUPPORT,
         Mode::ImageRgb8 => super::rgb8::ops::EQUALIZE_SUPPORT,
         Mode::ImagePalette8 => super::palette8::ops::EQUALIZE_SUPPORT,
-        _ => ModeSupport::Rejected {
-            mode,
-            reason: super::helpers::strategy::unsupported_mode_reason(mode),
-            kind: RejectionKind::OsError,
-        },
+        rejected_imageops_mode_pattern!() => unsupported_imageops_mode(mode),
     }
 }
 
@@ -92,7 +120,7 @@ pub(crate) static EXPAND_SUPPORT: OperationSupport =
 
 macro_rules! declare_expand_mode_contract {
     ($($mode:ident => $module:ident),+ $(,)?) => {
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         fn classify_expand_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::expand::SUPPORT,)+
@@ -208,7 +236,7 @@ pub(super) struct QuantizeModeStrategy {
 }
 
 /// Binds each exact mode's support declaration to its concrete source strategy.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn quantize_mode_strategy(mode: Mode) -> QuantizeModeStrategy {
     let (source, scope, default_method) = match mode {
         Mode::ImageLuma8 => (QuantizeSource::Luma, QuantizeSupportScope::Pillow, 0),
@@ -267,7 +295,7 @@ pub(super) fn quantize_mode_strategy(mode: Mode) -> QuantizeModeStrategy {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_quantize_mode(mode: Mode) -> ModeSupport {
     quantize_mode_strategy(mode).support
 }
@@ -283,7 +311,7 @@ pub(crate) use super::helpers::quantize::{
     validate_pillow_rgba_method,
 };
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_autocontrast_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -302,7 +330,7 @@ pub(crate) fn prepare_autocontrast_pipeline<'a>(
     .map(crate::compute::registry::PreparedOperation::from_autocontrast)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_equalize_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -317,7 +345,7 @@ pub(crate) fn prepare_equalize_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_equalize)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_expand_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -343,7 +371,7 @@ pub(in crate::compute::pool_cpu::ops::imageops) const CROP_BORDER_INPUTS: &[Inpu
 
 macro_rules! declare_crop_border_modes {
     ($($mode:ident => $module:ident),+ $(,)?) => {
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         fn classify_crop_border_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::CROP_BORDER_SUPPORT,)+
@@ -394,14 +422,14 @@ pub(crate) enum PreparedCropBorder<'a> {
 }
 
 impl PreparedCropBorder<'_> {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::Crop(_, selection) | Self::Empty(_, _, selection) => selection,
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self {
             Self::Crop(crop, _) => crop.execute(),
@@ -413,7 +441,7 @@ impl PreparedCropBorder<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_crop_border<'a>(
     image: &'a DynamicImage,
     border: u32,
@@ -459,7 +487,7 @@ pub(crate) fn prepare_crop_border<'a>(
     Ok(PreparedCropBorder::Crop(crop, selection))
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_crop_border_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -478,7 +506,7 @@ macro_rules! declare_invert_modes {
             $($mode(super::$module::ops::Strategy<'a>),)+
         }
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         fn classify_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::SUPPORT,)+
@@ -493,7 +521,7 @@ macro_rules! declare_invert_modes {
             }
         }
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         fn prepare_mode<'a>(
             image: &'a DynamicImage,
             ctx: &ExecutionContext,
@@ -512,12 +540,12 @@ macro_rules! declare_invert_modes {
         }
 
         impl PreparedInvert<'_> {
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
             }
 
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let mut output = match self {
                     $(Self::$mode(strategy) => super::$module::ops::execute(strategy),)+
@@ -546,7 +574,7 @@ declare_invert_modes! {
     ImageHsv8 => hsv8,
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rejected(mode: Mode, reason: &'static str) -> ModeSupport {
     ModeSupport::Rejected {
         mode,
@@ -555,7 +583,7 @@ fn rejected(mode: Mode, reason: &'static str) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rejection_error(mode: Mode) -> PilError {
     match INVERT_SUPPORT.for_mode(mode) {
         ModeSupport::Rejected { reason, kind, .. } => kind.into_error(reason),
@@ -603,7 +631,7 @@ pub(crate) static IMAGEOPS_SOLARIZE_SUPPORT: OperationSupport = OperationSupport
     IMAGEOPS_LUT_CHILDREN,
 );
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn validate_imageops_invert_mode(mode: Mode) -> Result<(), PilError> {
     match IMAGEOPS_INVERT_SUPPORT.route_for_mode(mode) {
         OperationModeRoute::ComposedFallback {
@@ -619,7 +647,7 @@ pub(crate) fn validate_imageops_invert_mode(mode: Mode) -> Result<(), PilError> 
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_posterize_mode(mode: Mode) -> ModeSupport {
     super::helpers::point_support::classify_native_byte_point_mode(
         mode,
@@ -638,7 +666,7 @@ pub(crate) static POSTERIZE_SUPPORT: OperationSupport = OperationSupport::new(
     classify_posterize_mode,
 );
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_solarize_mode(mode: Mode) -> ModeSupport {
     super::helpers::point_support::classify_native_byte_point_mode(
         mode,
@@ -654,7 +682,7 @@ pub(crate) static SOLARIZE_SUPPORT: OperationSupport =
 
 macro_rules! declare_colorize_modes {
     ($($mode:ident),+ $(,)?) => {
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         fn classify_colorize_mode(mode: Mode) -> ModeSupport {
             match mode {
                 Mode::ImageLuma8 => super::luma8::ops::COLORIZE_SUPPORT,
@@ -664,7 +692,7 @@ macro_rules! declare_colorize_modes {
     };
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rejected_colorize_mode(mode: Mode) -> ModeSupport {
     ModeSupport::Rejected {
         mode,
@@ -725,7 +753,7 @@ pub(crate) static IMAGEOPS_COLORIZE_LUT_SUPPORT: OperationSupport = OperationSup
     IMAGEOPS_COLORIZE_LUT_CHILDREN,
 );
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_colorize<'a>(
     image: &'a DynamicImage,
     black: &(u8, u8, u8),
@@ -747,7 +775,7 @@ fn prepare_colorize<'a>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_colorize_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -785,7 +813,7 @@ pub(crate) enum PreparedPosterize<'a> {
 }
 
 impl PreparedPosterize<'_> {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::Luma(prepared) => prepared.selection(),
@@ -794,7 +822,7 @@ impl PreparedPosterize<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let mut output = match self {
             Self::Luma(prepared) => prepared.execute()?,
@@ -814,7 +842,7 @@ pub(crate) enum PreparedSolarize<'a> {
 }
 
 impl PreparedSolarize<'_> {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::Luma(prepared) => prepared.selection(),
@@ -823,7 +851,7 @@ impl PreparedSolarize<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let mut output = match self {
             Self::Luma(prepared) => prepared.execute()?,
@@ -835,7 +863,7 @@ impl PreparedSolarize<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn mode_selection(
     support: &'static OperationSupport,
     image: &DynamicImage,
@@ -851,7 +879,7 @@ fn mode_selection(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_posterize<'a>(
     image: &'a DynamicImage,
     bits: u8,
@@ -879,7 +907,7 @@ fn prepare_posterize<'a>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_solarize<'a>(
     image: &'a DynamicImage,
     threshold: u8,
@@ -902,7 +930,7 @@ fn prepare_solarize<'a>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_posterize_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -915,7 +943,7 @@ pub(crate) fn prepare_posterize_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_posterize)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_solarize_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -928,7 +956,7 @@ pub(crate) fn prepare_solarize_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_solarize)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     ctx: &ExecutionContext,
@@ -936,7 +964,7 @@ pub(crate) fn prepare<'a>(
     prepare_mode(image, ctx)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_invert_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

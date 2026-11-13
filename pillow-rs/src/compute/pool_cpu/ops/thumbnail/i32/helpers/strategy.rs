@@ -3,6 +3,7 @@ use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn selected_architecture(
     selection: &StrategySelection,
 ) -> Result<Architecture, PilError> {

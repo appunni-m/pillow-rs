@@ -5,6 +5,7 @@ use crate::compute::helpers::resampling::rounding::round_up;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{ImageBuffer, Pixel};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize<P: Pixel<Subpixel = u16>>(
     input: &ImageBuffer<P, Vec<u16>>,
     destination_width: u32,
@@ -60,6 +61,7 @@ pub(crate) fn resize<P: Pixel<Subpixel = u16>>(
     output
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize_with_alpha<P: Pixel<Subpixel = u16>>(
     input: &ImageBuffer<P, Vec<u16>>,
     destination_width: u32,
@@ -90,6 +92,7 @@ pub(crate) fn resize_with_alpha<P: Pixel<Subpixel = u16>>(
     output
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn premultiply_u16(image: &mut ImageBuffer<impl Pixel<Subpixel = u16>, Vec<u16>>, channels: usize) {
     let denominator = u64::from(u16::MAX);
     for pixel in image.chunks_exact_mut(channels) {
@@ -101,6 +104,7 @@ fn premultiply_u16(image: &mut ImageBuffer<impl Pixel<Subpixel = u16>, Vec<u16>>
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn unpremultiply_u16(
     image: &mut ImageBuffer<impl Pixel<Subpixel = u16>, Vec<u16>>,
     channels: usize,
@@ -119,6 +123,7 @@ fn unpremultiply_u16(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_pass(
     source_row: &[u16],
     coefficients: &crate::ops::pil_resize::FilterCoeffsF64,
@@ -142,6 +147,7 @@ fn horizontal_pass(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_pass(
     intermediate: &[u16],
     coefficients: &crate::ops::pil_resize::FilterCoeffsF64,
@@ -171,6 +177,7 @@ fn vertical_pass(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn native_u16(value: f64) -> u16 {
     round_up(value).clamp(0.0, f64::from(u16::MAX)) as u16
 }

@@ -5,6 +5,7 @@ use crate::ops::pil_resize::FilterCoeffsF64;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{ImageBuffer, Luma};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize<const BIG_ENDIAN: bool>(
     input: &ImageBuffer<Luma<u16>, Vec<u16>>,
     destination_width: u32,
@@ -52,6 +53,7 @@ pub(crate) fn resize<const BIG_ENDIAN: bool>(
     output
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_pass<const BIG_ENDIAN: bool>(
     source_row: &[u16],
     coefficients: &FilterCoeffsF64,
@@ -77,6 +79,7 @@ fn horizontal_pass<const BIG_ENDIAN: bool>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_sample<const BIG_ENDIAN: bool>(
     intermediate: &[u16],
     output_x: u32,

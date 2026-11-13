@@ -6,8 +6,7 @@ use crate::error::PilError;
 use crate::image::FormattedExtrema;
 use crate::raster::{DynamicImage, Mode};
 
-/// Prepared GetExtrema execution retains the exact source mode and route.
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn support(
     mode: Mode,
     category: GetExtremaSupportCategory,
@@ -76,6 +75,7 @@ macro_rules! declare_getextrema_support {
 
 pub(crate) use declare_getextrema_support;
 
+/// Prepared GetExtrema execution retains the exact source mode and route.
 pub(crate) struct PreparedGetExtrema<'a> {
     image: &'a DynamicImage,
     mode: Mode,
@@ -83,10 +83,12 @@ pub(crate) struct PreparedGetExtrema<'a> {
 }
 
 impl PreparedGetExtrema<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<FormattedExtrema, PilError> {
         if self.image.mode() != self.mode {
             return Err(PilError::InternalError(
@@ -177,6 +179,7 @@ impl PreparedGetExtrema<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Selects exact-mode GetExtrema from the injected CPU context.
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,

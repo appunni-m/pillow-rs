@@ -9,6 +9,7 @@ use std::arch::aarch64::{
 use super::LANES;
 use super::plan::HorizontalBlock;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 #[inline]
 fn round_up_i32x2(value: float64x2_t) -> int32x2_t {
@@ -26,6 +27,7 @@ fn round_up_i32x2(value: float64x2_t) -> int32x2_t {
 
 /// Execute a horizontal tap plan when every lane has stride-two samples and a
 /// uniform coefficient.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 pub(super) fn horizontal_block(
     source_row: &[i32],
@@ -86,6 +88,7 @@ pub(super) fn horizontal_block(
 }
 
 /// Execute the vertical tap span for eight contiguous intermediate samples.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 pub(super) fn vertical_block(
     source: &[i32],

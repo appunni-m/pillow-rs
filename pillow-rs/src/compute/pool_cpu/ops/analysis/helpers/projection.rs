@@ -16,6 +16,7 @@ pub(crate) struct ProjectionOutput {
 }
 
 impl ProjectionOutput {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn serial(axes: ProjectionAxes) -> Self {
         Self {
             axes,
@@ -23,7 +24,7 @@ impl ProjectionOutput {
             scalar_tail: 0,
         }
     }
-
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn vector(axes: ProjectionAxes, vector_blocks: u64, scalar_tail: u64) -> Self {
         Self {
             axes,
@@ -32,7 +33,7 @@ impl ProjectionOutput {
         }
     }
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn native_pixel_bytes(mode: Mode) -> usize {
     match mode {
         Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => 1,
@@ -52,13 +53,13 @@ pub(crate) fn native_pixel_bytes(mode: Mode) -> usize {
         Mode::ImageRgba32F => 16,
     }
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn storage_error(mode: Mode) -> crate::error::PilError {
     crate::error::PilError::InternalError(format!(
         "GetProjection mode {mode:?} did not match its exact raster variant"
     ))
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Project native samples without changing their mode or pixel representation.
 pub(crate) fn project_native_bytes(
     bytes: &[u8],
@@ -93,7 +94,7 @@ pub(crate) fn project_native_bytes(
     }
     Ok((horizontal, vertical))
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Preserve Pillow's I/F stored-word test, including F negative-zero bits.
 pub(crate) fn project_stored_words(
     bytes: &[u8],
@@ -145,7 +146,7 @@ pub(crate) fn project_stored_words(
     }
     Ok((horizontal, vertical))
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// LAB's encoded A/B neutral point is 128, not a zero byte.
 pub(crate) fn project_lab(image: &RgbImage) -> ProjectionAxes {
     let (width, height) = (image.width() as usize, image.height() as usize);
@@ -162,14 +163,14 @@ pub(crate) fn project_lab(image: &RgbImage) -> ProjectionAxes {
     }
     (horizontal, vertical)
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn cmyk_projection_pixel_is_nonzero(samples: &[u8]) -> bool {
     let mut packed = [0; 4];
     packed.copy_from_slice(samples);
     u32::from_ne_bytes(packed) != 0
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn cmyk_projection_scan_row(
     row: &[u8],
@@ -225,7 +226,7 @@ fn cmyk_projection_scan_row(
     };
     (row_nonzero, scalar_tail_pixels)
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Scan native CMYK bytes with the existing 16-byte serial grouping.
 pub(crate) fn cmyk_projection(image: &RgbaImage) -> (Vec<u32>, Vec<u32>) {
     cmyk_projection_with_blocks(image, 16, |samples| {
@@ -235,7 +236,7 @@ pub(crate) fn cmyk_projection(image: &RgbaImage) -> (Vec<u32>, Vec<u32>) {
     })
     .0
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Preserve the existing scalar RGB row traversal for narrow images.
 pub(crate) fn rgb_projection(image: &RgbImage) -> (Vec<u32>, Vec<u32>) {
     let (width, height) = (image.width() as usize, image.height() as usize);
@@ -256,7 +257,7 @@ pub(crate) fn rgb_projection(image: &RgbImage) -> (Vec<u32>, Vec<u32>) {
     }
     (horizontal, vertical)
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rgb_projection_wide(image: &RgbImage, width: usize, height: usize) -> ProjectionAxes {
     let mut horizontal = vec![0; width];
     let mut vertical = vec![0; height];
@@ -287,7 +288,7 @@ fn rgb_projection_wide(image: &RgbImage, width: usize, height: usize) -> Project
     }
     (horizontal, vertical)
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Keep CMYK block detection separate from row and axis bookkeeping.
 pub(crate) fn cmyk_projection_with_blocks(
     image: &RgbaImage,

@@ -7,6 +7,7 @@ use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
     byte_coefficients_fit_i32, byte_coefficients_fit_source, fixed_point_to_u8_i32,
 };
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &[u8],
     source_size: (u32, u32),
@@ -57,6 +58,7 @@ pub(crate) fn execute(
     Some(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_row(
     source: &[u8],
     coefficients: &FilterCoeffs,
@@ -115,6 +117,7 @@ fn horizontal_row(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_rows(
     intermediate: &[u8],
     row_stride: usize,
@@ -172,6 +175,7 @@ fn vertical_rows(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_pixel(
     source: &[u8],
     row_stride: usize,
@@ -197,6 +201,7 @@ fn vertical_pixel(
     ]
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn weights(coefficients: &FilterCoeffs, index: usize) -> &[i64] {
     let start = coefficients.offsets[index];
     &coefficients.weights[start..start + coefficients.count[index]]

@@ -93,6 +93,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     size: (u32, u32, u32),
@@ -113,6 +114,7 @@ pub(crate) fn prepare<'a>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     prepared: super::super::helpers::strategy::Strategy<'_>,
 ) -> Result<DynamicImage, PilError> {

@@ -5,6 +5,7 @@ use crate::raster::{ImageBuffer, Pixel};
 
 /// Returns the complete native samples belonging to the declared image extent.
 ///
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn logical_samples<P>(image: &ImageBuffer<P, Vec<P::Subpixel>>) -> &[P::Subpixel]
 where
     P: Pixel,
@@ -23,16 +24,19 @@ where
     image.as_raw().get(..sample_count).unwrap_or_default()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn byte_bands_1(samples: &[u8]) -> Vec<(u8, u8)> {
     Vec::from(extrema_by_channel::<_, 1, 1>(samples, [0], |sample| sample))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn byte_bands_2(samples: &[u8]) -> Vec<(u8, u8)> {
     Vec::from(extrema_by_channel::<_, 2, 2>(samples, [0, 1], |sample| {
         sample
     }))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn byte_bands_3(samples: &[u8]) -> Vec<(u8, u8)> {
     Vec::from(extrema_by_channel::<_, 3, 3>(
         samples,
@@ -41,6 +45,7 @@ pub(crate) fn byte_bands_3(samples: &[u8]) -> Vec<(u8, u8)> {
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn byte_bands_4(samples: &[u8]) -> Vec<(u8, u8)> {
     Vec::from(extrema_by_channel::<_, 4, 4>(
         samples,
@@ -49,6 +54,7 @@ pub(crate) fn byte_bands_4(samples: &[u8]) -> Vec<(u8, u8)> {
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn clipped_u16_luma(samples: &[u16]) -> Vec<(u8, u8)> {
     Vec::from(extrema_by_channel::<_, 1, 1>(samples, [0], |sample| {
         sample.min(u16::from(u8::MAX)) as u8
@@ -56,11 +62,13 @@ pub(crate) fn clipped_u16_luma(samples: &[u16]) -> Vec<(u8, u8)> {
 }
 
 /// Preserve the old byte API's first two RGBA projection lanes for LA16.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn projected_u16_luma_alpha(samples: &[u16]) -> Vec<(u8, u8)> {
     let luma = extrema_by_channel::<_, 2, 1>(samples, [0], |sample| u8::from_primitive(sample))[0];
     vec![luma, luma]
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn u16_bands_3(samples: &[u16]) -> Vec<(u8, u8)> {
     Vec::from(extrema_by_channel::<_, 3, 3>(
         samples,
@@ -69,6 +77,7 @@ pub(crate) fn u16_bands_3(samples: &[u16]) -> Vec<(u8, u8)> {
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn u16_bands_4(samples: &[u16]) -> Vec<(u8, u8)> {
     Vec::from(extrema_by_channel::<_, 4, 4>(
         samples,
@@ -78,6 +87,7 @@ pub(crate) fn u16_bands_4(samples: &[u16]) -> Vec<(u8, u8)> {
 }
 
 /// Preserve the former RGBA8 fallback's opaque fourth lane for RGB32F.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn f32_bands_3_with_opaque_alpha(samples: &[f32]) -> Vec<(u8, u8)> {
     let mut extrema = Vec::from(extrema_by_channel::<_, 3, 3>(
         samples,
@@ -92,6 +102,7 @@ pub(crate) fn f32_bands_3_with_opaque_alpha(samples: &[f32]) -> Vec<(u8, u8)> {
     extrema
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn f32_bands_4(samples: &[f32]) -> Vec<(u8, u8)> {
     Vec::from(extrema_by_channel::<_, 4, 4>(
         samples,
@@ -100,6 +111,7 @@ pub(crate) fn f32_bands_4(samples: &[f32]) -> Vec<(u8, u8)> {
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn extrema_by_channel<T: Copy, const SOURCE_CHANNELS: usize, const OUTPUT_CHANNELS: usize>(
     samples: &[T],

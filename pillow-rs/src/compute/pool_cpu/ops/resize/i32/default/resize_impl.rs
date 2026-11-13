@@ -8,6 +8,7 @@ use crate::raster::RgbaImage;
 
 use super::super::super::helpers::typed_nearest::BoxBounds;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbaImage,
     width: u32,
@@ -25,6 +26,7 @@ pub(crate) fn execute(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_with_fma<F: F64MulAdd>(
     input: &RgbaImage,
     width: u32,
@@ -62,6 +64,7 @@ pub(crate) fn execute_with_fma<F: F64MulAdd>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn empty(width: u32, height: u32) -> Result<RgbaImage, PilError> {
     let dims = CheckedDims::new_allow_empty(width, height, 4)?;
     RgbaImage::from_raw(width, height, dims.alloc_buffer())

@@ -7,6 +7,7 @@ pub(crate) mod avx2;
 
 pub(crate) mod wide;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn write_rgb_block(
     context: &RgbReduceRowContext<'_>,
@@ -47,6 +48,7 @@ fn write_rgb_block(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn process_rgb_row_range(
     context: &RgbReduceRowContext<'_>,
@@ -95,11 +97,13 @@ fn process_rgb_row_range(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn process_rgb_row(context: &RgbReduceRowContext<'_>, y: u32, row: &mut [u8]) {
     process_rgb_row_range(context, y, row, 0, context.output_width);
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn reduce_rgb_general(
     context: &RgbReduceRowContext<'_>,
     output_height: u32,
@@ -112,6 +116,7 @@ pub(super) fn reduce_rgb_general(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 pub(super) fn reduce_rgb_dense_even_2x2(
     source: &[u8],

@@ -7,6 +7,7 @@ use crate::ops::pil_resize::{F64MulAdd, PortableFma};
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbaImage,
     width: u32,
@@ -17,6 +18,7 @@ pub(crate) fn execute(
     execute_with_fma(input, width, height, filter, bounds, &PortableFma)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_with_fma<F: F64MulAdd>(
     input: &RgbaImage,
     width: u32,
@@ -71,6 +73,7 @@ pub(crate) fn execute_with_fma<F: F64MulAdd>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn empty(width: u32, height: u32) -> Result<RgbaImage, PilError> {
     let dims = CheckedDims::new_allow_empty(width, height, 4)?;
     RgbaImage::from_raw(width, height, dims.alloc_buffer()).ok_or_else(|| {
@@ -78,6 +81,7 @@ fn empty(width: u32, height: u32) -> Result<RgbaImage, PilError> {
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn repeated(width: u32, height: u32, sample: f32) -> Result<RgbaImage, PilError> {
     let dims = CheckedDims::new_allow_empty(width, height, 4)?;
     let bytes = sample.to_le_bytes().repeat(dims.total_pixels());

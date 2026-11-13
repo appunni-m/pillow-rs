@@ -6,6 +6,7 @@ use crate::raster::buffer::ImageBuffer;
 use crate::raster::traits::Pixel;
 use wide::u8x16;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Load sixteen bytes from a circular row without splitting the operation
 /// into scalar copies when the offset crosses the row boundary. The two
 /// source vectors are selected with lane masks; the byte indices are control
@@ -41,6 +42,7 @@ pub(super) fn circular_byte_block(source: &[u8], start: usize) -> Option<u8x16> 
     Some((tail_values & mask) | (head_values & (u8x16::splat(u8::MAX) ^ mask)))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Copy one wrapped offset row through complete native vector blocks. The
 /// final incomplete store is the only scalar tail; the circular source load
 /// remains vectorized even when the shift divides the row into two short
@@ -67,6 +69,7 @@ fn offset_native_row(source: &[u8], output: &mut [u8], shift_bytes: usize) -> Op
     Some((vector_blocks, scalar_tail as u64))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Load one narrow row and rotate its byte lanes. The load may cross into the
 /// following row; the swizzle mask only references the current row, so those
 /// extra bytes are never observed. A final source row without sixteen bytes
@@ -97,6 +100,7 @@ pub(super) fn narrow_rotated_row(
     Some(loaded.shuffle(u8x16::new(indices)))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Process a narrow-row offset as a vector stream over the frame buffer.
 /// Output blocks may contain the end of one row and the beginning of the next;
 /// each segment is selected from a vectorized, independently rotated source
@@ -182,6 +186,7 @@ fn offset_narrow_bytes(
     Some((vector_blocks, scalar_tail as u64))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Offset one exact-mode byte buffer through the shared architecture kernel.
 /// The mode owner supplies its typed buffer, so channel width comes from the
 /// pixel type and output identity remains with that owner.
@@ -276,6 +281,7 @@ where
     Ok(record_output(result, vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn record_output<P: Pixel<Subpixel = u8>>(
     image: ImageBuffer<P, Vec<u8>>,
     vector_blocks: u64,
@@ -287,6 +293,7 @@ fn record_output<P: Pixel<Subpixel = u8>>(
     image
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn offset_layout_error() -> PilError {
     PilError::InternalError("Chops Offset input did not match its admitted native layout".into())
 }

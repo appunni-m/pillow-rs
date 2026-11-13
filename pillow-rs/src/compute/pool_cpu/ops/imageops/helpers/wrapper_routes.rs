@@ -22,45 +22,95 @@ fn scope_for_wrapper_mode(mode: Mode) -> SupportScope {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn imageops_lut_mode_support(mode: Mode) -> Option<ModeSupport> {
-    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
-        return None;
+    match mode {
+        Mode::ImageLuma8 | Mode::ImageRgb8 => {
+            let support = OperationId::Eval.support().for_mode(mode);
+            let scope = match support {
+                ModeSupport::Supported { scope, .. } => scope,
+                ModeSupport::Rejected { .. } => return Some(support),
+            };
+            Some(match support {
+                ModeSupport::Supported {
+                    default,
+                    architectures,
+                    output,
+                    inputs,
+                    value_result,
+                    ..
+                } => ModeSupport::Supported {
+                    scope,
+                    default,
+                    architectures,
+                    output,
+                    inputs,
+                    value_result,
+                },
+                rejected => rejected,
+            })
+        }
+        Mode::One
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => None,
     }
-    let support = OperationId::Eval.support().for_mode(mode);
-    let scope = match support {
-        ModeSupport::Supported { scope, .. } => scope,
-        ModeSupport::Rejected { .. } => return Some(support),
-    };
-    Some(match support {
-        ModeSupport::Supported {
-            default,
-            architectures,
-            output,
-            inputs,
-            value_result,
-            ..
-        } => ModeSupport::Supported {
-            scope,
-            default,
-            architectures,
-            output,
-            inputs,
-            value_result,
-        },
-        rejected => rejected,
-    })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn imageops_lut_wrapper_rejection(mode: Mode) -> Option<(&'static str, RejectionKind)> {
     match mode {
         Mode::ImagePalette8 => Some((
             "mode P support coming soon",
             RejectionKind::NotImplementedError,
         )),
-        _ => None,
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => None,
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_imageops_lut_route(mode: Mode) -> OperationModeRoute {
     let support_scope = scope_for_wrapper_mode(mode);
     let (support, operations, scope, outcome) =
@@ -121,9 +171,11 @@ fn classify_imageops_lut_route(mode: Mode) -> OperationModeRoute {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
     let child_support = OperationId::Eval.support().for_mode(mode);
-    let wrapper_rejection = imageops_lut_wrapper_rejection(mode).or_else(|| match mode {
+    let wrapper_rejection = match mode {
+        Mode::ImagePalette8 => imageops_lut_wrapper_rejection(mode),
         Mode::ImageLumaA8 => Some(("not supported for mode LA", RejectionKind::OsError)),
         Mode::ImagePaletteAlpha8 => Some(("not supported for mode PA", RejectionKind::OsError)),
         Mode::ImageRgba8 => Some(("not supported for mode RGBA", RejectionKind::OsError)),
@@ -134,8 +186,21 @@ pub(crate) fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
         Mode::ImageI16L => Some(("not supported for mode I;16L", RejectionKind::OsError)),
         Mode::ImageI16B => Some(("not supported for mode I;16B", RejectionKind::OsError)),
         Mode::ImageI16N => Some(("not supported for mode I;16N", RejectionKind::OsError)),
-        _ => None,
-    });
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImageRgb8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => None,
+    };
     let scope = match (wrapper_rejection, child_support) {
         (Some(_), _) if mode.is_pillow_mode() => SupportScope::Pillow,
         (_, ModeSupport::Supported { scope, .. }) => scope,
@@ -188,10 +253,11 @@ pub(crate) fn classify_imageops_solarize_route(mode: Mode) -> OperationModeRoute
     classify_imageops_lut_route(mode)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn classify_imageops_colorize_route(mode: Mode) -> OperationModeRoute {
     let scope = scope_for_wrapper_mode(mode);
-    if mode == Mode::ImageLuma8 {
-        return OperationModeRoute::ComposedFallback {
+    match mode {
+        Mode::ImageLuma8 => OperationModeRoute::ComposedFallback {
             mode,
             intermediate_mode: Some(Mode::ImageRgb8),
             scope,
@@ -199,25 +265,51 @@ pub(crate) fn classify_imageops_colorize_route(mode: Mode) -> OperationModeRoute
             output: OutputModeRule::Fixed(Mode::ImageRgb8),
             outcome: OperationRouteOutcome::Produces,
             prepared_support: OperationId::Colorize.support().for_mode(mode),
-        };
-    }
-    let reason = "";
-    let kind = RejectionKind::AssertionError;
-    OperationModeRoute::ComposedFallback {
-        mode,
-        intermediate_mode: None,
-        scope,
-        operations: &[],
-        output: OutputModeRule::Fixed(Mode::ImageRgb8),
-        outcome: OperationRouteOutcome::Rejects {
-            stage: OperationRouteStage::WrapperGuard,
-            reason,
-            kind,
         },
-        prepared_support: ModeSupport::Rejected { mode, reason, kind },
+        Mode::One
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => {
+            let reason = "";
+            let kind = RejectionKind::AssertionError;
+            OperationModeRoute::ComposedFallback {
+                mode,
+                intermediate_mode: None,
+                scope,
+                operations: &[],
+                output: OutputModeRule::Fixed(Mode::ImageRgb8),
+                outcome: OperationRouteOutcome::Rejects {
+                    stage: OperationRouteStage::WrapperGuard,
+                    reason,
+                    kind,
+                },
+                prepared_support: ModeSupport::Rejected { mode, reason, kind },
+            }
+        }
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn classify_imageops_colorize_lut_route(mode: Mode) -> OperationModeRoute {
     let scope = scope_for_wrapper_mode(mode);
     let (support, operations, outcome) =
@@ -240,7 +332,28 @@ pub(crate) fn classify_imageops_colorize_lut_route(mode: Mode) -> OperationModeR
                     },
                 )
             }
-            _ => {
+            Mode::One
+            | Mode::ImageLumaA8
+            | Mode::ImageLaPremultiplied8
+            | Mode::ImagePaletteAlpha8
+            | Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8
+            | Mode::ImageYCbCr8
+            | Mode::ImageLab8
+            | Mode::ImageHsv8
+            | Mode::ImageI32
+            | Mode::ImageF32
+            | Mode::ImageI16
+            | Mode::ImageI16L
+            | Mode::ImageI16B
+            | Mode::ImageI16N
+            | Mode::ImageLumaA16
+            | Mode::ImageRgb16
+            | Mode::ImageRgba16
+            | Mode::ImageRgb32F
+            | Mode::ImageRgba32F => {
                 let reason = crate::compute::pool_cpu::ops::imageops::helpers::strategy::
                 unsupported_mode_reason(mode);
                 let kind = RejectionKind::OsError;

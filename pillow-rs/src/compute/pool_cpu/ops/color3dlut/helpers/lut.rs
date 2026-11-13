@@ -10,11 +10,13 @@ pub(super) const SCALE_MASK: u32 = (1 << SCALE_BITS) - 1;
 pub(super) const SHIFT_BITS: u32 = 15;
 
 #[inline(always)]
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn table_index_3d(x: usize, y: usize, z: usize, sx: usize, sxy: usize) -> usize {
     x + y * sx + z * sxy
 }
 
 #[inline(always)]
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn interpolate(a: i16, b: i16, shift: i32) -> i16 {
     let value = (i64::from(a) * i64::from((1 << SHIFT_BITS) - shift)
         + i64::from(b) * i64::from(shift))
@@ -22,6 +24,7 @@ fn interpolate(a: i16, b: i16, shift: i32) -> i16 {
     value as i16
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn prepare_table(table: &[f64]) -> Vec<i16> {
     table
         .iter()
@@ -41,6 +44,7 @@ pub(super) fn prepare_table(table: &[f64]) -> Vec<i16> {
         .collect()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn color_scales(size: (usize, usize, usize)) -> [u32; 3] {
     [
         ((size.0 - 1) as f64 / 255.0 * f64::from(1 << SCALE_BITS)) as u32,
@@ -50,6 +54,7 @@ pub(super) fn color_scales(size: (usize, usize, usize)) -> [u32; 3] {
 }
 
 #[inline(always)]
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn interpolate_channel(
     table: &[i16],
     base: usize,
@@ -85,6 +90,7 @@ fn interpolate_channel(
 }
 
 #[inline(always)]
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn write_pixel(
     pixel: [u8; 4],
     preserve_source_fourth: bool,
@@ -130,6 +136,7 @@ pub(super) fn write_pixel(
 /// This path is used by core-only color-space strategies that intentionally
 /// interpret their stored channels as table coordinates without converting
 /// the source mode to RGB.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn apply_native_rgb_samples(
     image: &RgbImage,
     size: (u32, u32, u32),
@@ -202,6 +209,7 @@ pub(crate) fn apply_native_rgb_samples(
 /// the source's fourth sample when a three-channel table expands to four
 /// output channels. This is alpha for RGBA and K for CMYK; the byte kernel
 /// does not reinterpret or convert either source mode.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn apply_native_rgba_samples(
     image: &RgbaImage,
     size: (u32, u32, u32),
@@ -279,6 +287,7 @@ pub(crate) fn apply_native_rgba_samples(
 
 /// Retain the fourth physical byte copied by Pillow's three-channel LUT path
 /// when the destination is the compact RGB carrier.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn preserve_target_padding(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -342,6 +351,7 @@ pub(crate) fn preserve_target_padding(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn image_from_native_bytes(
     width: u32,
     height: u32,

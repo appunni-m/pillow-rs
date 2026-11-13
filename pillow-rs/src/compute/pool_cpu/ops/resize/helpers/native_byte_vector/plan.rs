@@ -3,6 +3,7 @@
 use super::constants::SIMD_RESIZE_LANES;
 use crate::ops::pil_resize::FilterCoeffs;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 pub(super) fn resize_coeff_slice(coeffs: &FilterCoeffs, index: usize) -> Option<&[i64]> {
     let start = *coeffs.offsets.get(index)?;
@@ -29,6 +30,7 @@ pub(super) struct ResizeHorizontalPlan {
 /// resize call. They are independent of the source row, so rebuilding them
 /// inside every row needlessly repeats checked arithmetic and coefficient
 /// conversion.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn build_resize_horizontal_plan<const CHANNELS: usize>(
     coeffs: &FilterCoeffs,
     output_width: usize,

@@ -5,11 +5,13 @@ use crate::error::PilError;
 use crate::ops::pil_resize::{F64MulAdd, FilterCoeffsF64};
 use crate::raster::RgbaImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn mul_add<F: F64MulAdd>(fma: &F, weight: f64, sample: i32, accumulator: f64) -> f64 {
     fma.mul_add(weight, f64::from(sample), accumulator)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn sum_eight<F: F64MulAdd>(
     weights: &[f64; 8],
@@ -27,6 +29,7 @@ pub(crate) fn sum_eight<F: F64MulAdd>(
     mul_add(fma, weights[7], sample(first_sample + 7), accumulator)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn sum_eight_contiguous<F: F64MulAdd>(
     weights: &[f64; 8],
@@ -47,6 +50,7 @@ fn sum_eight_contiguous<F: F64MulAdd>(
     mul_add(fma, weights[7], samples[7], accumulator)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn sum_general<F: F64MulAdd>(
     weights: &[f64],
@@ -61,11 +65,13 @@ pub(crate) fn sum_general<F: F64MulAdd>(
     accumulator
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn round_to_i32(value: f64) -> i32 {
     (value + 0.5_f64.copysign(value)) as i32
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn contiguous_eight_tap_weights(
     coefficients: &[Vec<f64>],
 ) -> Option<(usize, Vec<[f64; 8]>)> {
@@ -87,6 +93,7 @@ pub(crate) fn contiguous_eight_tap_weights(
     Some((first, fixed_width))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn horizontal_row<F: F64MulAdd>(
     source_row: &[i32],
     output_row: &mut [i32],
@@ -130,6 +137,7 @@ pub(crate) fn horizontal_row<F: F64MulAdd>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_pass<F: F64MulAdd>(
     source: &[i32],
     source_width: usize,
@@ -187,6 +195,7 @@ fn vertical_pass<F: F64MulAdd>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute<F: F64MulAdd>(
     source: &[i32],
     source_width: u32,

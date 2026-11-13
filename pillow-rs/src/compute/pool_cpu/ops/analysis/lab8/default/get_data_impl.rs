@@ -2,6 +2,7 @@ use crate::compute::pool_cpu::ops::analysis::helpers::get_data as helpers;
 use crate::error::PilError;
 use crate::raster::RgbImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn get_data(image: &RgbImage) -> Result<Vec<u8>, PilError> {
     let mut output = image.as_raw().clone();
     for pixel in output.chunks_exact_mut(3) {
@@ -11,6 +12,7 @@ pub(crate) fn get_data(image: &RgbImage) -> Result<Vec<u8>, PilError> {
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn write_band(image: &RgbImage, band: usize, output: &mut [u8]) -> Result<(), PilError> {
     helpers::write_lab_band(image.as_raw(), band, output);
     Ok(())

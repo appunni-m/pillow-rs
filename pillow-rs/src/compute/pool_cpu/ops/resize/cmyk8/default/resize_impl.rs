@@ -8,6 +8,7 @@ use crate::raster::RgbaImage;
 
 use super::filtered;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbaImage,
     width: u32,
@@ -58,6 +59,7 @@ pub(crate) fn execute(
         .ok_or_else(|| PilError::ValueError("resize_cmyk: failed to create output buffer".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resized_with_helper(
     input: &RgbaImage,
     width: u32,

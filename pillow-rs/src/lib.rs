@@ -717,11 +717,21 @@ pub use crate::ops::paste::PasteSourceInput as PythonPasteSource;
 #[doc(hidden)]
 pub use crate::ops::paste::PasteSourcePlan;
 pub use crate::ops::quantize::QuantizePalette;
+#[doc(hidden)]
+pub use crate::ops::resize::ReducingGapCallbackPlan;
+#[doc(hidden)]
+pub use crate::ops::resize::ReducingGapPlan;
 pub use crate::ops::resize::ResampleInput;
+#[doc(hidden)]
+pub use crate::ops::resize::ResizeBounds;
 #[doc(hidden)]
 pub use crate::ops::resize::ThumbnailPlan;
 pub use crate::ops::resize::parse_resample;
 pub use crate::ops::resize::parse_resample_input;
+#[doc(hidden)]
+pub use crate::ops::resize::resize_reducing_gap_bounds;
+#[doc(hidden)]
+pub use crate::ops::resize::resize_reducing_gap_filter_support;
 #[doc(hidden)]
 pub use crate::ops::rotate::PreparedRotate;
 pub use crate::ops::rotate::RotateExpandInput;

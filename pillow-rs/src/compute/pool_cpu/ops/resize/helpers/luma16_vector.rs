@@ -10,6 +10,8 @@ use wide::{f64x8, u16x8};
 const LANES: usize = 8;
 
 /// Resizes the native u16 carrier using the byte interpretation owned by its mode.
+// TODO(pillow-rs#3ptb): verify empty I;16 requests select the Default fallback.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize<const BIG_ENDIAN: bool>(
     input: &ImageBuffer<Luma<u16>, Vec<u16>>,
     output_width: u32,
@@ -36,7 +38,11 @@ pub(crate) fn resize<const BIG_ENDIAN: bool>(
     let output_len = output_width_usize
         .checked_mul(output_height_usize)
         .ok_or_else(|| unsupported("output sample count overflowed"))?;
-    let (output, vector_blocks) = if source_width == 0 || source_height == 0 {
+    let (output, vector_blocks) = if source_width == 0
+        || source_height == 0
+        || output_width_usize == 0
+        || output_height_usize == 0
+    {
         zero_output(output_len)
     } else if (source_width, source_height) == (output_width_usize, output_height_usize) {
         copy_identity(input.as_raw())?
@@ -65,10 +71,12 @@ pub(crate) fn resize<const BIG_ENDIAN: bool>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn unsupported(reason: &str) -> PilError {
     PilError::InternalError(format!("I;16 vector Resize {reason}"))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn zero_output(output_len: usize) -> (Vec<u16>, u64) {
     let zero = u16x8::splat(0).to_array();
     let mut output = vec![0u16; output_len];
@@ -86,6 +94,7 @@ fn zero_output(output_len: usize) -> (Vec<u16>, u64) {
     (output, vector_blocks)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn copy_identity(source: &[u16]) -> Result<(Vec<u16>, u64), PilError> {
     let mut output = vec![0u16; source.len()];
     let mut vector_blocks = 0u64;
@@ -109,6 +118,7 @@ fn copy_identity(source: &[u16]) -> Result<(Vec<u16>, u64), PilError> {
     Ok((output, vector_blocks))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn nearest_output(
     source: &[u16],
     source_width: u32,
@@ -152,6 +162,7 @@ fn nearest_output(
     Ok((output, vector_blocks))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn nearest_indices(source_size: u32, output_size: u32) -> Result<Vec<usize>, PilError> {
     if source_size == 0 || output_size == 0 {
         return Err(unsupported("nearest dimensions must be nonzero"));
@@ -176,6 +187,7 @@ fn nearest_indices(source_size: u32, output_size: u32) -> Result<Vec<usize>, Pil
     Ok(indices)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn filtered_output<const BIG_ENDIAN: bool>(
     source: &[u16],
     source_dimensions: (usize, usize),
@@ -199,6 +211,7 @@ fn filtered_output<const BIG_ENDIAN: bool>(
     Ok((output, horizontal_blocks.saturating_add(vertical_blocks)))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_pass<const BIG_ENDIAN: bool>(
     source: &[u16],
     source_dimensions: (usize, usize),
@@ -271,6 +284,7 @@ fn horizontal_pass<const BIG_ENDIAN: bool>(
     Ok((intermediate, vector_blocks))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_pass<const BIG_ENDIAN: bool>(
     intermediate: &[u16],
     output_dimensions: (usize, usize),

@@ -41,6 +41,7 @@ impl ModeSupport {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Rejects unsupported source modes through this operation's declaration.
     pub(crate) fn validate_mode(self) -> Result<(), PilError> {
         match self {
@@ -132,6 +133,7 @@ impl ModeSupport {
         ))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Validates an ImageChops secondary identity from this mode's declaration.
     ///
     /// The secondary identity is supplied lazily so source rejection can

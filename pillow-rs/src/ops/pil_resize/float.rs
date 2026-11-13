@@ -4,18 +4,22 @@ use super::*;
 use crate::compute::{Architecture, Backend, ExecutionContext};
 
 pub(crate) trait F64MulAdd: Sync {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64;
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[inline(always)]
     fn mul_add_finite(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
         self.mul_add(weight, sample, accumulator)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn supports_finite_mul_add(&self) -> bool {
         false
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn f_resize_samples_allow_finite_fma<F: F64MulAdd>(fma: &F, samples: &[f32]) -> bool {
     fma.supports_finite_mul_add() && samples.iter().all(|sample| sample.is_finite())
@@ -25,6 +29,7 @@ pub(crate) fn f_resize_samples_allow_finite_fma<F: F64MulAdd>(fma: &F, samples: 
 /// ordered f64 accumulator stays well within the finite range. F-mode samples
 /// are f32, so a row's sum of absolute weighted sample bounds proves every
 /// intermediate f64 accumulator finite.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn f_resize_coefficients_allow_finite_fma(coefficients: &FilterCoeffsF64) -> bool {
     let max_accumulator = f64::MAX * 0.5;
     let max_sample = f64::from(f32::MAX);
@@ -48,6 +53,7 @@ pub(crate) fn f_resize_coefficients_allow_finite_fma(coefficients: &FilterCoeffs
 pub(crate) struct PortableSeparateMulAdd;
 
 impl F64MulAdd for PortableSeparateMulAdd {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[inline(always)]
     fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
         weight * sample + accumulator
@@ -58,6 +64,7 @@ impl F64MulAdd for PortableSeparateMulAdd {
 pub(crate) struct PortableFma;
 
 impl F64MulAdd for PortableFma {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[inline(always)]
     fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
         weight.mul_add(sample, accumulator)
@@ -71,6 +78,7 @@ pub(crate) struct X86FmaToken {
 
 #[cfg(target_arch = "x86_64")]
 impl X86FmaToken {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn from_context(
         context: &ExecutionContext,
         implementation: Architecture,
@@ -86,6 +94,7 @@ impl X86FmaToken {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[allow(unsafe_code)]
     #[inline(always)]
     fn mul_add_finite_operands(weight: f64, sample: f64, accumulator: f64) -> f64 {
@@ -108,6 +117,7 @@ impl X86FmaToken {
 
 #[cfg(target_arch = "x86_64")]
 impl F64MulAdd for X86FmaToken {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[allow(unsafe_code)]
     #[inline(always)]
     fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
@@ -120,11 +130,13 @@ impl F64MulAdd for X86FmaToken {
         Self::mul_add_finite_operands(weight, sample, accumulator)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[inline(always)]
     fn mul_add_finite(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
         Self::mul_add_finite_operands(weight, sample, accumulator)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[inline(always)]
     fn supports_finite_mul_add(&self) -> bool {
         true

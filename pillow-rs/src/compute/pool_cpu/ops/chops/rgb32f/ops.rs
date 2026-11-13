@@ -6,10 +6,12 @@ use crate::raster::{DynamicImage, Mode};
 
 pub(crate) const MODE: Mode = Mode::ImageRgb32F;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn support(operation: OperationId) -> ModeSupport {
     super::super::ops::mode_support(MODE, operation)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     request: super::super::ops::ChopsRequest,

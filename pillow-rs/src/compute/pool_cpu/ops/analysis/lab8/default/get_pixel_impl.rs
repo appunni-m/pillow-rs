@@ -3,6 +3,7 @@ use crate::error::PilError;
 use crate::image::FormattedPixelValue;
 use crate::raster::RgbImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Reads one pixel from this exact mode's native carrier.
 pub(crate) fn execute(image: &RgbImage, x: u32, y: u32) -> Result<FormattedPixelValue, PilError> {
     Ok(pixel_access::components_lab8(image, x, y))

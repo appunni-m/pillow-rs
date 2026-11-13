@@ -1,6 +1,7 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     size: (u32, u32, u32),

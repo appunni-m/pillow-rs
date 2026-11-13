@@ -7,6 +7,7 @@ use crate::raster::Mode;
 
 const VALUE_AT_INPUTS: &[InputContract] = &[InputContract::CallerValidatedPixelIndex];
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn put_data(mode: Mode, supported: bool) -> ModeSupport {
     if supported {
         match mode {
@@ -22,7 +23,26 @@ pub(crate) const fn put_data(mode: Mode, supported: bool) -> ModeSupport {
                 &[],
                 "native typed PutData extends the CoreOnly multiband mode contract",
             ),
-            _ => ModeSupport::cpu(
+            Mode::One
+            | Mode::ImageLuma8
+            | Mode::ImageLumaA8
+            | Mode::ImageLaPremultiplied8
+            | Mode::ImagePalette8
+            | Mode::ImagePaletteAlpha8
+            | Mode::ImageRgb8
+            | Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8
+            | Mode::ImageYCbCr8
+            | Mode::ImageLab8
+            | Mode::ImageHsv8
+            | Mode::ImageI32
+            | Mode::ImageF32
+            | Mode::ImageI16
+            | Mode::ImageI16L
+            | Mode::ImageI16B
+            | Mode::ImageI16N => ModeSupport::cpu(
                 OperationId::PutDataValueAt,
                 mode,
                 OutputModeRule::Preserve,

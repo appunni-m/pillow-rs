@@ -8,6 +8,7 @@ use crate::ops::pil_resize::{
 use crate::pipeline::ResampleFilter;
 use std::sync::Arc;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn for_resize(
     source: (u32, u32),
     destination: (u32, u32),
@@ -39,6 +40,7 @@ pub(crate) fn for_resize(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resample_pass_requirements(
     source: (u32, u32),
     destination: (u32, u32),
@@ -64,12 +66,14 @@ pub(crate) fn resample_pass_requirements(
 /// Pillow runs the vertical pass first when height is reduced by more than
 /// twice the horizontal size change. The comparison uses image dimensions,
 /// including when the source box is narrower than the full image.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn horizontal_first(source: (u32, u32), destination: (u32, u32)) -> bool {
     let horizontal_reduction = i64::from(source.0) - i64::from(destination.0);
     let vertical_reduction = i64::from(source.1) - i64::from(destination.1);
     !(vertical_reduction > 0 && vertical_reduction > horizontal_reduction * 2)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn byte_coefficients_fit_i32(coefficients: &FilterCoeffs) -> bool {
     if coefficients.count.len() != coefficients.offsets.len()
         || coefficients.xmin.len() != coefficients.offsets.len()
@@ -108,6 +112,7 @@ pub(crate) fn byte_coefficients_fit_i32(coefficients: &FilterCoeffs) -> bool {
     true
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn byte_coefficients_fit_source(
     coefficients: &FilterCoeffs,
     source_extent: usize,
@@ -129,6 +134,7 @@ pub(crate) fn byte_coefficients_fit_source(
         })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn fixed_point_to_u8_i32(sum: i32) -> u8 {
     ((sum + (1_i32 << 21)) >> 22).clamp(0, 255) as u8

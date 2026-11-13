@@ -62,6 +62,7 @@ macro_rules! dynamic_map_dispatch {
     };
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn luma16_to_u8(sample: u16) -> u8 {
     sample.min(u16::from(u8::MAX)) as u8
@@ -70,12 +71,14 @@ fn luma16_to_u8(sample: u16) -> u8 {
 macro_rules! impl_dynamic_clone {
     (default; $( $(#[$attribute:meta])* $variant:ident($image:ty), )+) => {
         impl Clone for DynamicImage {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn clone(&self) -> Self {
         match self {
             $( Self::$variant(image) => Self::$variant(image.clone()), )+
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn clone_from(&mut self, source: &Self) {
         match (self, source) {
             $( (Self::$variant(p1), Self::$variant(p2)) => p1.clone_from(p2), )+
@@ -88,6 +91,7 @@ macro_rules! impl_dynamic_clone {
 
 for_each_raster_identity!(impl_dynamic_clone);
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn crop_buffer<P: Pixel>(
     image: &ImageBuffer<P, Vec<P::Subpixel>>,
@@ -153,6 +157,7 @@ impl DynamicImage {
     }
 
     /// Returns a copy of this image as an RGBA image.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[must_use]
     pub fn to_rgba8(&self) -> RgbaImage {
         match self {
@@ -224,6 +229,7 @@ impl DynamicImage {
     }
 
     /// Internal helper: convert to a generic pixel type using pixel conversion.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn to_generic<Px>(&self) -> ImageBuffer<Px, Vec<<Px as Pixel>::Subpixel>>
     where
         Px: Pixel
@@ -401,8 +407,16 @@ impl DynamicImage {
         }
     }
 
-    /// Replaces physical lanes omitted from the compact Pillow-mode carrier.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    /// Replaces omitted lanes after validating their count against this mode.
     pub(crate) fn replace_hidden_pixel_lanes(&mut self, lanes: Option<HiddenPixelLanes>) -> bool {
+        let expected_lane_count = self.mode().hidden_pixel_lane_count();
+        if lanes
+            .as_ref()
+            .is_some_and(|lanes| Some(lanes.lane_count()) != expected_lane_count)
+        {
+            return false;
+        }
         match self {
             Self::ImageLumaA8(image)
             | Self::ImageLaPremultiplied8(image)
@@ -473,6 +487,7 @@ impl DynamicImage {
     }
 
     /// Return this image's color type.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[must_use]
     pub fn color(&self) -> ColorType {
         match *self {
@@ -522,6 +537,7 @@ impl DynamicImage {
         self.mode().has_alpha()
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Return a cropped copy of the image.
     #[must_use]
     pub fn crop_imm(&self, x: u32, y: u32, width: u32, height: u32) -> DynamicImage {
@@ -697,6 +713,7 @@ impl GenericImageView for DynamicImage {
 use super::traits::GenericImage as GenericImageTrait;
 
 impl GenericImageTrait for DynamicImage {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
         // These mode-tagged compact carriers retain bytes outside the logical
         // pixel. GenericImage writes only that logical pixel, so keep the
@@ -784,6 +801,7 @@ impl GenericImageTrait for DynamicImage {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn copy_within(&mut self, source: super::error::Rect, x: u32, y: u32) -> bool {
         let (sx, sy, width, height) = (source.x, source.y, source.width, source.height);
         let (image_width, image_height) = self.dimensions();

@@ -212,6 +212,7 @@ impl StrategyGuard {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn assess_native(self, input: StrategyInputs) -> GuardAssessment {
         match self {
             Self::ReduceNativeByteVector { channels } => {

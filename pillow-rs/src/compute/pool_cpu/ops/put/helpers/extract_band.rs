@@ -50,11 +50,31 @@ pub(crate) fn facts<P: Pixel>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn output_mode(mode: Mode) -> Mode {
     match mode {
         Mode::ImageLumaA16 | Mode::ImageRgb16 | Mode::ImageRgba16 => Mode::ImageI16,
         Mode::ImageRgb32F | Mode::ImageRgba32F => Mode::ImageF32,
-        _ => Mode::ImageLuma8,
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => Mode::ImageLuma8,
     }
 }
 
@@ -66,6 +86,7 @@ pub(crate) const fn output_bytes_per_pixel(mode: Mode) -> u8 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn support(
     mode: Mode,
     inputs: &'static [InputContract],
@@ -86,7 +107,26 @@ pub(crate) const fn support(
             architectures,
             "native high-depth ExtractBand extends the Pillow mode contract",
         ),
-        _ => ModeSupport::cpu(
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => ModeSupport::cpu(
             OperationId::ExtractBand,
             mode,
             output,

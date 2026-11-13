@@ -29,7 +29,7 @@ pub(crate) use terminals::{
 
 // ── Router ─────────────────────────────────────────────────────────────────
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn route_decision(
     ops: &[PipelineOp],
     explicit: Option<Backend>,
@@ -98,7 +98,7 @@ fn route_decision(
     )) // universal fallback
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn backend_label(backend: Backend) -> &'static str {
     match backend {
         Backend::Cpu => "CPU",
@@ -220,7 +220,7 @@ pub(crate) fn execute_prepared_cpu_arch_convert_output(
 /// Performs the route and validation phases before a source image is
 /// materialized. Keeping this separate preserves the explicit-backend contract
 /// while allowing the actual backend phase to be measured later.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_execution(
     ops: &[PipelineOp],
     requested_backend: Option<Backend>,
@@ -258,7 +258,7 @@ pub(crate) fn prepare_execution(
 ///
 /// Returns [`PilError::ValueError`] for an unavailable backend or the first
 /// operation without a native implementation on the selected backend.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<(), PilError> {
     let executor_backend = if backend == Backend::Simd {
         Backend::Cpu
@@ -493,7 +493,7 @@ fn reset_execution_telemetry() {
     let _ = take_pipeline_resize_coeff_cache_stats();
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_prepared_on_backend(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],

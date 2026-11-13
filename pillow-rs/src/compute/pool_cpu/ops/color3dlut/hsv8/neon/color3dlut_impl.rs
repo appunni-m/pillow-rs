@@ -6,6 +6,7 @@ use crate::raster::{DynamicImage, Mode};
 
 // NO_PILLOW_SUPPORT: This applies the table to stored HSV samples directly,
 // without converting the raster to RGB.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     size: (u32, u32, u32),

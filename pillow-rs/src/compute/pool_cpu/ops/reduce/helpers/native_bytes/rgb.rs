@@ -41,10 +41,12 @@ struct RgbGeometry {
     corner: RgbReduceRounding,
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn division_multiplier(divider: u32) -> u32 {
     ((1u128 << 32) / (u128::from(divider) * 256)) as u32
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rounding(divider: u32) -> RgbReduceRounding {
     RgbReduceRounding {
         multiplier: division_multiplier(divider.max(1)),
@@ -52,6 +54,7 @@ fn rounding(divider: u32) -> RgbReduceRounding {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rgb_geometry(width: u32, height: u32, x_factor: u32, y_factor: u32) -> RgbGeometry {
     let main_width = width / x_factor;
     let main_height = height / y_factor;
@@ -69,6 +72,7 @@ fn rgb_geometry(width: u32, height: u32, x_factor: u32, y_factor: u32) -> RgbGeo
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn reduce_rgb_row_context<'a>(
     source: &'a [u8],
     width: u32,
@@ -96,6 +100,7 @@ pub(crate) fn reduce_rgb_row_context<'a>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn try_sparse_2x2(
     source: &[u8],
     width: u32,
@@ -111,6 +116,7 @@ fn try_sparse_2x2(
     reduce_sparse_2x2(source, width, height, output_width, output_height)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn reduce_sparse_2x2_if_applicable(
     source: &[u8],
     width: u32,
@@ -133,6 +139,7 @@ pub(crate) fn reduce_sparse_2x2_if_applicable(
 }
 
 /// Keeps exact active-row facts for the thumbnail reducing-gap consumer.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn reduce_rgb_with_sparse_rows(
     source: &[u8],
     width: u32,
@@ -180,6 +187,7 @@ pub(crate) fn reduce_rgb_with_sparse_rows(
 }
 
 /// Reduces a native `RgbImage`; no logical mode tests or conversions are needed.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn reduce_rgb(
     source: &[u8],
     width: u32,
@@ -197,6 +205,7 @@ pub(crate) fn reduce_rgb(
     reduce_bytes::<3, false>(source, width, height, x_factor, y_factor)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_rgb_dense_or_general(
     source: &[u8],
     width: u32,
@@ -225,6 +234,7 @@ fn reduce_rgb_dense_or_general(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_sparse_2x2(
     source: &[u8],
     width: u32,
@@ -258,6 +268,7 @@ fn reduce_sparse_2x2(
     Ok(Some((output, nonzero_rows)))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn sparse_block_sums(
     source: &[u8],
     width: u32,
@@ -304,6 +315,7 @@ fn sparse_block_sums(
     Some(sums)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn words_are_zero(bytes: &[u8]) -> bool {
     [0usize, 8, 16].into_iter().all(|offset| {
         u64::from_ne_bytes(

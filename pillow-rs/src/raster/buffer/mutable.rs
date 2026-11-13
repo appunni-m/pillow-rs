@@ -9,6 +9,7 @@ where
     P: Pixel,
     Container: Deref<Target = [P::Subpixel]> + DerefMut,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Updates logical samples while leaving mode-owned physical lanes intact.
     #[track_caller]
     pub(crate) fn put_pixel_preserving_hidden_lanes(&mut self, x: u32, y: u32, pixel: P) {

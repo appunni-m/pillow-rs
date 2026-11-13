@@ -22,6 +22,7 @@ struct Color3DLutKernel<'a> {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn interpolate_vector(a: i32x8, b: i32x8, shift: i32x8) -> i32x8 {
     const SHIFT_BITS: u32 = 15;
     let one = i32x8::splat(1i32 << SHIFT_BITS);
@@ -29,6 +30,7 @@ fn interpolate_vector(a: i32x8, b: i32x8, shift: i32x8) -> i32x8 {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn table_indices(
     source: &[u8],
     first_pixel: usize,
@@ -67,6 +69,7 @@ fn table_indices(
     (bases, shift_x, shift_y, shift_z)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn interpolate_channel(
     prepared: &[i16],
     bases: [usize; 8],
@@ -122,6 +125,7 @@ fn interpolate_channel(
 }
 
 impl Color3DLutKernel<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn write_vector_batch(&self, output: &mut [u8], first_pixel: usize) {
         let (sx, sy, _) = self.size;
         let sxy = sx * sy;
@@ -163,6 +167,7 @@ impl Color3DLutKernel<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn write_scalar_tail(&self, output: &mut [u8], start: usize, end: usize) {
         for pixel_index in start..end {
             let source_offset = pixel_index * self.source_channels;
@@ -191,6 +196,7 @@ impl Color3DLutKernel<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn source_channels(mode: Mode) -> Result<usize, PilError> {
     match mode {
         Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => Ok(3),
@@ -201,6 +207,7 @@ fn source_channels(mode: Mode) -> Result<usize, PilError> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn target_channels(mode: Mode) -> Result<usize, PilError> {
     match mode {
         Mode::ImageRgb8 => Ok(3),
@@ -212,6 +219,7 @@ fn target_channels(mode: Mode) -> Result<usize, PilError> {
 }
 
 /// Applies the vector interpolation path selected by the mode's architecture owner.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn apply(
     image: &DynamicImage,
     source_mode: Mode,

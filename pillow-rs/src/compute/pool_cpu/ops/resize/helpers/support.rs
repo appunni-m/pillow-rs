@@ -8,6 +8,7 @@ use crate::raster::Mode;
 
 pub(in crate::compute::pool_cpu::ops::resize) const INPUTS: &[InputContract] = &[];
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::resize) const fn native_byte_architectures(
     mode: Mode,
     channels: u8,
@@ -21,6 +22,7 @@ pub(in crate::compute::pool_cpu::ops::resize) const fn native_byte_architectures
     byte_architectures(OperationId::Resize, mode, guard)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::resize) const fn boxed_byte_architectures(
     mode: Mode,
     channels: u8,
@@ -37,6 +39,7 @@ pub(in crate::compute::pool_cpu::ops::resize) const fn boxed_byte_architectures(
     byte_architectures(OperationId::ResizeBoxed, mode, guard)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 const fn byte_architectures(
     operation: OperationId,
     mode: Mode,
@@ -73,6 +76,7 @@ const fn byte_architectures(
     ]
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::resize) const fn luma16_architectures(
     mode: Mode,
 ) -> [ImplementationSupport; 3] {
@@ -107,6 +111,7 @@ pub(in crate::compute::pool_cpu::ops::resize) const fn luma16_architectures(
     ]
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::resize) const fn native_mode_support(
     mode: Mode,
     architectures: &'static [ImplementationSupport],
@@ -120,6 +125,7 @@ pub(in crate::compute::pool_cpu::ops::resize) const fn native_mode_support(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::resize) const fn boxed_mode_support(
     mode: Mode,
     architectures: &'static [ImplementationSupport],

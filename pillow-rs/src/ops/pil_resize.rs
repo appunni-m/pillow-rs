@@ -18,7 +18,7 @@ mod luma16;
 mod samples;
 mod vertical_passes;
 
-pub(crate) use alpha::{unpremultiply_channel, unpremultiply_rgba};
+pub(crate) use alpha::unpremultiply_channel;
 
 pub(crate) use coefficients::{
     FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, fixed_point_to_u8,

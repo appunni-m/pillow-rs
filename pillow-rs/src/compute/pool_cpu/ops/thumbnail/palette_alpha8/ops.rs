@@ -10,12 +10,14 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::serial(
     super::super::ops::INPUTS,
 );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::thumbnail) const fn effective_filter(
     requested: ResampleFilter,
 ) -> ResampleFilter {
     requested
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::thumbnail) const fn should_reduce(
     filter: ResampleFilter,
 ) -> bool {

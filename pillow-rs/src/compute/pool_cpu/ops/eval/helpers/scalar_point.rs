@@ -9,6 +9,7 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::raster::{DynamicImage, Mode};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageI32
@@ -17,7 +18,25 @@ fn classify(mode: Mode) -> ModeSupport {
         | Mode::ImageI16L
         | Mode::ImageI16B
         | Mode::ImageI16N => ModeSupport::serial(OperationId::PointScalar, mode, &[]),
-        mode => ModeSupport::Rejected {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::Rejected {
             mode,
             reason: "point operation not supported for this mode",
             kind: RejectionKind::ValueError,

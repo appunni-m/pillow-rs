@@ -24,6 +24,7 @@ pub(super) struct HorizontalPlan {
 }
 
 /// Resolve checked horizontal tap indices and repeated-lane NEON eligibility.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn build_horizontal(
     coefficients: &FilterCoeffsF64,
     source_width: usize,
@@ -78,6 +79,7 @@ pub(super) fn build_horizontal(
     Some(HorizontalPlan { blocks })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn neon_tap_plan(
     active_lanes: u8,
     source_indices: &[usize; LANES],
@@ -105,6 +107,7 @@ fn neon_tap_plan(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 pub(super) fn horizontal_values(source_row: &[i32], tap: &HorizontalTap) -> [f64; LANES] {
     std::array::from_fn(|lane| {

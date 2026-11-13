@@ -3,10 +3,12 @@ use crate::error::PilError;
 use crate::image::ScalarImageSamples;
 use crate::raster::{Mode, RgbaImage};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn get_data(image: &RgbaImage) -> Result<Vec<u8>, PilError> {
     Ok(image.as_raw().clone())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn write_band(
     image: &RgbaImage,
     _band: usize,
@@ -16,6 +18,7 @@ pub(crate) fn write_band(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn scalar_samples(image: &RgbaImage) -> Result<ScalarImageSamples, PilError> {
     let raw = image.as_raw();
     helpers::validate_scalar_storage(raw, image.width(), image.height(), Mode::ImageF32)?;

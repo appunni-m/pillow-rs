@@ -54,6 +54,7 @@ impl ColorType {
     }
 
     /// Number of channels in one unpacked pixel.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[must_use]
     pub const fn channel_count(self) -> u8 {
         match self {

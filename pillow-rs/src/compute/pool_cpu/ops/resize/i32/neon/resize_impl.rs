@@ -16,6 +16,7 @@ use super::LANES;
 use super::kernels;
 use super::plan::{self, HorizontalPlan};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     context: &ExecutionContext,
     input: &RgbaImage,
@@ -67,6 +68,7 @@ pub(crate) fn execute(
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resize_nearest(
     input: &RgbaImage,
     width: u32,
@@ -117,6 +119,7 @@ fn resize_nearest(
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn nearest_indices(source_size: u32, output_size: u32) -> Option<Vec<usize>> {
     if source_size == 0 || output_size == 0 {
         return None;
@@ -136,6 +139,7 @@ fn nearest_indices(source_size: u32, output_size: u32) -> Option<Vec<usize>> {
     Some(indices)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_filtered(
     source: &[i32],
     source_width: usize,
@@ -173,6 +177,7 @@ fn execute_filtered(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_pass(
     source: &[i32],
     source_width: usize,
@@ -224,6 +229,7 @@ fn horizontal_pass(
     Ok((blocks, used_neon))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_wide_block(
     source_row: &[i32],
     block: &plan::HorizontalBlock,
@@ -240,6 +246,7 @@ fn horizontal_wide_block(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_pass(
     intermediate: &[i32],
     output_width: usize,
@@ -295,6 +302,7 @@ fn vertical_pass(
     Ok((blocks, used_neon))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_wide_block(
     intermediate: &[i32],
     row_width: usize,
@@ -322,6 +330,7 @@ fn vertical_wide_block(
     Ok(sums.to_array().map(|value| round_up(value) as i32))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn write_output_block(
     output: &mut [u8],
     output_row: usize,
@@ -342,6 +351,7 @@ fn write_output_block(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn record_path(blocks: u64, used_neon: bool) {
     crate::compute::record_pipeline_operation_vector_blocks(blocks);
     crate::compute::record_pipeline_operation_scalar_tail(0);
@@ -352,6 +362,7 @@ fn record_path(blocks: u64, used_neon: bool) {
     });
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn invalid_plan() -> PilError {
     PilError::InternalError("ImageI32 NEON Resize plan did not match its source layout".into())
 }

@@ -4122,7 +4122,9 @@ def ensure_generated_parity_inputs(manifest: dict[str, Any]) -> None:
 
 def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: str | None) -> tuple[list[dict[str, Any]], dict[str, str]]:
     ensure_generated_parity_inputs(manifest)
-    validate_fixed_inputs(manifest, FIXTURE_ROOT, lane="parity")
+    validate_fixed_inputs(
+        manifest, FIXTURE_ROOT, lane="parity", retain_documents=False
+    )
     cases: list[dict[str, Any]] = []
     case_inputs: dict[str, str] = {}
     known_case_ids: set[str] = set()
@@ -5281,7 +5283,7 @@ def build_identity(
         ],
         "assets": assets,
         "oracles": [{"oracle_id": ORACLE_ID, "name": ORACLE_NAME, "version": ORACLE_VERSION, "runtime": "CPython 3.12"}],
-        "targets": [{"target_profile": target_profile_for_backend(TARGET_BACKEND), "target_id": TARGET_ID, "revision": git_revision(), "dirty": target_dirty, "runtime": platform.python_version(), "backend": TARGET_BACKEND, "features": TARGET_FEATURES.copy()}],
+        "targets": [{"target_profile": target_profile_for_backend(TARGET_BACKEND), "target_id": TARGET_ID, "revision": git_revision(), "dirty": target_dirty, "runtime": platform.python_version(), "backend": TARGET_BACKEND, "architecture": TARGET_ARCHITECTURE if TARGET_BACKEND == "cpu" else None, "features": TARGET_FEATURES.copy()}],
         "command": command,
     }
 

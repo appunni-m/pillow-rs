@@ -12,6 +12,7 @@ use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::{DynamicImage, Mode};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn effective_filter(mode: Mode, requested: ResampleFilter) -> ResampleFilter {
     match mode {
         Mode::One => super::super::one::ops::effective_filter(requested),
@@ -72,6 +73,7 @@ static ALPHA_REDUCING_GAP_SUPPORT: OperationSupport = OperationSupport::new(
     classify_alpha_reducing_gap,
 );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn alpha_reducing_gap_support() -> &'static OperationSupport {
     &ALPHA_REDUCING_GAP_SUPPORT
 }
@@ -120,7 +122,7 @@ impl PreparedResize<'_> {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         if let ResizeRequest::Boxed {
             filter,
@@ -128,14 +130,21 @@ impl PreparedResize<'_> {
             reducing_gap: Some(gap),
         } = self.request
         {
-            return execute_alpha_reducing_gap(
+            let mut output = execute_alpha_reducing_gap(
                 self.image,
                 (self.width, self.height),
                 filter,
                 bounds,
                 gap,
                 &self.selection,
-            );
+            )?;
+            super::super::helpers::hidden_lanes::finish(
+                self.image,
+                &mut output,
+                filter,
+                Some(bounds),
+            )?;
+            return Ok(output);
         }
         if let ResizeRequest::Boxed { filter, bounds, .. } = self.request
             && let Some(mut output) = super::super::helpers::tall_boxed::execute(
@@ -497,7 +506,7 @@ fn prepare_direct_with_request<'a>(
 }
 
 /// Prepares ordinary or boxed Resize using the operation's declared support.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &'a PipelineOp,

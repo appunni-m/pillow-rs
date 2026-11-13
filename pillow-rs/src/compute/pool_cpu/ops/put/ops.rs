@@ -349,7 +349,7 @@ pub(crate) fn select_put_data_l16_bytes(
         .select_serial(context)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_put_data_l16_bytes(
     image: &mut DynamicImage,
     data: &[u8],
@@ -472,16 +472,38 @@ fn classify_put_band_mode(mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_fill_band_mode(mode: Mode) -> ModeSupport {
-    if super::helpers::imaging_core_band::is_byte_mode(mode) {
-        ModeSupport::serial(OperationId::FillBand, mode, FILL_BAND_INPUTS)
-    } else {
-        ModeSupport::Rejected {
+    match mode {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8 => ModeSupport::serial(OperationId::FillBand, mode, FILL_BAND_INPUTS),
+        Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::Rejected {
             mode,
             reason: "image has wrong mode",
             kind: RejectionKind::ValueError,
-        }
+        },
     }
 }
 

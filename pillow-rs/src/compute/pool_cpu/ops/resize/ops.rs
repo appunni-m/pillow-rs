@@ -6,8 +6,9 @@
 //! One and P normalize to nearest before mode and architecture selection;
 //! their Default routes remain serial fallbacks when no vector route applies.
 //! Rayon scheduling belongs to Parallel CPU.
-//! TODO(pillow-rs#3ptb): verify exact-mode output, bounds/empty cases, and
-//! requested-architecture fallback receipts across the frozen CPU matrix.
+//! TODO(pillow-rs#3ptb): verify exact-mode output, boxed validation/error
+//! ordering, empty/zero-axis cases, and requested-architecture fallback
+//! receipts across the frozen CPU matrix.
 //! Resize/ResizeBoxed now compose omitted lanes at the prepared execution
 //! boundary. Current fused Resize-to-Pad owners are L and RGBX; neither has
 //! omitted physical lanes. Compact modes use prepared Resize followed by Pad.

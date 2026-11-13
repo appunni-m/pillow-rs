@@ -3,6 +3,7 @@ use crate::error::PilError;
 use crate::image::FormattedPixelValue;
 use crate::raster::RgbaImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Reads one pixel from this exact mode's native carrier.
 pub(crate) fn execute(image: &RgbaImage, x: u32, y: u32) -> Result<FormattedPixelValue, PilError> {
     pixel_access::scalar_f32(image, x, y)

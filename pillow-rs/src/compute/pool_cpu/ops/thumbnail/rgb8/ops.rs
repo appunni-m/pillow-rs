@@ -13,6 +13,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::serial(
 );
 
 /// Execute the supported native RGB PutPixel/Thumbnail fusion strategy.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_putpixel_thumbnail(
     image: &DynamicImage,
     writes: &[PipelineOp],

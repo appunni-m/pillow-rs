@@ -6,6 +6,7 @@ use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn require_default_selection(
     selection: &StrategySelection,
     mode: Mode,
@@ -22,6 +23,7 @@ pub(crate) fn require_default_selection(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn byte_architectures(
     operation: OperationId,
     mode: Mode,
@@ -37,6 +39,7 @@ pub(crate) const fn byte_architectures(
     architecture_strategies(operation, mode, guard)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn offset_byte_architectures(
     mode: Mode,
     channels: u8,
@@ -48,6 +51,7 @@ pub(crate) const fn offset_byte_architectures(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn offset_i16_architectures(mode: Mode) -> [ImplementationSupport; 3] {
     architecture_strategies(
         OperationId::ChopsOffset,
@@ -56,6 +60,7 @@ pub(crate) const fn offset_i16_architectures(mode: Mode) -> [ImplementationSuppo
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 const fn architecture_strategies(
     operation: OperationId,
     mode: Mode,
@@ -199,6 +204,7 @@ macro_rules! declare_byte_binary_architectures {
             $crate::compute::pool_cpu::ops::chops::helpers::strategy::offset_byte_architectures(
                 $mode, $channels,
             );
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         fn architecture_for(operation: OperationId) -> &'static [ImplementationSupport] {
             match operation {
                 OperationId::ChopsOffset => &OFFSET_ARCHITECTURES,

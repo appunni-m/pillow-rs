@@ -15,18 +15,21 @@ enum PadCallbackError {
 }
 
 impl From<pillow_rs::PilError> for PadCallbackError {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn from(error: pillow_rs::PilError) -> Self {
         Self::Core(error)
     }
 }
 
 impl From<PyErr> for PadCallbackError {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn from(error: PyErr) -> Self {
         Self::Python(error)
     }
 }
 
 impl From<super::AspectCallbackError> for PadCallbackError {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn from(error: super::AspectCallbackError) -> Self {
         match error {
             super::AspectCallbackError::Core(error) => Self::Core(error),
@@ -36,6 +39,7 @@ impl From<super::AspectCallbackError> for PadCallbackError {
 }
 
 impl<'py> PythonPadCallbacks<'py> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn with_native_size_callbacks<T>(
         &mut self,
         operation: impl FnOnce(
@@ -45,6 +49,7 @@ impl<'py> PythonPadCallbacks<'py> {
         operation(&mut self.aspect).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn exact_type_is(&self, value: &Bound<'py, PyAny>, expected_name: &str) -> PyResult<bool> {
         let type_function = super::imageops_global_or_builtin(self.aspect.py, "type")?;
         let actual = type_function.call1((value,))?;
@@ -52,6 +57,7 @@ impl<'py> PythonPadCallbacks<'py> {
         Ok(actual.is(&expected))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn exact_number_type(&self, value: &Bound<'py, PyAny>) -> PyResult<bool> {
         let type_function = super::imageops_global_or_builtin(self.aspect.py, "type")?;
         let actual = type_function.call1((value,))?;
@@ -60,6 +66,7 @@ impl<'py> PythonPadCallbacks<'py> {
         Ok(Self::type_matches(&actual, &integer)? || Self::type_matches(&actual, &floating)?)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn type_matches(actual: &Bound<'py, PyAny>, expected: &Bound<'py, PyAny>) -> PyResult<bool> {
         if actual.is(expected) {
             return Ok(true);
@@ -67,6 +74,7 @@ impl<'py> PythonPadCallbacks<'py> {
         actual.rich_compare(expected, CompareOp::Eq)?.is_truthy()
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn instance_has_pad_overrides(&self) -> PyResult<bool> {
         let attributes = self.aspect.image.getattr("__dict__")?;
         let attributes = attributes.cast::<PyDict>().map_err(PyErr::from)?;
@@ -78,6 +86,7 @@ impl<'py> PythonPadCallbacks<'py> {
         Ok(false)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn values_have_non_native_numeric_types(&self, values: &Bound<'py, PyAny>) -> PyResult<bool> {
         for value in PyIterator::from_object(values)? {
             let value = value?;
@@ -88,6 +97,7 @@ impl<'py> PythonPadCallbacks<'py> {
         Ok(false)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn image_class(&self) -> PyResult<Bound<'py, PyAny>> {
         self.aspect
             .py
@@ -95,6 +105,7 @@ impl<'py> PythonPadCallbacks<'py> {
             .getattr("Image")
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn image_class_member_matches_base(&self, member: &str, baseline: &str) -> PyResult<bool> {
         let current = self.image_class()?.getattr(member)?;
         let expected = self
@@ -105,6 +116,7 @@ impl<'py> PythonPadCallbacks<'py> {
         Ok(current.is(&expected))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn native_pad_wrapper_is_eligible_host(&mut self) -> PyResult<bool> {
         let type_function = super::imageops_global_or_builtin(self.aspect.py, "type")?;
         let actual_type = type_function.call1((self.aspect.image.clone(),))?;
@@ -150,6 +162,7 @@ impl<'py> PythonPadCallbacks<'py> {
         Ok(true)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn native_pad_arguments_are_eligible_host(
         &self,
         method: &Bound<'py, PyAny>,
@@ -198,6 +211,7 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
     type Image = Bound<'py, PyAny>;
     type Palette = Bound<'py, PyAny>;
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn contain(
         &mut self,
         size: &Self::Value,
@@ -211,6 +225,7 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn resized_size_matches(
         &mut self,
         resized: &Self::Image,
@@ -223,6 +238,7 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn new_canvas(
         &mut self,
         size: &Self::Value,
@@ -238,18 +254,22 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
         constructor.call1((mode, size, color)).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn resized_palette_is_truthy(&mut self, resized: &Self::Image) -> Result<bool, Self::Error> {
         resized.getattr("palette")?.is_truthy().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn resized_palette(&mut self, resized: &Self::Image) -> Result<Self::Palette, Self::Error> {
         resized.call_method0("getpalette").map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn palette_is_none(&mut self, palette: &Self::Palette) -> Result<bool, Self::Error> {
         Ok(palette.is_none())
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn put_palette(
         &mut self,
         output: &mut Self::Image,
@@ -262,6 +282,7 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn width_differs(
         &mut self,
         resized: &Self::Image,
@@ -275,6 +296,7 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn centered_offset(
         &mut self,
         axis: pillow_rs::ImageOpsPadAxis,
@@ -303,6 +325,7 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
         round.call1((centered_difference,)).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn paste_at(
         &mut self,
         output: &mut Self::Image,
@@ -327,18 +350,21 @@ impl<'py> pillow_rs::ImageOpsNativeSizeCallbacks for PythonPadCallbacks<'py> {
     type Value = Bound<'py, PyAny>;
     type Error = PadCallbackError;
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn image_is_instance(&mut self) -> Result<bool, Self::Error> {
         self.with_native_size_callbacks(|callbacks| {
             pillow_rs::ImageOpsNativeSizeCallbacks::image_is_instance(callbacks)
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn image_uses_default_getattribute(&mut self) -> Result<bool, Self::Error> {
         self.with_native_size_callbacks(|callbacks| {
             pillow_rs::ImageOpsNativeSizeCallbacks::image_uses_default_getattribute(callbacks)
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn image_property_matches_base(
         &mut self,
         property: pillow_rs::ImageOpsNativeSizeProperty,
@@ -348,36 +374,42 @@ impl<'py> pillow_rs::ImageOpsNativeSizeCallbacks for PythonPadCallbacks<'py> {
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn size_is_exact_tuple(&mut self) -> Result<bool, Self::Error> {
         self.with_native_size_callbacks(|callbacks| {
             pillow_rs::ImageOpsNativeSizeCallbacks::size_is_exact_tuple(callbacks)
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn size_length(&mut self) -> Result<usize, Self::Error> {
         self.with_native_size_callbacks(|callbacks| {
             pillow_rs::ImageOpsNativeSizeCallbacks::size_length(callbacks)
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn size_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error> {
         self.with_native_size_callbacks(|callbacks| {
             pillow_rs::ImageOpsNativeSizeCallbacks::size_coordinate(callbacks, index)
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn coordinate_is_exact_integer(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
         self.with_native_size_callbacks(|callbacks| {
             pillow_rs::ImageOpsNativeSizeCallbacks::coordinate_is_exact_integer(callbacks, value)
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn coordinate_is_u32(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
         self.with_native_size_callbacks(|callbacks| {
             pillow_rs::ImageOpsNativeSizeCallbacks::coordinate_is_u32(callbacks, value)
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn coordinate_as_u32(&mut self, value: &Self::Value) -> Result<u32, Self::Error> {
         self.with_native_size_callbacks(|callbacks| {
             pillow_rs::ImageOpsNativeSizeCallbacks::coordinate_as_u32(callbacks, value)
@@ -386,11 +418,21 @@ impl<'py> pillow_rs::ImageOpsNativeSizeCallbacks for PythonPadCallbacks<'py> {
 }
 
 impl<'py> pillow_rs::ImageOpsPadRouteCallbacks for PythonPadCallbacks<'py> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    fn contain_function_is_base(&mut self) -> Result<bool, PadCallbackError> {
+        let module = self.aspect.py.import("pillow_rs.imageops")?;
+        let contain = module.getattr("contain")?;
+        let baseline = module.getattr("_BASE_IMAGEOPS_CONTAIN")?;
+        Ok(contain.is(&baseline))
+    }
+
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn native_pad_wrapper_is_eligible(&mut self) -> Result<bool, PadCallbackError> {
         self.native_pad_wrapper_is_eligible_host()
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn native_pad_arguments_are_eligible(
         &mut self,
         method: &<Self as pillow_rs::ImageOpsPadCallbacks>::Value,
@@ -401,14 +443,17 @@ impl<'py> pillow_rs::ImageOpsPadRouteCallbacks for PythonPadCallbacks<'py> {
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn run_core<T: Send>(&mut self, operation: impl FnOnce() -> T + Send) -> T {
         self.aspect.py.detach(operation)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn native_image_snapshot(&mut self) -> Result<pillow_rs::Image, PadCallbackError> {
         super::wrapped_image_snapshot(&self.aspect.image).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn resample_input(
         &mut self,
         method: &<Self as pillow_rs::ImageOpsPadCallbacks>::Value,
@@ -416,6 +461,7 @@ impl<'py> pillow_rs::ImageOpsPadRouteCallbacks for PythonPadCallbacks<'py> {
         crate::inputs::resample_input_from_python(Some(method)).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn realize_dirty_palette(&mut self) -> Result<(), PadCallbackError> {
         self.aspect
             .image
@@ -424,6 +470,7 @@ impl<'py> pillow_rs::ImageOpsPadRouteCallbacks for PythonPadCallbacks<'py> {
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn fill_input(
         &mut self,
         mode: pillow_rs::Mode,
@@ -433,6 +480,7 @@ impl<'py> pillow_rs::ImageOpsPadRouteCallbacks for PythonPadCallbacks<'py> {
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn centering_input(
         &mut self,
         centering: &<Self as pillow_rs::ImageOpsPadCallbacks>::Value,
@@ -440,6 +488,7 @@ impl<'py> pillow_rs::ImageOpsPadRouteCallbacks for PythonPadCallbacks<'py> {
         Ok(crate::inputs::centering_from_python(centering))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn wrap_native_pad_result(
         &mut self,
         image: pillow_rs::Image,
@@ -469,6 +518,7 @@ fn pad_callback_error(error: PadCallbackError) -> PyErr {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_pad_with_route_callbacks(
     py: Python<'_>,

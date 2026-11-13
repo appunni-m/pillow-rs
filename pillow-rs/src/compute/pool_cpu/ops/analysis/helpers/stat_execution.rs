@@ -10,6 +10,7 @@ use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Builds Stat support for one exact-mode owner.
 pub(crate) fn mode_support(
     mode: Mode,
@@ -38,6 +39,7 @@ pub(crate) fn mode_support(
 
 macro_rules! declare_stat_support {
     ($mode:ident, pillow $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn stat_mode_support() -> $crate::compute::registry::support::ModeSupport {
             $crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::mode_support(
                 $crate::raster::Mode::$mode,
@@ -46,6 +48,7 @@ macro_rules! declare_stat_support {
         }
     };
     ($mode:ident, core_only $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn stat_mode_support() -> $crate::compute::registry::support::ModeSupport {
             $crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::mode_support(
                 $crate::raster::Mode::$mode,
@@ -59,6 +62,7 @@ pub(crate) use declare_stat_support;
 
 macro_rules! declare_stat_owner {
     ($mode:ident, $image_ty:ty, $implementation:path $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn execute_stat(
             image: &$image_ty,
             selection: crate::compute::registry::support::StrategySelection,
@@ -97,11 +101,13 @@ pub(crate) struct PreparedStat<'a> {
 }
 
 impl PreparedStat<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Returns the selected exact-mode Stat implementation.
     pub(crate) const fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Runs scalar Stat directly or consumes its prepared Histogram child.
     pub(crate) fn execute(self) -> Result<StatOutput, PilError> {
         self.validate_selection()?;
@@ -116,6 +122,7 @@ impl PreparedStat<'_> {
         execute_stat_mode(self.image, self.selection, request)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Executes the mode owner with the Histogram child for formatted Stat.
     pub(crate) fn execute_formatted_histogram(self) -> Result<StatOutput, PilError> {
         self.validate_selection()?;
@@ -133,6 +140,7 @@ impl PreparedStat<'_> {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn validate_selection(&self) -> Result<(), PilError> {
         if self.image.mode() != self.mode {
             return Err(PilError::InternalError(
@@ -149,6 +157,7 @@ impl PreparedStat<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_stat_mode(
     image: &DynamicImage,
     selection: StrategySelection,
@@ -231,6 +240,7 @@ fn execute_stat_mode(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Selects Stat and its Histogram child from the injected CPU context.
 pub(crate) fn prepare_stat<'a>(
     image: &'a DynamicImage,

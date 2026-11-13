@@ -9,7 +9,7 @@ pub(crate) enum SupportKind {
     CoreOnly,
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn mode_support(mode: Mode, kind: SupportKind) -> ModeSupport {
     match kind {
         SupportKind::Pillow => ModeSupport::cpu(
@@ -32,7 +32,7 @@ pub(crate) fn mode_support(mode: Mode, kind: SupportKind) -> ModeSupport {
 
 macro_rules! declare_projection_support {
     ($mode:ident, $kind:ident $(,)?) => {
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn get_projection_mode_support() ->
             $crate::compute::registry::support::ModeSupport
         {

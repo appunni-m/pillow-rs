@@ -148,6 +148,7 @@ where
 }
 
 impl<'a, P: Pixel + 'a> Rows<'a, P> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(super) fn with_image(pixels: &'a [P::Subpixel], width: u32, height: u32) -> Self {
         let width = usize::try_from(width).unwrap_or(usize::MAX);
         let height = usize::try_from(height).unwrap_or(usize::MAX);
@@ -243,6 +244,7 @@ where
 }
 
 impl<'a, P: Pixel + 'a> RowsMut<'a, P> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(super) fn with_image(pixels: &'a mut [P::Subpixel], width: u32, height: u32) -> Self {
         let width = usize::try_from(width).unwrap_or(usize::MAX);
         let height = usize::try_from(height).unwrap_or(usize::MAX);

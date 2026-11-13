@@ -3,18 +3,22 @@ use crate::error::PilError;
 use crate::raster::GrayImage;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn get_data(image: &GrayImage) -> Result<Vec<u8>, PilError> {
     Ok(image.as_raw().clone())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn get_data_view(image: &GrayImage) -> &[u8] {
     image.as_raw()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn palette_indices_view(indices: &[u8]) -> &[u8] {
     indices
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn write_band(
     image: &GrayImage,
     band: usize,
@@ -28,6 +32,7 @@ pub(crate) fn write_band(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Keep an owned P image's zero-copy index plane on the Palette8 strategy.
 pub(crate) fn write_palette_indices_band(
     indices: &[u8],

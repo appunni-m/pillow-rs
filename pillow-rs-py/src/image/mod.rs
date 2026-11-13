@@ -7,6 +7,7 @@ mod arrays;
 mod constructors;
 mod creation;
 mod data;
+mod enhance;
 mod operations;
 mod point;
 mod properties;

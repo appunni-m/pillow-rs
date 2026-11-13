@@ -6,6 +6,7 @@ use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
 };
 use crate::ops::pil_resize::FilterCoeffs;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &[u8],
     source_size: (u32, u32),
@@ -26,6 +27,7 @@ pub(crate) fn execute(
     Some(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Resizes native L bytes into a caller-owned output window.
 pub(crate) fn execute_into(
     source: &[u8],
@@ -72,6 +74,7 @@ pub(crate) fn execute_into(
     Some(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_row(source: &[u8], coefficients: &FilterCoeffs, output: &mut [u8]) {
     for (output_x, destination) in output.iter_mut().enumerate() {
         let weights = weights(coefficients, output_x);
@@ -89,6 +92,7 @@ fn horizontal_row(source: &[u8], coefficients: &FilterCoeffs, output: &mut [u8])
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn sum_four(source: &[u8], first: usize, weights: &[i64]) -> i32 {
     let mut sum = i32::from(source[first]) * weights[0] as i32;
     sum += i32::from(source[first + 1]) * weights[1] as i32;
@@ -96,18 +100,21 @@ fn sum_four(source: &[u8], first: usize, weights: &[i64]) -> i32 {
     sum + i32::from(source[first + 3]) * weights[3] as i32
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn sum_five(source: &[u8], first: usize, weights: &[i64]) -> i32 {
     let mut sum = sum_four(source, first, weights);
     sum += i32::from(source[first + 4]) * weights[4] as i32;
     sum
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn sum_six(source: &[u8], first: usize, weights: &[i64]) -> i32 {
     let mut sum = sum_five(source, first, weights);
     sum += i32::from(source[first + 5]) * weights[5] as i32;
     sum
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn sum_general(source: &[u8], first: usize, weights: &[i64]) -> i32 {
     let mut sum = 0_i32;
     for (tap, &weight) in weights.iter().enumerate() {
@@ -116,6 +123,7 @@ fn sum_general(source: &[u8], first: usize, weights: &[i64]) -> i32 {
     sum
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_rows(
     intermediate: &[u8],
     output_width: usize,
@@ -138,6 +146,7 @@ fn vertical_rows(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_four(
     intermediate: &[u8],
     width: usize,
@@ -164,6 +173,7 @@ fn vertical_four(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_five(
     intermediate: &[u8],
     width: usize,
@@ -193,6 +203,7 @@ fn vertical_five(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_six(
     intermediate: &[u8],
     width: usize,
@@ -225,6 +236,7 @@ fn vertical_six(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_general(
     intermediate: &[u8],
     width: usize,
@@ -241,6 +253,7 @@ fn vertical_general(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn weights(coefficients: &FilterCoeffs, index: usize) -> &[i64] {
     let start = coefficients.offsets[index];
     &coefficients.weights[start..start + coefficients.count[index]]

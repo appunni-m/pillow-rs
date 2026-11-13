@@ -7,10 +7,12 @@ use crate::raster::{GrayImage, Rgb, RgbImage};
 pub(crate) type Input = RgbImage;
 pub(crate) type Kernel<'a> = Checked<'a, Rgb<u8>>;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare(input: &Input) -> Result<Kernel<'_>, PilError> {
     Checked::new(input)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(input: Kernel<'_>) -> Result<GrayImage, PilError> {
     // Stream the shared LAB-to-sRGB transform directly into luma, so the
     // Rust-only LAB grayscale extension does not materialize an RGB raster.

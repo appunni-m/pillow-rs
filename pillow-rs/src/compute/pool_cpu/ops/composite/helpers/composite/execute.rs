@@ -1,10 +1,11 @@
 //! Composite dispatch and validated mask sample preparation.
 
 use crate::compute::Architecture;
-use crate::compute::pool_cpu::ops::composite::ops::CompositeLayout;
 use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
+
+use super::CompositeLayout;
 
 /// Executes the selected byte-mode architecture through that exact Paste mode strategy.
 pub(crate) fn execute_byte_selected<'a, F>(

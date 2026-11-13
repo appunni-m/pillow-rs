@@ -10,6 +10,7 @@ use crate::raster::{DynamicImage, Mode};
 /// Generates the exact-mode Default owner for one GetColors implementation.
 macro_rules! declare_getcolors_owner {
     ($mode:ident, $image_ty:ty, $implementation:path $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn execute_getcolors(
             image: &$image_ty,
             selection: crate::compute::registry::support::StrategySelection,
@@ -49,11 +50,13 @@ pub(crate) struct PreparedGetColors<'a> {
 }
 
 impl PreparedGetColors<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Returns the selected exact-mode Default implementation.
     pub(crate) const fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Executes the exact-mode color-count strategy.
     pub(crate) fn execute(self) -> Result<GetColorsOutput, PilError> {
         if self.image.mode() != self.mode {
@@ -77,6 +80,7 @@ impl PreparedGetColors<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_getcolors_mode(
     image: &DynamicImage,
     selection: StrategySelection,
@@ -153,6 +157,7 @@ fn execute_getcolors_mode(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Selects exact-mode GetColors from the injected backend and architecture.
 pub(crate) fn prepare_getcolors<'a>(
     image: &'a DynamicImage,

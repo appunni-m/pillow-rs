@@ -35,6 +35,7 @@ struct VerticalTail<'a> {
     source_y: usize,
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &GrayImage,
     width: u32,
@@ -49,6 +50,7 @@ pub(crate) fn execute(
 }
 
 /// Writes the exact Luma8 SSE2 strategy into a caller-owned full-width window.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_into_window(
     input: &GrayImage,
     width: u32,
@@ -67,6 +69,7 @@ pub(crate) fn execute_into_window(
     execute_into(input, width, height, filter, output).is_ok()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_into(
     input: &GrayImage,
     width: u32,
@@ -127,6 +130,7 @@ fn execute_into(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_coefficients(
     horizontal: &FilterCoeffs,
     vertical: &FilterCoeffs,
@@ -147,6 +151,7 @@ fn validate_coefficients(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn build_horizontal_plan(
     coefficients: &FilterCoeffs,
     output_width: usize,
@@ -166,6 +171,7 @@ fn build_horizontal_plan(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn build_horizontal_block(coefficients: &FilterCoeffs, output_x: usize) -> Option<Block> {
     let max_count = (0..LANES)
         .filter_map(|lane| output_x.checked_add(lane))
@@ -180,6 +186,7 @@ fn build_horizontal_block(coefficients: &FilterCoeffs, output_x: usize) -> Optio
     Some(Block { taps })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn build_horizontal_tap(coefficients: &FilterCoeffs, output_x: usize, tap: usize) -> Option<Tap> {
     let mut source_bases = [0; LANES];
     let mut weights = [0; LANES];
@@ -204,6 +211,7 @@ fn build_horizontal_tap(coefficients: &FilterCoeffs, output_x: usize, tap: usize
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_pass(
     source: &[u8],
     source_width: usize,
@@ -228,6 +236,7 @@ fn horizontal_pass(
     Some((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_row(
     source: &[u8],
     coefficients: &FilterCoeffs,
@@ -258,6 +267,7 @@ fn horizontal_row(
     Some((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_scalar_tail(
     source: &[u8],
     coefficients: &FilterCoeffs,
@@ -279,6 +289,7 @@ fn horizontal_scalar_tail(
     Some(scalar_tail)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_pass(
     intermediate: &[u8],
     output_width: usize,
@@ -306,6 +317,7 @@ fn vertical_pass(
     Some((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_row(
     intermediate: &[u8],
     output_width: usize,
@@ -360,6 +372,7 @@ fn vertical_row(
     Some((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_scalar_tail(context: VerticalTail<'_>, start: usize, output: &mut [u8]) -> Option<u64> {
     let weights = coefficient_slice(context.coefficients, context.output_y)?;
     let mut scalar_tail = 0_u64;
@@ -381,12 +394,14 @@ fn vertical_scalar_tail(context: VerticalTail<'_>, start: usize, output: &mut [u
     Some(scalar_tail)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn coefficient_slice(coefficients: &FilterCoeffs, index: usize) -> Option<&[i64]> {
     let start = *coefficients.offsets.get(index)?;
     let count = *coefficients.count.get(index)?;
     coefficients.weights.get(start..start.checked_add(count)?)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn record_vector_work(
     horizontal_blocks: u64,
     vertical_blocks: u64,
@@ -402,6 +417,7 @@ fn record_vector_work(
     );
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn invalid_kernel_plan() -> PilError {
     PilError::InternalError("selected ImageLuma8 SSE2 Resize kernel rejected its plan".into())
 }

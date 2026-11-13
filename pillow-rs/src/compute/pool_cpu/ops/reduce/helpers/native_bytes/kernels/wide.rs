@@ -9,11 +9,13 @@ const LANES: usize = 8;
 const LANES_U32: u32 = 8;
 const RGB_BYTES: usize = 3;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn clamp_u8(value: u32) -> u8 {
     u8::try_from(value.min(u32::from(u8::MAX))).unwrap_or(u8::MAX)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn average_u32x8(
     sums: [u32; LANES],
@@ -23,11 +25,13 @@ fn average_u32x8(
     (((u32x8::new(sums) + u32x8::new(amends)) * u32x8::new(multipliers)) >> 24u32).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn average_2x2_u32x8(sums: [u32; LANES]) -> [u32; LANES] {
     ((u32x8::new(sums) + u32x8::splat(2)) >> 2u32).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rgb_3x5_pixel_sums(
     source: &[u8],
     width: usize,
@@ -49,6 +53,7 @@ fn rgb_3x5_pixel_sums(
     sums
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_rgb_2x2_block(
     source: &[u8],
     width: usize,
@@ -79,6 +84,7 @@ fn reduce_rgb_2x2_block(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_rgb_3x5_block(
     source: &[u8],
     width: usize,
@@ -110,6 +116,7 @@ fn reduce_rgb_3x5_block(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn write_special_rgb_vector<
     const CHANNELS: usize,
     const PREMULTIPLIED: bool,
@@ -156,6 +163,7 @@ fn write_special_rgb_vector<
     false
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn write_generic_vector<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     context: &ByteReduceContext<'_, CHANNELS, PREMULTIPLIED>,
     output_x: u32,
@@ -203,6 +211,7 @@ fn write_generic_vector<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn write_averaged_pixels<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     averages: &[[u8; LANES]; 4],
     valid_pixels: usize,
@@ -227,6 +236,7 @@ fn write_averaged_pixels<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_vector_block<const CHANNELS: usize, const PREMULTIPLIED: bool, const RGB_3X5: bool>(
     context: &ByteReduceContext<'_, CHANNELS, PREMULTIPLIED>,
     factors: (u32, u32),
@@ -249,6 +259,7 @@ fn reduce_vector_block<const CHANNELS: usize, const PREMULTIPLIED: bool, const R
 }
 
 /// Runs the archived portable wide-lane reducer for one exact mode strategy.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn reduce<const CHANNELS: usize, const PREMULTIPLIED: bool, const RGB_3X5: bool>(
     source: &[u8],
     width: u32,

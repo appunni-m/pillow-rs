@@ -26,6 +26,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::thumbnail) fn streams_two_by_two(
     source: (u32, u32),
     output: (u32, u32),
@@ -36,6 +37,7 @@ pub(in crate::compute::pool_cpu::ops::thumbnail) fn streams_two_by_two(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     output: (u32, u32),

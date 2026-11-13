@@ -5,9 +5,11 @@ use crate::raster::{GrayImage, Luma, RgbImage};
 
 pub(crate) type Input = RgbImage;
 pub(crate) type Kernel<'a> = &'a Input;
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare(input: &Input) -> Kernel<'_> {
     input
 }
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(input: Kernel<'_>) -> GrayImage {
     native_ycbcr_luma(input).unwrap_or_else(|| {
         let source = input.clone();
@@ -17,6 +19,7 @@ pub(crate) fn execute(input: Kernel<'_>) -> GrayImage {
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn native_ycbcr_luma(source: &RgbImage) -> Option<crate::raster::GrayImage> {
     let dims = CheckedDims::new(source.width(), source.height(), 3).ok()?;
     let pixels = dims.total_pixels();
@@ -31,6 +34,7 @@ fn native_ycbcr_luma(source: &RgbImage) -> Option<crate::raster::GrayImage> {
     crate::raster::GrayImage::from_raw(source.width(), source.height(), output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Extract four Y samples per block using bounded word loads and stores. Each
 /// complete block is exactly twelve bytes, so the loads stay within the source
 /// allocation. The remainder contains complete three-byte pixels only.

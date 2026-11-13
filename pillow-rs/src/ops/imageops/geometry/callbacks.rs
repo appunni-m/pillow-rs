@@ -194,6 +194,7 @@ where
     fn native_box_tuple(&mut self, box_: (u32, u32, u32, u32)) -> Result<Self::Value, Self::Error>;
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Expand a scalar, pair, or four-value border and compute its crop box.
 pub fn crop_box_with_callbacks<C: ImageOpsCropCallbacks>(
     callbacks: &mut C,
@@ -207,6 +208,7 @@ pub fn crop_box_with_callbacks<C: ImageOpsCropCallbacks>(
     callbacks.box_tuple(&left, &top, &right, &bottom)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Select native crop geometry for the unmodified base-image route, otherwise
 /// preserve Python's dynamic border protocols through the host callbacks.
 pub fn crop_box_with_route_callbacks<C: ImageOpsCropRouteCallbacks>(
@@ -459,6 +461,7 @@ pub trait ImageOpsNativeSizeCallbacks {
     fn coordinate_as_u32(&mut self, value: &Self::Value) -> Result<u32, Self::Error>;
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Selects the native ImageOps size route from ordered host capability facts.
 #[doc(hidden)]
 pub fn native_size_pair_with_callbacks<C: ImageOpsNativeSizeCallbacks>(
@@ -534,6 +537,7 @@ pub(super) fn expand_geometry_values_with_callbacks<C: ImageOpsExpandGeometryCal
     Ok((width, height, left, top))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Compute the size argument that ImageOps passes to public Image.resize.
 fn aspect_size_with_callbacks<C: ImageOpsAspectCallbacks>(
     callbacks: &mut C,
@@ -566,6 +570,7 @@ fn aspect_size_with_callbacks<C: ImageOpsAspectCallbacks>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Selects native or callback-driven contain/cover geometry from one core route.
 #[doc(hidden)]
 pub fn aspect_size_with_route_callbacks<C: ImageOpsAspectRouteCallbacks>(
@@ -592,6 +597,7 @@ pub fn aspect_size_with_route_callbacks<C: ImageOpsAspectRouteCallbacks>(
     aspect_size_with_callbacks(callbacks, operation)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn contain_size<C: ImageOpsAspectCallbacks>(
     callbacks: &mut C,
     source_ratio: &C::Value,
@@ -623,6 +629,7 @@ fn contain_size<C: ImageOpsAspectCallbacks>(
     Ok(ImageOpsAspectSize::Original)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn cover_size<C: ImageOpsAspectCallbacks>(
     callbacks: &mut C,
     source_ratio: &C::Value,
@@ -654,6 +661,7 @@ fn cover_size<C: ImageOpsAspectCallbacks>(
     Ok(ImageOpsAspectSize::Original)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rounded_scaled_axis<C: ImageOpsAspectCallbacks>(
     callbacks: &mut C,
     image_numerator: usize,

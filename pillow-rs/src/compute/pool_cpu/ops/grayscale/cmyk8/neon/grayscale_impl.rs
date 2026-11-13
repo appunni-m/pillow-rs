@@ -10,6 +10,7 @@ pub(crate) struct Kernel<'a> {
     neon: Neon,
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare(input: scalar::Kernel<'_>, neon: Neon) -> Kernel<'_> {
     Kernel {
         input: input.input,
@@ -17,6 +18,7 @@ pub(crate) fn prepare(input: scalar::Kernel<'_>, neon: Neon) -> Kernel<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Convert sixteen native C/M/Y/K pixels directly to Pillow-compatible luma.
 /// This fuses the exact integer CMYK-to-RGB conversion with the luma formula,
 /// so the path never materializes the intermediate RGB image.
@@ -36,6 +38,7 @@ fn cmyk_muldiv255_neon(
     round(value_low * ink_low).narrow(round(value_high * ink_high))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 #[inline(always)]
 fn cmyk_luma_neon(
@@ -62,8 +65,10 @@ fn cmyk_luma_neon(
     luma_half(red_low, green_low, blue_low).narrow(luma_half(red_high, green_high, blue_high))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 fearless_simd::kernel!(
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[inline(always)]
     fn cmyk_grayscale_block_neon(neon: Neon, source: &[u8; 64]) -> [u8; 16] {
         let [cyan, magenta, yellow, black] = SafeU8x16::<Neon>::load_four_interleaved(neon, source);
@@ -78,6 +83,7 @@ fearless_simd::kernel!(
     }
 );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn block(neon: Neon, source: &[u8]) -> [u8; 16] {
     let source = source
@@ -86,10 +92,12 @@ fn block(neon: Neon, source: &[u8]) -> [u8; 16] {
     cmyk_grayscale_block_neon(neon, source)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn dimensions(input: &Kernel<'_>) -> (u32, u32) {
     input.input.dimensions()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(input: Kernel<'_>) -> (Vec<u8>, u64, u64) {
     let source = input.input.as_raw();
     let pixels = source.len() / 4;

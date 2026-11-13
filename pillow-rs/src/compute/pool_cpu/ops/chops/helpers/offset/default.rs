@@ -3,6 +3,7 @@
 use crate::raster::buffer::ImageBuffer;
 use crate::raster::traits::Pixel;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Wrap typed pixels by Pillow's ordinary pixel-coordinate Offset rule.
 pub(crate) fn offset_pixels<P>(
     image: &ImageBuffer<P, Vec<P::Subpixel>>,

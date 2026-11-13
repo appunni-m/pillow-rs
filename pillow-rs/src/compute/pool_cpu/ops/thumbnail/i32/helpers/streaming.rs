@@ -9,6 +9,7 @@ use crate::ops::pil_resize::{F64MulAdd, FilterCoeffsF64, i32_samples_from_le_byt
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn reduce_source_row_pair(
     source: &[i32],
     source_width: usize,
@@ -29,6 +30,7 @@ fn reduce_source_row_pair(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_ring_row<F: F64MulAdd>(
     source: &[i32],
     source_width: usize,
@@ -47,6 +49,7 @@ fn horizontal_ring_row<F: F64MulAdd>(
     resize_streaming::horizontal_row(reduced_row, ring_row, horizontal, fixed_weights, fma);
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_output_row<F: F64MulAdd>(
     output: &mut [u8],
     output_y: usize,
@@ -83,6 +86,7 @@ fn vertical_output_row<F: F64MulAdd>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_stream<F: F64MulAdd>(
     source: &[i32],
     source_dimensions: (u32, u32),
@@ -145,6 +149,7 @@ fn execute_stream<F: F64MulAdd>(
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute<F: F64MulAdd>(
     input: &RgbaImage,
     destination: (u32, u32),

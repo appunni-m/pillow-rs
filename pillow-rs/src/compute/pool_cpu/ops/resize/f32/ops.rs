@@ -45,6 +45,7 @@ pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::cpu(
     &RESIZE_BOXED_ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize(
     context: &ExecutionContext,
     image: &DynamicImage,
@@ -89,6 +90,7 @@ pub(crate) fn resize(
     Ok(DynamicImage::ImageF32(output))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resize_selected(
     _context: &ExecutionContext,
     selection: &StrategySelection,

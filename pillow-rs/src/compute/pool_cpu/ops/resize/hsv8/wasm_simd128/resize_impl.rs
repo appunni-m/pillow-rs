@@ -4,6 +4,7 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbImage,
     width: u32,
@@ -18,6 +19,7 @@ pub(crate) fn execute(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Boxed filtered Resize entry point for this exact mode and architecture.
 pub(crate) fn execute_boxed(
     input: &RgbImage,

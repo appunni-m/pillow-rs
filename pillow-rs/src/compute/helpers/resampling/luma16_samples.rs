@@ -1,6 +1,7 @@
 //! Pillow-compatible byte interpretation for native `I;16*` samples.
 
 /// Reads the two native sample bytes using Pillow's selected byte order.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn read<const BIG_ENDIAN: bool>(sample: u16) -> u16 {
     let native_bytes = sample.to_ne_bytes();
@@ -12,6 +13,7 @@ pub(crate) fn read<const BIG_ENDIAN: bool>(sample: u16) -> u16 {
 }
 
 /// Applies Pillow's ordered round and full-sample clipping to one u16 sample.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn write<const BIG_ENDIAN: bool>(value: f64) -> u16 {
     let rounded = super::rounding::round_up(value) as i64;

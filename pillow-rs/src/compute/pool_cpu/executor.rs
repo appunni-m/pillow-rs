@@ -14,22 +14,22 @@ use crate::raster::{DynamicImage, Mode};
 pub struct CpuPool;
 
 impl BackendImpl for CpuPool {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn name(&self) -> Backend {
         Backend::Cpu
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn priority(&self) -> u8 {
         0
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn supports(&self, op: &PipelineOp) -> Result<bool, PilError> {
         registry::cpu_supports(op)
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn execute_batch(
         &self,
         ops: &[PipelineOp],
@@ -40,7 +40,7 @@ impl BackendImpl for CpuPool {
         batch_execution::execute_batch(ops, image, &context, Default::default())
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn execute_batch_with_context(
         &self,
         ops: &[PipelineOp],
@@ -51,7 +51,7 @@ impl BackendImpl for CpuPool {
         batch_execution::execute_batch(ops, image, context, Default::default())
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn execute_batch_with_context_and_palette(
         &self,
         ops: &[PipelineOp],

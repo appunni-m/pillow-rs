@@ -144,7 +144,7 @@ def main() -> None:
                     raise SystemExit(
                         f"missing generated parity asset: assets/generated/{relative.as_posix()}"
                     )
-        validate_inputs(manifest, active_root)
+        validate_inputs(manifest, active_root, retain_documents=False)
         referenced_assets = indexed_generated_asset_paths(active_root, manifest)
         referenced_assets.update(
             retained_unindexed_generated_asset_paths(active_root, manifest)

@@ -18,8 +18,35 @@ pub(crate) use super::helpers::stat_execution::prepare_stat;
 
 const NO_INPUTS: &[InputContract] = &[];
 const HISTOGRAM_MASK_MODES: &[Mode] = &[Mode::One, Mode::ImageLuma8];
+const HISTOGRAM_MASK_SOURCE_MODES: &[Mode] = &[
+    Mode::One,
+    Mode::ImageLuma8,
+    Mode::ImageLumaA8,
+    Mode::ImageLaPremultiplied8,
+    Mode::ImagePalette8,
+    Mode::ImagePaletteAlpha8,
+    Mode::ImageRgb8,
+    Mode::ImageRgba8,
+    Mode::ImageRgbPremultiplied8,
+    Mode::ImageRgbx8,
+    Mode::ImageCmyk8,
+    Mode::ImageYCbCr8,
+    Mode::ImageLab8,
+    Mode::ImageHsv8,
+    Mode::ImageI16,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
+    Mode::ImageLumaA16,
+    Mode::ImageRgb16,
+    Mode::ImageRgba16,
+    Mode::ImageRgb32F,
+    Mode::ImageRgba32F,
+];
 const HISTOGRAM_EXTREMA_MODES: &[Mode] = &[Mode::ImageI32, Mode::ImageF32];
 const HISTOGRAM_MASK_INPUT: InputContract = InputContract::HistogramMask {
+    source_modes: HISTOGRAM_MASK_SOURCE_MODES,
+    source_rejection: "image has wrong mode",
     modes: HISTOGRAM_MASK_MODES,
     mode_rejection: "bad transparency mask",
     size_rejection: "images do not match",
@@ -485,7 +512,7 @@ pub(crate) fn select_get_pixel_rgba(
 }
 
 /// Executes Pillow-shaped GetPixel after its declared exact-mode selection.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel(
     image: &DynamicImage,
     x: u32,
@@ -664,7 +691,7 @@ fn classify_get_bbox_mode(mode: Mode) -> ModeSupport {
 }
 
 /// Exhaustive GetBBox support aggregated from exact-mode owners.
-/// TODO(pillow-rs#3ptb): verify alpha-only inputs, bounds, and Default receipts.
+/// TODO(pillow-rs#3ptb): verify alpha-only inputs, zero-axis bounds, and Default receipts.
 pub(crate) static GET_BBOX_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::GetBBox, &[], classify_get_bbox_mode);
 
@@ -674,7 +701,7 @@ use super::helpers::projection::{
     native_pixel_bytes, project_lab, project_native_bytes, project_stored_words, storage_error,
 };
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::get_projection_mode_support(),
@@ -720,12 +747,12 @@ pub(crate) struct PreparedProjection<'a> {
 }
 
 impl PreparedProjection<'_> {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<ProjectionOutput, PilError> {
         if self.image.mode() != self.mode {
             return Err(PilError::InternalError(
@@ -776,7 +803,7 @@ impl PreparedProjection<'_> {
 }
 
 /// Resolve the exact mode declaration and architecture before scanning pixels.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     context: &ExecutionContext,
@@ -797,7 +824,7 @@ pub(crate) fn prepare<'a>(
 }
 
 /// Execute the prepared native RGB8 strategy for terminal CPU fusion.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_rgb8_selected(
     image: &crate::raster::RgbImage,
     selection: StrategySelection,
@@ -806,7 +833,7 @@ pub(crate) fn execute_rgb8_selected(
 }
 
 /// Execute the prepared native CMYK8 strategy for terminal CPU fusion.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_cmyk8_selected(
     image: &crate::raster::RgbaImage,
     selection: StrategySelection,
@@ -814,7 +841,7 @@ pub(crate) fn execute_cmyk8_selected(
     super::cmyk8::ops::execute(image, selection)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn select(
     context: &ExecutionContext,
     mode: Mode,

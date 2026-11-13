@@ -14,6 +14,7 @@ use super::default::get_data_impl;
 const SSE2_REQUIRES: &[Architecture] = &[Architecture::Sse2];
 const NEON_REQUIRES: &[Architecture] = &[Architecture::Neon];
 const WASM_REQUIRES: &[Architecture] = &[Architecture::WasmSimd128];
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 const ARCHITECTURES: &[ImplementationSupport] = &[
     ImplementationSupport::cpu(
         OperationId::GetProjection,
@@ -41,6 +42,7 @@ const ARCHITECTURES: &[ImplementationSupport] = &[
     ),
 ];
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::GetProjection,
     Mode::ImageCmyk8,
@@ -72,7 +74,7 @@ pub(crate) fn execute_get_data(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &RgbaImage,
     selection: StrategySelection,
@@ -101,7 +103,7 @@ pub(crate) fn execute(
 
 /// Build CMYK axes from bounded positive writes under the prepared strategy.
 /// `None` asks the caller to use the full scan.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_positive_writes(
     selection: StrategySelection,
     width: u32,
@@ -154,8 +156,7 @@ pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::Mode
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::rgba_get_pixel_support(
         crate::raster::Mode::ImageCmyk8,
     );
-
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel(
     image: &crate::raster::RgbaImage,
     x: u32,

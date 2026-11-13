@@ -8,6 +8,7 @@ use wide::{f32x8, u8x16, u16x16};
 
 use super::binary::BinaryOperation;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Executes a validated native-byte architecture strategy.
 pub(crate) fn execute<P>(
     image: &ImageBuffer<P, Vec<u8>>,
@@ -54,6 +55,7 @@ where
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_invert<P>(image: &ImageBuffer<P, Vec<u8>>) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
 where
     P: Pixel<Subpixel = u8>,
@@ -97,6 +99,7 @@ where
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_bytes<P, K>(
     image: &ImageBuffer<P, Vec<u8>>,
     other: &ImageBuffer<P, Vec<u8>>,
@@ -135,6 +138,7 @@ where
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn apply_blocks<K>(left: &[u8], right: &[u8], output: &mut [u8], kernel: K)
 where
@@ -156,6 +160,7 @@ where
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_native<P>(
     image: &ImageBuffer<P, Vec<u8>>,
     other: &ImageBuffer<P, Vec<u8>>,
@@ -213,6 +218,7 @@ where
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Applies an admitted Add/Sub vector strategy to an owned batch intermediate.
 pub(crate) fn execute_in_place<P>(
     image: &mut ImageBuffer<P, Vec<u8>>,
@@ -268,6 +274,7 @@ where
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn affine_parameters(operation: BinaryOperation) -> Result<(f32, f32, bool), PilError> {
     match operation {
         BinaryOperation::Add { scale, offset, .. } => Ok((scale, offset, false)),
@@ -278,6 +285,7 @@ fn affine_parameters(operation: BinaryOperation) -> Result<(f32, f32, bool), Pil
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn exact_default_parameters(operation: BinaryOperation) -> bool {
     match operation {
         BinaryOperation::Add {
@@ -292,6 +300,7 @@ fn exact_default_parameters(operation: BinaryOperation) -> bool {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn apply_saturating(left: &[u8], right: &[u8], output: &mut [u8], subtract: bool) {
     let (left_blocks, left_tail) = left.as_chunks::<16>();
     let (right_blocks, right_tail) = right.as_chunks::<16>();
@@ -322,6 +331,7 @@ fn apply_saturating(left: &[u8], right: &[u8], output: &mut [u8], subtract: bool
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn apply_saturating_in_place(left: &mut [u8], right: &[u8], subtract: bool) {
     let (left_blocks, left_tail) = left.as_chunks_mut::<16>();
     let (right_blocks, right_tail) = right.as_chunks::<16>();
@@ -351,6 +361,7 @@ fn apply_saturating_in_place(left: &mut [u8], right: &[u8], subtract: bool) {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn apply_affine_in_place(
     left: &mut [u8],
     right: &[u8],
@@ -389,6 +400,7 @@ fn apply_affine_in_place(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn apply_affine(
     left: &[u8],
     right: &[u8],
@@ -429,6 +441,7 @@ fn apply_affine(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn affine_block(left: [u8; 8], right: [u8; 8], scale: f32, offset: f32, subtract: bool) -> [u8; 8] {
     let left = f32x8::new(left.map(f32::from));
@@ -439,6 +452,7 @@ fn affine_block(left: [u8; 8], right: [u8; 8], scale: f32, offset: f32, subtract
         .map(|value| value.clamp(0.0, 255.0) as u8)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn affine_sample(left: u8, right: u8, scale: f32, offset: f32, subtract: bool) -> u8 {
     let left = f32::from(left);
@@ -447,6 +461,7 @@ fn affine_sample(left: u8, right: u8, scale: f32, offset: f32, subtract: bool) -
     (value / scale + offset).clamp(0.0, 255.0) as u8
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 pub(super) fn divide_255(value: u16x16) -> u16x16 {
     const ONE: u16x16 = u16x16::splat(1);
@@ -454,6 +469,7 @@ pub(super) fn divide_255(value: u16x16) -> u16x16 {
     (incremented + (incremented >> 8u32)) >> 8u32
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn multiply_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let left = u16x16::from(u8x16::new(left));
@@ -462,6 +478,7 @@ fn multiply_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
         .to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn screen_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     const MAX: u16x16 = u16x16::splat(255);
@@ -471,16 +488,19 @@ fn screen_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16(value).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn darker_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     (u8x16::new(left).min(u8x16::new(right))).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn lighter_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     (u8x16::new(left).max(u8x16::new(right))).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn difference_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let left = u8x16::new(left);
@@ -488,16 +508,19 @@ fn difference_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     (left.max(right) - left.min(right)).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn add_modulo_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     (u8x16::new(left) + u8x16::new(right)).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn subtract_modulo_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     (u8x16::new(left) - u8x16::new(right)).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn divide_127(value: u16x16) -> u16x16 {
     const ONE: u16x16 = u16x16::splat(1);
@@ -505,16 +528,19 @@ fn divide_127(value: u16x16) -> u16x16 {
     (value + (value >> 7u32) + (value >> 14u32)) >> 7u32
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn overlay_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     lut_block(left, right, false)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn hard_light_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     lut_block(left, right, true)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn lut_block(left: [u8; 16], right: [u8; 16], hard_light: bool) -> [u8; 16] {
     const MAX: u16x16 = u16x16::splat(255);
@@ -532,6 +558,7 @@ fn lut_block(left: [u8; 16], right: [u8; 16], hard_light: bool) -> [u8; 16] {
     crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16(value).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn soft_light_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     const MAX: u16x16 = u16x16::splat(255);
@@ -549,18 +576,21 @@ fn soft_light_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16(clamped).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn logical_and_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let nonzero = u8x16::new(left).min(u8x16::new(right)).simd_eq(u8x16::ZERO);
     nonzero.select(u8x16::ZERO, u8x16::splat(255)).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn logical_or_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let nonzero = (u8x16::new(left) | u8x16::new(right)).simd_eq(u8x16::ZERO);
     nonzero.select(u8x16::ZERO, u8x16::splat(255)).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn logical_xor_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let left = u8x16::new(left)

@@ -4,6 +4,7 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbaImage,
     width: u32,
@@ -19,6 +20,7 @@ pub(crate) fn execute(
 }
 
 /// NEON filtered Resize into a caller-owned full-width Pad window.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_into_window(
     input: &RgbaImage,
     width: u32,
@@ -36,6 +38,7 @@ pub(crate) fn execute_into_window(
 }
 
 /// Boxed filtered Resize entry point for this exact mode and architecture.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_boxed(
     input: &RgbaImage,
     width: u32,

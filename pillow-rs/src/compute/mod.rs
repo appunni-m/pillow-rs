@@ -332,7 +332,7 @@ pub(crate) trait BackendImpl: Send + Sync {
     /// Backends that have not adopted context-driven strategy selection keep
     /// their existing executor through this default. CPU overrides it so each
     /// operation consumes the same injected backend and architecture choice.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn execute_batch_with_context(
         &self,
         ops: &[PipelineOp],
@@ -347,7 +347,7 @@ pub(crate) trait BackendImpl: Send + Sync {
     /// Most backends do not consume palette metadata and retain their current
     /// executor. CPU overrides this boundary so exact P/PA strategies receive
     /// the palette resolved by the image wrapper.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn execute_batch_with_context_and_palette(
         &self,
         ops: &[PipelineOp],

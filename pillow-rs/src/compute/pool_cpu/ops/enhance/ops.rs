@@ -182,6 +182,7 @@ const fn color_saturation_intermediate_mode(mode: Mode) -> Mode {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn composed_color_saturation_route(
     mode: Mode,
     scope: SupportScope,
@@ -199,6 +200,7 @@ fn composed_color_saturation_route(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn color_saturation_rejection(
     mode: Mode,
     scope: SupportScope,
@@ -218,6 +220,7 @@ fn color_saturation_rejection(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn color_saturation_composed_route(mode: Mode) -> OperationModeRoute {
     match mode {
         Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => composed_color_saturation_route(
@@ -278,6 +281,7 @@ fn color_saturation_composed_route(mode: Mode) -> OperationModeRoute {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_color_saturation_route(mode: Mode) -> OperationModeRoute {
     let prepared_support = classify_color_saturation_mode(mode);
     if matches!(prepared_support, ModeSupport::Supported { .. }) {

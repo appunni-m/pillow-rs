@@ -252,8 +252,12 @@ pub enum InputContract {
         /// Exact source identities with a logical alpha band.
         alpha_modes: &'static [Mode],
     },
-    /// Histogram accepts these exact optional mask modes after size validation.
+    /// Histogram accepts these optional mask modes for these exact source modes.
     HistogramMask {
+        /// Exact source identities whose Histogram accepts a mask.
+        source_modes: &'static [Mode],
+        /// Existing rejection when the source mode disallows a mask.
+        source_rejection: &'static str,
         /// Exact mask identities accepted by the public Histogram wrapper.
         modes: &'static [Mode],
         /// Existing rejection for an unsupported mask identity.

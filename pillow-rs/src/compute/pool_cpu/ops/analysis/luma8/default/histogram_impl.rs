@@ -1,5 +1,6 @@
 use crate::error::PilError;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &crate::raster::GrayImage,
     mask_raw: Option<&[u8]>,

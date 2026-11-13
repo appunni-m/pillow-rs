@@ -5,6 +5,7 @@ use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn require_default_architecture(
     context: &ExecutionContext,
     selection: &StrategySelection,
@@ -32,6 +33,7 @@ pub(crate) fn require_default_architecture(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn require_architecture(
     context: &ExecutionContext,
     selection: &StrategySelection,
@@ -64,6 +66,7 @@ pub(crate) fn require_architecture(
 }
 
 /// Selects a declared native-byte nearest kernel or the mode's Default route.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
     context: &ExecutionContext,
     selection: &StrategySelection,
@@ -116,6 +119,7 @@ pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
 }
 
 /// Selects the mode's serial Default route or its declared native-byte strategy.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize_byte_native<T, const CHANNELS: usize>(
     context: &ExecutionContext,
     selection: &StrategySelection,

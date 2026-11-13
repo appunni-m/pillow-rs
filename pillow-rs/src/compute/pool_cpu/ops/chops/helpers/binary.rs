@@ -63,6 +63,7 @@ pub(crate) enum BinaryOperation {
 }
 
 impl BinaryOperation {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Applies the same byte arithmetic as the native Chops strategy to an
     /// omitted physical pixel lane.
     pub(crate) fn apply_to_byte(self, left: u8, right: u8) -> u8 {
@@ -98,6 +99,7 @@ impl BinaryOperation {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Produces Chops results for retained physical lanes, resolving missing
 /// producer state with the same canonical mode fallback used by Paste.
 pub(crate) fn output_hidden_lanes(
@@ -110,6 +112,7 @@ pub(crate) fn output_hidden_lanes(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Produces retained physical lanes using an operation-specific byte mapping.
 pub(crate) fn output_hidden_lanes_with<F>(
     image: &DynamicImage,
@@ -192,6 +195,7 @@ where
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_hidden_lane_source(
     image: &DynamicImage,
     lanes: Option<&HiddenPixelLanes>,
@@ -210,6 +214,7 @@ fn validate_hidden_lane_source(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn output_hidden_lanes_with_fallbacks<F>(
     image: &DynamicImage,
     other: &DynamicImage,
@@ -248,6 +253,7 @@ where
         .ok_or_else(|| PilError::InternalError("Chops physical lane result was invalid".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn input_hidden_lanes(
     image: &DynamicImage,
     lanes: Option<&HiddenPixelLanes>,
@@ -274,6 +280,9 @@ fn input_hidden_lanes(
     hidden_lanes_for_pixel_ref(None, pixel_index, lane_count, fallback)
 }
 
+// TODO(pillow-rs#3ptb): Freeze raw-byte follow-on Paste parity for binary
+// Chops across each declared CPU architecture and hidden-lane producer state.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Attaches Chops arithmetic for omitted bytes to an already computed image.
 pub(crate) fn carry_hidden_lanes(
     image: &DynamicImage,
@@ -289,6 +298,7 @@ pub(crate) fn carry_hidden_lanes(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Clips two admitted native-byte inputs and applies the operation to the
 /// primary mode's typed buffer. The mode owner wraps the result in its exact
 /// `DynamicImage` variant.
@@ -324,6 +334,7 @@ where
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn apply(
     left: &[u8],
     right: &[u8],
@@ -398,6 +409,7 @@ fn apply(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn apply_lut(
     left: &[u8],
     right: &[u8],
@@ -422,6 +434,7 @@ fn apply_lut(
     );
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn apply_rows<F: Fn(u8, u8) -> u8>(
     left: &[u8],
     right: &[u8],

@@ -1,5 +1,6 @@
 //! Original AArch64 NEON RGB arithmetic and padded vector tail.
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 #[allow(unsafe_code)]
 #[inline]
@@ -51,6 +52,7 @@ fn grayscale_rgb_luma_vector_neon(source: &[u8]) -> core::arch::aarch64::uint8x1
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 #[allow(unsafe_code)]
 #[inline]
@@ -65,6 +67,7 @@ fn grayscale_rgb_block_neon(source: &[u8]) -> [u8; 16] {
     output
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Store complete NEON RGB blocks directly into the final grayscale vector.
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 #[allow(unsafe_code)]

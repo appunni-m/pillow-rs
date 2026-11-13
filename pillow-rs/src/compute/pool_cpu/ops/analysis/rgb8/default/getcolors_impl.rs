@@ -2,6 +2,7 @@ use crate::compute::pool_cpu::ops::analysis::helpers::getcolors::{self, GetColor
 use crate::error::PilError;
 use crate::raster::RgbImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(maxcolors: u32, image: &RgbImage) -> Result<GetColorsOutput, PilError> {
     getcolors::rgb8(maxcolors, image)
 }

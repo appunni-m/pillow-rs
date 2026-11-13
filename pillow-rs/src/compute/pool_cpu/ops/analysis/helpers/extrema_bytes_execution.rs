@@ -13,10 +13,12 @@ pub(crate) struct PreparedGetExtremaBytes<'a> {
 }
 
 impl PreparedGetExtremaBytes<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<Vec<(u8, u8)>, PilError> {
         if self.image.mode() != self.mode {
             return Err(PilError::InternalError(
@@ -41,6 +43,7 @@ impl PreparedGetExtremaBytes<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_mode(
     image: &DynamicImage,
     selection: StrategySelection,
@@ -124,6 +127,7 @@ fn execute_mode(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     context: &ExecutionContext,
@@ -142,6 +146,7 @@ pub(crate) fn prepare<'a>(
 /// Declares a mode-owned Default strategy for the byte-valued compatibility API.
 macro_rules! declare_getextrema_bytes_owner {
     ($mode:ident, $image_ty:ty, $implementation:path $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn execute_getextrema_bytes(
             image: &$image_ty,
             selection: crate::compute::registry::support::StrategySelection,
@@ -168,6 +173,7 @@ macro_rules! declare_getextrema_bytes_owner {
 }
 
 pub(crate) use declare_getextrema_bytes_owner;
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn support(
     mode: Mode,
     core_only: bool,

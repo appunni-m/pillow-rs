@@ -376,6 +376,7 @@ class Image:
         if self._native_info is not None:
             self.info
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     def _copy_info_state_from(self, source):
         """Copy the public info mapping and its lazy-merge bookkeeping.
 
@@ -403,6 +404,7 @@ class Image:
         self._native_info_rebaseline = True
         self._native_info_omitted = snapshot[2]
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     def _new(self, rust_image):
         """Wrap a derived image with Pillow's shallow metadata-copy semantics."""
         if self._transpose_loads_info:
@@ -500,7 +502,22 @@ class Image:
             fp, format, options.get("compress_level"), self.load
         )
 
-    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    def _get_safe_box(self, size, resample, box):
+        """Evaluate Pillow's overridable safe-box numeric protocol boundary."""
+        filter_support = _core._resize_reducing_gap_filter_support(resample)
+        scale_x = (box[2] - box[0]) / size[0]
+        scale_y = (box[3] - box[1]) / size[1]
+        support_x = filter_support * scale_x
+        support_y = filter_support * scale_y
+        return (
+            max(0, int(box[0] - support_x)),
+            max(0, int(box[1] - support_y)),
+            min(self.size[0], _math.ceil(box[2] + support_x)),
+            min(self.size[1], _math.ceil(box[3] + support_y)),
+        )
+
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     def resize(
         self,
         size: Tuple[int, int],
@@ -513,35 +530,147 @@ class Image:
         filter_code = self._rust_image._resize_filter_code(resample)
         if reducing_gap is not None and reducing_gap < 1.0:
             raise ValueError("reducing_gap must be 1.0 or greater")
+        # TODO(pillow-rs#3ptb): parity-check zero-axis and large finite factors,
+        # large integer box coordinates, malformed/float/oversized sizes,
+        # short/long/custom boxes, custom numbers, reducer faults, and
+        # non-callable `reduce` overrides.
+        if box is None:
+            box = (0, 0, *self.size)
+        size = tuple(size)
+        if self.size == size and box == (0, 0, *self.size):
+            return self.copy()
+        if self.mode in ("1", "P"):
+            resample = Resampling.NEAREST
+            filter_code = int(Resampling.NEAREST)
+        if self.mode in ("LA", "RGBA") and resample != Resampling.NEAREST:
+            instance_dict = object.__getattribute__(self, "__dict__")
+            custom_conversion = (
+                "convert" in instance_dict
+                or getattr(type(self), "convert", None)
+                is not _BASE_IMAGE_CONVERT_METHOD
+            )
+            custom_resize = (
+                type(self) is not Image
+                or "resize" in instance_dict
+                or getattr(type(self), "resize", None)
+                is not _BASE_IMAGE_RESIZE_METHOD
+            )
+            custom_reduce = reducing_gap is not None and (
+                "reduce" in instance_dict
+                or getattr(type(self), "reduce", None)
+                is not _BASE_IMAGE_REDUCE_METHOD
+            )
+            if custom_conversion or custom_resize or custom_reduce:
+                converted = self.convert({"LA": "La", "RGBA": "RGBa"}[self.mode])
+                resized = converted.resize(size, resample, box, reducing_gap)
+                return resized.convert(self.mode)
         palette = self.__dict__.get("_palette_object")
         dirty_palette = (
             palette is not None and palette.dirty and self.mode in ("P", "PA")
         )
-        # TODO(pillow-rs#3ptb): parity-check custom geometry/gap objects
-        # whose comparisons or numeric conversion raise at this boundary.
-        if box is None:
-            box = (0, 0) + self.size
-        size = tuple(size)
-        full_box = (0, 0) + self.size
-        identity = self.size == size and box == full_box
-        if identity and not dirty_palette:
-            return self.copy()
         if dirty_palette:
-            if identity:
-                # The identity copy loads but does not use reducing_gap.
-                # Pass canonical geometry so Pillow-compatible identity inputs
-                # avoid later integer/box coercion in the Rust binding.
-                size = self.size
-                box = full_box
-                reducing_gap = None
             self._realize_dirty_palette()
         else:
             # Pillow loads the source before the native layer converts box and
             # reducing_gap values; keep those conversions behind this boundary.
             self.load()
-        return self._new(
-            self._rust_image.resize(size, filter_code, box, reducing_gap)
+        dispatch_box = box
+        dispatch_gap = reducing_gap
+        long_builtin_box = False
+        if (
+            reducing_gap is not None
+            and filter_code != Resampling.NEAREST
+        ):
+            # Pillow computes both factors before its native resize parses
+            # dimensions or the box, including for zero-axis requests.
+            factor_x = int((box[2] - box[0]) / size[0] / reducing_gap) or 1
+            factor_y = int((box[3] - box[1]) / size[1] / reducing_gap) or 1
+            if factor_x > 1 or factor_y > 1:
+                instance_dict = object.__getattribute__(self, "__dict__")
+                custom_box_values = type(box) not in (list, tuple) or any(
+                    type(value) not in (int, float, bool) for value in box[:4]
+                )
+                large_integer_box_coordinates = (
+                    type(box) in (list, tuple)
+                    and any(
+                        type(value) is int and abs(value) > (1 << 53)
+                        for value in box[:4]
+                    )
+                )
+                # Pillow calls the reducer before `_imaging.resize` parses
+                # exactly two C-int dimensions.
+                size_requires_deferred_parse = len(size) != 2 or any(
+                    type(value) not in (int, bool)
+                    or (
+                        type(value) is int
+                        and not -(1 << 31) <= value < (1 << 31)
+                    )
+                    for value in size
+                )
+                custom_numeric_inputs = (
+                    type(reducing_gap) not in (int, float, bool)
+                    or size_requires_deferred_parse
+                )
+                custom_safe_box = (
+                    "_get_safe_box" in instance_dict
+                    or getattr(type(self), "_get_safe_box", None)
+                    is not _BASE_IMAGE_SAFE_BOX_METHOD
+                )
+                if (
+                    custom_box_values
+                    or large_integer_box_coordinates
+                    or custom_numeric_inputs
+                    or custom_safe_box
+                ):
+                    # Preserve Python numeric and override protocols here;
+                    # the ordinary built-in path keeps geometry and pixels in Rust.
+                    # Large built-in integers also stay here because Pillow
+                    # subtracts them before converting the span to float.
+                    reduce_box = self._get_safe_box(size, resample, box)
+                    factor = (factor_x, factor_y)
+                    reducer = self.reduce
+                    # Pillow calls the current attribute directly; a
+                    # non-callable override must raise instead of bypassing it.
+                    reduced = reducer(factor, box=reduce_box)
+                    translated_box = (
+                        (box[0] - reduce_box[0]) / factor_x,
+                        (box[1] - reduce_box[1]) / factor_y,
+                        (box[2] - reduce_box[0]) / factor_x,
+                        (box[3] - reduce_box[1]) / factor_y,
+                    )
+                    return reduced._new(
+                        reduced.im.resize(size, resample, translated_box)
+                    )
+                if type(box) in (list, tuple) and len(box) > 4:
+                    # Pillow replaces a long box with four translated values
+                    # after reducing, so the extra entries do not reach resize.
+                    dispatch_box = tuple(box[:4])
+                    long_builtin_box = True
+            else:
+                # Pillow proceeds directly to native resize once neither
+                # integer factor selects a reduction.
+                dispatch_gap = None
+        result = self._rust_image._resize_dispatch(
+            size, filter_code, dispatch_box, dispatch_gap
         )
+        if isinstance(result, dict) and result.get("kind") == "reducing-gap":
+            # These integral-valued floats preserve Python's arbitrary-size
+            # integer callback arguments instead of narrowing them to i64.
+            factor = tuple(int(value) for value in result["factor"])
+            reduce_box = tuple(int(value) for value in result["reduce_box"])
+            reducer = self.reduce
+            # Keep non-callable instance/class overrides on Python's call path.
+            reduced = reducer(factor, box=reduce_box)
+            translated_box = _core._resize_reducing_gap_bounds(
+                tuple(box[index] for index in range(4))
+                if long_builtin_box
+                else box,
+                factor,
+                reduce_box,
+            )
+            # Keep the reducer result's carrier and wrapper construction hooks.
+            return reduced._new(reduced.im.resize(size, resample, translated_box))
+        return self._new(result)
 
     def crop(self, box: Optional[Tuple[float, float, float, float]] = None) -> "Image":
         # Pillow rejects reversed coordinates before loading the source.
@@ -758,6 +887,7 @@ class Image:
     def getbands(self) -> Tuple[str, ...]:
         return self._rust_image.getbands()
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     def copy(self) -> "Image":
         # Pillow materializes the source before copying it.
         self.load()
@@ -1073,24 +1203,26 @@ class Image:
             # when the core reports that later validation error.
             self._sync_observed_info()
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     def reduce(
         self,
         factor: int | tuple[int, int],
         box: tuple[int, int, int, int] | None = None,
     ) -> "Image":
         """Reduce image by integer factor through the Rust core."""
-        # Pillow normalizes factor/box and takes the identity copy before
-        # loading. Its non-identity P path loads immediately before reduction.
+        # Pillow normalizes scalar factors, then delegates exact (1, 1) to
+        # the current public crop before its non-identity reducer load.
         if not isinstance(factor, (list, tuple)):
             factor = (factor, factor)
+        if factor == (1, 1):
+            return self.crop(box)
         if box is None:
             box = (0, 0) + self.size
-        if factor == (1, 1) and box == (0, 0) + self.size:
-            return self.copy()
         # Pillow loads before its core parser converts factor and box items.
         self.load()
         return self._new(self._rust_image.reduce(factor, box))
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     def load(self):
         """Load pixel data and return a mutable Pillow-style pixel view."""
         self._native_info_known_empty = False
@@ -1239,6 +1371,7 @@ class Image:
         self.load()
         return self._rust_image.getpalette_with_input(rawmode)
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     def _realize_dirty_palette(self):
         """Commit Python ImagePalette bytes when Pillow would load the image."""
         # TODO(pillow-rs#3ptb): verify dirty-palette Transform fill and output
@@ -1596,6 +1729,7 @@ class Image:
         if self._verify_encoded_source:
             self._rust_image.verify()
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     @property
     def size(self) -> Tuple[int, int]:
         return self._rust_image.size
@@ -1629,6 +1763,7 @@ class Image:
         self._palette_object = palette
         return palette
 
+    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     @property
     def mode(self) -> str:
         return self._rust_image.mode
@@ -1709,6 +1844,9 @@ class Image:
 
 
 _BASE_IMAGE_CONVERT_METHOD = Image.convert
+_BASE_IMAGE_SAFE_BOX_METHOD = Image._get_safe_box
+_BASE_IMAGE_REDUCE_METHOD = Image.reduce
+_BASE_IMAGE_RESIZE_METHOD = Image.resize
 _BASE_IMAGE_TRANSFORM_METHOD = Image.transform
 
 

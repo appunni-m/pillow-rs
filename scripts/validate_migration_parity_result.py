@@ -565,18 +565,23 @@ def execution_evidence_summary(value: dict[str, Any], label: str) -> None:
         raise ValueError(f"{label}: backend counts are inconsistent")
 
 
-def parity(result: dict[str, Any]) -> None:
-    exact(result, {"schema", "identity", "status", "summary", "comparisons", "infrastructure_errors"}, "parity")
-    schema = result["schema"]
+def _parity_summary_header(
+    schema: str,
+    status: str,
+    identity_value: Any,
+    summary: Any,
+    comparison_count: int,
+    errors: Any,
+) -> None:
     if schema not in {
         "migration-parity/parity-result@1",
         "migration-parity/parity-result@2",
         "migration-parity/parity-result@3",
     }:
         raise ValueError("parity.schema: unsupported schema")
-    if result["status"] not in {"completed", "infrastructure_failed", "cancelled", "invalid"}:
+    if status not in {"completed", "infrastructure_failed", "cancelled", "invalid"}:
         raise ValueError("parity.status: invalid artifact status")
-    identity(result["identity"])
+    identity(identity_value)
     legacy_fields = {"selected", "executed", "passed", "failed", "not_run", "infrastructure_errors"}
     v2_fields = legacy_fields | {"parity_cases", "fault_contracts"}
     v3_fields = legacy_fields | {"parity_cases", "expected_output_cases", "fault_contracts"}
@@ -587,9 +592,9 @@ def parity(result: dict[str, Any]) -> None:
         if schema.endswith("@2")
         else v3_fields
     )
-    exact(result["summary"], expected_summary_fields, "parity.summary")
+    exact(summary, expected_summary_fields, "parity.summary")
     for field in legacy_fields:
-        non_negative_int(result["summary"][field], f"parity.summary.{field}")
+        non_negative_int(summary[field], f"parity.summary.{field}")
     if not schema.endswith("@1"):
         partition_names = (
             ("parity_cases", "fault_contracts")
@@ -597,7 +602,7 @@ def parity(result: dict[str, Any]) -> None:
             else ("parity_cases", "expected_output_cases", "fault_contracts")
         )
         for label in partition_names:
-            counts = result["summary"][label]
+            counts = summary[label]
             exact(counts, {"selected", "executed", "passed", "failed", "not_run"}, f"parity.summary.{label}")
             for field, value in counts.items():
                 non_negative_int(value, f"parity.summary.{label}.{field}")
@@ -606,112 +611,167 @@ def parity(result: dict[str, Any]) -> None:
             if counts["executed"] > counts["selected"]:
                 raise ValueError(f"parity.summary.{label}: executed exceeds selected")
         for field in ("selected", "executed", "passed", "failed", "not_run"):
-            if result["summary"][field] != sum(result["summary"][kind][field] for kind in partition_names):
+            if summary[field] != sum(summary[kind][field] for kind in partition_names):
                 raise ValueError(f"parity.summary.{field}: verification partitions disagree")
-    if result["summary"]["executed"] != len(result["comparisons"]):
+    if summary["executed"] != comparison_count:
         raise ValueError("parity.summary.executed does not equal comparison count")
     if schema.endswith("@1"):
-        if result["status"] == "completed":
-            if result["summary"]["selected"] != result["summary"]["executed"]:
+        if status == "completed":
+            if summary["selected"] != summary["executed"]:
                 raise ValueError("completed parity must execute every selected case")
-            if result["summary"]["passed"] + result["summary"]["failed"] + result["summary"]["not_run"] != result["summary"]["executed"]:
+            if summary["passed"] + summary["failed"] + summary["not_run"] != summary["executed"]:
                 raise ValueError("parity.summary: executed must equal passed plus failed plus not_run")
         else:
-            if result["summary"]["passed"] + result["summary"]["failed"] != result["summary"]["executed"]:
+            if summary["passed"] + summary["failed"] != summary["executed"]:
                 raise ValueError("incomplete parity must classify every executed comparison")
-            if result["summary"]["not_run"] != result["summary"]["selected"] - result["summary"]["executed"]:
+            if summary["not_run"] != summary["selected"] - summary["executed"]:
                 raise ValueError("incomplete parity must classify every unexecuted case as not_run")
     else:
-        if result["summary"]["passed"] + result["summary"]["failed"] + result["summary"]["not_run"] != result["summary"]["selected"]:
+        if summary["passed"] + summary["failed"] + summary["not_run"] != summary["selected"]:
             raise ValueError("parity.summary: selected cases are not partitioned")
-        if result["status"] == "completed" and result["summary"]["selected"] != result["summary"]["executed"]:
+        if status == "completed" and summary["selected"] != summary["executed"]:
             raise ValueError("completed parity must execute every selected case")
-    if result["summary"]["infrastructure_errors"] != len(result["infrastructure_errors"]):
+    if summary["infrastructure_errors"] != len(errors):
         raise ValueError("parity.summary.infrastructure_errors does not equal error count")
-    infrastructure_errors(result["infrastructure_errors"])
-    comparison_ids: list[tuple[str, str]] = []
-    kind_counts = {"parity": 0, "fault_contract": 0}
-    if schema.endswith("@3"):
-        kind_counts["expected_output"] = 0
-    kind_outcomes = {
-        kind: {"pass": 0, "fail": 0, "not_run": 0}
-        for kind in kind_counts
+    infrastructure_errors(errors)
+
+
+def _parity_kind_counts() -> tuple[dict[str, int], dict[str, dict[str, int]]]:
+    kinds = ("legacy", "parity", "fault_contract", "expected_output")
+    return (
+        {kind: 0 for kind in kinds},
+        {kind: {"pass": 0, "fail": 0, "not_run": 0} for kind in kinds},
+    )
+
+
+def _validate_parity_comparison(
+    comparison: Any,
+    index: int,
+    kind_counts: dict[str, int],
+    kind_outcomes: dict[str, dict[str, int]],
+    comparison_ids: set[tuple[str, str]],
+) -> None:
+    prefix = f"parity.comparisons[{index}]"
+    base_fields = {
+        "case_id",
+        "target_profile",
+        "requirements",
+        "source",
+        "target",
+        "outcome",
+        "diffs",
     }
-    for index, comparison in enumerate(result["comparisons"]):
-        prefix = f"parity.comparisons[{index}]"
-        base_fields = {"case_id", "target_profile", "requirements", "source", "target", "outcome", "diffs"}
-        if schema.endswith("@2") or schema.endswith("@3"):
-            if not isinstance(comparison, dict) or comparison.get("verification") not in kind_counts:
-                raise ValueError(f"{prefix}.verification: invalid verification kind")
-            kind = comparison["verification"]
-            exact(
-                comparison,
-                base_fields
-                | {"verification", "fault_contract_id"}
-                if kind == "fault_contract"
-                else base_fields | {"verification", "target_expectation"}
-                if kind == "expected_output"
-                else base_fields | {"verification"},
-                prefix,
-            )
-            kind_counts[kind] += 1
-            if kind == "fault_contract":
-                string(comparison["fault_contract_id"], f"{prefix}.fault_contract_id")
-                if comparison["fault_contract_id"] not in FAULT_CONTRACTS:
-                    raise ValueError(f"{prefix}.fault_contract_id: unknown contract")
-            elif kind == "expected_output":
-                target_expectation(
-                    comparison["target_expectation"],
-                    f"{prefix}.target_expectation",
-                )
-        else:
-            exact(comparison, base_fields, prefix)
-        string(comparison["case_id"], f"{prefix}.case_id")
-        string(comparison["target_profile"], f"{prefix}.target_profile")
-        requirements = id_array(comparison["requirements"], f"{prefix}.requirements")
-        if comparison["outcome"] not in {"pass", "fail", "not_run"}:
-            raise ValueError(f"{prefix}.outcome: invalid outcome")
-        if schema.endswith("@2") or schema.endswith("@3"):
-            kind_outcomes[comparison["verification"]][comparison["outcome"]] += 1
-        workflow(comparison["source"], f"{prefix}.source")
-        workflow(comparison["target"], f"{prefix}.target")
-        if schema.endswith("@2") and comparison["verification"] == "fault_contract":
-            if comparison["source"]["status"] != "not_applicable":
-                raise ValueError(f"{prefix}: target-only fault contract must mark oracle N/A")
-            if "fault_contract_observation" not in comparison["target"]:
-                raise ValueError(f"{prefix}: missing runner-owned fault observation")
-        elif schema.endswith("@3") and comparison["verification"] in {"fault_contract", "expected_output"}:
-            if comparison["source"]["status"] != "not_applicable":
-                raise ValueError(f"{prefix}: target-only verification must mark oracle N/A")
-            if comparison["verification"] == "fault_contract" and "fault_contract_observation" not in comparison["target"]:
-                raise ValueError(f"{prefix}: missing runner-owned fault observation")
-        elif comparison["source"]["status"] == "not_applicable":
-            raise ValueError(f"{prefix}: parity case cannot mark its oracle N/A")
-        if comparison["source"]["case_id"] != comparison["case_id"] or comparison["target"]["case_id"] != comparison["case_id"]:
-            raise ValueError(f"{prefix}: workflow case IDs do not match comparison")
-        comparison_ids.append((comparison["case_id"], comparison["target_profile"]))
-        if not isinstance(comparison["diffs"], list):
-            raise ValueError(f"{prefix}.diffs: expected array")
-        for diff_index, diff in enumerate(comparison["diffs"]):
-            exact(diff, {"step_id", "path", "kind", "source", "target", "message"}, f"{prefix}.diffs[{diff_index}]")
-            for field in ("step_id", "path", "kind", "message"):
-                string(diff[field], f"{prefix}.diffs[{diff_index}].{field}")
-    unique(comparison_ids, "parity.comparisons")
-    if not schema.endswith("@1"):
+    if not isinstance(comparison, dict):
+        raise ValueError(f"{prefix}: expected object")
+    kind = comparison.get("verification", "legacy")
+    if kind == "legacy":
+        exact(comparison, base_fields, prefix)
+    elif kind == "parity":
+        exact(comparison, base_fields | {"verification"}, prefix)
+    elif kind == "fault_contract":
+        exact(comparison, base_fields | {"verification", "fault_contract_id"}, prefix)
+        string(comparison["fault_contract_id"], f"{prefix}.fault_contract_id")
+        if comparison["fault_contract_id"] not in FAULT_CONTRACTS:
+            raise ValueError(f"{prefix}.fault_contract_id: unknown contract")
+    elif kind == "expected_output":
+        exact(comparison, base_fields | {"verification", "target_expectation"}, prefix)
+        target_expectation(comparison["target_expectation"], f"{prefix}.target_expectation")
+    else:
+        raise ValueError(f"{prefix}.verification: invalid verification kind")
+    kind_counts[kind] += 1
+    string(comparison["case_id"], f"{prefix}.case_id")
+    string(comparison["target_profile"], f"{prefix}.target_profile")
+    id_array(comparison["requirements"], f"{prefix}.requirements")
+    if comparison["outcome"] not in {"pass", "fail", "not_run"}:
+        raise ValueError(f"{prefix}.outcome: invalid outcome")
+    kind_outcomes[kind][comparison["outcome"]] += 1
+    workflow(comparison["source"], f"{prefix}.source")
+    workflow(comparison["target"], f"{prefix}.target")
+    if kind in {"fault_contract", "expected_output"}:
+        if comparison["source"]["status"] != "not_applicable":
+            raise ValueError(f"{prefix}: target-only verification must mark oracle N/A")
+        if kind == "fault_contract" and "fault_contract_observation" not in comparison["target"]:
+            raise ValueError(f"{prefix}: missing runner-owned fault observation")
+    elif comparison["source"]["status"] == "not_applicable":
+        raise ValueError(f"{prefix}: parity case cannot mark its oracle N/A")
+    if (
+        comparison["source"]["case_id"] != comparison["case_id"]
+        or comparison["target"]["case_id"] != comparison["case_id"]
+    ):
+        raise ValueError(f"{prefix}: workflow case IDs do not match comparison")
+    pair = (comparison["case_id"], comparison["target_profile"])
+    if pair in comparison_ids:
+        raise ValueError(f"parity.comparisons: duplicate ID/profile pair {pair!r}")
+    comparison_ids.add(pair)
+    if not isinstance(comparison["diffs"], list):
+        raise ValueError(f"{prefix}.diffs: expected array")
+    for diff_index, diff in enumerate(comparison["diffs"]):
+        exact(diff, {"step_id", "path", "kind", "source", "target", "message"}, f"{prefix}.diffs[{diff_index}]")
+        for field in ("step_id", "path", "kind", "message"):
+            string(diff[field], f"{prefix}.diffs[{diff_index}].{field}")
+
+
+def _validate_parity_rows_for_schema(
+    schema: str,
+    kind_counts: dict[str, int],
+    kind_outcomes: dict[str, dict[str, int]],
+) -> list[tuple[str, str]]:
+    if schema.endswith("@1"):
+        if any(kind_counts[kind] for kind in ("parity", "fault_contract", "expected_output")):
+            raise ValueError("parity-result@1 comparisons must omit verification")
+        return []
+    if kind_counts["legacy"]:
+        raise ValueError("versioned parity comparisons must declare verification")
+    if schema.endswith("@2") and kind_counts["expected_output"]:
+        raise ValueError("parity-result@2 does not support expected-output comparisons")
+    if schema.endswith("@2") or schema.endswith("@3"):
         partitions = [("parity_cases", "parity")]
         if schema.endswith("@3"):
             partitions.append(("expected_output_cases", "expected_output"))
         partitions.append(("fault_contracts", "fault_contract"))
-        for label, kind in partitions:
-            counts = result["summary"][label]
-            if counts["executed"] != kind_counts[kind]:
-                raise ValueError(f"parity summary {label}.executed does not match rows")
-            for outcome in ("pass", "fail"):
-                if counts["passed" if outcome == "pass" else "failed"] != kind_outcomes[kind][outcome]:
-                    raise ValueError(f"parity summary {label} {outcome} count does not match rows")
-            expected_not_run = kind_outcomes[kind]["not_run"] + counts["selected"] - counts["executed"]
-            if counts["not_run"] != expected_not_run:
-                raise ValueError(f"parity summary {label}.not_run does not match rows and selection")
+        return partitions
+    raise ValueError("parity.schema: unsupported artifact version")
+
+
+def _validate_parity_partitions(
+    schema: str,
+    summary: dict[str, Any],
+    kind_counts: dict[str, int],
+    kind_outcomes: dict[str, dict[str, int]],
+) -> None:
+    partitions = _validate_parity_rows_for_schema(schema, kind_counts, kind_outcomes)
+    for label, kind in partitions:
+        counts = summary[label]
+        if counts["executed"] != kind_counts[kind]:
+            raise ValueError(f"parity summary {label}.executed does not match rows")
+        for outcome in ("pass", "fail"):
+            if counts["passed" if outcome == "pass" else "failed"] != kind_outcomes[kind][outcome]:
+                raise ValueError(f"parity summary {label} {outcome} count does not match rows")
+        expected_not_run = kind_outcomes[kind]["not_run"] + counts["selected"] - counts["executed"]
+        if counts["not_run"] != expected_not_run:
+            raise ValueError(f"parity summary {label}.not_run does not match rows and selection")
+
+
+def parity(result: dict[str, Any]) -> None:
+    exact(result, {"schema", "identity", "status", "summary", "comparisons", "infrastructure_errors"}, "parity")
+    schema = result["schema"]
+    _parity_summary_header(
+        schema,
+        result["status"],
+        result["identity"],
+        result["summary"],
+        len(result["comparisons"]),
+        result["infrastructure_errors"],
+    )
+    kind_counts, kind_outcomes = _parity_kind_counts()
+    comparison_ids: set[tuple[str, str]] = set()
+    for index, comparison in enumerate(result["comparisons"]):
+        _validate_parity_comparison(
+            comparison, index, kind_counts, kind_outcomes, comparison_ids
+        )
+    _validate_parity_partitions(
+        schema, result["summary"], kind_counts, kind_outcomes
+    )
 
 
 def coverage_backend_executions(executions: Any, plans: list[dict[str, Any]], summary: dict[str, int]) -> None:
@@ -1699,11 +1759,155 @@ def status_report(result: dict[str, Any]) -> None:
             raise ValueError(f"status.stale_or_incompatible_evidence[{index}].identity_diff: expected string array")
 
 
+class _JsonStreamReader:
+    """Incrementally decode top-level JSON values from a text stream."""
+
+    def __init__(self, stream: Any) -> None:
+        self.stream = stream
+        self.buffer = ""
+        self.position = 0
+        self.eof = False
+        self.decoder = json.JSONDecoder()
+
+    def _fill(self) -> bool:
+        if self.position:
+            self.buffer = self.buffer[self.position :]
+            self.position = 0
+        chunk = self.stream.read(1 << 20)
+        if not chunk:
+            self.eof = True
+            return False
+        self.buffer += chunk
+        return True
+
+    def _skip_whitespace(self) -> None:
+        while True:
+            while self.position < len(self.buffer) and self.buffer[
+                self.position
+            ].isspace():
+                self.position += 1
+            if self.position < len(self.buffer) or not self._fill():
+                return
+
+    def peek(self) -> str | None:
+        self._skip_whitespace()
+        if self.position >= len(self.buffer):
+            return None
+        return self.buffer[self.position]
+
+    def consume(self, expected: str) -> None:
+        actual = self.peek()
+        if actual != expected:
+            raise ValueError(f"expected JSON token {expected!r}, found {actual!r}")
+        self.position += 1
+
+    def value(self) -> Any:
+        self._skip_whitespace()
+        while True:
+            try:
+                value, end = self.decoder.raw_decode(self.buffer, self.position)
+            except json.JSONDecodeError as exc:
+                if not self._fill():
+                    raise ValueError(f"invalid or incomplete JSON: {exc}") from exc
+            else:
+                self.position = end
+                return value
+
+    def finish(self) -> None:
+        if self.peek() is not None:
+            raise ValueError("trailing content after parity JSON object")
+
+
+def parity_stream(path: Path) -> None:
+    """Validate a parity result while retaining at most one comparison row."""
+
+    opener = gzip.open if path.name.endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8") as stream:
+        reader = _JsonStreamReader(stream)
+        reader.consume("{")
+        fields: dict[str, Any] = {}
+        keys: set[str] = set()
+        comparison_count = 0
+        kind_counts, kind_outcomes = _parity_kind_counts()
+        comparison_ids: set[tuple[str, str]] = set()
+        comparisons_seen = False
+        first_key = True
+        while True:
+            token = reader.peek()
+            if token == "}":
+                reader.consume("}")
+                break
+            if not first_key:
+                reader.consume(",")
+            key = reader.value()
+            if not isinstance(key, str):
+                raise ValueError("parity: expected string object key")
+            if key in keys:
+                raise ValueError(f"parity: duplicate object key {key!r}")
+            keys.add(key)
+            reader.consume(":")
+            if key == "comparisons":
+                comparisons_seen = True
+                reader.consume("[")
+                first_comparison = True
+                while True:
+                    token = reader.peek()
+                    if token == "]":
+                        reader.consume("]")
+                        break
+                    if not first_comparison:
+                        reader.consume(",")
+                    comparison = reader.value()
+                    _validate_parity_comparison(
+                        comparison,
+                        comparison_count,
+                        kind_counts,
+                        kind_outcomes,
+                        comparison_ids,
+                    )
+                    comparison_count += 1
+                    first_comparison = False
+            else:
+                fields[key] = reader.value()
+            first_key = False
+        reader.finish()
+    expected_keys = {
+        "schema",
+        "identity",
+        "status",
+        "summary",
+        "comparisons",
+        "infrastructure_errors",
+    }
+    if keys != expected_keys or not comparisons_seen:
+        missing = sorted(expected_keys - keys)
+        unexpected = sorted(keys - expected_keys)
+        raise ValueError(
+            f"parity: invalid top-level keys; missing={missing}, unexpected={unexpected}"
+        )
+    schema = fields["schema"]
+    _parity_summary_header(
+        schema,
+        fields["status"],
+        fields["identity"],
+        fields["summary"],
+        comparison_count,
+        fields["infrastructure_errors"],
+    )
+    _validate_parity_partitions(
+        schema, fields["summary"], kind_counts, kind_outcomes
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("lane", choices=("parity", "coverage", "all_backends", "benchmark", "status"))
     parser.add_argument("result", type=Path)
     args = parser.parse_args()
+    if args.lane == "parity":
+        parity_stream(args.result)
+        print("parity result schema valid")
+        return 0
     if args.result.name.endswith(".gz"):
         with gzip.open(args.result, "rt", encoding="utf-8") as handle:
             result = json.load(handle)

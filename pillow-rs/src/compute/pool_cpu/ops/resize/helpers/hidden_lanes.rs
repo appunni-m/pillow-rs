@@ -11,6 +11,7 @@ use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, Mode, buffer::HiddenPixelLanes};
 
 /// Applies Pillow's copy, crop, or resample rule to compact-carrier lanes.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn finish(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -64,6 +65,7 @@ pub(crate) fn finish(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn remap_lanes(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -103,6 +105,7 @@ fn remap_lanes(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resampled_lanes(
     output: &DynamicImage,
     mode: Mode,
@@ -123,6 +126,7 @@ fn resampled_lanes(
     HiddenPixelLanes::constant(lane_count, pixel_count, [0; 2]).ok_or_else(invalid_lane_output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn luma_alpha_resampled_lanes(
     output: &DynamicImage,
     pixel_count: usize,
@@ -154,10 +158,12 @@ fn luma_alpha_resampled_lanes(
     HiddenPixelLanes::per_pixel(lane_count, pixel_count, values).ok_or_else(invalid_lane_output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 const fn is_straight_alpha(mode: Mode) -> bool {
     matches!(mode, Mode::ImageLumaA8 | Mode::ImageRgba8)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn invalid_lane_output() -> PilError {
     PilError::InternalError("Resize physical lane output was invalid".into())
 }

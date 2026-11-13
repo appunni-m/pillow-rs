@@ -5,6 +5,7 @@ use crate::pipeline::ResampleFilter;
 use crate::raster::RgbImage;
 
 /// Resizes RGB bytes while skipping source rows proven to contain only zeros.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_boxed_with_sparse_rows(
     input: &RgbImage,
     width: u32,
@@ -26,6 +27,7 @@ pub(crate) fn execute_boxed_with_sparse_rows(
         .ok_or_else(|| PilError::ValueError("resize_rgb: failed to create output buffer".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbImage,
     width: u32,

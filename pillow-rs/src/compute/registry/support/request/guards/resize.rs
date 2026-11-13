@@ -8,6 +8,7 @@ use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
 };
 use crate::ops::pil_resize::{precompute_coeffs, precompute_coeffs_boxed_for_filter};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize_filtered_fma_guard(input: StrategyInputs) -> GuardAssessment {
     match input.request {
         RequestFacts::Resize {
@@ -50,6 +51,7 @@ pub(crate) fn resize_filtered_fma_guard(input: StrategyInputs) -> GuardAssessmen
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height) = match input.request {
         RequestFacts::Resize {
@@ -89,6 +91,7 @@ pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessme
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn resize_i32_neon_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height) = match input.request {
         RequestFacts::Resize {

@@ -4,6 +4,7 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::RgbaImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &[i32],
     source_size: (u32, u32),
@@ -18,6 +19,7 @@ pub(crate) fn execute(
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_boxed(
     input: &RgbaImage,
     destination_size: (u32, u32),
@@ -80,6 +82,7 @@ pub(crate) fn execute_boxed(
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn ordinary_samples(
     source: &[i32],
     source_size: (u32, u32),
@@ -102,6 +105,7 @@ fn ordinary_samples(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn encode(samples: &[i32], byte_count: usize) -> Vec<u8> {
     let mut bytes = vec![0_u8; byte_count];
     for (sample, output) in samples.iter().zip(bytes.chunks_exact_mut(4)) {

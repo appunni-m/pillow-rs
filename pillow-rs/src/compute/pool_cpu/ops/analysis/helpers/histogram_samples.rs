@@ -15,6 +15,7 @@ use crate::raster::{ImageBuffer, Pixel};
 /// Counts byte channels directly, without constructing another raster.
 // Exact-mode owners opt into the repeated hidden lane only for two-band modes
 // whose masked Histogram result uses it. Plain LA keeps its stored alpha band.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn byte_bands<P, const MASKED_SECOND_FROM_FIRST_BAND: bool>(
     image: &ImageBuffer<P, Vec<u8>>,
     mask_raw: Option<&[u8]>,
@@ -65,6 +66,7 @@ where
 /// `(sample + 128) / 257` is the same rounded full-range mapping as
 /// `FromPrimitive<u16> for u8`, used by the archived byte projection. The
 /// source buffer remains u16; only the destination bin index is calculated.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn u16_bands<P>(image: &ImageBuffer<P, Vec<u16>>, mask_raw: Option<&[u8]>) -> Vec<u32>
 where
     P: Pixel<Subpixel = u16>,
@@ -101,6 +103,7 @@ where
 /// `FromPrimitive<f32> for u8`, which the archived byte projection used. Each
 /// bin is computed from the f32 sample without materializing that projected
 /// byte or another sample buffer.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn f32_bands<P>(image: &ImageBuffer<P, Vec<f32>>, mask_raw: Option<&[u8]>) -> Vec<u32>
 where
     P: Pixel<Subpixel = f32>,
@@ -113,6 +116,7 @@ where
 ///
 /// Preserves RGB32F's established four-band Histogram result without building
 /// the projected RGBA8 image; the final band is opaque for included pixels.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn f32_rgb_bands_with_opaque_alpha(
     image: &ImageBuffer<crate::raster::Rgb<f32>, Vec<f32>>,
     mask_raw: Option<&[u8]>,
@@ -120,6 +124,7 @@ pub(crate) fn f32_rgb_bands_with_opaque_alpha(
     f32_bands_impl::<crate::raster::Rgb<f32>, true>(image, mask_raw)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn f32_bands_impl<P, const OPAQUE_ALPHA: bool>(
     image: &ImageBuffer<P, Vec<f32>>,
     mask_raw: Option<&[u8]>,
@@ -161,6 +166,7 @@ where
     histogram
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn f32_byte_bin(sample: f32) -> usize {
     let normalized = if sample < 1.0 { sample.max(0.0) } else { 1.0 };
@@ -175,6 +181,7 @@ fn f32_byte_bin(sample: f32) -> usize {
 /// continue the previous row's high/low-byte alternation.
 // TODO(pillow-rs#3ptb): freeze exact I;16 endian, odd-width row-prefix, and
 // masked byte-selection parity cases.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn l16_byte_prefix_native(
     image: &ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     mask_raw: Option<&[u8]>,
@@ -183,6 +190,7 @@ pub(crate) fn l16_byte_prefix_native(
 }
 
 /// Preserves Pillow's little-endian I;16L byte-prefix histogram.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn l16_byte_prefix_little_endian(
     image: &ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     mask_raw: Option<&[u8]>,
@@ -191,6 +199,7 @@ pub(crate) fn l16_byte_prefix_little_endian(
 }
 
 /// Preserves Pillow's big-endian I;16B byte-prefix histogram.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn l16_byte_prefix_big_endian(
     image: &ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     mask_raw: Option<&[u8]>,
@@ -199,6 +208,7 @@ pub(crate) fn l16_byte_prefix_big_endian(
 }
 
 /// Bins the archived byte prefix while keeping endian choice compile-time.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn l16_byte_prefix<const BIG_ENDIAN: bool>(
     image: &ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     mask_raw: Option<&[u8]>,
@@ -231,6 +241,7 @@ fn l16_byte_prefix<const BIG_ENDIAN: bool>(
     histogram
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn l16_prefix_byte<const BIG_ENDIAN: bool>(samples: &[u16], x: usize) -> u8 {
     let lane = x & 1;
@@ -243,6 +254,7 @@ fn l16_prefix_byte<const BIG_ENDIAN: bool>(samples: &[u16], x: usize) -> u8 {
 }
 
 /// Matches Pillow's extrema-scaled histogram for unmasked signed integer data.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn i32_scalar(
     image: &crate::raster::RgbaImage,
     mask_raw: Option<&[u8]>,
@@ -270,6 +282,7 @@ pub(crate) fn i32_scalar(
 // edge cases with two's-complement wrapping before the float32 scaling.
 // TODO(pillow-rs#3ptb): freeze the full-range INT32 extrema behavior against
 // the pinned Pillow build; the C source does not define the overflow result.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn i32_scalar_with_extrema(
     image: &crate::raster::RgbaImage,
     mask_raw: Option<&[u8]>,
@@ -295,6 +308,7 @@ pub(crate) fn i32_scalar_with_extrema(
 }
 
 /// Matches Pillow's extrema-scaled histogram for unmasked float data.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn f32_scalar(
     image: &crate::raster::RgbaImage,
     mask_raw: Option<&[u8]>,
@@ -326,6 +340,7 @@ pub(crate) fn f32_scalar(
 // defining the NaN and infinity cases that C leaves undefined.
 // TODO(pillow-rs#3ptb): freeze explicit-extrema NaN/infinity and finite range
 // boundaries against the pinned Pillow build after source migration.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn f32_scalar_with_extrema(
     image: &crate::raster::RgbaImage,
     mask_raw: Option<&[u8]>,
@@ -354,11 +369,13 @@ pub(crate) fn f32_scalar_with_extrema(
     Ok(histogram)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn read_i32_sample(sample: &[u8]) -> i32 {
     i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]])
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn read_f32_sample(sample: &[u8]) -> f32 {
     f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]])

@@ -77,6 +77,12 @@ indexed document stays below the 90 MiB input limit. Resize additionally runs
 MKS2013 and MKS2021 over every declared size/pattern input in all 20 Pillow
 modes.
 
+Reduce also has a dedicated Pillow `L` workload at 4,097 × 4,096 with factor
+4,097 × 4,096. Its one-valued input crosses the fixed-point reciprocal's 2^24
+area boundary and keeps the observed zero output in both parity and timing
+evidence. It is separate from the general size matrix so this boundary does not
+multiply large inputs across unrelated operations and modes.
+
 The matrix spans the 25 Rust `Mode` identities: 20 Pillow raster modes and five
 internal `NO_PILLOW_SUPPORT` modes. Each operation contributes only the
 mode/input combinations declared by its support contract; Rust-only modes use
@@ -93,25 +99,26 @@ and each case has a matching benchmark workflow. The five CoreOnly PutData
 writers also have 575 recorded-output cases across the declared size/pattern
 matrix. Those inputs exercise native u16 clamping, f32 narrowing, RGB/RGBA
 tuple arities, and multiband scale/offset handling without a Pillow oracle. The
-current indexed snapshot contains 143,865 size-matrix parity cases and 168,922
-parity cases total across 3,818 indexed parity documents. It has 95,561 matrix
-benchmark workflows: 84,271 with Pillow comparisons and 11,290 target-only
-workflows. Each applicable matrix benchmark declares CPU, SIMD, and GPU target
-profiles. The encoded `Image.open` mode matrix adds 1,035 parity inputs across
-nine modes and 38 size/pattern points; it stays outside backend benchmarks
-because image-slash-star owns this codec path rather than a compute pool.
-Resize's MKS2013/MKS2021
-matrix contributes 8,574 parity cases and matching benchmark workflows across
-all 20 Pillow modes. The indexed benchmark corpus contains 96,427 workloads
-total. The same matrix inputs feed CPU, SIMD, and GPU target profiles;
-target-only cases use target profiles without a Pillow comparison.
+current indexed snapshot contains 152,571 size-matrix parity cases and
+177,882 parity cases total across 5,110 indexed parity documents. It has
+105,083 matrix benchmark workflows: 89,886 with Pillow comparisons and 15,197
+target-only workflows. Each applicable matrix benchmark declares CPU, SIMD,
+and GPU target profiles. The encoded `Image.open` mode matrix adds 1,035 parity
+inputs across nine modes and 38 size/pattern points; it stays outside backend
+benchmarks because image-slash-star owns this codec path rather than a compute
+pool. Resize's MKS2013/MKS2021 matrix contributes 8,574 parity cases and
+matching benchmark workflows across all 20 Pillow modes. The indexed benchmark
+corpus contains 105,786 workloads total. The same matrix inputs feed CPU, SIMD,
+and GPU target profiles; target-only cases use target profiles without a Pillow
+comparison.
 Requirement-specific benchmark workloads have distinct IDs, while specialized
 material workflows are emitted once per operation. Architecture selectors and
 physical GPU adapters replay these same workload inputs and are identified in
-their run receipts. The 95,561 matrix-workload total includes 95,209
+their run receipts. The 105,083 matrix-workload total includes 104,731
 mode/size workflows and 352 32×24 pipeline-operation matrix workflows.
-The target-only matrix contains 11,290 cases across Image.frombytes, ImageChops,
-Crop, PutData, Resize, Brightness, and Sharpness. The 72 extra parity JSON
+The target-only matrix contains 15,197 cases across Image.frombytes, ImageChops,
+Crop, GetData, GetFlattenedData, GetBBox, PutData, Reduce, Resize, Brightness,
+and Sharpness. The 72 extra parity JSON
 documents and five benchmark trial documents on disk are unindexed and excluded
 from these counts; their mapping is tracked in the CPU refactor plan.
 

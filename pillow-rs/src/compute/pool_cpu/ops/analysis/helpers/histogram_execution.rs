@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use super::super::ops::{ENTROPY_SUPPORT, HISTOGRAM_SUPPORT};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn selected_histogram_architecture(
     selection: StrategySelection,
     mode: crate::raster::Mode,
@@ -25,6 +26,7 @@ pub(crate) fn selected_histogram_architecture(
 }
 
 /// Builds Histogram and Entropy mode support for one exact-mode owner.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn mode_support(
     mode: Mode,
     result_bands: usize,
@@ -81,6 +83,7 @@ pub(crate) fn mode_support(
 
 macro_rules! declare_histogram_support {
     ($mode:ident, $bands:literal, pillow $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn histogram_entropy_support() -> (
             $crate::compute::registry::support::ModeSupport,
             $crate::compute::registry::support::ModeSupport,
@@ -93,6 +96,7 @@ macro_rules! declare_histogram_support {
         }
     };
     ($mode:ident, $bands:literal, core_only $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn histogram_entropy_support() -> (
             $crate::compute::registry::support::ModeSupport,
             $crate::compute::registry::support::ModeSupport,
@@ -111,6 +115,7 @@ pub(crate) use declare_histogram_support;
 /// Generates the exact-mode architecture owner for one Histogram implementation.
 macro_rules! declare_histogram_owner {
     ($mode:ident, $image_ty:ty, $implementation:path $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn execute_histogram(
             image: &$image_ty,
             selection: crate::compute::registry::support::StrategySelection,
@@ -140,6 +145,7 @@ pub(crate) struct PreparedAnalysisMask {
 
 impl PreparedAnalysisMask {
     /// Borrows the accepted `1` or `L` byte plane for the duration of a scan.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn raw(&self) -> Option<&[u8]> {
         match self.image.as_deref() {
             Some(DynamicImage::One(mask) | DynamicImage::ImageLuma8(mask)) => {
@@ -152,6 +158,7 @@ impl PreparedAnalysisMask {
 }
 
 /// Validates a materialized Histogram mask with the established error order.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_histogram_mask(
     source: &DynamicImage,
     mask: Option<Arc<DynamicImage>>,
@@ -160,6 +167,7 @@ pub(crate) fn prepare_histogram_mask(
 }
 
 /// Validates a materialized Entropy mask with its declared input contract.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_entropy_mask(
     source: &DynamicImage,
     mask: Option<Arc<DynamicImage>>,
@@ -167,6 +175,7 @@ pub(crate) fn prepare_entropy_mask(
     prepare_materialized_analysis_mask(source, mask, &ENTROPY_SUPPORT)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_materialized_analysis_mask(
     source: &DynamicImage,
     image: Option<Arc<DynamicImage>>,
@@ -185,6 +194,7 @@ fn prepare_materialized_analysis_mask(
     Ok(PreparedAnalysisMask { image: Some(image) })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_mask(
     support_descriptor: &'static OperationSupport,
     source_mode: Mode,
@@ -198,6 +208,8 @@ fn validate_mask(
         ModeSupport::Rejected { .. } => support_descriptor.inputs,
     };
     let Some(InputContract::HistogramMask {
+        source_modes,
+        source_rejection,
         modes,
         mode_rejection,
         size_rejection,
@@ -215,7 +227,11 @@ fn validate_mask(
     if !modes.contains(&mask_mode) {
         return Err(PilError::ValueError((*mode_rejection).into()));
     }
-    support.validate_mode()
+    support.validate_mode()?;
+    if !source_modes.contains(&source_mode) {
+        return Err(PilError::ValueError((*source_rejection).into()));
+    }
+    Ok(())
 }
 
 /// Holds exact-mode admission and architecture selection until the Histogram scan.
@@ -229,11 +245,13 @@ pub(crate) struct PreparedHistogram<'a> {
 
 impl PreparedHistogram<'_> {
     /// Returns the concrete Default implementation and any architecture fallback.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) const fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
     /// Executes the selected exact-mode Histogram route.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<Vec<u32>, PilError> {
         if self.image.mode() != self.mode {
             return Err(PilError::InternalError(
@@ -264,6 +282,7 @@ impl PreparedHistogram<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_histogram_with_extrema(
     image: &DynamicImage,
     selection: StrategySelection,
@@ -287,6 +306,7 @@ fn execute_histogram_with_extrema(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_histogram_mode(
     image: &DynamicImage,
     selection: StrategySelection,
@@ -321,6 +341,7 @@ fn execute_histogram_mode(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_pillow_histogram(
     image: &DynamicImage,
     selection: StrategySelection,
@@ -393,6 +414,7 @@ fn execute_pillow_histogram(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_coreonly_histogram(
     image: &DynamicImage,
     selection: StrategySelection,
@@ -421,6 +443,7 @@ fn execute_coreonly_histogram(
 }
 
 /// Selects Histogram from the injected CPU architecture context before scanning.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_histogram<'a>(
     image: &'a DynamicImage,
     mask_raw: Option<&'a [u8]>,
@@ -430,6 +453,7 @@ pub(crate) fn prepare_histogram<'a>(
 }
 
 /// Selects Histogram with its optional native I/F range before scanning.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_histogram_with_extrema<'a>(
     image: &'a DynamicImage,
     mask_raw: Option<&'a [u8]>,
@@ -448,6 +472,7 @@ pub(crate) fn prepare_histogram_with_extrema<'a>(
 }
 
 /// Selects Entropy itself, then prepares its Histogram child under the same context.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_entropy_histogram<'a>(
     image: &'a DynamicImage,
     mask_raw: Option<&'a [u8]>,
@@ -457,6 +482,7 @@ pub(crate) fn prepare_entropy_histogram<'a>(
 }
 
 /// Selects Entropy and its Histogram child with an optional native I/F range.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_entropy_histogram_with_extrema<'a>(
     image: &'a DynamicImage,
     mask_raw: Option<&'a [u8]>,

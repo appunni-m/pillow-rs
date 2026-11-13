@@ -5,6 +5,7 @@ use super::plan::{ResizeHorizontalPlan, resize_coeff_slice};
 use crate::ops::pil_resize::FilterCoeffs;
 use wide::{i32x8, i64x8};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 pub(super) fn resize_fixed_point_to_u8(sum: f64) -> u8 {
     let value = (sum as i64 + (1_i64 << 21)) >> 22;
@@ -16,17 +17,20 @@ pub(super) fn resize_fixed_point_to_u8(sum: f64) -> u8 {
 /// `FilterCoeffs` stores weights at `2^22` precision. Samples and weights are
 /// therefore accumulated as integers in the native SIMD path; this helper
 /// preserves the scalar rounding without a floating-point conversion.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn resize_fixed_point_i64_to_u8(sum: i64) -> u8 {
     let value = (sum + (1_i64 << 21)) >> 22;
     value.clamp(0, 255) as u8
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 pub(super) fn resize_premultiply_u8(value: u8, alpha: u8) -> u8 {
     ((u16::from(value) * u16::from(alpha) + 127) / 255) as u8
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn resize_premultiply_alpha_row<const CHANNELS: usize>(
     source: &[u8],
     output: &mut [u8],
@@ -48,11 +52,13 @@ pub(super) fn resize_premultiply_alpha_row<const CHANNELS: usize>(
     Some(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 pub(super) fn resize_unpremultiply_u8(value: u8, alpha: u8) -> u8 {
     crate::ops::pil_resize::unpremultiply_channel(value, alpha)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 pub(super) fn resize_horizontal_scalar<const CHANNELS: usize>(
     source_row: &[u8],
@@ -72,6 +78,7 @@ pub(super) fn resize_horizontal_scalar<const CHANNELS: usize>(
     Some(resize_fixed_point_to_u8(sum))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn resize_horizontal_vector_row<const CHANNELS: usize>(
     source_row: &[u8],
     coeffs: &FilterCoeffs,
@@ -147,6 +154,7 @@ pub(super) fn resize_horizontal_vector_row<const CHANNELS: usize>(
 /// each source pixel once into a reusable row buffer, then let the convolution
 /// taps consume those native interleaved samples without repeating the alpha
 /// multiply for every destination pixel and filter tap.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn resize_horizontal_convolution_row<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -180,6 +188,7 @@ pub(super) fn resize_horizontal_convolution_row<
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn resize_vertical_vector_row<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool>(
     intermediate: &[u8],
     output_width: usize,

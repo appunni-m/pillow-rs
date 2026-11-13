@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbaImage};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn make_output(width: u32, height: u32, bytes: Vec<u8>) -> Result<DynamicImage, PilError> {
     let image = crate::raster::RgbaImage::from_raw(width, height, bytes).ok_or_else(|| {
         PilError::InternalError("failed to construct ImageRgba8 Reduce output".into())
@@ -10,6 +11,7 @@ fn make_output(width: u32, height: u32, bytes: Vec<u8>) -> Result<DynamicImage, 
     Ok(DynamicImage::ImageRgba8(image))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbaImage,
     x_factor: u32,

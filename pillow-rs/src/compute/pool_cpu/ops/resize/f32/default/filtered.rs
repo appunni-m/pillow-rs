@@ -20,6 +20,7 @@ const F_RESIZE_VECTOR_WIDTH: usize = 4;
 const F_RESIZE_VECTOR_WIDTH: usize = 16;
 // TODO(pillow-rs#3ptb): verify the F-mode product block width on x86_64 and wasm.
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute<F: F64MulAdd>(
     source: &[f32],
     source_size: (u32, u32),
@@ -89,6 +90,7 @@ pub(crate) fn execute<F: F64MulAdd>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_vertical_first<F: F64MulAdd>(
     source: &[f32],
     source_size: (u32, u32),
@@ -136,6 +138,7 @@ fn execute_vertical_first<F: F64MulAdd>(
     encode(width, height, &output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     output: &mut [f32],
@@ -199,6 +202,7 @@ fn horizontal_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source_row: &[f32],
     first_source_x: i64,
@@ -226,6 +230,7 @@ fn horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     accumulator as f32
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn horizontal_eight_tap<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source_row: &[f32],
@@ -268,6 +273,7 @@ fn horizontal_eight_tap<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     Some(accumulator as f32)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn contiguous_eight_tap_coefficients(
     coefficients: &FilterCoeffsF64,
 ) -> Option<(usize, Vec<(usize, [f64; 8])>)> {
@@ -288,6 +294,7 @@ fn contiguous_eight_tap_coefficients(
     Some((first, fixed))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     output: &mut [f32],
@@ -316,6 +323,7 @@ fn vertical_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_output_packed<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     width: u32,
@@ -344,6 +352,7 @@ fn vertical_output_packed<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn accumulate_row<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     source_row_stride: usize,
@@ -363,6 +372,7 @@ fn accumulate_row<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn mul_add<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     fma: &F,
@@ -377,6 +387,7 @@ fn mul_add<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn encode(width: u32, height: u32, samples: &[f32]) -> Result<RgbaImage, PilError> {
     let dims = CheckedDims::new_allow_empty(width, height, 4)?;
     if samples.len() != dims.total_pixels() {

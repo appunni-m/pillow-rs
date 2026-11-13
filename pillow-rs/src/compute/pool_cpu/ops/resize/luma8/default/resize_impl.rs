@@ -6,6 +6,7 @@ use crate::ops::pil_resize::precompute_coeffs;
 use crate::pipeline::ResampleFilter;
 use crate::raster::GrayImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &GrayImage,
     width: u32,
@@ -48,6 +49,7 @@ pub(crate) fn execute(
         .ok_or_else(|| PilError::ValueError("resize_l: failed to create output buffer".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Resizes native L bytes into a caller-owned full-width output window.
 pub(crate) fn execute_into_window(
     input: &GrayImage,
@@ -78,6 +80,7 @@ pub(crate) fn execute_into_window(
     .is_some()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn filtered_standard(
     input: &GrayImage,
     source_size: (u32, u32),
@@ -104,16 +107,19 @@ fn filtered_standard(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn is_empty(source_size: (u32, u32), destination_size: (u32, u32)) -> bool {
     source_size.0 == 0 || source_size.1 == 0 || destination_size.0 == 0 || destination_size.1 == 0
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn standard_zero_source(input: &GrayImage, bounds: Option<(f64, f64, f64, f64)>) -> bool {
     bounds.is_none()
         && !input.as_raw().is_empty()
         && input.as_raw().iter().all(|&sample| sample == 0)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn boxed_zero_source(input: &GrayImage, bounds: Option<(f64, f64, f64, f64)>) -> bool {
     let (width, height) = input.dimensions();
     let Some(pixels) = (width as usize).checked_mul(height as usize) else {
@@ -125,6 +131,7 @@ fn boxed_zero_source(input: &GrayImage, bounds: Option<(f64, f64, f64, f64)>) ->
         && input.as_raw().iter().all(|&sample| sample == 0)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn empty(width: u32, height: u32) -> Result<GrayImage, PilError> {
     let dimensions = CheckedDims::new_allow_empty(width, height, 1)?;
     GrayImage::from_raw(width, height, dimensions.alloc_buffer())

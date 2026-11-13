@@ -7,6 +7,7 @@ use crate::raster::Mode;
 use super::super::helpers::get_data::{self as helpers, GetDataOutput, GetDataRequest};
 use super::default::get_data_impl;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_get_data(
     image: &Rgb16Image,
     selection: StrategySelection,
@@ -75,6 +76,7 @@ pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::Mode
         crate::raster::Mode::ImageRgb16,
     );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel(
     image: &crate::raster::ImageBuffer<crate::raster::Rgb<u16>, Vec<u16>>,
     x: u32,
@@ -134,6 +136,7 @@ crate::compute::pool_cpu::ops::analysis::helpers::get_data_support::declare_get_
 );
 
 // NO_PILLOW_SUPPORT: native high-depth projection extends the Pillow mode contract.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 crate::compute::pool_cpu::ops::analysis::helpers::projection_support::declare_projection_support!(
     ImageRgb16, CoreOnly,
 );

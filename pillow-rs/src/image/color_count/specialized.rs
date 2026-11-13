@@ -16,6 +16,7 @@ pub(crate) enum ScalarColorDomainCounts {
     Colors(Vec<(u32, FormattedPixelValue)>),
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn scalar_byte_domain_index(mode: Mode, pixel: u32) -> Option<usize> {
     match mode {
         Mode::ImageI32 => {
@@ -54,6 +55,7 @@ fn scalar_byte_domain_index(mode: Mode, pixel: u32) -> Option<usize> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn scalar_byte_domain_is_plausible(mode: Mode, bytes: &[u8]) -> bool {
     let sample_count = bytes.len() / 4;
     if sample_count == 0 {
@@ -86,6 +88,7 @@ pub(crate) fn scalar_byte_domain_is_plausible(mode: Mode, bytes: &[u8]) -> bool 
     true
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn getcolors_scalar_byte_domain(
     mode: Mode,
     bytes: &[u8],
@@ -126,6 +129,7 @@ pub(crate) fn getcolors_scalar_byte_domain(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 fn scalar_byte_domain_counts(
     mode: Mode,
@@ -185,6 +189,7 @@ pub(crate) const SCALAR_I_SPARSE_RUN_COLOR_LIMIT: usize = 4096;
 pub(crate) const SCALAR_I_REPEATED_RUN_MIN_PREFIX_SAMPLES: usize = 256;
 pub(crate) const SCALAR_I_REPEATED_RUN_MIN_DIRECT_SLOTS: usize = 65_536;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn getcolors_scalar_i_repeated_runs(
     bytes: &[u8],
     maxcolors: usize,
@@ -263,6 +268,7 @@ pub(crate) fn getcolors_scalar_i_repeated_runs(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn scalar_prefix_has_repeated_samples(bytes: &[u8]) -> bool {
     let mut samples = bytes.chunks_exact(4).take(64);
     let Some(mut previous) = samples.next() else {
@@ -281,6 +287,7 @@ pub(crate) fn scalar_prefix_has_repeated_samples(bytes: &[u8]) -> bool {
     false
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn scalar_i_prefix_has_long_run(bytes: &[u8]) -> bool {
     let Some(first) = bytes.get(..4) else {
         return false;
@@ -291,6 +298,7 @@ pub(crate) fn scalar_i_prefix_has_long_run(bytes: &[u8]) -> bool {
         .all(|sample| sample == first)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn getcolors_rgb8_grayscale(
     image: &crate::raster::RgbImage,
     maxcolors: usize,

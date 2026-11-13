@@ -4,6 +4,7 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::GrayImage;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &GrayImage,
     width: u32,
@@ -13,6 +14,7 @@ pub(crate) fn execute(
     super::super::helpers::vector::execute(input, width, height, filter)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_into_window(
     input: &GrayImage,
     width: u32,
@@ -24,6 +26,7 @@ pub(crate) fn execute_into_window(
 }
 
 /// Boxed filtered Resize entry point for this exact mode and architecture.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_boxed(
     input: &GrayImage,
     width: u32,

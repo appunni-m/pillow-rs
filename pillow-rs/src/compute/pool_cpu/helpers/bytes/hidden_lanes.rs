@@ -3,6 +3,7 @@ use crate::raster::Mode;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{ImageBuffer, Pixel};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Returns the canonical omitted bytes for a logical pixel when no producer
 /// state was retained for its compact carrier.
 pub(crate) fn default_hidden_pixel_lanes(mode: Mode, first_sample: u8) -> Option<[u8; 2]> {
@@ -19,6 +20,7 @@ pub(crate) fn default_hidden_pixel_lanes(mode: Mode, first_sample: u8) -> Option
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Materializes canonical omitted bytes from a compact logical raster.
 pub(crate) fn default_hidden_lanes_for_bytes(
     mode: Mode,
@@ -62,6 +64,7 @@ pub(crate) fn default_hidden_lanes_for_bytes(
         .ok_or_else(|| PilError::InternalError("physical-lane extent was invalid".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Read one compact carrier's omitted physical bytes before a logical write.
 pub(crate) fn hidden_lanes_for_pixel(
     hidden_lanes: &Option<HiddenPixelLanes>,
@@ -72,6 +75,7 @@ pub(crate) fn hidden_lanes_for_pixel(
     hidden_lanes_for_pixel_ref(hidden_lanes.as_ref(), pixel_index, lane_count, fallback)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Read omitted physical bytes from a borrowed sidecar or a mode fallback.
 pub(crate) fn hidden_lanes_for_pixel_ref(
     hidden_lanes: Option<&HiddenPixelLanes>,
@@ -100,6 +104,7 @@ pub(crate) fn hidden_lanes_for_pixel_ref(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Update omitted bytes for a compact carrier, materializing untouched lanes
 /// from the operation's mode-specific fallback only when needed.
 pub(crate) fn update_hidden_lanes<P, F>(

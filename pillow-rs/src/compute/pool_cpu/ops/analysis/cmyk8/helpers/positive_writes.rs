@@ -9,7 +9,7 @@ use super::super::super::helpers::projection_vector::VectorProjection;
 use crate::compute::pool_cpu::ops::analysis::helpers::projection::ProjectionOutput;
 
 const MAX_WRITES: usize = 8;
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Build projection axes without scanning the source when all writes are positive.
 pub(crate) fn execute(width: u32, height: u32, ops: &[PipelineOp]) -> Option<VectorProjection> {
     if ops.is_empty() || ops.len() > MAX_WRITES {
@@ -51,7 +51,7 @@ pub(crate) fn execute(width: u32, height: u32, ops: &[PipelineOp]) -> Option<Vec
         scalar_tail: horizontal_tail.saturating_add(vertical_tail),
     })
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Run the small-write path under the already selected CMYK strategy.
 pub(crate) fn execute_selected(
     selection: StrategySelection,
@@ -69,7 +69,7 @@ pub(crate) fn execute_selected(
         result.scalar_tail,
     ))
 }
-
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn fill_axis(output: &mut [u32], marks: &[u32]) -> (u64, u64) {
     let zero = u32x4::splat(0);
     let one = u32x4::splat(1);

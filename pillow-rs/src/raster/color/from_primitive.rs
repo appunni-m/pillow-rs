@@ -16,6 +16,7 @@ impl<T: Primitive> FromPrimitive<T> for T {
 }
 // From f32:
 impl FromPrimitive<f32> for u8 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn from_primitive(float: f32) -> Self {
         u8::try_from(saturating_trunc_f32_to_u128(normalize_float(
             float,
@@ -37,6 +38,7 @@ impl FromPrimitive<f32> for u16 {
 
 // From u16:
 impl FromPrimitive<u16> for u8 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn from_primitive(c16: u16) -> Self {
         let rounded = u32::from(c16).saturating_add(128);
         let scaled = rounded.checked_div(257).unwrap_or_default();
@@ -63,6 +65,7 @@ impl FromPrimitive<u8> for u16 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline]
 pub(super) fn normalize_float(float: f32, max: f32) -> f32 {
     let clamped = if matches!(float.partial_cmp(&1.0), Some(std::cmp::Ordering::Less)) {

@@ -27,6 +27,7 @@ _BASE_IMAGE_WRAPPER_NEW = Image._new
 _BASE_IMAGE_REALIZE_DIRTY_PALETTE = Image._realize_dirty_palette
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 def _scale_native_types(image, factor):
     """Report host type facts for the core's native Scale strategy."""
     return (
@@ -42,6 +43,7 @@ def _scale_native_types(image, factor):
     )
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 def _fit_native_types(bleed, centering):
     """Report host type facts for the core's native Fit strategy."""
     return (
@@ -52,6 +54,7 @@ def _fit_native_types(bleed, centering):
     )
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 def _unpack_fit_centering(centering):
     """Apply Python's pair-unpacking protocol for the callback Fit strategy."""
     centering_x, centering_y = centering
@@ -98,6 +101,7 @@ def expand(image: Image, border=0, fill=0) -> Image:
     return _core.ops_expand_with_callbacks(image, border, fill, lambda: Image)
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 def crop(image: Image, border: int = 0) -> Image:
     box = _core.ops_crop_box_with_route_callbacks(image, border)
     # TODO(pillow-rs#3ptb): verify custom border protocol and public crop
@@ -105,12 +109,14 @@ def crop(image: Image, border: int = 0) -> Image:
     return image.crop(box)
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 def scale(image: Image, factor: float, resample=Image.Resampling.BICUBIC) -> Image:
     # TODO(pillow-rs#3ptb): freeze custom factor arithmetic, copy/load behavior,
     # and resize strategy receipts in the CPU parity matrix.
     return _core.ops_scale_with_route_callbacks(image, factor, resample)
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 def contain(image: Image, size, method=Image.Resampling.BICUBIC) -> Image:
     size = _core.ops_contain_size_with_route_callbacks(image, size)
     # TODO(pillow-rs#3ptb): freeze custom size arithmetic, mutation/fault order,
@@ -119,6 +125,10 @@ def contain(image: Image, size, method=Image.Resampling.BICUBIC) -> Image:
     return image.resize(size, resample=method)
 
 
+_BASE_IMAGEOPS_CONTAIN = contain
+
+
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 def cover(image: Image, size, method=Image.Resampling.BICUBIC) -> Image:
     size = _core.ops_cover_size_with_route_callbacks(image, size)
     # TODO(pillow-rs#3ptb): freeze custom size arithmetic, mutation/fault order,
@@ -127,6 +137,7 @@ def cover(image: Image, size, method=Image.Resampling.BICUBIC) -> Image:
     return image.resize(size, resample=method)
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 def fit(
     image: Image,
     size,
@@ -143,11 +154,13 @@ def fit(
     return image.resize(size, method, box=box)
 
 
+# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 def pad(
     image: Image, size, method=Image.Resampling.BICUBIC, color=None, centering=(0.5, 0.5)
 ):
-    # TODO(pillow-rs#3ptb): freeze native/callback output, fault order, and
-    # mode/architecture receipts in CPU parity.
+    # TODO(pillow-rs#3ptb): parity-check a replaced module-level `contain`
+    # callback uses the fallback, including its output and fault order; freeze
+    # native/callback output, palette behavior, and route receipts as well.
     return _core.ops_pad_with_route_callbacks(
         image, size, method, color, centering
     )

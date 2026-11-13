@@ -86,6 +86,7 @@ where
     ) -> Result<<Self as ImageOpsAspectCallbacks>::Value, <Self as ImageOpsAspectCallbacks>::Error>;
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Compute Pillow-compatible `ImageOps.fit` crop coordinates with host callbacks.
 pub fn fit_box_with_callbacks<C: ImageOpsFitCallbacks>(
     callbacks: &mut C,
@@ -169,6 +170,7 @@ pub fn fit_box_with_callbacks<C: ImageOpsFitCallbacks>(
     callbacks.box_tuple(&left, &top, &right, &bottom)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Select native or host-protocol Fit geometry from one core entry point.
 pub fn fit_box_with_route_callbacks<C: ImageOpsFitRouteCallbacks>(
     callbacks: &mut C,
@@ -191,6 +193,7 @@ pub fn fit_box_with_route_callbacks<C: ImageOpsFitRouteCallbacks>(
     fit_box_with_callbacks(callbacks, bleed, &centering_x, &centering_y)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn normalized_centering<C: ImageOpsFitCallbacks>(
     callbacks: &mut C,
     value: &C::Value,
@@ -207,6 +210,7 @@ fn normalized_centering<C: ImageOpsFitCallbacks>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn live_axis<C: ImageOpsFitCallbacks>(
     callbacks: &mut C,
     index: usize,
@@ -218,6 +222,7 @@ fn live_axis<C: ImageOpsFitCallbacks>(
     callbacks.arithmetic(ImageOpsAspectArithmetic::Subtract, &size, &bleed_twice)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn offset_axis<C: ImageOpsFitCallbacks>(
     callbacks: &mut C,
     bleed: &C::Value,

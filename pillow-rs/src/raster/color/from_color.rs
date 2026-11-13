@@ -108,6 +108,7 @@ impl<S: Primitive, T: Primitive> FromColor<Rgba<S>> for Rgba<T>
 where
     T: FromPrimitive<S>,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn copy_from_color(&mut self, other: &Rgba<S>) {
         let own = &mut self.0;
         let other = &other.0;
@@ -122,6 +123,7 @@ impl<S: Primitive, T: Primitive> FromColor<Rgb<S>> for Rgba<T>
 where
     T: FromPrimitive<S>,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn copy_from_color(&mut self, other: &Rgb<S>) {
         let rgba = &mut self.0;
         let rgb = &other.0;
@@ -136,6 +138,7 @@ impl<S: Primitive, T: Primitive> FromColor<LumaA<S>> for Rgba<T>
 where
     T: FromPrimitive<S>,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn copy_from_color(&mut self, gray: &LumaA<S>) {
         let rgba = &mut self.0;
         let gray = &gray.0;
@@ -150,6 +153,7 @@ impl<S: Primitive, T: Primitive> FromColor<Luma<S>> for Rgba<T>
 where
     T: FromPrimitive<S>,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn copy_from_color(&mut self, gray: &Luma<S>) {
         let rgba = &mut self.0;
         let gray = gray.0[0];

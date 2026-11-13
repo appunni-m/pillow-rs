@@ -1,5 +1,4 @@
 use super::RsImage;
-use super::arrays::image_info_value_to_python;
 use super::point::point_transform_from_python;
 use super::quantize::quantize_palette_from_python;
 use crate::*;
@@ -52,10 +51,39 @@ pub(super) fn thumbnail_reducing_gap(value: Option<&Bound<'_, PyAny>>) -> PyResu
     value.map(|value| value.extract::<f64>()).transpose()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+#[pyfunction(name = "_resize_reducing_gap_bounds")]
+pub(super) fn resize_reducing_gap_bounds(
+    bounds: &Bound<'_, PyAny>,
+    factor: &Bound<'_, PyAny>,
+    safe_box: &Bound<'_, PyAny>,
+) -> PyResult<(f64, f64, f64, f64)> {
+    let bounds = bounds.extract::<(f64, f64, f64, f64)>()?;
+    let factor = factor.extract::<(f64, f64)>()?;
+    let safe_box = safe_box.extract::<(f64, f64, f64, f64)>()?;
+    pillow_rs::resize_reducing_gap_bounds(bounds, factor, safe_box).map_err(map_error)
+}
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
+#[pyfunction(name = "_resize_reducing_gap_filter_support")]
+pub(super) fn resize_reducing_gap_filter_support(
+    resample: Option<&Bound<'_, PyAny>>,
+) -> PyResult<f64> {
+    let input = resample_input_from_python(resample)?;
+    let filter = pillow_rs::parse_resample_input(input).map_err(map_error)?;
+    Ok(pillow_rs::resize_reducing_gap_filter_support(filter))
+}
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn register_adapter_functions(m: &Bound<'_, pyo3::types::PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(thumbnail_filter_code, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(imageops_filter_code, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(thumbnail_reducing_gap, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(resize_reducing_gap_bounds, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(
+        resize_reducing_gap_filter_support,
+        m
+    )?)?;
     Ok(())
 }
 
@@ -104,7 +132,7 @@ impl PyImage {
         Ok(resample_filter_code(filter))
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[pyo3(signature = (size, resample=None, box_coords=None, reducing_gap=None))]
     fn resize(
         slf: Py<Self>,
@@ -127,6 +155,40 @@ impl PyImage {
             .detach(move || inner.resize_with_options(size, resample, box_coords, reducing_gap))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
+    }
+
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    #[pyo3(signature = (size, resample=None, box_coords=None, reducing_gap=None))]
+    fn _resize_dispatch(
+        slf: Py<Self>,
+        size: &Bound<'_, PyAny>,
+        resample: Option<&Bound<'_, PyAny>>,
+        box_coords: Option<&Bound<'_, PyAny>>,
+        reducing_gap: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
+    ) -> PyResult<Py<PyAny>> {
+        let resample = resample_input_from_python(resample)?;
+        let size = size.extract::<(i64, i64)>()?;
+        let box_coords = box_coords
+            .map(|value| value.extract::<(f64, f64, f64, f64)>())
+            .transpose()?;
+        let reducing_gap = reducing_gap
+            .map(|value| value.extract::<f64>())
+            .transpose()?;
+        let inner = slf.bind(py).borrow().inner.clone();
+        if let Some(plan) =
+            inner.resize_reducing_gap_plan(size, resample.clone(), box_coords, reducing_gap)
+        {
+            let result = PyDict::new(py);
+            result.set_item("kind", "reducing-gap")?;
+            result.set_item("factor", (plan.x_factor, plan.y_factor))?;
+            result.set_item("reduce_box", plan.safe_box)?;
+            return Ok(result.into_any().unbind());
+        }
+        let resized = py
+            .detach(move || inner.resize_with_options(size, resample, box_coords, reducing_gap))
+            .map_err(map_error)?;
+        Py::new(py, PyImage { inner: resized }).map(|image| image.into_any())
     }
 
     fn crop(
@@ -447,10 +509,6 @@ impl PyImage {
 
     fn validate_filter(&self, filter_name: &str) -> PyResult<()> {
         self.inner.validate_filter(filter_name).map_err(map_error)
-    }
-
-    fn preflight_enhance_sharpness(&self) -> PyResult<()> {
-        self.inner.preflight_enhance_sharpness().map_err(map_error)
     }
 
     fn copy(&self) -> PyImage {
@@ -900,78 +958,5 @@ impl PyImage {
 
     fn tobitmap(&mut self, py: Python<'_>) -> PyResult<Vec<u8>> {
         py.detach(|| self.inner.tobitmap()).map_err(map_error)
-    }
-
-    fn enhance_brightness(slf: Py<Self>, factor: f64) -> PyResult<PyImage> {
-        let rs = Python::attach(|py| {
-            let inner = slf.bind(py).borrow().inner.clone();
-            py.detach(|| inner.enhance_brightness(factor))
-        })
-        .map_err(map_error)?;
-        Ok(PyImage { inner: rs })
-    }
-
-    fn contrast_degenerate(&self, py: Python<'_>) -> PyResult<PyImage> {
-        let inner = self.inner.clone();
-        let rs = py
-            .detach(|| inner.contrast_degenerate())
-            .map_err(map_error)?;
-        Ok(PyImage { inner: rs })
-    }
-
-    fn enhance_contrast(slf: Py<Self>, factor: f64) -> PyResult<PyImage> {
-        let rs = Python::attach(|py| {
-            let inner = slf.bind(py).borrow().inner.clone();
-            py.detach(|| inner.enhance_contrast(factor))
-        })
-        .map_err(map_error)?;
-        Ok(PyImage { inner: rs })
-    }
-
-    fn enhance_color(slf: Py<Self>, factor: f64) -> PyResult<PyImage> {
-        let rs = Python::attach(|py| {
-            let inner = slf.bind(py).borrow().inner.clone();
-            py.detach(|| inner.enhance_color(factor))
-        })
-        .map_err(map_error)?;
-        Ok(PyImage { inner: rs })
-    }
-
-    fn color_degenerate(&self, py: Python<'_>) -> PyResult<PyImage> {
-        let inner = self.inner.clone();
-        let rs = py.detach(|| inner.color_degenerate()).map_err(map_error)?;
-        Ok(PyImage { inner: rs })
-    }
-
-    fn color_transparency(
-        slf: Py<Self>,
-        value: &Bound<'_, PyAny>,
-        py: Python<'_>,
-    ) -> PyResult<Py<PyAny>> {
-        // Color's metadata normalizer accepts component lists and converts
-        // invalid input into a warning; public putpixel has stricter errors.
-        let value = if let Ok(value) = value.extract::<i64>() {
-            pillow_rs::PutPixelValue::Integer(value)
-        } else if let Ok(value) = value.extract::<Vec<i64>>() {
-            pillow_rs::PutPixelValue::Components(value)
-        } else if let Ok(value) = value.extract::<Vec<f64>>() {
-            pillow_rs::PutPixelValue::FloatComponents(value)
-        } else if let Ok(value) = value.extract::<f64>() {
-            pillow_rs::PutPixelValue::Float(value)
-        } else {
-            pillow_rs::PutPixelValue::Invalid
-        };
-        let image = slf.bind(py).borrow();
-        let value = image.inner.color_transparency(value).map_err(map_error)?;
-        image_info_value_to_python(py, value)
-    }
-
-    fn enhance_sharpness(slf: Py<Self>, factor: f64) -> PyResult<PyImage> {
-        let rs = Python::attach(|py| {
-            let inner = slf.bind(py).borrow().inner.clone();
-            py.detach(|| inner.enhance_sharpness(factor))
-        })
-        .map_err(map_error)?;
-        Ok(PyImage { inner: rs })
     }
 }

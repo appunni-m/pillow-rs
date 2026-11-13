@@ -1,5 +1,6 @@
 //! Original NEON structure-load extraction of the Y channel.
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 pub(crate) fn execute(source: &[u8]) -> (Vec<u8>, u64, u64) {
     let pixels = source.len() / 3;

@@ -41,6 +41,7 @@ pub use pad_route::{ImageOpsPadRouteCallbacks, pad_with_route_callbacks};
 
 type AspectDimensions = ((u32, u32), (u32, u32));
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resolve_centering(input: CenteringInput) -> Result<(f64, f64), PilError> {
     match input {
         CenteringInput::Default => Ok((0.5, 0.5)),
@@ -67,6 +68,7 @@ fn resolve_centering(input: CenteringInput) -> Result<(f64, f64), PilError> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Pillow replaces each out-of-range `ImageOps.fit` centering coordinate with
 /// `0.5` before computing its crop box. This also handles NaN and infinities,
 /// for which Rust's floating-point `clamp` would otherwise preserve a value
@@ -79,6 +81,7 @@ pub(crate) fn normalize_fit_centering(value: f64) -> f64 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn native_geometry_color_input(input: &ImageOpsColor) -> Option<crate::pipeline::NativeColorInput> {
     match input {
         ImageOpsColor::Scalar(value) => Some(crate::pipeline::NativeColorInput::scalar(*value)),
@@ -99,6 +102,7 @@ fn native_geometry_color_input(input: &ImageOpsColor) -> Option<crate::pipeline:
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Python's `round()` for the positive dimensions used by `ImageOps.contain`.
 pub(crate) fn round_positive_ties_even(value: f64) -> u32 {
     let floor = value.floor();
@@ -113,6 +117,7 @@ pub(crate) fn round_positive_ties_even(value: f64) -> u32 {
     rounded.max(0.0).min(f64::from(u32::MAX)) as u32
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Return the exact dimensions Pillow computes before its empty-image return
 /// or `Image.resize` call.
 fn pad_containment_dimensions(
@@ -148,6 +153,7 @@ fn pad_containment_dimensions(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Computes the contain result for a captured source and target size.
 ///
 /// This is shared by the public ImageOps facade and prepared backend
@@ -161,12 +167,14 @@ pub(crate) fn contain_dimensions_from_sizes(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Pillow's `ImageOps.contain` returns `Image.new` instead of resizing when
 /// either computed output dimension is zero.
 pub(crate) const fn contain_returns_empty_image(dimensions: (u32, u32)) -> bool {
     dimensions.0 == 0 || dimensions.1 == 0
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Return the dimensions that `ImageOps.contain` computes for its result.
 fn contain_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, PilError> {
     let source = image.size()?;
@@ -174,6 +182,7 @@ fn contain_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions,
     Ok((source, dimensions))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Captures the output dimensions that `ImageOps.contain` computes before
 /// `Image.resize` parses the filter.
 #[doc(hidden)]
@@ -181,6 +190,7 @@ pub fn contain_geometry_preflight(image: &Image, w: u32, h: u32) -> Result<(u32,
     contain_dimensions(image, w, h).map(|(_, dimensions)| dimensions)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Validate the dimensions produced by `ImageOps.contain` or `ImageOps.cover`
 /// before queuing the resize. Pillow's empty-width source is the one valid
 /// zero-axis result: when its height is unchanged, the resize request equals
@@ -196,6 +206,7 @@ pub(crate) fn validate_aspect_resize_dimensions(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Return the dimensions that `ImageOps.cover` passes to `Image.resize`.
 ///
 /// Unlike `contain`, a zero-width source can only reach the resize call when
@@ -231,12 +242,14 @@ pub(crate) fn cover_dimensions_from_sizes(
     Ok(dimensions)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn cover_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, PilError> {
     let source = image.size()?;
     let dimensions = cover_dimensions_from_sizes(source, (w, h))?;
     Ok((source, dimensions))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Captures the output dimensions that `ImageOps.cover` computes before
 /// `Image.resize` parses the filter.
 #[doc(hidden)]
@@ -244,6 +257,7 @@ pub fn cover_geometry_preflight(image: &Image, w: u32, h: u32) -> Result<(u32, u
     cover_dimensions(image, w, h).map(|(_, dimensions)| dimensions)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn parse_imageops_filter(
     input: Option<ResampleInput>,
 ) -> Result<crate::pipeline::ResampleFilter, PilError> {
@@ -259,6 +273,7 @@ fn parse_imageops_filter(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Parses the strict filter value accepted by Pillow ImageOps wrappers.
 #[doc(hidden)]
 pub fn parse_imageops_filter_input(
@@ -267,6 +282,7 @@ pub fn parse_imageops_filter_input(
     parse_imageops_filter(input)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Validates the resampling argument accepted by `ImageOps.deform`.
 ///
 /// Normalize the target facade's symbolic names and validate numeric values;
@@ -274,6 +290,7 @@ pub fn parse_imageops_filter_input(
 pub fn validate_deform_resample(input: Option<ResampleInput>) -> Result<(), PilError> {
     parse_resample_input(input).map(|_| ())
 }
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Resizes an image to fit within `(w, h)` while preserving aspect ratio.
 ///
 /// # Errors
@@ -289,6 +306,7 @@ pub fn contain(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Im
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// `ImageOps.contain` with a host-neutral public filter value.
 pub fn contain_with_input(
     image: &Image,
@@ -308,6 +326,7 @@ pub fn contain_with_input(
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Resizes an image to cover `(w, h)` while preserving its aspect ratio.
 ///
 /// The returned dimensions may exceed `(w, h)`; overflow is not cropped.
@@ -322,6 +341,7 @@ pub fn cover(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Imag
     Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// `ImageOps.cover` with a host-neutral public filter value.
 pub fn cover_with_input(
     image: &Image,
@@ -338,6 +358,7 @@ pub fn cover_with_input(
     Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Resizes and crops an image to exactly fit `(w, h)`.
 ///
 /// `bleed` and `centering` follow Pillow `ImageOps.fit` semantics.
@@ -377,6 +398,7 @@ pub fn fit(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// `ImageOps.fit` with filter and centering validation owned by core.
 pub fn fit_with_input(
     image: &Image,
@@ -411,6 +433,7 @@ pub fn fit_with_input(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Validates `ImageOps.fit` centering and aspect geometry before host filter
 /// coercion, matching the order in which Pillow delegates to `Image.resize`.
 #[doc(hidden)]
@@ -427,6 +450,7 @@ pub fn fit_geometry_preflight(
     Ok(fit_box_coordinates(image.size()?, (w, h), bleed, centering))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Computes Pillow `ImageOps.fit`'s crop box after its early geometry checks.
 ///
 /// Kept outside the pixel path so the Python facade can retain this geometry
@@ -460,6 +484,7 @@ pub(crate) fn fit_box_coordinates(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resolve_fit_centering(centering: CenteringInput) -> Result<(f64, f64), PilError> {
     // Pillow treats an explicit `(0.5, 0.5)` pair like the omitted default.
     // Keep the original filter-presence check separate so it still controls
@@ -478,6 +503,7 @@ fn resolve_fit_centering(centering: CenteringInput) -> Result<(f64, f64), PilErr
 // Pillow's ImageOps.fit normalizes invalid bleed values before calculating the
 // crop box. Keep this at the public core boundary so CPU, SIMD, and GPU receive
 // the same deferred operation value instead of each reimplementing the rule.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn normalize_fit_bleed(bleed: f64) -> f64 {
     if (0.0..0.5).contains(&bleed) {
         bleed
@@ -486,6 +512,7 @@ pub(crate) fn normalize_fit_bleed(bleed: f64) -> f64 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Validate the geometry and error ordering performed by `ImageOps.fit` before
 /// its lazy boxed resize is queued. Pillow evaluates the source/live aspect
 /// ratio and output aspect ratio in Python before parsing the resize filter.
@@ -517,6 +544,7 @@ fn validate_fit_geometry(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Validate the dimensions that Pillow's `Image.resize` checks after its
 /// filter has been parsed. Keeping this separate from [`validate_fit_geometry`]
 /// preserves the native precedence of an invalid filter over a zero-width
@@ -544,6 +572,7 @@ fn validate_fit_resize_dimensions(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Compute Pillow's ties-to-even target dimensions before public `resize`.
 #[doc(hidden)]
 pub fn scale_geometry_preflight(image: &Image, factor: f64) -> Result<(f64, f64), PilError> {
@@ -556,6 +585,7 @@ pub fn scale_geometry_preflight(image: &Image, factor: f64) -> Result<(f64, f64)
     scale_dimensions_preflight((width, height), factor)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Compute Pillow's ties-to-even Scale dimensions from a captured image size.
 /// The prepared CPU path uses the same validation and rounding as the eager
 /// facade before it selects a mode or architecture strategy.
@@ -582,6 +612,7 @@ pub(crate) fn scale_dimensions_preflight(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn round_scaled_dimension(dimension: u32, factor: f64) -> Result<f64, PilError> {
     let value = f64::from(dimension) * factor;
     if value.is_nan() {
@@ -606,6 +637,7 @@ fn round_scaled_dimension(dimension: u32, factor: f64) -> Result<f64, PilError> 
     Ok(rounded)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn scale_dimension_to_u32(value: f64) -> Result<u32, PilError> {
     if value > f64::from(u32::MAX) {
         return Err(PilError::OverflowError(
@@ -615,6 +647,7 @@ pub(crate) fn scale_dimension_to_u32(value: f64) -> Result<u32, PilError> {
     Ok(value as u32)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// `ImageOps.scale` with the integer/enum resampling value exposed by Pillow.
 pub fn scale_with_input(
     image: &Image,
@@ -662,6 +695,7 @@ pub fn scale_with_input(
     Ok(Image::push_op(image, PipelineOp::Scale { factor, filter }))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Crops the same border width from every image edge.
 ///
 /// # Errors
@@ -676,6 +710,7 @@ pub fn crop(image: &Image, border: u32) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::CropBorder { border }))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Return the same-border crop box used by `ImageOps.crop`.
 ///
 /// This lets a host wrapper preserve public `Image.crop()` dispatch while

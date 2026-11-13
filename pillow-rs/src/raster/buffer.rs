@@ -70,6 +70,7 @@ enum HiddenLaneValues {
 }
 
 impl HiddenPixelLanes {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn constant(lane_count: usize, pixel_count: usize, values: [u8; 2]) -> Option<Self> {
         (1..=2).contains(&lane_count).then_some(Self {
             lane_count,
@@ -78,6 +79,7 @@ impl HiddenPixelLanes {
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn per_pixel(
         lane_count: usize,
         pixel_count: usize,
@@ -95,18 +97,22 @@ impl HiddenPixelLanes {
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) const fn lane_count(&self) -> usize {
         self.lane_count
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) const fn pixel_count(&self) -> usize {
         self.pixel_count
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn is_constant(&self) -> bool {
         matches!(&self.values, HiddenLaneValues::Constant(_))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn for_pixel(&self, index: usize) -> Option<&[u8]> {
         if index >= self.pixel_count {
             return None;
@@ -120,6 +126,7 @@ impl HiddenPixelLanes {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn set_pixel(&mut self, index: usize, values: [u8; 2]) -> Option<()> {
         if index >= self.pixel_count {
             return None;
@@ -156,6 +163,7 @@ impl HiddenPixelLanes {
         Some(())
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn map_values<F>(&self, mut map: F) -> Self
     where
         F: FnMut(u8) -> u8,
@@ -179,6 +187,7 @@ impl HiddenPixelLanes {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn map_values_in_place<F>(&mut self, mut map: F)
     where
         F: FnMut(u8) -> u8,
@@ -197,6 +206,7 @@ impl HiddenPixelLanes {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Applies a byte operation to matching physical lanes while clipping to
     /// the output extent used by Pillow's two-image Chops operations.
     pub(crate) fn zip_map_clipped<F>(
@@ -247,6 +257,7 @@ impl HiddenPixelLanes {
         Self::per_pixel(self.lane_count, pixel_count, values)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn remap<F>(&self, pixel_count: usize, mut source_index: F) -> Option<Self>
     where
         F: FnMut(usize) -> usize,
@@ -273,6 +284,7 @@ where
     P: Pixel,
     Container: Deref<Target = [P::Subpixel]>,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Constructs a buffer from a generic container.
     ///
     /// Returns `None` if the container is not big enough.
@@ -300,15 +312,18 @@ where
         &self.data
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Returns physical lanes omitted by this buffer's logical pixel carrier.
     pub(crate) fn hidden_pixel_lanes(&self) -> Option<&HiddenPixelLanes> {
         self.hidden_pixel_lanes.as_ref()
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn take_hidden_pixel_lanes(&mut self) -> Option<HiddenPixelLanes> {
         self.hidden_pixel_lanes.take()
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Replaces hidden physical lanes after validating the image extent.
     pub(crate) fn replace_hidden_pixel_lanes(&mut self, lanes: Option<HiddenPixelLanes>) -> bool {
         let Some(pixel_count) = (self.width as usize).checked_mul(self.height as usize) else {
@@ -328,6 +343,7 @@ where
         true
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Carries physical lanes from a source buffer through a pixel-index map.
     pub(crate) fn remap_hidden_pixel_lanes_from<F>(
         &mut self,
@@ -365,11 +381,13 @@ where
         self.height
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn inner_pixels(&self) -> &[P::Subpixel] {
         let len = Self::image_buffer_len(self.width, self.height).unwrap_or(0);
         &self.data[..len]
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Returns an iterator over the pixels of this image.
     pub fn pixels(&self) -> Pixels<'_, P> {
         Pixels {
@@ -379,11 +397,13 @@ where
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Returns an iterator over the rows of this image.
     pub fn rows(&self) -> Rows<'_, P> {
         Rows::with_image(&self.data, self.width, self.height)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Enumerates over the pixels of the image.
     pub fn enumerate_pixels(&self) -> EnumeratePixels<'_, P> {
         EnumeratePixels {
@@ -394,6 +414,7 @@ where
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Enumerates over the rows of the image.
     pub fn enumerate_rows(&self) -> EnumerateRows<'_, P> {
         EnumerateRows {
@@ -403,6 +424,7 @@ where
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Gets a reference to the pixel at location `(x, y)`.
     ///
     /// # Panics
@@ -423,10 +445,11 @@ where
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Gets a reference to the pixel at location `(x, y)` or returns `None` if
     /// the index is out of the bounds `(width, height)`.
     pub fn get_pixel_checked(&self, x: u32, y: u32) -> Option<&P> {
-        if x >= self.width {
+        if x >= self.width || y >= self.height {
             return None;
         }
         let num_channels = <P as Pixel>::CHANNEL_COUNT as usize;
@@ -440,17 +463,20 @@ where
             .map(|pixel_indices| <P as Pixel>::from_slice(pixel_indices))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn check_image_fits(width: u32, height: u32, len: usize) -> bool {
         let checked_len = Self::image_buffer_len(width, height);
         checked_len.is_some_and(|min_len| min_len <= len)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn image_buffer_len(width: u32, height: u32) -> Option<usize> {
         Some(<P as Pixel>::CHANNEL_COUNT as usize)
             .and_then(|size| size.checked_mul(width as usize))
             .and_then(|size| size.checked_mul(height as usize))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[inline(always)]
     fn pixel_indices(&self, x: u32, y: u32) -> Option<Range<usize>> {
         if x >= self.width || y >= self.height {
@@ -459,6 +485,7 @@ where
         Some(self.pixel_indices_unchecked(x, y))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     #[inline(always)]
     fn pixel_indices_unchecked(&self, x: u32, y: u32) -> Range<usize> {
         let no_channels = usize::from(<P as Pixel>::CHANNEL_COUNT);
@@ -480,6 +507,7 @@ where
     P: Pixel,
     Container: Deref<Target = [P::Subpixel]> + DerefMut,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn inner_pixels_mut(&mut self) -> &mut [P::Subpixel] {
         self.invalidate_hidden_pixel_lanes();
         let len = Self::image_buffer_len(self.width, self.height).unwrap_or(0);
@@ -494,10 +522,12 @@ where
     // bypasses invalidation; DynamicImage::put_pixel updates its lane sidecar.
     // TODO(pillow-rs#3ptb): keep downstream Paste/Histogram outcomes in CPU
     // parity; this mode-free buffer cannot infer Pillow's physical lanes.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn invalidate_hidden_pixel_lanes(&mut self) {
         self.hidden_pixel_lanes = None;
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Returns an iterator over the mutable pixels of this image.
     pub fn pixels_mut(&mut self) -> PixelsMut<'_, P> {
         PixelsMut {
@@ -507,12 +537,14 @@ where
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Returns an iterator over the mutable rows of this image.
     pub fn rows_mut(&mut self) -> RowsMut<'_, P> {
         self.invalidate_hidden_pixel_lanes();
         RowsMut::with_image(&mut self.data, self.width, self.height)
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Enumerates over the pixels of the image.
     pub fn enumerate_pixels_mut(&mut self) -> EnumeratePixelsMut<'_, P> {
         let width = self.width;
@@ -524,6 +556,7 @@ where
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Enumerates over the rows of the image.
     pub fn enumerate_rows_mut(&mut self) -> EnumerateRowsMut<'_, P> {
         let width = self.width;
@@ -534,6 +567,7 @@ where
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Gets a reference to the mutable pixel at location `(x, y)`.
     #[inline]
     #[track_caller]
@@ -552,10 +586,11 @@ where
         <P as Pixel>::from_slice_mut(&mut self.data[pixel_indices])
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Gets a reference to the mutable pixel at location `(x, y)` or returns
     /// `None` if the index is out of the bounds `(width, height)`.
     pub fn get_pixel_mut_checked(&mut self, x: u32, y: u32) -> Option<&mut P> {
-        if x >= self.width {
+        if x >= self.width || y >= self.height {
             return None;
         }
         let num_channels = <P as Pixel>::CHANNEL_COUNT as usize;
@@ -572,6 +607,7 @@ where
             .map(|pixel_indices| <P as Pixel>::from_slice_mut(pixel_indices))
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Puts a pixel at location `(x, y)`.
     ///
     /// # Panics
@@ -586,6 +622,7 @@ where
 
 // Vec-backed buffer implementation
 impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn zero_hidden_pixel_lanes(width: u32, height: u32) -> Option<HiddenPixelLanes> {
         if std::mem::size_of::<P::Subpixel>() != std::mem::size_of::<u8>() {
             return None;
@@ -602,6 +639,7 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
         HiddenPixelLanes::constant(lane_count, pixel_count, [0; 2])
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Creates a new image buffer based on a `Vec<P::Subpixel>`.
     ///
     /// All pixels have a value of zero.
@@ -623,6 +661,7 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Constructs a new `ImageBuffer` by copying a pixel.
     ///
     /// # Panics
@@ -658,6 +697,7 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     /// Constructs a new `ImageBuffer` by repeated application of the supplied function.
     ///
     /// # Panics
@@ -698,6 +738,7 @@ where
     P: Pixel,
     Container: Default,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn default() -> Self {
         Self {
             width: 0,
@@ -727,6 +768,7 @@ where
     P: Pixel,
     Container: Deref<Target = [P::Subpixel]> + DerefMut,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn deref_mut(&mut self) -> &mut <Self as Deref>::Target {
         self.invalidate_hidden_pixel_lanes();
         &mut self.data
@@ -751,6 +793,7 @@ where
     P: Pixel,
     Container: Deref<Target = [P::Subpixel]> + DerefMut,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn index_mut(&mut self, (x, y): (u32, u32)) -> &mut P {
         self.get_pixel_mut(x, y)
     }
@@ -762,6 +805,7 @@ where
     P: Pixel,
     Container: Deref<Target = [P::Subpixel]> + Clone,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn clone(&self) -> ImageBuffer<P, Container> {
         ImageBuffer {
             data: self.data.clone(),
@@ -772,6 +816,7 @@ where
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn clone_from(&mut self, source: &Self) {
         self.data.clone_from(&source.data);
         self.width = source.width;
@@ -804,6 +849,7 @@ where
     P: Pixel,
     Container: Deref<Target = [P::Subpixel]> + DerefMut,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn put_pixel(&mut self, x: u32, y: u32, pixel: P) {
         *self.get_pixel_mut(x, y) = pixel;
     }
@@ -847,6 +893,7 @@ where
     Container: Deref<Target = [FromType::Subpixel]>,
     ToType: FromColor<FromType>,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn convert(&self) -> ImageBuffer<ToType, Vec<ToType::Subpixel>> {
         let mut buffer: ImageBuffer<ToType, Vec<ToType::Subpixel>> =
             ImageBuffer::new(self.width, self.height);

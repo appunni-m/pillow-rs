@@ -6,6 +6,7 @@ use wide::u8x16;
 
 const VECTOR_BYTES: usize = 16;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -14,6 +15,7 @@ pub(crate) fn execute<const CHANNELS: usize>(
     execute_for_bounds::<CHANNELS>(source, source_size, output_size, None)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_boxed<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -23,6 +25,7 @@ pub(crate) fn execute_boxed<const CHANNELS: usize>(
     execute_for_bounds::<CHANNELS>(source, source_size, output_size, Some(bounds))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_for_bounds<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -77,6 +80,7 @@ fn execute_for_bounds<const CHANNELS: usize>(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resize_indices(
     source_size: u32,
     output_size: u32,
@@ -88,6 +92,7 @@ fn resize_indices(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn nearest_indices(source_size: u32, output_size: u32) -> Option<Vec<usize>> {
     if source_size == 0 || output_size == 0 {
         return None;
@@ -107,6 +112,7 @@ fn nearest_indices(source_size: u32, output_size: u32) -> Option<Vec<usize>> {
     Some(indices)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn boxed_nearest_indices(
     source_size: u32,
     output_size: u32,
@@ -129,6 +135,7 @@ fn boxed_nearest_indices(
     Some(indices)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn write_row<const CHANNELS: usize>(
     source: &[u8],
     source_row: usize,
@@ -172,6 +179,7 @@ fn write_row<const CHANNELS: usize>(
     Some((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vector_block<const CHANNELS: usize>(
     source: &[u8],
     source_row: usize,
@@ -211,6 +219,7 @@ fn vector_block<const CHANNELS: usize>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn gather_block<const CHANNELS: usize>(
     source: &[u8],
     source_row: usize,
@@ -233,6 +242,7 @@ fn gather_block<const CHANNELS: usize>(
     Some(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn invalid_nearest_layout() -> PilError {
     PilError::InternalError("native nearest Resize plan did not match its byte layout".into())
 }

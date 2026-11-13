@@ -266,28 +266,52 @@ pub(crate) static CONVERT_SUPPORT: OperationSupport =
         .with_rejected_output(OutputModeRule::ByTargetMode)
         .with_target_compositions(super::helpers::convert::classify_target_composition);
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_matrix_mode(mode: Mode) -> ModeSupport {
-    if mode == Mode::ImageRgb8 {
-        return ModeSupport::cpu(
+    match mode {
+        Mode::ImageRgb8 => ModeSupport::cpu(
             OperationId::ConvertMatrix,
             mode,
             crate::compute::registry::support::OutputModeRule::ByTargetMode,
             MATRIX_INPUTS,
             &[],
-        );
+        ),
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => {
+            // NO_PILLOW_SUPPORT: native samples preserve RGB projection for
+            // these exact source identities.
+            ModeSupport::cpu_core_only(
+                OperationId::ConvertMatrix,
+                mode,
+                crate::compute::registry::support::OutputModeRule::ByTargetMode,
+                MATRIX_INPUTS,
+                &[],
+                "matrix conversion from this exact source identity extends Pillow's RGB matrix contract",
+            )
+        }
     }
-
-    // NO_PILLOW_SUPPORT: native samples preserve the existing RGB projection
-    // semantics for these exact source identities.
-    ModeSupport::cpu_core_only(
-        OperationId::ConvertMatrix,
-        mode,
-        crate::compute::registry::support::OutputModeRule::ByTargetMode,
-        MATRIX_INPUTS,
-        &[],
-        "matrix conversion from this exact source identity extends Pillow's RGB matrix contract",
-    )
 }
 
 /// Matrix conversion support, with one Default strategy for each exact source mode.

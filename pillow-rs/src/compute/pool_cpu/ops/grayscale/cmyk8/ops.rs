@@ -36,6 +36,7 @@ macro_rules! declare_architectures {
         pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
 
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn prepare<'a>(input: &'a grayscale_impl::Input, ctx: &ExecutionContext)
             -> Result<Strategy<'a>, PilError> {
             let facts = StrategyInputs { width: input.width(), height: input.height(),
@@ -50,6 +51,7 @@ macro_rules! declare_architectures {
             Ok(Prepared::new(implementation, selection))
         }
 
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
                 let output = match strategy.implementation {
                     ArchitectureStrategy::Default(input) => grayscale_impl::execute(input),
@@ -64,6 +66,7 @@ macro_rules! declare_architectures {
     };
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 #[allow(unsafe_code)]
 fn prepare_neon(input: grayscale_impl::Kernel<'_>) -> super::neon::grayscale_impl::Kernel<'_> {

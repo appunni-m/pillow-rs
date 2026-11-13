@@ -3,12 +3,14 @@
 //! These helpers receive a compile-time channel layout. They do not infer mode,
 //! select architecture, inspect backend state, or schedule rows.
 
+use crate::compute::pool_cpu::helpers::alpha::unpremultiply_channel;
 use wide::{u8x16, u16x16};
 
 pub(super) use crate::compute::pool_cpu::helpers::channel::gather::gather_interleaved_channel;
 
 pub(super) use crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn grayscale_block<const CHANNELS: usize>(source: &[u8]) -> [u8; 16] {
     let load = |offset| {
@@ -55,6 +57,7 @@ fn grayscale_block<const CHANNELS: usize>(source: &[u8]) -> [u8; 16] {
     simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn grayscale_interleaved<const CHANNELS: usize>(source: &[u8]) -> Vec<u8> {
     debug_assert!(matches!(CHANNELS, 2 | 3 | 4));
     debug_assert_eq!(source.len() % CHANNELS, 0);
@@ -72,4 +75,42 @@ pub(crate) fn grayscale_interleaved<const CHANNELS: usize>(source: &[u8]) -> Vec
         output.extend_from_slice(&block[..active_pixels]);
     }
     output
+}
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+pub(crate) fn grayscale_premultiplied_rgba(source: &[u8]) -> (Vec<u8>, u64, u64) {
+    debug_assert_eq!(source.len() % 4, 0);
+    let pixels = source.len() / 4;
+    let mut output = Vec::with_capacity(pixels);
+    let mut vector_blocks = 0u64;
+    let mut blocks = source.chunks_exact(64);
+
+    for block in blocks.by_ref() {
+        let mut straight = [0u8; 64];
+        unpremultiply_rgba_block(block, &mut straight);
+        output.extend_from_slice(&grayscale_block::<4>(&straight));
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    let remainder = blocks.remainder();
+    if !remainder.is_empty() {
+        let mut straight = [0u8; 64];
+        unpremultiply_rgba_block(remainder, &mut straight);
+        let remainder_pixels = remainder.len() / 4;
+        output.extend_from_slice(&grayscale_block::<4>(&straight)[..remainder_pixels]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+
+    (output, vector_blocks, 0)
+}
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+fn unpremultiply_rgba_block(source: &[u8], output: &mut [u8; 64]) {
+    for (pixel, straight) in source.chunks_exact(4).zip(output.chunks_exact_mut(4)) {
+        let alpha = pixel[3];
+        straight[0] = unpremultiply_channel(pixel[0], alpha);
+        straight[1] = unpremultiply_channel(pixel[1], alpha);
+        straight[2] = unpremultiply_channel(pixel[2], alpha);
+        straight[3] = alpha;
+    }
 }

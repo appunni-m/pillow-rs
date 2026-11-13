@@ -18,10 +18,12 @@ pub(crate) struct PreparedGetBBox<'a> {
 }
 
 impl PreparedGetBBox<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<BBox, PilError> {
         if self.image.mode() != self.mode {
             return Err(PilError::InternalError(
@@ -113,6 +115,7 @@ impl PreparedGetBBox<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Selects GetBBox from the injected CPU context before any scan is performed.
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,

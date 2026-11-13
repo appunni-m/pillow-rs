@@ -16,6 +16,7 @@ enum StraightAlpha {
 }
 
 /// Reports whether a boxed request needs Pillow's tall-image pass order.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn required(
     image: &DynamicImage,
     output_size: (u32, u32),
@@ -32,6 +33,7 @@ pub(crate) fn required(
         && output_size.1 < source_height
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     context: &ExecutionContext,
@@ -65,6 +67,7 @@ pub(crate) fn execute(
     Ok(Some(output))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resize_boxed_stage(
     image: &DynamicImage,
     context: &ExecutionContext,
@@ -87,6 +90,7 @@ fn resize_boxed_stage(
     .execute()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn premultiply_for_boxed_passes(
     image: &DynamicImage,
     filter: ResampleFilter,
@@ -121,10 +125,12 @@ fn premultiply_for_boxed_passes(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn premultiply_sample(sample: u8, alpha: u8) -> u8 {
     ((u16::from(sample) * u16::from(alpha) + 127) / 255) as u8
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn unpremultiply_for_boxed_passes(
     image: DynamicImage,
     alpha: StraightAlpha,
@@ -150,6 +156,7 @@ fn unpremultiply_for_boxed_passes(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn unpremultiply_sample(sample: u8, alpha: u8) -> u8 {
     if alpha == 0 {
         sample
@@ -158,6 +165,7 @@ fn unpremultiply_sample(sample: u8, alpha: u8) -> u8 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn pillow_mode_uses_tall_pass_order(mode: Mode) -> bool {
     match mode {
         Mode::One

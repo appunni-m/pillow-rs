@@ -7,10 +7,12 @@ use crate::raster::{GrayImage, ImageBuffer, Rgba};
 pub(crate) type Input = ImageBuffer<Rgba<u16>, Vec<u16>>;
 pub(crate) type Kernel<'a> = Checked<'a, Rgba<u16>>;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare(input: &Input) -> Result<Kernel<'_>, PilError> {
     Checked::new(input)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(input: Kernel<'_>) -> Result<GrayImage, PilError> {
     native_rgb::<u16, 4>(
         input.input.as_raw(),

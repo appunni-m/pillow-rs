@@ -381,6 +381,13 @@ BENCHMARK_CASE_OVERRIDES: dict[str, str] = {
     "pil-imagepalette-imagepalette.getcolor.standard": "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgb-tuple-append",
 }
 
+REDUCE_FIXED_POINT_BOUNDARY_CASE_ID = (
+    "PIL.Image.Image.reduce.nuanced.l-fixed-point-reciprocal-zero-4097x4096"
+)
+REDUCE_FIXED_POINT_BOUNDARY_WORKLOAD_ID = (
+    "pil-image-image.reduce.fixed-point-reciprocal-zero-l-4097x4096"
+)
+
 # Materialized public ``getchannel`` workflows used by the operation benchmark.
 # Setup stays outside the timed boundary; the call plus ``tobytes`` are timed so
 # lazy target backends pay for actual extraction, synchronization, and readback.
@@ -43682,6 +43689,19 @@ def build_nuanced_cases(
             "values": {"factor": literal([3, 5])},
         },)
 
+        # Preserve Pillow's fixed-point reciprocal edge where the block area
+        # exceeds 2^24.  The uniform source keeps the expected zero result
+        # visible without storing a 16 MiB fixture asset.
+        specs += ({
+            "surface": "PIL.Image.Image", "operation": "reduce",
+            "requirement_suffix": "mode.l",
+            "additional_requirement_suffixes": ["performance.standard"],
+            "name": "l-fixed-point-reciprocal-zero-4097x4096",
+            "mode": "L", "size": [4097, 4096], "edge": "uniform-fill",
+            "pixel": 1, "observe_result": "tobytes",
+            "values": {"factor": literal([4097, 4096])},
+        },)
+
         # Keep cross-backend parity sensitive to alpha handling and the
         # one-band path without multiplying the large benchmark fixture cost.
         for mode, requirement_suffix, seed in (
@@ -59983,6 +60003,51 @@ def _benchmark_success_workflow(workload_id: str) -> dict[str, Any] | None:
     return None
 
 
+def reduce_fixed_point_boundary_benchmark_workload(
+    operations: dict[tuple[str, str], dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the dedicated large-L workload for Pillow's Reduce reciprocal edge."""
+
+    case = cases_by_id.get(REDUCE_FIXED_POINT_BOUNDARY_CASE_ID)
+    if case is None:
+        raise ValueError(
+            "large-L fixed-point Reduce benchmark case is missing: "
+            f"{REDUCE_FIXED_POINT_BOUNDARY_CASE_ID}"
+        )
+    operation = operations[("PIL.Image.Image", "reduce")]
+    requirement_id = _performance_requirement(
+        operations, "PIL.Image.Image", "reduce"
+    )
+    if requirement_id not in case.get("covers", []):
+        raise ValueError(
+            "large-L fixed-point Reduce case lacks its benchmark requirement"
+        )
+    return {
+        "workload_id": REDUCE_FIXED_POINT_BOUNDARY_WORKLOAD_ID,
+        "covers": [requirement_id],
+        "subjects": benchmark_subjects(operation),
+        "input": {"kind": "parity_case", "case_id": case["case_id"]},
+        "measurement": {
+            "boundary": "observed_steps",
+            "step_ids": ["call", "observe-result"],
+            "metrics": operation["benchmark"]["metrics"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "concurrency": 1,
+            "cache_state": "warm",
+            "correctness_gate": "parity_pass",
+        },
+        "context": _workflow_benchmark_context(
+            case,
+            variant="reduce-fixed-point-reciprocal-zero-l-4097x4096",
+            surface="PIL.Image.Image",
+            operation="reduce",
+        ),
+    }
+
+
 # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
 def build_inputs(
     manifest: dict[str, Any],
@@ -60201,6 +60266,15 @@ def build_inputs(
             counts["getdata_core_only_target_output_cases"] = len(
                 getdata_core_only_cases
             )
+            for getdata_operation in ("getdata", "get_flattened_data"):
+                getdata_matrix_cases = core_only_getdata_matrix_cases(
+                    active_assets_root,
+                    getdata_operation,
+                )
+                nuanced_cases.extend(getdata_matrix_cases)
+                counts[
+                    f"{getdata_operation}_core_only_mode_size_matrix_cases"
+                ] = len(getdata_matrix_cases)
             # Native PutData writes use recorded outputs for the five
             # CoreOnly sample layouts, with the same sizes and input patterns
             # as the rest of the mode matrix.
@@ -62605,6 +62679,15 @@ def build_inputs(
                         }
                     )
                     members.append({"workload_id": workload_id, "weight": 1})
+        if surface_id == "PIL.Image.Image":
+            boundary_workload = reduce_fixed_point_boundary_benchmark_workload(
+                operations, all_cases_by_id
+            )
+            workloads.append(boundary_workload)
+            members.append(
+                {"workload_id": REDUCE_FIXED_POINT_BOUNDARY_WORKLOAD_ID, "weight": 1}
+            )
+
         mode_size_workloads: list[dict[str, Any]] = []
         mode_size_members: list[dict[str, Any]] = []
         target_only_mode_size_workloads: list[dict[str, Any]] = []
@@ -62634,7 +62717,12 @@ def build_inputs(
                 continue
             operation = matches[0][0]
             result_shape = operation.get("source", {}).get("result", {}).get("shape")
-            if result_shape != "image" and operation["id"] not in {"putdata", "getbbox"}:
+            if result_shape != "image" and operation["id"] not in {
+                "putdata",
+                "getbbox",
+                "getdata",
+                "get_flattened_data",
+            }:
                 continue
             benchmark_requirement_ids = {
                 requirement["id"]
@@ -62692,7 +62780,11 @@ def build_inputs(
                     "boundary": (
                         "observed_steps"
                         if operation["id"] == "putdata"
-                        or operation["id"] == "getbbox"
+                        or operation["id"] in {
+                            "getbbox",
+                            "getdata",
+                            "get_flattened_data",
+                        }
                         or (
                             target_only
                             and surface_id == "PIL.ImageEnhance.Sharpness"
@@ -62703,7 +62795,11 @@ def build_inputs(
                         ["call", "observe-receiver"]
                         if operation["id"] == "putdata"
                         else ["call"]
-                        if operation["id"] == "getbbox"
+                        if operation["id"] in {
+                            "getbbox",
+                            "getdata",
+                            "get_flattened_data",
+                        }
                         else [
                             "enhancer",
                             "result-sharpened",

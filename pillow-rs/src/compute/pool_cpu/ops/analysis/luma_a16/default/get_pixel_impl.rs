@@ -3,6 +3,7 @@ use crate::error::PilError;
 use crate::image::FormattedPixelValue;
 use crate::raster::{ImageBuffer, LumaA};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 // NO_PILLOW_SUPPORT: this internal high-depth identity has no Pillow GetPixel mode.
 /// Reads one pixel from this exact mode's native carrier.
 pub(crate) fn execute(

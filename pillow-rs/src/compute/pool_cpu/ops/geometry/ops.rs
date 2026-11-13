@@ -34,7 +34,7 @@ const SCALE_INPUTS: &[InputContract] = &[InputContract::ScaleParameters];
 const RESIZE_CHILD: &[OperationId] = &[OperationId::Resize];
 const BOXED_RESIZE_CHILD: &[OperationId] = &[OperationId::ResizeBoxed];
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_mode(
     operation: OperationId,
     inputs: &'static [InputContract],
@@ -71,22 +71,22 @@ fn classify_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_contain(mode: Mode) -> ModeSupport {
     classify_mode(OperationId::Contain, CONTAIN_INPUTS, mode)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_cover(mode: Mode) -> ModeSupport {
     classify_mode(OperationId::Cover, COVER_INPUTS, mode)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_fit(mode: Mode) -> ModeSupport {
     classify_mode(OperationId::Fit, FIT_INPUTS, mode)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_scale(mode: Mode) -> ModeSupport {
     classify_mode(OperationId::Scale, SCALE_INPUTS, mode)
 }
@@ -140,12 +140,12 @@ pub(crate) type PreparedFit<'a> = PreparedGeometry<'a>;
 pub(crate) type PreparedScale<'a> = PreparedGeometry<'a>;
 
 impl PreparedGeometry<'_> {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn composed_selections(&self) -> &[StrategySelection] {
         match &self.work {
             GeometryWork::Copy(_) => &[],
@@ -153,7 +153,7 @@ impl PreparedGeometry<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.work {
             GeometryWork::Copy(image) => Ok(image.clone()),
@@ -165,7 +165,7 @@ impl PreparedGeometry<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn select(
     support: &'static OperationSupport,
     mode: Mode,
@@ -181,7 +181,7 @@ fn select(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn resize_plan<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -200,7 +200,7 @@ fn resize_plan<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn select_contain(
     inputs: OperationInputs<'_>,
     width: u32,
@@ -216,7 +216,7 @@ fn select_contain(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn select_cover(
     inputs: OperationInputs<'_>,
     width: u32,
@@ -232,7 +232,7 @@ fn select_cover(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn select_fit(
     inputs: OperationInputs<'_>,
     width: u32,
@@ -252,7 +252,7 @@ fn select_fit(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn select_scale(
     inputs: OperationInputs<'_>,
     factor: f64,
@@ -269,7 +269,7 @@ fn select_scale(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_contain<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -295,7 +295,7 @@ fn prepare_contain<'a>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_cover<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -321,7 +321,7 @@ fn prepare_cover<'a>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_fit<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -361,7 +361,7 @@ fn prepare_fit<'a>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_scale<'a>(
     inputs: OperationInputs<'a>,
     factor: f64,
@@ -396,7 +396,7 @@ fn prepare_scale<'a>(
 }
 
 /// Prepares Contain, Cover, Fit, or Scale with its exact mode and nested Resize plan.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -449,7 +449,7 @@ pub(super) const NATIVE_F32_FILL_INPUTS: &[InputContract] = &[
 ];
 const PAD_RESIZE_CHILD: &[OperationId] = &[OperationId::Resize];
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_pad_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -497,19 +497,19 @@ pub(crate) struct PreparedPad<'a> {
 }
 
 impl PreparedPad<'_> {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn composed_selections(&self) -> &[StrategySelection] {
         self.resize
             .as_ref()
             .map_or(&[], |resize| std::slice::from_ref(resize.selection()))
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let source = self.inputs.image;
         let frame = self.frame;
@@ -556,7 +556,7 @@ impl PreparedPad<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn finish_pad(
     source: &DynamicImage,
     mut output: DynamicImage,
@@ -566,7 +566,7 @@ fn finish_pad(
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn record_vector_work(vector_blocks: u64, scalar_tail: u64) {
     if vector_blocks != 0 || scalar_tail != 0 {
         crate::compute::record_pipeline_operation_path("vector");
@@ -575,7 +575,7 @@ fn record_vector_work(vector_blocks: u64, scalar_tail: u64) {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn try_vertical_append(
     image: &DynamicImage,
     frame: PadFrame,
@@ -608,7 +608,7 @@ fn try_vertical_append(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn try_direct_resize_into_canvas(
     image: &DynamicImage,
     frame: PadFrame,
@@ -632,7 +632,7 @@ fn try_direct_resize_into_canvas(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn select_pad(
     mode: Mode,
     facts: StrategyInputs,
@@ -647,7 +647,7 @@ fn select_pad(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn pad_mode(
     image: &DynamicImage,
     frame: PadFrame,
@@ -704,7 +704,7 @@ fn pad_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_pad_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &'a PipelineOp,

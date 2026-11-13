@@ -951,6 +951,7 @@ pub(crate) fn native_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAs
     exact_byte_layout(input.byte_len, expected)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn checked_native_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let expected = crate::checked_dims::CheckedDims::new(input.width, input.height, channels)
         .ok()

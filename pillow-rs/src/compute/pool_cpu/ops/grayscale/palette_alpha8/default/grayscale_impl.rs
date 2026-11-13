@@ -1,34 +1,44 @@
-//! Palette colors are injected before the archived expansion and luma stages.
+//! Convert native palette-alpha indices to luma without materializing RGBA.
 
 use super::super::super::helpers::luma::finish;
 use crate::checked_dims::CheckedDims;
+use crate::compute::pool_cpu::helpers::palette as palette_lookup;
 use crate::compute::registry::support::PaletteInput;
 use crate::error::PilError;
-use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbaImage};
+use crate::raster::{GrayAlphaImage, GrayImage};
 
 pub(crate) type Input = GrayAlphaImage;
 pub(crate) struct Kernel<'a> {
-    source: RgbaImage,
-    dimensions: CheckedDims,
     input: &'a Input,
+    palette: PaletteInput<'a>,
+    dimensions: CheckedDims,
 }
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: &'a Input,
-    palette: PaletteInput<'_>,
+    palette: PaletteInput<'a>,
 ) -> Result<Kernel<'a>, PilError> {
-    let source = match crate::image::expand_palette_alpha(input, palette.rgb.unwrap_or_default()) {
-        DynamicImage::ImageRgba8(rgba) => rgba,
-        _ => unreachable!("PA expansion constructs RGBA"),
-    };
     let dimensions = CheckedDims::new_allow_empty(input.width(), input.height(), 1)?;
     Ok(Kernel {
-        source,
-        dimensions,
         input,
+        palette,
+        dimensions,
     })
 }
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(input: Kernel<'_>) -> Result<GrayImage, PilError> {
-    let source = input.source;
-    let output = crate::color::grayscale_rgb_bytes::<4>(source.as_raw(), input.dimensions, 32768);
+    let mut output: Vec<u8> = input
+        .input
+        .as_raw()
+        .chunks_exact(2)
+        .take(input.dimensions.total_pixels())
+        .map(|sample| {
+            let rgb = palette_lookup::color(sample[0], input.palette);
+            crate::color::grayscale_rgb_pixel(&rgb, 32768)
+        })
+        .collect();
+    output.resize(input.dimensions.total_pixels(), 0);
     finish(input.input.width(), input.input.height(), output)
 }

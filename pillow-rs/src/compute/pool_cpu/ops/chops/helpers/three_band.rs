@@ -6,6 +6,7 @@ use crate::raster::{DynamicImage, Mode, RgbImage};
 
 use super::binary::BinaryOperation;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Applies raw channel arithmetic to the primary mode's typed pixel buffer.
 pub(crate) fn execute(
     image: &RgbImage,
@@ -24,6 +25,7 @@ pub(crate) fn execute(
     super::binary::execute(image, right, operation)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Applies Pillow's native LAB chroma representation around a three-band
 /// binary operation. LAB's public byte carrier biases signed a/b samples by
 /// 128, while Pillow's internal Chops loop operates on their signed-byte
@@ -51,6 +53,7 @@ pub(crate) fn execute_lab_primary(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_encoded<const LEFT_LAB: bool, const RIGHT_LAB: bool, const OUTPUT_LAB: bool>(
     image: &RgbImage,
     other: &RgbImage,
@@ -97,6 +100,7 @@ fn execute_encoded<const LEFT_LAB: bool, const RIGHT_LAB: bool, const OUTPUT_LAB
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn map_chroma<const LEFT_LAB: bool, const RIGHT_LAB: bool, const OUTPUT_LAB: bool>(
     left: u8,
@@ -121,6 +125,7 @@ fn map_chroma<const LEFT_LAB: bool, const RIGHT_LAB: bool, const OUTPUT_LAB: boo
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn three_band_image(image: &DynamicImage) -> Result<&RgbImage, PilError> {
     match image {
         DynamicImage::ImageRgb8(buffer)

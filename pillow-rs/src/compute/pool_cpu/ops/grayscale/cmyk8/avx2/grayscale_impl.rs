@@ -5,14 +5,17 @@ use super::super::default::grayscale_impl as scalar;
 
 pub(crate) type Kernel<'a> = scalar::Kernel<'a>;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare(input: scalar::Kernel<'_>) -> Kernel<'_> {
     input
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn dimensions(input: &Kernel<'_>) -> (u32, u32) {
     input.input.dimensions()
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(input: Kernel<'_>) -> (Vec<u8>, u64, u64) {
     cmyk::execute(input.input.as_raw())
 }

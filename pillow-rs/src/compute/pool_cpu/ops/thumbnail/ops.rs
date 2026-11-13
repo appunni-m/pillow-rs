@@ -86,15 +86,19 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(
     COMPOSED_OPERATIONS,
 );
 
-/// Whether a validated RGB PutPixel prefix can use Thumbnail's sparse 2x2 path.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+/// Whether a validated RGB PutPixel prefix can use Thumbnail's serial sparse 2x2 path.
+/// Other architecture contexts execute their prepared Reduce and Resize children.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn rgb_putpixel_fusion_supported(
     image: &DynamicImage,
     writes: &[PipelineOp],
     thumbnail: &PipelineOp,
     context: &ExecutionContext,
 ) -> bool {
-    if context.backend() != Backend::Cpu || !matches!(image, DynamicImage::ImageRgb8(_)) {
+    if context.backend() != Backend::Cpu
+        || context.architecture() != Architecture::Default
+        || !matches!(image, DynamicImage::ImageRgb8(_))
+    {
         return false;
     }
     if writes.is_empty()
@@ -149,12 +153,12 @@ pub(crate) struct PreparedRgbPutPixelThumbnail<'a> {
 }
 
 impl PreparedRgbPutPixelThumbnail<'_> {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.resize_selection
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         super::rgb8::ops::execute_putpixel_thumbnail(
             self.image,
@@ -167,7 +171,7 @@ impl PreparedRgbPutPixelThumbnail<'_> {
 }
 
 /// Select the supported fusion and its exact child Resize strategy.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_rgb_putpixel_thumbnail<'a>(
     image: &'a DynamicImage,
     writes: &'a [PipelineOp],

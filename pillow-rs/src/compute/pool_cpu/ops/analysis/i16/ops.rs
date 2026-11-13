@@ -7,6 +7,7 @@ use crate::raster::Mode;
 use super::super::helpers::get_data::{self as helpers, GetDataOutput, GetDataRequest};
 use super::default::get_data_impl;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_get_data(
     image: &Luma16Image,
     selection: StrategySelection,
@@ -25,6 +26,7 @@ pub(crate) fn execute_get_data(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn integer_samples(
     image: &Luma16Image,
     selection: StrategySelection,
@@ -77,6 +79,7 @@ pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::Mode
         crate::raster::Mode::ImageI16,
     );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel(
     image: &crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     x: u32,
@@ -123,6 +126,7 @@ crate::compute::pool_cpu::ops::analysis::helpers::get_data_support::declare_get_
     ImageI16, 1, Pillow, Pillow, Rejected,
 );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 crate::compute::pool_cpu::ops::analysis::helpers::projection_support::declare_projection_support!(
     ImageI16, Pillow,
 );

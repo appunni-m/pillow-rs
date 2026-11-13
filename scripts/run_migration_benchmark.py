@@ -484,7 +484,7 @@ def load_parity_cases(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     from validate_migration_parity_contract import validate_inputs
 
     ensure_generated_parity_inputs(manifest)
-    validate_inputs(manifest, FIXTURE_ROOT)
+    validate_inputs(manifest, FIXTURE_ROOT, retain_documents=False)
     cases: dict[str, dict[str, Any]] = {}
     inputs: dict[str, str] = {}
     for relative in manifest["input_index"]["parity"]:

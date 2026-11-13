@@ -7,10 +7,12 @@ use crate::raster::{GrayAlphaImage, GrayImage, LumaA};
 pub(crate) type Input = GrayAlphaImage;
 pub(crate) type Kernel<'a> = Checked<'a, LumaA<u8>>;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare(input: &Input) -> Result<Kernel<'_>, PilError> {
     Checked::new(input)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(input: Kernel<'_>) -> Result<GrayImage, PilError> {
     let bytes = input
         .input

@@ -5,6 +5,7 @@ use crate::compute::registry::support::{
 };
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) const fn support(
     operation: OperationId,
     mode: Mode,
@@ -67,7 +68,16 @@ pub(crate) const fn support(
             architectures,
             "native high-depth alpha output extends Pillow putalpha",
         ),
-        _ => ModeSupport::cpu(operation, mode, output, inputs, architectures),
+        Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8 => ModeSupport::cpu(operation, mode, output, inputs, architectures),
     }
 }
 

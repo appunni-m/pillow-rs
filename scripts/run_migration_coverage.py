@@ -56,7 +56,7 @@ def now() -> str:
 def load_coverage_plans(manifest: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, str]]:
     from validate_migration_parity_contract import validate_inputs
 
-    validate_inputs(manifest, FIXTURE_ROOT)
+    validate_inputs(manifest, FIXTURE_ROOT, retain_documents=False)
     plans: list[dict[str, Any]] = []
     paths: dict[str, str] = {}
     for relative in manifest["input_index"]["coverage"]:

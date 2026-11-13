@@ -1,11 +1,28 @@
 //! Shared byte interleave kernels for exact Merge layouts.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::pool_cpu::ops::composite::ops::MergeLayout;
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum MergeLayout {
+    Two,
+    Three { lab_encoding: bool },
+    Four,
+}
+
+impl MergeLayout {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    pub(crate) const fn channels(self) -> u8 {
+        match self {
+            Self::Two => 2,
+            Self::Three { .. } => 3,
+            Self::Four => 4,
+        }
+    }
+}
 
 pub(crate) fn interleave(
     first: &DynamicImage,

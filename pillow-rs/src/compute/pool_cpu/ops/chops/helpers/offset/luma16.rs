@@ -6,6 +6,7 @@ use crate::raster::buffer::ImageBuffer;
 use crate::raster::color::Luma;
 use wide::{ShuffleExt, u16x8};
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Rotate one row of complete 16-bit samples, vectorizing each full block.
 #[inline]
 fn offset_luma16_row(
@@ -34,6 +35,7 @@ fn offset_luma16_row(
     Some((vector_blocks, u64::try_from(scalar_tail).ok()?))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Load eight samples from a row, joining the wrapped tail and head if needed.
 #[inline]
 fn offset_luma16_vector_block(source: &[u16], source_start: usize) -> Option<u16x8> {
@@ -66,6 +68,7 @@ fn offset_luma16_vector_block(source: &[u16], source_start: usize) -> Option<u16
     Some([u16x8::new(head), u16x8::new(tail)].shuffle(u16x8::new(indices)))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_luma16(
     image: &ImageBuffer<Luma<u16>, Vec<u16>>,
     xoffset: i32,
@@ -130,6 +133,7 @@ pub(crate) fn execute_luma16(
     Ok(record_luma16_output(result, vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn record_luma16_output(
     image: ImageBuffer<Luma<u16>, Vec<u16>>,
     vector_blocks: u64,
@@ -141,6 +145,7 @@ fn record_luma16_output(
     image
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn offset_luma16_error() -> PilError {
     PilError::InternalError("Chops Offset input did not match its admitted I;16 layout".into())
 }

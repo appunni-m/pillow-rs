@@ -613,6 +613,7 @@ pub(crate) fn color3dlut_guard(input: StrategyInputs, source_channels: u8) -> Gu
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn reduce_native_byte_vector_guard(
     input: StrategyInputs,
     channels: u8,

@@ -14,6 +14,10 @@ pub trait ImageOpsPadRouteCallbacks:
         Error = <Self as ImageOpsPadCallbacks>::Error,
     >
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    /// Whether the module-level public `ImageOps.contain` still resolves to
+    /// the implementation captured by the facade at import time.
+    fn contain_function_is_base(&mut self) -> Result<bool, <Self as ImageOpsPadCallbacks>::Error>;
     /// Whether the facade, image instance, and its Pad methods are unmodified.
     fn native_pad_wrapper_is_eligible(
         &mut self,
@@ -57,6 +61,7 @@ pub trait ImageOpsPadRouteCallbacks:
     ) -> Result<<Self as ImageOpsPadCallbacks>::Image, <Self as ImageOpsPadCallbacks>::Error>;
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 /// Select typed Pad or its host-protocol fallback from one core route.
 ///
 /// Keep the native branch ordered: contain geometry precedes filter parsing;
@@ -70,17 +75,20 @@ pub fn pad_with_route_callbacks<C: ImageOpsPadRouteCallbacks>(
     color: &<C as ImageOpsPadCallbacks>::Value,
     centering: &<C as ImageOpsPadCallbacks>::Value,
 ) -> Result<<C as ImageOpsPadCallbacks>::Image, <C as ImageOpsPadCallbacks>::Error> {
-    if let Some(dimensions) = native_size_pair_with_callbacks(callbacks)? {
-        if callbacks.native_pad_wrapper_is_eligible()?
-            && callbacks.native_pad_arguments_are_eligible(method, color, centering)?
-        {
-            return native_pad_with_callbacks(callbacks, dimensions, method, color, centering);
+    if callbacks.contain_function_is_base()? {
+        if let Some(dimensions) = native_size_pair_with_callbacks(callbacks)? {
+            if callbacks.native_pad_wrapper_is_eligible()?
+                && callbacks.native_pad_arguments_are_eligible(method, color, centering)?
+            {
+                return native_pad_with_callbacks(callbacks, dimensions, method, color, centering);
+            }
         }
     }
 
     super::pad_fallback_with_callbacks(callbacks, size, method, color, centering)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn native_pad_with_callbacks<C: ImageOpsPadRouteCallbacks>(
     callbacks: &mut C,
     dimensions: (u32, u32),

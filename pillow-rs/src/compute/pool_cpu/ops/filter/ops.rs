@@ -56,6 +56,7 @@ const RANK_WINDOW_VALUE: &[InputContract] = &[InputContract::OddRankWindow {
 }];
 const MODE_FILTER_INPUTS: &[InputContract] = &[InputContract::ModeFilterWindow];
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) const fn inputs_for(operation: OperationId) -> &'static [InputContract] {
     match operation {
         OperationId::Filter3x3 => FILTER3X3_INPUTS,
@@ -71,6 +72,7 @@ pub(super) const fn inputs_for(operation: OperationId) -> &'static [InputContrac
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn core_only_reason(operation: OperationId) -> &'static str {
     match operation {
         OperationId::GaussianBlur | OperationId::BoxBlur | OperationId::BoxBlurXY => {
@@ -88,6 +90,7 @@ fn core_only_reason(operation: OperationId) -> &'static str {
 
 // NO_PILLOW_SUPPORT: callers use this helper only for native mode extensions
 // whose Pillow mode contract is narrower; `core_only_reason` records the case.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn core_only(
     operation: OperationId,
     mode: Mode,
@@ -103,15 +106,18 @@ pub(super) fn core_only(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn core_only_serial(operation: OperationId, mode: Mode) -> ModeSupport {
     core_only(operation, mode, &[])
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn serial_mode_filter(mode: Mode) -> ModeSupport {
     ModeSupport::serial(OperationId::ModeFilter, mode, MODE_FILTER_INPUTS)
 }
 
 /// Declares a native Filter3x3 or Filter5x5 strategy implemented by Pillow.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn pillow_kernel(
     operation: OperationId,
     mode: Mode,
@@ -126,6 +132,7 @@ pub(super) fn pillow_kernel(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rejected(mode: Mode, reason: &'static str) -> ModeSupport {
     ModeSupport::Rejected {
         mode,
@@ -134,6 +141,7 @@ fn rejected(mode: Mode, reason: &'static str) -> ModeSupport {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn support_for_mode(operation: OperationId, mode: Mode) -> ModeSupport {
     if operation == OperationId::ModeFilter {
         return mode_filter_support_for_mode(mode);
@@ -186,6 +194,7 @@ enum ModeFilterStrategy {
 }
 
 impl ModeFilterStrategy {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn execute(self, image: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
         match self {
             Self::One => super::one::ops::execute_mode_filter(image, size),
@@ -210,6 +219,7 @@ impl ModeFilterStrategy {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn mode_filter_route(mode: Mode) -> (ModeSupport, Option<ModeFilterStrategy>) {
     match mode {
         Mode::One => (
@@ -282,10 +292,12 @@ fn mode_filter_route(mode: Mode) -> (ModeSupport, Option<ModeFilterStrategy>) {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn mode_filter_support_for_mode(mode: Mode) -> ModeSupport {
     mode_filter_route(mode).0
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn unsharp_support_for_mode(mode: Mode) -> ModeSupport {
     // Pillow 12.2 UnsharpMask delegates to ImagingGaussianBlur, whose admitted
     // uint8 identities are L, LA, La, RGB, RGBA, RGBa, RGBX, and CMYK.
@@ -298,7 +310,23 @@ fn unsharp_support_for_mode(mode: Mode) -> ModeSupport {
         | Mode::ImageRgbPremultiplied8
         | Mode::ImageRgbx8
         | Mode::ImageCmyk8 => ModeSupport::serial(OperationId::UnsharpMask, mode, UNSHARP_INPUTS),
-        _ => rejected(mode, WRONG_UNSHARP_MODE),
+        Mode::One
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => rejected(mode, WRONG_UNSHARP_MODE),
     }
 }
 
@@ -370,11 +398,13 @@ struct PreparedUnsharpBlend {
 }
 
 impl PreparedUnsharpBlend {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
     /// Applies the selected implementation to the original and blur buffers.
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn execute(self, original: &[u8], blurred_output: &mut [u8]) -> Result<(), PilError> {
         if self.selection.implementation.architecture != crate::compute::Architecture::Default {
             if self.mode != Mode::ImageRgb8 {
@@ -409,10 +439,12 @@ pub(crate) struct PreparedUnsharpMask<'a> {
 }
 
 impl PreparedUnsharpMask<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         self.blend.selection()
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let Self {
             original,
@@ -453,10 +485,12 @@ pub(crate) struct PreparedModeFilter<'a> {
 }
 
 impl PreparedModeFilter<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let mut output = self.strategy.execute(self.image, self.size)?;
         super::helpers::hidden_lanes::finish_mode_filter(self.image, &mut output, self.size)?;
@@ -465,6 +499,7 @@ impl PreparedModeFilter<'_> {
 }
 
 /// Selects the direct ModeFilter mode strategy before applying its native-byte helper.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_mode_filter<'a>(
     image: &'a DynamicImage,
     size: u32,
@@ -497,6 +532,7 @@ pub(crate) fn prepare_mode_filter<'a>(
 }
 
 /// Select the direct UnsharpMask blend from its declared exact-mode strategy.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_unsharp_blend(
     image: &DynamicImage,
     sigma: f32,
@@ -528,6 +564,7 @@ fn prepare_unsharp_blend(
 }
 
 /// Selects and composes the mode-specific blend with its GaussianBlur input.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_unsharp_mask<'a>(
     image: &'a DynamicImage,
     sigma: f32,
@@ -588,6 +625,7 @@ pub(crate) enum FilterRequest {
 }
 
 impl FilterRequest {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn operation(self) -> OperationId {
         match self {
             Self::Filter3x3 { .. } => OperationId::Filter3x3,
@@ -613,10 +651,12 @@ pub(crate) struct PreparedFilter<'a> {
 }
 
 impl PreparedFilter<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn shared_identity_proof(&self) -> Option<bool> {
         let FilterRequest::Filter3x3 {
             kernel,
@@ -637,6 +677,7 @@ impl PreparedFilter<'_> {
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let image = self.image;
         let request = self.request;
@@ -689,6 +730,7 @@ impl PreparedFilter<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_architecture_blur(
     image: &DynamicImage,
     mode: Mode,

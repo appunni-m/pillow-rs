@@ -11,6 +11,7 @@ use crate::error::PilError;
 use crate::ops::pil_resize::precompute_coeffs;
 use crate::pipeline::ResampleFilter;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_boxed<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     source: &[u8],
     source_size: (u32, u32),
@@ -28,6 +29,7 @@ pub(crate) fn execute_boxed<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_AL
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_boxed_with_sparse_rows<
     const CHANNELS: usize,
     const PREMULTIPLY_STRAIGHT_ALPHA: bool,
@@ -49,6 +51,7 @@ pub(crate) fn execute_boxed_with_sparse_rows<
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_boxed_with_row_facts<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     source: &[u8],
     source_size: (u32, u32),
@@ -100,6 +103,7 @@ fn execute_boxed_with_row_facts<const CHANNELS: usize, const PREMULTIPLY_STRAIGH
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_sparse_rows(sparse_rows: Option<&[bool]>, height: u32) -> Result<(), PilError> {
     if sparse_rows.is_some_and(|rows| usize::try_from(height).ok() != Some(rows.len())) {
         Err(PilError::InternalError(
@@ -110,6 +114,7 @@ fn validate_sparse_rows(sparse_rows: Option<&[bool]>, height: u32) -> Result<(),
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn checked_channel_count<const CHANNELS: usize>() -> Result<u8, PilError> {
     u8::try_from(CHANNELS)
         .ok()
@@ -119,6 +124,7 @@ fn checked_channel_count<const CHANNELS: usize>() -> Result<u8, PilError> {
         })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn transpose_source<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -140,6 +146,7 @@ fn transpose_source<const CHANNELS: usize>(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn nonzero_rows<const CHANNELS: usize>(
     source: &[u8],
     width: u32,
@@ -158,10 +165,12 @@ fn nonzero_rows<const CHANNELS: usize>(
         .collect())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn needs_vertical_first(source: (u32, u32), destination: (u32, u32)) -> bool {
     source.0 != destination.0 && source.1 != destination.1 && !horizontal_first(source, destination)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_vertical_first<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -208,6 +217,7 @@ fn execute_vertical_first<
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -227,6 +237,7 @@ pub(crate) fn execute<
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_with_sparse_rows<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -247,6 +258,7 @@ pub(crate) fn execute_with_sparse_rows<
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_with_row_facts<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -272,6 +284,7 @@ fn execute_with_row_facts<
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_into<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -304,6 +317,7 @@ pub(crate) fn execute_into<
     Ok(true)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_into_with_row_facts<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -414,6 +428,7 @@ fn execute_into_with_row_facts<
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_channels<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -434,6 +449,7 @@ fn validate_channels<
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_coefficients(
     horizontal: &crate::ops::pil_resize::FilterCoeffs,
     vertical: &crate::ops::pil_resize::FilterCoeffs,
@@ -453,6 +469,7 @@ fn validate_coefficients(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_pass<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -499,6 +516,7 @@ fn horizontal_pass<
     Some((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_pass<
     const CHANNELS: usize,
     const PREMULTIPLIED_ALPHA: bool,
@@ -555,6 +573,7 @@ fn vertical_pass<
     Some((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn invalid_kernel_plan() -> PilError {
     PilError::InternalError("selected native-byte Resize kernel rejected its plan".into())
 }

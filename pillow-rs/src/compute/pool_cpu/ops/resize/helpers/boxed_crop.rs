@@ -11,6 +11,7 @@ struct ExactCrop {
     full_source: bool,
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn narrow_valid_bounds(
     source_size: (u32, u32),
     bounds: (f64, f64, f64, f64),
@@ -25,6 +26,7 @@ pub(crate) fn narrow_valid_bounds(
 }
 
 /// Narrows and validates source-box coordinates at Pillow's float32 boundary.
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn validate_bounds(
     bounds: (f64, f64, f64, f64),
     source_size: (u32, u32),
@@ -49,6 +51,7 @@ pub(crate) fn validate_bounds(
     Ok(bounds)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn exact_crop(
     source_size: (u32, u32),
     destination_size: (u32, u32),
@@ -77,6 +80,7 @@ fn exact_crop(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn uses_default_shortcut(
     source_size: (u32, u32),
     destination_size: (u32, u32),
@@ -90,6 +94,7 @@ pub(crate) fn uses_default_shortcut(
     crop.full_source || !(straight_alpha_mode && !matches!(filter, ResampleFilter::Nearest))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute_default(
     image: &DynamicImage,
     destination_size: (u32, u32),

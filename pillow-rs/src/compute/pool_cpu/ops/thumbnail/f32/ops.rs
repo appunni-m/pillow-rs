@@ -9,6 +9,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::serial(
     super::super::ops::INPUTS,
 );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::thumbnail) fn uses_unboxed_resize(
     source: (u32, u32),
     output: (u32, u32),

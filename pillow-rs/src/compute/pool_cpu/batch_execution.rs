@@ -363,7 +363,7 @@ struct FusedStep {
     operations: usize,
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_fused_run(
     ops: &[PipelineOp],
     start: usize,
@@ -464,6 +464,7 @@ fn execute_fused_run(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn draw_run_end(ops: &[PipelineOp], start: usize) -> usize {
     let mut end = start + 1;
     while end < ops.len() && crate::compute::pool_cpu::ops::draw::is_draw_op(&ops[end]) {
@@ -472,6 +473,7 @@ fn draw_run_end(ops: &[PipelineOp], start: usize) -> usize {
     end
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_alpha_composite_mirror_run(
     ops: &[PipelineOp],
     start: usize,
@@ -549,6 +551,7 @@ fn execute_alpha_composite_mirror_run(
     }))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn record_fused_operation_telemetry(
     op: &PipelineOp,
     selection: &StrategySelection,
@@ -564,6 +567,7 @@ fn record_fused_operation_telemetry(
     finish_pipeline_operation_telemetry();
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_chops_multiply_screen_run(
     ops: &[PipelineOp],
     start: usize,
@@ -613,6 +617,7 @@ fn execute_chops_multiply_screen_run(
     }))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_rgb_putpixel_thumbnail_run(
     ops: &[PipelineOp],
     start: usize,
@@ -650,6 +655,7 @@ fn execute_rgb_putpixel_thumbnail_run(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_transpose_run(
     ops: &[PipelineOp],
     start: usize,
@@ -716,6 +722,7 @@ fn execute_transpose_run(
     }))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn finish_failed_unprepared_run(ops: &[PipelineOp]) {
     for op in ops {
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
@@ -724,6 +731,7 @@ fn finish_failed_unprepared_run(ops: &[PipelineOp]) {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn finish_failed_prepared_run(ops: &[PipelineOp], selection: &StrategySelection) {
     let architecture = selection.implementation.architecture;
     for _ in ops {
@@ -735,6 +743,7 @@ fn finish_failed_prepared_run(ops: &[PipelineOp], selection: &StrategySelection)
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn finish_prepared_transpose_run(
     ops: &[PipelineOp],
     uses_default: bool,
@@ -748,6 +757,7 @@ fn finish_prepared_transpose_run(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_point_run(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -803,6 +813,7 @@ fn execute_point_run(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn put_pixel_run_end(ops: &[PipelineOp], start: usize) -> usize {
     let mut end = start + 1;
     while end < ops.len() && matches!(&ops[end], PipelineOp::PutPixel { .. }) {
@@ -811,6 +822,7 @@ fn put_pixel_run_end(ops: &[PipelineOp], start: usize) -> usize {
     end
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn execute_put_pixel_run(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -850,6 +862,7 @@ fn execute_put_pixel_run(
     output
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn finish_cpu_operation_telemetry(ops: &[PipelineOp], selection: Option<&StrategySelection>) {
     let architecture = selection.map(|selection| selection.implementation.architecture);
     let path = match architecture {
@@ -865,11 +878,13 @@ fn finish_cpu_operation_telemetry(ops: &[PipelineOp], selection: Option<&Strateg
     }
 }
 
-// TODO(pillow-rs#3ptb): verify prepared-batch output, fallback, and selection
-// receipts across the frozen CPU parity matrix. Source review maps each batch
-// route to its exact-mode contract: generic registry preparation; Draw runs;
-// guarded AlphaComposite+Mirror; same-source Multiply+Screen; composed byte
-// point LUTs; transpose runs; prepared PutPixel batches; and RGB PutPixel plus
-// Thumbnail using the selected Resize/ResizeBoxed child. Owned Invert and
-// Chops Add/Sub use the selected mode/architecture strategy only when its
-// in-place guard admits it, otherwise they use the prepared allocating route.
+// TODO(pillow-rs#3ptb): verify prepared-batch outputs, fault order, fallback,
+// and selection receipts across the frozen CPU parity matrix. All 22 function
+// definitions in this file now have source VERIFY markers. Confirm failure
+// telemetry before closure: unprepared failures are currently labeled `cpu`
+// without a selected strategy, and RGB PutPixel+Thumbnail preparation errors
+// return before per-operation telemetry begins. Source review covers generic
+// registry preparation; Draw runs; guarded AlphaComposite+Mirror; same-source
+// Multiply+Screen; composed byte point LUTs; transpose runs; prepared PutPixel
+// batches; RGB PutPixel+Thumbnail with its selected Resize/ResizeBoxed child;
+// and owned Invert/Chops Add/Sub in-place guards and allocating fallbacks.

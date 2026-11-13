@@ -1,5 +1,6 @@
 //! Geometry operation registration.
 use super::prelude::{PilError, Registry};
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn register_resize(m: &mut Registry) {
     m.insert(
         "Resize",
@@ -10,6 +11,7 @@ fn register_resize(m: &mut Registry) {
     );
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn register_crop_rotate(m: &mut Registry) {
     m.insert(
         "Crop",
@@ -28,6 +30,7 @@ fn register_crop_rotate(m: &mut Registry) {
     );
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn register_part_2(m: &mut Registry) {
     m.insert(
         "Transpose",
@@ -54,6 +57,7 @@ fn register_part_2(m: &mut Registry) {
     );
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn register(m: &mut Registry) -> Result<(), PilError> {
     register_resize(m);
     register_crop_rotate(m);

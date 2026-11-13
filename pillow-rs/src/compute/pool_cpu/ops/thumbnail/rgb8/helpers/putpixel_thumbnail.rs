@@ -16,6 +16,7 @@ pub(crate) struct ReducedRgbThumbnail {
     pub(crate) sparse_nonzero_rows: Option<Vec<bool>>,
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare(
     image: &DynamicImage,
     putpixel_ops: &[PipelineOp],
@@ -82,6 +83,7 @@ pub(crate) fn prepare(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn collect_rgb_pixel_overrides(
     putpixel_ops: &[PipelineOp],
     source_width: u32,
@@ -109,6 +111,7 @@ fn collect_rgb_pixel_overrides(
     Ok(overrides)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 #[inline(always)]
 fn apply_rgb_pixel_overrides(
     source_bytes: &[u8],

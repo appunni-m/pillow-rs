@@ -16,6 +16,7 @@ use crate::ops::pil_resize::{
 };
 use crate::pipeline::ResampleFilter;
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) fn execute<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     source: &[u8],
     source_size: (u32, u32),
@@ -61,6 +62,7 @@ pub(super) fn execute<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: b
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_channels<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>()
 -> Result<(), PilError> {
     if (1..=4).contains(&CHANNELS) && (!PREMULTIPLY_STRAIGHT_ALPHA || matches!(CHANNELS, 2 | 4)) {
@@ -90,6 +92,7 @@ struct BoxedResizePlan {
 }
 
 impl BoxedResizePlan {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn new<const CHANNELS: usize>(
         source: &[u8],
         source_size: (u32, u32),
@@ -164,6 +167,7 @@ impl BoxedResizePlan {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn validate_coefficients(
     horizontal: &FilterCoeffs,
     vertical: &FilterCoeffs,
@@ -182,6 +186,7 @@ fn validate_coefficients(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_stage_needed(
     source_width: u32,
     output_width: u32,
@@ -190,6 +195,7 @@ fn horizontal_stage_needed(
     output_width != source_width || bounds.0 != 0.0 || bounds.2 != f64::from(output_width as f32)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_stage_needed(
     source_height: u32,
     output_height: u32,
@@ -198,6 +204,7 @@ fn vertical_stage_needed(
     output_height != source_height || bounds.1 != 0.0 || bounds.3 != f64::from(output_height as f32)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn compact_vertical_coefficients(
     vertical: &mut FilterCoeffs,
     source_height: u32,
@@ -223,6 +230,7 @@ struct HorizontalRows<'a, const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPH
     sparse_source_rows: Option<&'a [bool]>,
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn horizontal_stage<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     source: &[u8],
     resize: &BoxedResizePlan,
@@ -256,6 +264,7 @@ fn horizontal_stage<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: boo
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn process_horizontal_rows<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     rows: &HorizontalRows<'_, CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>,
     row_count: usize,
@@ -291,6 +300,7 @@ fn process_horizontal_rows<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALP
     Ok((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn boxed_horizontal_row<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     rows: &HorizontalRows<'_, CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>,
     source_y: usize,
@@ -324,6 +334,7 @@ fn boxed_horizontal_row<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA:
     .ok_or_else(invalid_boxed_plan)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn copy_horizontal_identity<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     source: &[u8],
     resize: &BoxedResizePlan,
@@ -369,6 +380,7 @@ struct VerticalRows<'a> {
     sparse_source_rows: Option<&'a [bool]>,
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn vertical_stage<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     intermediate: &[u8],
     resize: &BoxedResizePlan,
@@ -395,6 +407,7 @@ fn vertical_stage<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>
     )
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn process_vertical_rows<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     rows: &VerticalRows<'_>,
     output_height: usize,
@@ -440,6 +453,7 @@ fn process_vertical_rows<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA
     Ok((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn copy_vertical_identity<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     intermediate: &[u8],
     output: &mut [u8],
@@ -467,6 +481,7 @@ fn copy_vertical_identity<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPH
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn invalid_boxed_plan() -> PilError {
     PilError::InternalError("selected native-byte boxed Resize kernel rejected its plan".into())
 }
