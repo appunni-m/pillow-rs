@@ -1051,11 +1051,27 @@ def decode_literal(
 
 
 class AssetStore:
-    def __init__(self, assets: list[dict[str, Any]], root: Path, tempdir: Path):
+    def __init__(
+        self,
+        assets: list[dict[str, Any]],
+        root: Path,
+        tempdir: Path,
+        stored_contents: dict[str, str] | None = None,
+    ):
         self._assets = {asset["id"]: asset for asset in assets}
         self._root = root
         self._tempdir = tempdir
         self._resolved: dict[str, Any] = {}
+        unknown_stored_assets = set(stored_contents or {}) - set(self._assets)
+        if unknown_stored_assets:
+            raise ValueError(
+                "stored workflow content references unknown asset IDs: "
+                + ", ".join(sorted(unknown_stored_assets))
+            )
+        self._stored_contents = {
+            asset_id: base64.b64decode(encoded, validate=True)
+            for asset_id, encoded in (stored_contents or {}).items()
+        }
 
     def resolve(self, asset_id: str) -> Any:
         if asset_id in self._resolved:
@@ -1065,9 +1081,19 @@ class AssetStore:
         asset = self._assets[asset_id]
         kind = asset["kind"]
         if kind == "ref":
-            value: Any = str(self._root / asset["path"])
+            if asset_id in self._stored_contents:
+                value = self._write_asset(
+                    asset_id,
+                    self._stored_contents[asset_id],
+                    Path(asset["path"]).suffix,
+                )
+            else:
+                value = str(self._root / asset["path"])
         elif kind == "ref_bytes":
-            value = (self._root / asset["path"]).read_bytes()
+            if asset_id in self._stored_contents:
+                value = self._stored_contents[asset_id]
+            else:
+                value = (self._root / asset["path"]).read_bytes()
         elif kind == "inline":
             if asset.get("encoding") != "base64":
                 raise ValueError(f"unsupported inline encoding: {asset_id}")
@@ -3491,7 +3517,12 @@ def run_case(
     pipeline_execution_sink: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     step_receipts: list[dict[str, int]] = []
-    assets = AssetStore(case.get("assets", []), FIXTURE_ROOT / "assets", tempdir)
+    assets = AssetStore(
+        case.get("assets", []),
+        FIXTURE_ROOT / "assets",
+        tempdir,
+        case.get("_parity_asset_contents"),
+    )
     if timing_sink is not None:
         # The manifest's base64 or external-file representation is harness
         # storage, not input work performed by either public implementation.
@@ -6125,7 +6156,12 @@ def run_resident_case(
     bindings alive while the selected terminal steps are observed repeatedly.
     """
 
-    assets = AssetStore(case.get("assets", []), FIXTURE_ROOT / "assets", tempdir)
+    assets = AssetStore(
+        case.get("assets", []),
+        FIXTURE_ROOT / "assets",
+        tempdir,
+        case.get("_parity_asset_contents"),
+    )
     bindings: dict[str, Any] = {}
     setup_errors: list[dict[str, Any]] = []
 

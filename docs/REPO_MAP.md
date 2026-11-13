@@ -114,6 +114,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- batch_execution.rs
 |   |   |   |   |-- executor.rs
 |   |   |   |   |-- helpers/
+|   |   |   |   |   |-- alpha/
+|   |   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |   `-- unpremultiply.rs
 |   |   |   |   |   |-- bytes/
 |   |   |   |   |   |   |-- hidden_lanes.rs
 |   |   |   |   |   |   |-- mod.rs
@@ -133,6 +136,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- mod.rs
 |   |   |   |   |   |   `-- prepared.rs
 |   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |-- palette/
+|   |   |   |   |   |   |-- lookup.rs
+|   |   |   |   |   |   `-- mod.rs
 |   |   |   |   |   `-- quantization/
 |   |   |   |   |       |-- fixed_palette.rs
 |   |   |   |   |       |-- maxcoverage.rs
@@ -7814,6 +7820,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |   |-- constructors.rs
 |       |   |-- creation.rs
 |       |   |-- data.rs
+|       |   |-- enhance.rs
 |       |   |-- mod.rs
 |       |   |-- operations.rs
 |       |   |-- point.rs

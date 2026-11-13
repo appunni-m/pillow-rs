@@ -41,6 +41,14 @@ FIXTURES_DIR := pillow-rs/tests/fixtures
 REPORT       := /tmp/report.json
 TIMEOUT      := 300
 MIGRATION_PARITY_OUTPUT ?= build/migration-parity/parity-result.json
+PARITY_STORE_ENV_FILE ?= build/parity-store/local.env
+PARITY_STORE_COMPOSE_FILE ?= scripts/parity_store/compose.yaml
+DOCKER ?= docker
+MIGRATION_PARITY_STORE_PROFILE ?=
+MIGRATION_PARITY_STORE_LIMIT ?=
+MIGRATION_PARITY_STORE_CASE_IDS ?=
+MIGRATION_PARITY_STORE_CASE_ID_LIST = $(strip $(subst $(MIGRATION_COMMA),$(MIGRATION_SPACE),$(MIGRATION_PARITY_STORE_CASE_IDS)))
+MIGRATION_PARITY_STORE_CASE_ARGS = $(foreach case_id,$(MIGRATION_PARITY_STORE_CASE_ID_LIST),--case-id '$(case_id)')
 MIGRATION_PARITY_OUTPUTS ?= $(MIGRATION_PARITY_OUTPUT)
 MIGRATION_PARITY_AGGREGATE_ARGS = $(foreach output,$(MIGRATION_PARITY_OUTPUTS),--parity $(output))
 MIGRATION_CPU_ARCHITECTURES ?= default neon sse2 sse3 ssse3 avx avx2 avx_fma avx2_fma
@@ -175,6 +183,8 @@ NC   := \033[0m
 help: ## Show common contributor commands
 	@printf "%s\n" "pillow-rs — build, compare, contribute" "" \
 	  "  make setup-venv     Install pinned Python tools in this checkout" \
+	  "  make setup-parity-store  Install the optional PostgreSQL parity-store driver" \
+	  "  make parity-store-up     Start the local PostgreSQL store without replacing the data volume" \
 	  "  make build-parity   Build without replacing the Pillow oracle" \
 	  "  make build-parity-cpu-architecture   Build CPU architecture parity hooks" \
 	  "  make build          Install the replacement for application use" \
@@ -232,6 +242,8 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-benchmark-pillow-simd$(NC) Compare matched x86 Pillow-SIMD workloads\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run the all-backend public parity campaign\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
+	@printf "  $(CYAN)make migration-parity-test-postgres$(NC) Import and run bounded profile batches through the typed PostgreSQL store\n"
+	@printf "  $(CYAN)make parity-store-down$(NC) Stop PostgreSQL while retaining its named data volume\n"
 	@printf "  $(CYAN)make migration-parity-test-cpu-architectures$(NC) Run CPU parity for each architecture selector (no WASM)\n"
 	@printf "  $(CYAN)make migration-parity-test-parallel-cpu$(NC) Run parity with the opt-in Parallel CPU profile\n"
 	@printf "  $(CYAN)make migration-parity-test-gpu-fault-contract$(NC) Run the generated target-only GPU admission fault contract\n"
@@ -513,6 +525,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
 .PHONY: migration-parity-test migration-parity-test-cpu-architectures migration-parity-test-parallel-cpu migration-parity-test-gpu-fault-contract migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-cpu-architectures migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: parity-store-init parity-store-up parity-store-down setup-parity-store migration-parity-test-postgres
 .PHONY: migration-parity-test-gpu-adapters migration-parity-benchmark-gpu-adapters
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
@@ -534,6 +547,26 @@ migration-parity-test: ## Run canonical input-only parity against live Pillow
 	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
+
+parity-store-init: ## Create local-only credentials for the PostgreSQL parity store
+	$(PYTHON) scripts/parity_store/initialize_local_env.py --output "$(PARITY_STORE_ENV_FILE)"
+
+parity-store-up: parity-store-init ## Start the local PostgreSQL parity store (keeps its named volume)
+	$(DOCKER) compose --env-file "$(PARITY_STORE_ENV_FILE)" -f "$(PARITY_STORE_COMPOSE_FILE)" up -d --wait
+
+parity-store-down: ## Stop the PostgreSQL parity store without deleting its data volume
+	$(DOCKER) compose --env-file "$(PARITY_STORE_ENV_FILE)" -f "$(PARITY_STORE_COMPOSE_FILE)" stop
+
+setup-parity-store: ## Install the optional PostgreSQL parity-store driver
+	$(PIP) install -r requirements-parity-store.txt
+
+migration-parity-test-postgres: build-parity parity-store-up setup-parity-store ## Import and run profile-scoped parity incrementally through PostgreSQL
+	$(PYTHON) -m scripts.run_migration_parity_postgres \
+		--manifest "$(MANIFEST)" \
+		--env-file "$(PARITY_STORE_ENV_FILE)" \
+		$(if $(strip $(MIGRATION_PARITY_STORE_PROFILE)),--profile "$(MIGRATION_PARITY_STORE_PROFILE)",) \
+		$(if $(strip $(MIGRATION_PARITY_STORE_LIMIT)),--limit "$(MIGRATION_PARITY_STORE_LIMIT)",) \
+		$(MIGRATION_PARITY_STORE_CASE_ARGS)
 
 migration-parity-test-cpu-architectures: build-parity-cpu-architecture ## Run CPU parity once for each declared non-WASM architecture selector
 	@set -eu; \

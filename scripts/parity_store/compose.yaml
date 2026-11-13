@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:18.7-alpine3.24
+    environment:
+      POSTGRES_DB: ${PARITY_STORE_DB:-parity}
+      POSTGRES_USER: ${PARITY_STORE_USER:-parity}
+      POSTGRES_PASSWORD: ${PARITY_STORE_PASSWORD:?Set PARITY_STORE_PASSWORD in the local env file}
+    ports:
+      - "127.0.0.1:${PARITY_STORE_PORT:-55432}:5432"
+    volumes:
+      - parity_store_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  parity_store_data:

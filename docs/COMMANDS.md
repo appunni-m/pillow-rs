@@ -16,6 +16,7 @@ enabled.
 | Build for application use | `make build` | Installs the replacement into the selected environment |
 | Build npm package | `make build-wasm-release` | Compiles the shared Node/browser WASM artifact |
 | One parity case | `make migration-parity-case CASE_ID=<id>` | Runs the selected input against source and target |
+| Incremental PostgreSQL parity | `make migration-parity-test-postgres MIGRATION_PARITY_STORE_PROFILE=<profile>` | Imports typed case records and compressed binary assets, then executes bounded resumable batches; set `MIGRATION_PARITY_STORE_CASE_IDS=<id,...>` for a focused import; setup and Docker lifecycle are in [the parity store guide](PARITY_STORE.md) |
 | Same cases on CPU, SIMD, and GPU | Set `MIGRATION_TARGET_BACKEND=cpu`, `simd`, or `gpu` and run `make migration-parity-test` with the same `MIGRATION_PARITY_CASE_IDS` | The runner selects the backend; parity inputs and requirements are backend-neutral |
 | CPU architecture parity matrix | `make migration-parity-test-cpu-architectures` | Replays the same selected parity inputs under each configured CPU architecture selector |
 | GPU adapter parity matrix | `make migration-parity-test-gpu-adapters` | Enumerates native WGPU adapters and replays the same parity inputs on each physical adapter; set `MIGRATION_GPU_ADAPTER_INDICES='0 2'` to select a subset |
