@@ -24,6 +24,11 @@ from build_migration_parity_inputs import (
     retained_unindexed_generated_asset_paths,
 )
 from validate_migration_parity_contract import validate_inputs
+from migration_parity.fixture_io import (
+    exists as fixture_exists,
+    read_bytes as read_fixture_bytes,
+    read_json as read_fixture_json,
+)
 
 
 QUARANTINE_SCHEMA = "migration-parity/crash-quarantine-input@2"
@@ -50,9 +55,10 @@ def _reject_output_fields(value: object, path: str) -> None:
             _reject_output_fields(child, f"{path}[{index}]")
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def validate_crash_quarantine(path: Path) -> None:
     try:
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = read_fixture_json(path)
     except json.JSONDecodeError as exc:
         raise SystemExit(f"invalid crash quarantine JSON: {exc}") from exc
     expected_keys = {"schema", "status", "active", "execution", "reason", "cases"}
@@ -96,17 +102,17 @@ def validate_crash_quarantine(path: Path) -> None:
     _reject_output_fields(document, str(path))
 
 
-# VERIFY: source=reviewed@2026-11-14; parity=n/a; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def _validate_active_inputs(manifest: dict[str, Any], active_root: Path) -> set[str]:
     quarantine = active_root / CRASH_QUARANTINE_RELATIVE
-    if not quarantine.is_file():
+    if not fixture_exists(quarantine):
         raise SystemExit(
             f"missing crash quarantine input: {CRASH_QUARANTINE_RELATIVE}"
         )
     validate_crash_quarantine(quarantine)
     for lane, lane_paths in manifest["input_index"].items():
         for relative in lane_paths:
-            if not (active_root / relative).is_file():
+            if not fixture_exists(active_root / relative):
                 raise SystemExit(f"missing indexed {lane} input: {relative}")
     validate_inputs(manifest, active_root, retain_documents=False)
     referenced_assets = indexed_generated_asset_paths(active_root, manifest)
@@ -151,7 +157,7 @@ def main() -> None:
     active_root = FIXTURE_ROOT
     quarantine = active_root / CRASH_QUARANTINE_RELATIVE
     if args.quarantine_only:
-        if not quarantine.is_file():
+        if not fixture_exists(quarantine):
             raise SystemExit(
                 f"missing crash quarantine input: {CRASH_QUARANTINE_RELATIVE}"
             )
@@ -171,11 +177,11 @@ def main() -> None:
         )
         build_inputs(manifest, generated_root, generated_assets_root)
         generated_quarantine = generated_root / CRASH_QUARANTINE_RELATIVE
-        if not quarantine.is_file():
+        if not fixture_exists(quarantine):
             raise SystemExit(
                 f"missing crash quarantine input: {CRASH_QUARANTINE_RELATIVE}"
             )
-        if quarantine.read_bytes() != generated_quarantine.read_bytes():
+        if read_fixture_bytes(quarantine) != read_fixture_bytes(generated_quarantine):
             raise SystemExit(
                 f"input drift in crash quarantine: {CRASH_QUARANTINE_RELATIVE} differs from generator"
             )
@@ -187,7 +193,7 @@ def main() -> None:
             for relative in relative_paths:
                 active = active_root / relative
                 generated = generated_root / relative
-                if active.read_bytes() != generated.read_bytes():
+                if read_fixture_bytes(active) != read_fixture_bytes(generated):
                     raise SystemExit(
                         f"input drift in {lane}: {relative} differs from generator"
                     )

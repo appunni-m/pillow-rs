@@ -18,11 +18,20 @@ import subprocess
 import sys
 from typing import Callable
 
+try:
+    from migration_parity.fixture_io import exists as fixture_exists
+    from migration_parity.fixture_io import read_json as read_fixture_json
+    from migration_parity.fixture_io import sha256 as fixture_sha256
+except ModuleNotFoundError:
+    from scripts.migration_parity.fixture_io import exists as fixture_exists
+    from scripts.migration_parity.fixture_io import read_json as read_fixture_json
+    from scripts.migration_parity.fixture_io import sha256 as fixture_sha256
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def read(path: Path):
-    return json.loads(path.read_text())
+    return read_fixture_json(path)
 
 
 def write(path: Path, value) -> None:
@@ -33,7 +42,13 @@ def write(path: Path, value) -> None:
 
 
 def digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    try:
+        path.resolve().relative_to(
+            (ROOT / "pillow-rs" / "tests" / "fixtures").resolve()
+        )
+    except ValueError:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    return fixture_sha256(path)[0].hex()
 
 
 @cache
@@ -168,7 +183,8 @@ def verify_receipts(directory: Path, backend: str, excluded: list[str], expected
             raise ValueError(f'source changed since measurement: {key}')
     for key, value in receipt['input_hashes'].items():
         path = ROOT / key
-        if (digest(path) if path.is_file() else None) != value:
+        actual = digest(path) if fixture_exists(path) or path.is_file() else None
+        if actual != value:
             raise ValueError(f'input changed since measurement: {key}')
     executions = receipt['execution']['backends']
     if len(executions) != 1 or executions[0]['backend'] != backend:

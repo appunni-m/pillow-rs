@@ -19,6 +19,11 @@ from typing import Any
 
 import yaml
 
+try:
+    from migration_parity.fixture_io import read_json as read_fixture_json
+except ModuleNotFoundError:
+    from scripts.migration_parity.fixture_io import read_json as read_fixture_json
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "pillow-rs" / "tests" / "fixtures"
@@ -140,7 +145,7 @@ def load_public_operations(manifest: dict[str, Any]) -> tuple[dict[str, list[dic
 
     for relative in manifest.get("input_index", {}).get("parity", []):
         input_path = FIXTURE_ROOT / relative
-        document = json.loads(input_path.read_text(encoding="utf-8"))
+        document = read_fixture_json(input_path)
         for case in document.get("cases", []):
             case_id = case["case_id"]
             case_input_by_id[case_id] = relative

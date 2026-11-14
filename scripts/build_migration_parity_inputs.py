@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import base64
 import copy
+import gzip
 import hashlib
 import io
 import json
@@ -37,6 +38,17 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+try:
+    from migration_parity.fixture_io import (
+        exists as fixture_exists,
+        read_json as read_fixture_json,
+    )
+except ModuleNotFoundError:
+    from scripts.migration_parity.fixture_io import (
+        exists as fixture_exists,
+        read_json as read_fixture_json,
+    )
 
 try:
     from migration_parity.display_inputs import (
@@ -52285,7 +52297,7 @@ def regenerate_image_open_mode_size_inputs(
         assets_root,
     )
     base_path = output_root / "inputs/parity/pil-image.json"
-    base_document = json.loads(base_path.read_text(encoding="utf-8"))
+    base_document = read_fixture_json(base_path)
     base_document["cases"] = [
         case
         for case in base_document["cases"]
@@ -52294,7 +52306,7 @@ def regenerate_image_open_mode_size_inputs(
     write_json(base_path, base_document)
 
     matrix_path = output_root / "inputs/parity/pil-image-mode-size-matrix.json"
-    matrix_document = json.loads(matrix_path.read_text(encoding="utf-8"))
+    matrix_document = read_fixture_json(matrix_path)
     matrix_document["cases"] = [
         case
         for case in matrix_document["cases"]
@@ -52751,9 +52763,9 @@ def indexed_generated_asset_paths(
 
     for relative in sorted(input_paths):
         path = input_root / relative
-        if not path.is_file():
+        if not fixture_exists(path):
             raise FileNotFoundError(f"missing indexed parity input: {relative}")
-        visit(json.loads(path.read_text(encoding="utf-8")))
+        visit(read_fixture_json(path))
     return referenced
 
 
@@ -52790,11 +52802,11 @@ def retained_unindexed_generated_asset_paths(
         lane_root = input_root / "inputs" / lane
         if not lane_root.is_dir():
             continue
-        for path in lane_root.rglob("*.json"):
-            relative = path.relative_to(input_root).as_posix()
+        for path in (*lane_root.rglob("*.json"), *lane_root.rglob("*.json.gz")):
+            relative = path.relative_to(input_root).as_posix().removesuffix(".gz")
             if relative in indexed_paths:
                 continue
-            visit(json.loads(path.read_text(encoding="utf-8")))
+            visit(read_fixture_json(path))
     return referenced
 
 
@@ -52827,14 +52839,7 @@ def _serialized_json_digest(payload: dict[str, Any]) -> tuple[int, str]:
     return size + 1, digest.hexdigest()
 
 
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     serialized_size, serialized_digest = _serialized_json_digest(payload)
@@ -52848,25 +52853,48 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
                 f"{path}: input exceeds the {MAX_INPUT_JSON_BYTES}-byte size limit "
                 f"after externalizing {externalized} large assets"
             )
-    if (
-        path.is_file()
-        and path.stat().st_size == serialized_size
-        and _file_sha256(path) == serialized_digest
-    ):
-        return
+    compressed_path = path.with_name(path.name + ".gz")
+    if compressed_path.is_file():
+        actual_digest = hashlib.sha256()
+        actual_size = 0
+        with gzip.open(compressed_path, "rb") as existing:
+            while chunk := existing.read(1024 * 1024):
+                actual_size += len(chunk)
+                actual_digest.update(chunk)
+        if (
+            actual_size == serialized_size
+            and actual_digest.hexdigest() == serialized_digest
+        ):
+            path.unlink(missing_ok=True)
+            return
 
     descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+        prefix=f".{path.name}.", suffix=".gz.tmp", dir=path.parent
     )
     os.close(descriptor)
     temporary_path = Path(temporary_name)
     try:
-        with temporary_path.open("w", encoding="utf-8", newline="\n") as output:
-            json.dump(payload, output, indent=2, sort_keys=False)
-            output.write("\n")
-        mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
+        with temporary_path.open("wb") as compressed:
+            with gzip.GzipFile(
+                filename="",
+                mode="wb",
+                fileobj=compressed,
+                compresslevel=6,
+                mtime=0,
+            ) as output_bytes:
+                output = io.TextIOWrapper(output_bytes, encoding="utf-8", newline="\n")
+                json.dump(payload, output, indent=2, sort_keys=False)
+                output.write("\n")
+                output.flush()
+                output.detach()
+        mode = (
+            compressed_path.stat().st_mode & 0o777
+            if compressed_path.exists()
+            else 0o644
+        )
         os.chmod(temporary_path, mode)
-        os.replace(temporary_path, path)
+        os.replace(temporary_path, compressed_path)
+        path.unlink(missing_ok=True)
     finally:
         temporary_path.unlink(missing_ok=True)
 
@@ -63151,9 +63179,7 @@ def build_target_output_matrix_inputs(
         benchmark_relative = f"inputs/benchmark/{storage_slug}.json"
         if benchmark_relative not in benchmark_documents:
             benchmark_path = output_root / benchmark_relative
-            benchmark_document = json.loads(
-                benchmark_path.read_text(encoding="utf-8")
-            )
+            benchmark_document = read_fixture_json(benchmark_path)
             benchmark_documents[benchmark_relative] = benchmark_document
 
         mode_requirements = [

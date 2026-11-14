@@ -43,6 +43,11 @@ from typing import Any, Iterable
 import yaml
 
 try:
+    from migration_parity.fixture_io import (
+        exists as fixture_exists,
+        read_json as read_fixture_json,
+        sha256 as fixture_sha256,
+    )
     from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
     from validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
     from migration_parity.fault_contracts import FAULT_CONTRACTS, FAULT_POINTS
@@ -62,6 +67,11 @@ try:
         workflow_pipeline_observation_gaps,
     )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity`` in tests
+    from scripts.migration_parity.fixture_io import (
+        exists as fixture_exists,
+        read_json as read_fixture_json,
+        sha256 as fixture_sha256,
+    )
     from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
     from scripts.validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
     from scripts.migration_parity.fault_contracts import FAULT_CONTRACTS, FAULT_POINTS
@@ -395,8 +405,9 @@ def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def sha256_file(path: Path) -> str:
-    return sha256_bytes(path.read_bytes())
+    return fixture_sha256(path)[0].hex()
 
 
 def now_rfc3339() -> str:
@@ -4136,11 +4147,12 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return validate_fixed_manifest(manifest, manifest_path=path)
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def ensure_generated_parity_inputs(manifest: dict[str, Any]) -> None:
     """Materialize generated parity inputs when a clean checkout lacks them."""
 
     if all(
-        (FIXTURE_ROOT / relative).is_file()
+        fixture_exists(FIXTURE_ROOT / relative)
         for relative in manifest["input_index"]["parity"]
     ):
         return
@@ -4151,6 +4163,7 @@ def ensure_generated_parity_inputs(manifest: dict[str, Any]) -> None:
     build_inputs(manifest, FIXTURE_ROOT, FIXTURE_ROOT / "assets")
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: str | None) -> tuple[list[dict[str, Any]], dict[str, str]]:
     ensure_generated_parity_inputs(manifest)
     validate_fixed_inputs(
@@ -4161,7 +4174,7 @@ def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: 
     known_case_ids: set[str] = set()
     for relative in manifest["input_index"]["parity"]:
         path = ROOT / "pillow-rs" / "tests" / "fixtures" / relative
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = read_fixture_json(path)
         if payload.get("schema") != "migration-parity/parity-input@3":
             raise ValueError(f"{relative}: invalid parity input schema")
         for case in payload["cases"]:

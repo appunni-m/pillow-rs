@@ -23,6 +23,9 @@ DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_OUTPUT = ROOT / "build" / "migration-parity" / "status-report.json"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from migration_parity.fixture_io import exists as fixture_exists  # noqa: E402
+from migration_parity.fixture_io import read_json as read_fixture_json  # noqa: E402
+from migration_parity.fixture_io import sha256 as fixture_sha256  # noqa: E402
 from run_migration_parity import load_manifest  # noqa: E402
 from validate_migration_parity_result import (  # noqa: E402
     benchmark as validate_benchmark,
@@ -60,7 +63,14 @@ TARGET_KEYS = {
 }
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=n/a; benchmark=n/a
 def sha256(path: Path) -> str:
+    try:
+        path.resolve().relative_to(FIXTURE_ROOT.resolve())
+    except ValueError:
+        pass
+    else:
+        return fixture_sha256(path)[0].hex()
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -68,13 +78,14 @@ def relative(path: Path) -> str:
     return path.resolve().relative_to(ROOT.resolve()).as_posix()
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=n/a; benchmark=n/a
 def load_indexed_documents(
     manifest: dict[str, Any], lane: str, schema: str
 ) -> list[tuple[str, dict[str, Any]]]:
     documents: list[tuple[str, dict[str, Any]]] = []
     for item in manifest["input_index"][lane]:
         path = FIXTURE_ROOT / item
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = read_fixture_json(path)
         if payload.get("schema") != schema:
             raise ValueError(f"{item}: expected {schema}")
         documents.append((item, payload))
@@ -197,6 +208,7 @@ def normalize_result_path(value: str) -> str:
     return path.as_posix()
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=n/a; benchmark=n/a
 def check_identity(
     lane: str,
     result: dict[str, Any],
@@ -232,7 +244,7 @@ def check_identity(
         if item["schema"] != allowed[path]:
             differences.append(f"{prefix}.schema")
         actual = FIXTURE_ROOT / path
-        if not actual.is_file() or item["sha256"] != sha256(actual):
+        if not fixture_exists(actual) or item["sha256"] != sha256(actual):
             differences.append(f"{prefix}.sha256")
 
     if lane == "parity":

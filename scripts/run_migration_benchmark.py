@@ -29,6 +29,8 @@ import uuid
 from typing import Any
 
 try:
+    from migration_parity.fixture_io import read_json as read_fixture_json
+    from migration_parity.fixture_io import sha256 as fixture_sha256
     from migration_execution_attestation import (
         AttestationCollector,
         merge_parity_attestations,
@@ -62,6 +64,8 @@ try:
         receipt_terminal_complete,
     )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` in tests
+    from scripts.migration_parity.fixture_io import read_json as read_fixture_json
+    from scripts.migration_parity.fixture_io import sha256 as fixture_sha256
     from scripts.migration_execution_attestation import (
         AttestationCollector,
         merge_parity_attestations,
@@ -463,9 +467,16 @@ def benchmark_environment() -> dict[str, Any]:
     return environment
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
 def sha256(path: Path) -> str:
     import hashlib
 
+    try:
+        path.resolve().relative_to(FIXTURE_ROOT.resolve())
+    except ValueError:
+        pass
+    else:
+        return fixture_sha256(path)[0].hex()
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -480,6 +491,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return validate_manifest(manifest, manifest_path=path)
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
 def load_parity_cases(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
     from validate_migration_parity_contract import validate_inputs
 
@@ -488,7 +500,7 @@ def load_parity_cases(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     cases: dict[str, dict[str, Any]] = {}
     inputs: dict[str, str] = {}
     for relative in manifest["input_index"]["parity"]:
-        payload = json.loads((FIXTURE_ROOT / relative).read_text(encoding="utf-8"))
+        payload = read_fixture_json(FIXTURE_ROOT / relative)
         if payload.get("schema") != "migration-parity/parity-input@3":
             raise ValueError(f"{relative}: invalid parity input schema")
         for case in payload["cases"]:
@@ -499,12 +511,13 @@ def load_parity_cases(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     return cases, inputs
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
 def load_benchmarks(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], dict[str, str]]:
     workloads: dict[str, dict[str, Any]] = {}
     suites: list[dict[str, Any]] = []
     inputs: dict[str, str] = {}
     for relative in manifest["input_index"]["benchmark"]:
-        payload = json.loads((FIXTURE_ROOT / relative).read_text(encoding="utf-8"))
+        payload = read_fixture_json(FIXTURE_ROOT / relative)
         if payload.get("schema") != "migration-parity/benchmark-input@1":
             raise ValueError(f"{relative}: invalid benchmark input schema")
         for workload in payload["workloads"]:

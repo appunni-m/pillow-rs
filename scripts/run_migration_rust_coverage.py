@@ -164,6 +164,7 @@ def coverage_supplements(plans: list[dict[str, Any]], *, full_lane: bool) -> lis
     return [script for command, script in scripts.items() if full_lane or command in commands]
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def coverage_input_hashes(
     manifest_path: Path,
     input_paths: list[str],
@@ -192,9 +193,11 @@ def coverage_input_hashes(
     if "run_migration_font_native_cases.py" in supplements:
         from run_migration_font_native_cases import asset_path
 
-        for path in sorted((FIXTURE_ROOT / "inputs" / "font-native").glob("*.json")):
-            paths.add(path)
-            for case in json.loads(path.read_text(encoding="utf-8")).get("cases", []):
+        font_root = FIXTURE_ROOT / "inputs" / "font-native"
+        font_paths = (*font_root.glob("*.json"), *font_root.glob("*.json.gz"))
+        for path in sorted(font_paths):
+            paths.add(Path(str(path).removesuffix(".gz")))
+            for case in read_fixture_json(path).get("cases", []):
                 assets = case.get("inputs", {}).get("assets", {})
                 for asset in assets.values():
                     if asset.get("kind") not in {"load_default", "pilfont_default"}:
@@ -212,14 +215,15 @@ def coverage_input_hashes(
             key = path.relative_to(ROOT).as_posix()
         except ValueError:
             key = str(path)
-        hashes[key] = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+        hashes[key] = _input_file_sha256(path)
     return hashes
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def verify_coverage_input_hashes(hashes: dict[str, str | None]) -> None:
     for key, expected in hashes.items():
         path = ROOT / key
-        actual = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+        actual = _input_file_sha256(path)
         if actual != expected:
             raise RuntimeError(f"coverage input changed during collection: {key}")
 
@@ -385,6 +389,26 @@ def install_instrumented_extension() -> Path:
 
 
 sys.path.insert(0, str(ROOT / "scripts"))
+from migration_parity.fixture_io import exists as fixture_exists  # noqa: E402
+from migration_parity.fixture_io import read_json as read_fixture_json  # noqa: E402
+from migration_parity.fixture_io import sha256 as fixture_sha256  # noqa: E402
+
+
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
+def _input_file_sha256(path: Path) -> str | None:
+    """Hash logical fixture bytes while keeping external inputs byte-based."""
+    try:
+        relative = path.relative_to(FIXTURE_ROOT)
+    except ValueError:
+        if not path.is_file():
+            return None
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    logical_path = FIXTURE_ROOT / relative
+    if not fixture_exists(logical_path):
+        return None
+    return fixture_sha256(logical_path)[0].hex()
+
+
 from run_migration_coverage import (  # noqa: E402
     build_components,
     coverage_identity,

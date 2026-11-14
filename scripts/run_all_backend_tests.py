@@ -34,6 +34,11 @@ from typing import Any
 
 import yaml
 
+try:
+    from migration_parity.fixture_io import read_json as read_fixture_json
+except ModuleNotFoundError:
+    from scripts.migration_parity.fixture_io import read_json as read_fixture_json
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "build" / "migration-parity" / "all-backends-test-result.json"
@@ -328,7 +333,7 @@ def public_case_ids(manifest_path: Path = DEFAULT_MANIFEST) -> list[str]:
     all_ids: list[str] = []
     fixture_root = manifest_path.parent
     for relative in manifest["input_index"]["parity"]:
-        document = json.loads((fixture_root / relative).read_text(encoding="utf-8"))
+        document = read_fixture_json(fixture_root / relative)
         for case in document["cases"]:
             all_ids.append(case["case_id"])
             if case.get("verification", "parity") == "parity":

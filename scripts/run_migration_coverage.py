@@ -33,6 +33,8 @@ TARGET_ID = "pillow-rs-python"
 ORACLE_VERSION = "13.0.0"
 
 sys.path.insert(0, str(ROOT / "scripts"))
+from migration_parity.fixture_io import read_json as read_fixture_json  # noqa: E402
+from migration_parity.fixture_io import sha256 as fixture_sha256  # noqa: E402
 from run_migration_parity import (  # noqa: E402
     AssetStore,
     ENCODED_INPUTS,
@@ -53,6 +55,7 @@ def now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def load_coverage_plans(manifest: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, str]]:
     from validate_migration_parity_contract import validate_inputs
 
@@ -61,7 +64,7 @@ def load_coverage_plans(manifest: dict[str, Any]) -> tuple[list[dict[str, Any]],
     paths: dict[str, str] = {}
     for relative in manifest["input_index"]["coverage"]:
         path = FIXTURE_ROOT / relative
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = read_fixture_json(path)
         if payload.get("schema") != "migration-parity/coverage-input@1":
             raise ValueError(f"{relative}: invalid coverage input schema")
         for plan in payload["plans"]:
@@ -224,6 +227,7 @@ def scoped_coverage_command(
     return scoped
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def coverage_identity(
     manifest_path: Path,
     input_paths: list[str],
@@ -279,7 +283,7 @@ def coverage_identity(
                     if "/coverage/" in path
                     else "migration-parity/parity-input@3"
                 ),
-                "sha256": sha256_file(FIXTURE_ROOT / path),
+                "sha256": fixture_sha256(FIXTURE_ROOT / path)[0].hex(),
             }
             for path in input_paths
         ],

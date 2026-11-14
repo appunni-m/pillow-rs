@@ -16,6 +16,11 @@ from pathlib import Path
 import subprocess
 import sys
 
+try:
+    from migration_parity.fixture_io import read_json as read_fixture_json
+except ModuleNotFoundError:
+    from scripts.migration_parity.fixture_io import read_json as read_fixture_json
+
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "pillow-rs/tests/fixtures/inputs/parity/pil-imagechops.json"
 CASE_PREFIX = "PIL.ImageChops."
@@ -26,7 +31,7 @@ DEFAULT_OUTPUT_DIR = ROOT / "build/migration-parity/chops-affine"
 def selected_case_ids() -> list[str]:
     """Return the shared generated ImageChops offset-coercion case IDs."""
 
-    document = json.loads(INPUT.read_text(encoding="utf-8"))
+    document = read_fixture_json(INPUT)
     return sorted(
         case["case_id"]
         for case in document["cases"]

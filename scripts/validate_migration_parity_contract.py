@@ -18,8 +18,12 @@ from typing import Any, Iterable
 
 try:
     from migration_parity.fault_contracts import validate_fault_registries
+    from migration_parity.fixture_io import exists as fixture_exists
+    from migration_parity.fixture_io import read_json as read_fixture_json
 except ModuleNotFoundError:
     from scripts.migration_parity.fault_contracts import validate_fault_registries
+    from scripts.migration_parity.fixture_io import exists as fixture_exists
+    from scripts.migration_parity.fixture_io import read_json as read_fixture_json
 
 
 SCHEMA_MANIFEST = "migration-parity/manifest@3"
@@ -1367,10 +1371,10 @@ def validate_inputs(
                 raise _error(f"input_index.{current_lane}", "duplicate indexed path")
             seen_paths.add(relative)
             path = fixture_root / relative
-            if not path.is_file():
+            if not fixture_exists(path):
                 raise _error(relative, "indexed input does not exist")
             try:
-                document = json.loads(path.read_text(encoding="utf-8"))
+                document = read_fixture_json(path)
             except json.JSONDecodeError as exc:
                 raise _error(relative, f"invalid JSON: {exc}") from exc
             expected_schema = SCHEMA_BY_LANE[current_lane]

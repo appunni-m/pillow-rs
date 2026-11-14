@@ -15,6 +15,11 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
+try:
+    from migration_parity.fixture_io import read_json as read_fixture_json
+except ModuleNotFoundError:
+    from scripts.migration_parity.fixture_io import read_json as read_fixture_json
+
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "pillow-rs" / "tests" / "fixtures"
 FONT_NATIVE_ROOT = FIXTURE_ROOT / "inputs" / "font-native"
@@ -250,19 +255,28 @@ def require_target():
         raise RuntimeError("font coverage requires the checkout extension")
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def run_native_cases() -> dict[str, Any]:
     require_target()
     from run_migration_parity import configure_target_backend
 
     configure_target_backend()
     results, seen = [], set()
-    for path in sorted(FONT_NATIVE_ROOT.glob("*.json")):
-        for case in json.loads(path.read_text(encoding="utf-8"))["cases"]:
+    paths = (*FONT_NATIVE_ROOT.glob("*.json"), *FONT_NATIVE_ROOT.glob("*.json.gz"))
+    for path in sorted(paths):
+        for case in read_fixture_json(path)["cases"]:
             case_id = case["case_id"]
             if case_id in seen:
                 raise ValueError(f"duplicate font case ID: {case_id}")
             seen.add(case_id)
-            record = {"case_id": case_id, "input": str(path.relative_to(FIXTURE_ROOT)), "operation": case["operation"]}
+            logical_path = (
+                path.relative_to(FIXTURE_ROOT).as_posix().removesuffix(".gz")
+            )
+            record = {
+                "case_id": case_id,
+                "input": logical_path,
+                "operation": case["operation"],
+            }
             try:
                 record.update(status="returned", observation=run_case(case))
             except ApiRaised as error:

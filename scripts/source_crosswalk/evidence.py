@@ -12,6 +12,13 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Mapping
 
+try:
+    from migration_parity.fixture_io import read_bytes as read_fixture_bytes
+    from migration_parity.fixture_io import stored_path as stored_fixture_path
+except ModuleNotFoundError:
+    from scripts.migration_parity.fixture_io import read_bytes as read_fixture_bytes
+    from scripts.migration_parity.fixture_io import stored_path as stored_fixture_path
+
 FIXTURE_ROOT = Path("pillow-rs/tests/fixtures")
 
 
@@ -24,14 +31,14 @@ def _fixture_input_path(root: Path, relative: Any) -> tuple[Path, str]:
 
     repository_root = root.resolve()
     fixture_root = (repository_root / FIXTURE_ROOT).resolve()
-    path = (fixture_root / relative_path).resolve()
+    path = stored_fixture_path(fixture_root / relative_path).resolve()
     try:
         path.relative_to(fixture_root)
     except ValueError as error:
         raise ValueError(f"fixture input path escapes its owner: {relative!r}") from error
     if not path.is_file():
         raise FileNotFoundError(f"indexed fixture input does not exist: {relative!r}")
-    return path, path.relative_to(repository_root).as_posix()
+    return path, (FIXTURE_ROOT / relative_path).as_posix()
 
 
 def _operation_id(surface: Any, operation: Any) -> str | None:
@@ -144,7 +151,7 @@ def build_declared_evidence_index(
     parity_case_count = 0
 
     for path, repository_path in _input_paths(root, manifest, "parity"):
-        contents = path.read_bytes()
+        contents = read_fixture_bytes(path)
         parity_files.append({
             "path": repository_path,
             "sha256": hashlib.sha256(contents).hexdigest(),
@@ -228,7 +235,7 @@ def build_declared_evidence_index(
     benchmark_workload_count = 0
 
     for path, repository_path in _input_paths(root, manifest, "benchmark"):
-        contents = path.read_bytes()
+        contents = read_fixture_bytes(path)
         benchmark_files.append({
             "path": repository_path,
             "sha256": hashlib.sha256(contents).hexdigest(),

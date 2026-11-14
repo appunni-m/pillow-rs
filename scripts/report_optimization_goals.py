@@ -22,8 +22,10 @@ import yaml
 
 try:
     from run_migration_benchmark import suite_subject_is_comparable
+    from migration_parity.fixture_io import read_json as read_fixture_json
 except ModuleNotFoundError:
     from scripts.run_migration_benchmark import suite_subject_is_comparable
+    from scripts.migration_parity.fixture_io import read_json as read_fixture_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -363,6 +365,7 @@ def assess_workload(
     }
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 def build_report(manifest_path: Path, result_path: Path | None, parity_path: Path | None) -> dict[str, Any]:
     manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     operations = {}
@@ -378,7 +381,7 @@ def build_report(manifest_path: Path, result_path: Path | None, parity_path: Pat
     specs = {}
     spec_paths = {}
     for relative in manifest["input_index"]["benchmark"]:
-        for workload in read_json(manifest_path.parent / relative)["workloads"]:
+        for workload in read_fixture_json(manifest_path.parent / relative)["workloads"]:
             key = workload["workload_id"]
             if key in specs:
                 raise ValueError(f"duplicate workload: {key}")

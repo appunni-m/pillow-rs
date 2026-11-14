@@ -7,12 +7,13 @@ import binascii
 import codecs
 import hashlib
 import json
-import mmap
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from scripts import run_migration_parity as parity
+from scripts.migration_parity.fixture_io import open_binary as open_fixture_binary
+from scripts.migration_parity.fixture_io import read_bytes as read_fixture_bytes
 from scripts.parity_store import (
     AssetRecord,
     CaseRecord,
@@ -162,7 +163,7 @@ def import_manifest(
         document_digest = document_digests[relative]
         batch: list[CaseRecord] = []
         batch_bytes = 0
-        with document_path.open("rb") as source:
+        with open_fixture_binary(document_path) as source:
             hashing_source = _HashingTextReader(source)
             for source_ordinal, raw_case in enumerate(
                 iter_object_array(hashing_source, "cases")
@@ -234,7 +235,7 @@ def import_manifest(
 
 def _sha256_file(path: Path) -> bytes:
     digest = hashlib.sha256()
-    with path.open("rb") as source:
+    with open_fixture_binary(path) as source:
         for chunk in iter(lambda: source.read(8 * 1024 * 1024), b""):
             digest.update(chunk)
     return digest.digest()
@@ -258,12 +259,15 @@ def _candidate_case_documents(
     candidates = []
     for relative in input_paths:
         path = fixture_root / relative
-        if path.stat().st_size == 0:
-            continue
-        with path.open("rb") as source:
-            with mmap.mmap(source.fileno(), 0, access=mmap.ACCESS_READ) as contents:
-                if any(contents.find(token) >= 0 for token in tokens):
+        overlap = max(map(len, tokens), default=1) - 1
+        tail = b""
+        with open_fixture_binary(path) as source:
+            while chunk := source.read(64 * 1024):
+                contents = tail + chunk
+                if any(token in contents for token in tokens):
                     candidates.append(relative)
+                    break
+                tail = contents[-overlap:] if overlap else b""
     return tuple(candidates)
 
 
@@ -547,7 +551,7 @@ def _make_asset_record(asset: dict[str, Any]) -> AssetRecord:
             raise ValueError(f"inline asset {asset_id!r} has an unsupported encoding")
     elif kind in {"ref", "ref_bytes"}:
         path = (parity.FIXTURE_ROOT / "assets" / asset["path"]).resolve()
-        content = path.read_bytes()
+        content = read_fixture_bytes(path)
     elif kind == "builtin" and asset.get("name") in parity.ENCODED_INPUTS:
         content = parity.ENCODED_INPUTS[asset["name"]]
 

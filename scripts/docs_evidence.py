@@ -20,6 +20,13 @@ from pathlib import Path
 import re
 import statistics
 
+try:
+    from migration_parity.fixture_io import read_json as read_fixture_json
+    from migration_parity.fixture_io import stored_path as stored_fixture_path
+except ModuleNotFoundError:
+    from scripts.migration_parity.fixture_io import read_json as read_fixture_json
+    from scripts.migration_parity.fixture_io import stored_path as stored_fixture_path
+
 SCHEMA = "public-docs/benchmark-snapshot@2"
 LEGACY_SCHEMA = "public-docs/benchmark-snapshot@1"
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -714,13 +721,15 @@ def render_support(root: Path, config: dict, output: Path) -> str:
         missing_inputs = []
         for relative in document["input_index"]["parity"]:
             input_path = source.parent / relative
-            if not input_path.is_file():
+            physical_input_path = stored_fixture_path(input_path)
+            if not physical_input_path.is_file():
                 missing_inputs.append(relative)
                 continue
-            for case in json.loads(input_path.read_text())["cases"]:
+            for case in read_fixture_json(input_path)["cases"]:
                 key = (case["surface"], case["operation"])
                 counts[key] += 1
-                paths[key] = f"https://github.com/{config['repository']}/blob/main/{source.parent.relative_to(root)}/{relative}"
+                physical_relative = physical_input_path.relative_to(root).as_posix()
+                paths[key] = f"https://github.com/{config['repository']}/blob/main/{physical_relative}"
         lines = ["# API support inventory", "", "Generated from the public manifest. "
                  "A declared status and an input count do not prove all argument combinations. "
                  "[Maturity and release evidence](compatibility.md) identify the executed scope.", ""]

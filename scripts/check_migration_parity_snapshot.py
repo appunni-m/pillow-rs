@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import os
 import sys
@@ -24,6 +25,7 @@ RECIPE_FILES = (
 RECIPE_MODULES = (
     "channel_inputs.py",
     "display_inputs.py",
+    "fixture_io.py",
     "gpu_batch_inputs.py",
     "mode_size_matrix.py",
     "pipeline_contract.py",
@@ -31,7 +33,8 @@ RECIPE_MODULES = (
     "target_output_contracts.py",
 )
 CORPUS_ROOTS = (FIXTURES / "inputs", FIXTURES / "assets" / "generated")
-LOCK_SCHEMA = "migration-parity/input-snapshot-lock@1"
+LOCK_SCHEMA = "migration-parity/input-snapshot-lock@2"
+COMPRESSION_RECIPE = "json-gzip@mtime0-level6"
 
 
 # VERIFY: source=reviewed@2026-11-14; parity=n/a; benchmark=n/a
@@ -91,6 +94,7 @@ def _recipe_digest() -> str:
     digest = hashlib.sha256()
     _frame(digest, LOCK_SCHEMA.encode())
     _frame(digest, f"python={PYTHON_VERSION}".encode())
+    _frame(digest, COMPRESSION_RECIPE.encode())
     for path in _recipe_files():
         content_digest, size = _sha256_file(path)
         _frame(digest, path.relative_to(ROOT).as_posix().encode())
@@ -101,10 +105,43 @@ def _recipe_digest() -> str:
 
 # VERIFY: source=reviewed@2026-11-14; parity=n/a; benchmark=n/a
 def _corpus_files() -> list[Path]:
-    files = []
+    by_logical_path: dict[str, Path] = {}
     for root in CORPUS_ROOTS:
-        files.extend(_files_under(root))
-    return sorted(files, key=lambda path: path.relative_to(FIXTURES).as_posix())
+        for path in _files_under(root):
+            relative = path.relative_to(FIXTURES).as_posix()
+            logical = (
+                relative.removesuffix(".gz")
+                if relative.endswith(".json.gz")
+                else relative
+            )
+            previous = by_logical_path.get(logical)
+            if previous is None or path.name.endswith(".json.gz"):
+                by_logical_path[logical] = path
+    return [by_logical_path[name] for name in sorted(by_logical_path)]
+
+
+# VERIFY: source=reviewed@2026-11-14; parity=n/a; benchmark=n/a
+def _logical_size(path: Path) -> int:
+    """Read the locked logical size without inflating a compressed fixture."""
+    if not path.name.endswith(".json.gz"):
+        return path.stat().st_size
+    compressed_size = path.stat().st_size
+    if compressed_size < 18:
+        raise SystemExit(
+            f"invalid compressed input snapshot: {path.relative_to(FIXTURES)}"
+        )
+    with path.open("rb") as stream:
+        if stream.read(2) != b"\x1f\x8b":
+            raise SystemExit(
+                f"invalid compressed input snapshot: {path.relative_to(FIXTURES)}"
+            )
+        stream.seek(-4, os.SEEK_END)
+        uncompressed_size = int.from_bytes(stream.read(4), "little")
+    if uncompressed_size == 0:
+        raise SystemExit(
+            f"empty compressed input snapshot: {path.relative_to(FIXTURES)}"
+        )
+    return uncompressed_size
 
 
 # VERIFY: source=reviewed@2026-11-14; parity=n/a; benchmark=n/a
@@ -114,20 +151,34 @@ def _corpus_snapshot(*, include_content: bool) -> dict[str, str | int]:
     tree_digest = hashlib.sha256()
     total_bytes = 0
     for path in files:
-        relative = path.relative_to(FIXTURES).as_posix()
-        size = path.stat().st_size
-        total_bytes += size
+        physical = path.relative_to(FIXTURES).as_posix()
+        relative = (
+            physical.removesuffix(".gz")
+            if physical.endswith(".json.gz")
+            else physical
+        )
+        logical_size = _logical_size(path)
         _frame(paths_digest, relative.encode())
-        _frame(paths_digest, size.to_bytes(8, "big"))
+        _frame(paths_digest, logical_size.to_bytes(8, "big"))
+        total_bytes += logical_size
         if include_content:
-            content_digest, actual_size = _sha256_file(path)
-            if actual_size != size:
+            content = hashlib.sha256()
+            actual_size = 0
+            opener = gzip.open if path.name.endswith(".json.gz") else open
+            with opener(path, "rb") as stream:
+                while chunk := stream.read(1024 * 1024):
+                    actual_size += len(chunk)
+                    content.update(chunk)
+            content_digest = content.hexdigest()
+            if actual_size != logical_size:
                 raise SystemExit(f"file changed while hashing: {relative}")
             if relative.startswith("assets/generated/"):
                 if Path(relative).stem != content_digest:
-                    raise SystemExit(f"generated asset is not content-addressed: {relative}")
+                    raise SystemExit(
+                        f"generated asset is not content-addressed: {relative}"
+                    )
             _frame(tree_digest, relative.encode())
-            _frame(tree_digest, size.to_bytes(8, "big"))
+            _frame(tree_digest, actual_size.to_bytes(8, "big"))
             _frame(tree_digest, bytes.fromhex(content_digest))
     return {
         "file_count": len(files),
@@ -208,7 +259,12 @@ def main() -> None:
         print("input recipe matches the versioned corpus lock")
         return
     snapshot = _corpus_snapshot(include_content=not args.metadata_only)
-    for field in ("file_count", "total_bytes", "paths_sha256"):
+    fields = (
+        "file_count",
+        "total_bytes",
+        "paths_sha256",
+    )
+    for field in fields:
         if str(snapshot[field]) != lock[field]:
             raise SystemExit(f"input snapshot {field} differs from the versioned lock")
     if not args.metadata_only and snapshot["tree_sha256"] != lock["tree_sha256"]:

@@ -60,10 +60,19 @@ of rebuilding it. There are no fallback cache keys: a stale snapshot cannot
 satisfy a changed lock. After eviction, the next workflow rebuilds and checks
 the exact locked contents before saving the cache.
 
+Generated JSON documents are stored as deterministic `.json.gz` files to keep
+the CI cache and runner disk footprint bounded. Manifest paths remain logical
+`.json` names; fixture readers transparently stream either compressed or raw
+storage, and the lock hashes the uncompressed JSON bytes. Content-addressed
+binary assets stay in their native format. PostgreSQL separately compresses
+binary values into typed blobs when importing cases; it does not replace or
+own this reproducible input snapshot.
+
 Use `make migration-parity-inputs-check` for a full content-digest check,
 `make migration-parity-inputs-cache-check` for the inexpensive post-restore
-inventory check, and `make migration-parity-inputs-regenerate-check` when an
-explicit full rebuild is needed to audit generator determinism. After a
+logical-path and uncompressed-size check, and
+`make migration-parity-inputs-regenerate-check` when an explicit full rebuild
+is needed to audit generator determinism. After a
 deliberate corpus update, run `make migration-parity-inputs-lock-update` and
 review the lock diff. PostgreSQL remains a separate, rebuildable index and
 execution ledger; it does not store the generated JSON documents or replace
