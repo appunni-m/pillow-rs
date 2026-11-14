@@ -53,6 +53,10 @@ contract.
    generated-input recipe, or other versioned specification is reviewed and
    pinned by its project. The database is a rebuildable index and evidence
    ledger, not a second editing surface.
+   Large generated corpora can remain outside Git when the project checks in a
+   small lock containing the recipe and output digests. CI can cache the exact
+   locked snapshot and regenerate only after a cache miss; the database still
+   imports the authored inputs incrementally and is not the corpus cache.
 3. **Persist meaning as typed relations.** Store cases, dimensions, steps,
    implementation identities, observations, outcomes, and references in
    normalized tables. Do not use JSON or JSONB columns, JSON operators, or

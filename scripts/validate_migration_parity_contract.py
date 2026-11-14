@@ -2041,13 +2041,21 @@ def main() -> int:
         / "fixtures"
         / "manifest.yaml",
     )
+    parser.add_argument(
+        "--manifest-only",
+        action="store_true",
+        help="validate only the manifest without loading every indexed input document",
+    )
     args = parser.parse_args()
-    validate_active_tree(args.manifest.resolve())
+    manifest_path = args.manifest.resolve()
     import yaml
 
-    manifest = yaml.safe_load(args.manifest.resolve().read_text(encoding="utf-8"))
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    validate_manifest(manifest, manifest_path=manifest_path)
+    if not args.manifest_only:
+        validate_inputs(manifest, manifest_path.parent)
     counts = {lane: len(manifest["input_index"][lane]) for lane in LANES}
-    print(json.dumps({"manifest": str(args.manifest.resolve()), "documents": counts}, sort_keys=True))
+    print(json.dumps({"manifest": str(manifest_path), "documents": counts}, sort_keys=True))
     return 0
 
 

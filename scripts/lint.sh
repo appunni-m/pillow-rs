@@ -73,7 +73,7 @@ check "Python binding rules" "$PYTHON" scripts/check_bindings.py
 echo ""
 echo "=== migration parity specification ==="
 
-check "migration parity inputs" "$PYTHON" scripts/check_migration_parity_inputs.py
+check "migration parity input recipe" "$PYTHON" scripts/check_migration_parity_snapshot.py --recipe-only
 check "migration parity inventory" "$PYTHON" scripts/migration_parity_inventory.py --format check
 check "migration parity contract" "$PYTHON" scripts/validate_migration_parity_contract.py \
 	--manifest pillow-rs/tests/fixtures/manifest.yaml

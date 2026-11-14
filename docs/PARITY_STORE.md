@@ -41,6 +41,34 @@ catalog, transaction, selection, execution, comparison, and completeness
 operations while keeping the Pillow importer and the shared coordinator
 unchanged.
 
+## Versioned generated inputs in CI
+
+The generated parity, coverage, benchmark, and binary-asset corpus is too large
+to commit as source files. Git tracks `pillow-rs/tests/fixtures/input-corpus.lock`
+instead. The lock binds the corpus to the generator, its helper modules, the
+manifest, source assets, and pinned Python requirements, and records both the
+corpus tree digest and its path/size inventory. Updating the generator or its
+authored inputs requires regenerating the corpus and deliberately refreshing
+this lock.
+
+GitHub Actions keys its shared cache from that lock. A single preparation job
+checks the recipe, restores the exact snapshot, and generates the corpus only
+on a cache miss. The Python and WASM matrix lanes restore the same snapshot and
+check its recipe and inventory before running. Other parity and benchmark
+workflows use the same key, so routine workflow runs reuse the corpus instead
+of rebuilding it. There are no fallback cache keys: a stale snapshot cannot
+satisfy a changed lock. After eviction, the next workflow rebuilds and checks
+the exact locked contents before saving the cache.
+
+Use `make migration-parity-inputs-check` for a full content-digest check,
+`make migration-parity-inputs-cache-check` for the inexpensive post-restore
+inventory check, and `make migration-parity-inputs-regenerate-check` when an
+explicit full rebuild is needed to audit generator determinism. After a
+deliberate corpus update, run `make migration-parity-inputs-lock-update` and
+review the lock diff. PostgreSQL remains a separate, rebuildable index and
+execution ledger; it does not store the generated JSON documents or replace
+the versioned input snapshot.
+
 ```text
 versioned project specification and input files
     -> validated project importer

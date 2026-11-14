@@ -312,7 +312,10 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-fixtures$(NC) Compatibility alias for manifest and input builds\n"
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify authority, manifest, and input regeneration\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Verify strict aggregate/result interfaces\n"
-	@printf "  $(CYAN)make migration-parity-inputs$(NC) Build parity, coverage, and benchmark inputs\n"
+	@printf "  $(CYAN)make migration-parity-inputs-check$(NC) Verify input corpus against its content lock\n"
+	@printf "  $(CYAN)make migration-parity-inputs-cache-check$(NC) Verify a restored cache inventory\n"
+	@printf "  $(CYAN)make migration-parity-inputs-lock-update$(NC) Regenerate and refresh the input lock\n"
+	@printf "  $(CYAN)make migration-parity-inputs-regenerate-check$(NC) Audit full generator determinism\n"
 	@printf "\n$(BOLD)Lint$(NC)\n"
 	@printf "  $(CYAN)make quality$(NC)       Run Rust, repository, and source-policy quality gates\n"
 	@printf "  $(CYAN)make large-files-check$(NC) Reject unapproved files at or above 1 MiB in the latest diff\n"
@@ -1108,7 +1111,7 @@ image-slash-star-full-test: ## Run image-slash-star all-feature coverage matrix
 image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-slash-star-test image-slash-star-lint ## Run maintained image-slash-star integration gates
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-fixtures-check migration-parity-inputs-check migration-parity-crash-quarantine-check migration-parity-evidence-check
+.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-fixtures-check migration-parity-inputs-check migration-parity-inputs-cache-check migration-parity-inputs-recipe-check migration-parity-inputs-lock-update migration-parity-inputs-regenerate-check migration-parity-crash-quarantine-check migration-parity-evidence-check
 .PHONY: operation-source-crosswalk implementation-structure-audit implementation-structure-inventory
 
 fixtures: migration-parity-fixtures ## Build the active manifest and input specifications
@@ -1146,9 +1149,25 @@ migration-parity-fixtures-check: migration-parity-inventory-check ## Verify auth
 	$(MAKE) migration-parity-inputs-check
 
 .PHONY: migration-parity-inputs-check
-migration-parity-inputs-check: ## Verify deterministic inputs and safe workflow consolidation
+migration-parity-inputs-check: ## Verify the complete generated input corpus against its version lock
+	$(PYTHON) scripts/check_migration_parity_snapshot.py
+	$(PYTHON) scripts/check_migration_parity_inputs.py --active-only
+
+migration-parity-inputs-cache-check: ## Verify a restored input cache by recipe, paths, and sizes
+	$(PYTHON) scripts/check_migration_parity_snapshot.py --metadata-only
+
+migration-parity-inputs-recipe-check: ## Verify the input generator recipe matches the corpus lock
+	$(PYTHON) scripts/check_migration_parity_snapshot.py --recipe-only
+	$(PYTHON) scripts/validate_migration_parity_contract.py --manifest-only --manifest "$(MANIFEST)"
+
+migration-parity-inputs-lock-update: ## Regenerate, validate, and lock the current input corpus
+	$(MAKE) migration-parity-inputs
+	$(PYTHON) scripts/check_migration_parity_inputs.py --active-only
+	$(PYTHON) scripts/check_migration_parity_snapshot.py --write-lock
+
+migration-parity-inputs-regenerate-check: ## Expensively rebuild all inputs and compare deterministic output
 	$(PYTHON) scripts/check_migration_parity_inputs.py
-	$(PYTHON) scripts/validate_migration_parity_contract.py --manifest "$(MANIFEST)"
+	$(PYTHON) scripts/check_migration_parity_snapshot.py
 
 migration-parity-crash-quarantine-check: ## Verify isolated crash inputs without executing them
 	$(PYTHON) scripts/check_migration_parity_inputs.py --quarantine-only
@@ -1245,7 +1264,7 @@ repo-map-check: ## Validate docs/REPO_MAP.md generated tree
 repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 	$(PYTHON) scripts/check_repo_map.py --write
 
-docs-check: docs-lint repo-map-check implementation-structure-audit implementation-structure-inventory operation-source-crosswalk migration-parity-inputs-check migration-parity-pipeline-roadmap-check release-tools-test ## Validate documentation, inputs, structure, and release configuration
+docs-check: docs-lint repo-map-check implementation-structure-audit implementation-structure-inventory operation-source-crosswalk migration-parity-inputs-recipe-check migration-parity-pipeline-roadmap-check release-tools-test ## Validate documentation, input recipe, structure, and release configuration
 
 .PHONY: migration-parity-pipeline-roadmap-check
 migration-parity-pipeline-roadmap-check: ## Validate all 64 public roadmap IDs without claiming benchmark execution

@@ -9,6 +9,11 @@ on:
       - 'scripts/run_migration_benchmark.py'
       - 'scripts/run_migration_parity.py'
       - 'scripts/run_pillow_simd_benchmark.py'
+      - 'scripts/build_migration_parity_inputs.py'
+      - 'scripts/migration_parity/**'
+      - 'requirements-ci.txt'
+      - 'pillow-rs/tests/fixtures/input-corpus.lock'
+      - 'pillow-rs/tests/fixtures/assets/**'
       - 'scripts/docs_evidence.py'
       - 'scripts/docs_benchmark_view.py'
       - 'scripts/docs_site.py'
@@ -43,6 +48,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: restore the versioned parity corpus
+        id: parity-input-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            pillow-rs/tests/fixtures/inputs
+            pillow-rs/tests/fixtures/assets/generated
+          key: parity-inputs-v1-${{ hashFiles('pillow-rs/tests/fixtures/input-corpus.lock') }}
+          enableCrossOsArchive: true
       - name: install the locked Rust toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt --component clippy
@@ -59,6 +73,26 @@ jobs:
             python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev
       - name: install project benchmark tools
         run: make setup-venv PYTHON=python
+      - name: verify the input recipe
+        run: make PYTHON=.venv/bin/python migration-parity-inputs-recipe-check
+      - name: generate inputs after a cache miss
+        if: steps.parity-input-cache.outputs.cache-hit != 'true'
+        run: make PYTHON=.venv/bin/python migration-parity-inputs
+      - name: verify the restored input cache
+        if: steps.parity-input-cache.outputs.cache-hit == 'true'
+        run: make PYTHON=.venv/bin/python migration-parity-inputs-cache-check
+      - name: verify newly generated corpus contents
+        if: steps.parity-input-cache.outputs.cache-hit != 'true'
+        run: make PYTHON=.venv/bin/python migration-parity-inputs-check
+      - name: save the versioned parity corpus
+        if: success() && steps.parity-input-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            pillow-rs/tests/fixtures/inputs
+            pillow-rs/tests/fixtures/assets/generated
+          key: parity-inputs-v1-${{ hashFiles('pillow-rs/tests/fixtures/input-corpus.lock') }}
+          enableCrossOsArchive: true
       - name: verify runner architecture and record hardware identity
         id: runner
         shell: bash

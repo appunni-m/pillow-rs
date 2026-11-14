@@ -7881,6 +7881,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- check_implementation_structure.py
     |-- check_large_files.py
     |-- check_migration_parity_inputs.py
+    |-- check_migration_parity_snapshot.py
     |-- check_pipeline_benchmark_budgets.py
     |-- check_public_api_boundary.py
     |-- check_python_compatibility.py

@@ -1,0 +1,7 @@
+schema=migration-parity/input-snapshot-lock@1
+producer_python=3.12.10
+recipe_sha256=af83b05a3f49b66354e9311dd2bcf80c3cd6776448b00efe1ae5df6ed5a8e4e6
+paths_sha256=2f5b53ae9fa3e11338ef080077056afcfd6483f53d6f02af321de2bca721e671
+tree_sha256=f8d5cf6a19c510e708d1a57b920205565466d805875c9a8460b6630d000b387e
+file_count=12643
+total_bytes=17557692961
