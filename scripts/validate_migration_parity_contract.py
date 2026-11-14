@@ -2055,7 +2055,13 @@ def main() -> int:
     import yaml
 
     manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
-    validate_manifest(manifest, manifest_path=manifest_path)
+    # A manifest-only check runs before the generated corpus is restored or
+    # generated in CI, so validate its path declarations without requiring the
+    # indexed input files to exist yet. Full input validation checks presence.
+    validate_manifest(
+        manifest,
+        manifest_path=None if args.manifest_only else manifest_path,
+    )
     if not args.manifest_only:
         validate_inputs(manifest, manifest_path.parent)
     counts = {lane: len(manifest["input_index"][lane]) for lane in LANES}
