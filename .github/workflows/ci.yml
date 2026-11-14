@@ -46,7 +46,7 @@ jobs:
   # snapshot across runs. Other parity lanes restore the same locked key.
   parity-inputs:
     name: prepare versioned parity inputs
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -139,7 +139,7 @@ jobs:
     # are generated on Apple ARM64. Keep both parity adapters on the same
     # architecture so platform-specific C/Pillow arithmetic is not reported as
     # a migration mismatch; Linux remains covered by the Rust and WASM jobs.
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -358,7 +358,7 @@ jobs:
     # The live Pillow oracle and version-locked native parity corpus are measured
     # on Apple ARM64. Keep the JS/WASM source/target comparison on that same
     # architecture; the Rust matrix above continues to cover Linux builds.
-    runs-on: macos-14
+    runs-on: macos-15
     # The browser adapter intentionally isolates process-global RNG cases and
     # runs the complete public corpus.  Hosted macOS runners can need more
     # than an hour even though the local ARM64 replay is exact; keep the full
