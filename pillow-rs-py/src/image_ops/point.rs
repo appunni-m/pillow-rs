@@ -4,6 +4,7 @@ use super::{
 };
 use crate::map_error;
 use pyo3::basic::CompareOp;
+use pyo3::exceptions::PyAssertionError;
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
 use pyo3::types::{PyAnyMethods, PyModuleMethods};
 use pyo3::types::{PyInt, PyIterator, PyList, PyListMethods};
@@ -72,6 +73,116 @@ impl<'py> pillow_rs::ImageOpsLutCallbacks for PythonImageOpsCallbacks<'py> {
 
     fn point(&mut self, image: &Self::Image, lut: Self::Lut) -> Result<Self::Output, Self::Error> {
         image.call_method1("point", (lut,)).map_err(Into::into)
+    }
+}
+
+impl<'py> pillow_rs::ImageOpsPaletteLutCallbacks for PythonImageOpsCallbacks<'py> {
+    type PaletteMode = Bound<'py, PyAny>;
+    type PaletteValues = Bound<'py, PyAny>;
+    type PaletteIterator = Bound<'py, PyIterator>;
+    type PaletteEntry = Bound<'py, PyAny>;
+    type PaletteBuilder = Bound<'py, PyList>;
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn copy_palette_image(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error> {
+        image.call_method0("copy").map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn palette_is_none(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
+        Ok(image.getattr("palette")?.is_none())
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+    fn palette_assertion_error(&mut self) -> Self::Error {
+        ImageOpsCallbackError::Python(PyAssertionError::new_err(""))
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn palette_mode(&mut self, image: &Self::Image) -> Result<Self::PaletteMode, Self::Error> {
+        image
+            .getattr("palette")?
+            .getattr("mode")
+            .map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn palette_values(&mut self, image: &Self::Image) -> Result<Self::PaletteValues, Self::Error> {
+        image
+            .call_method1("getpalette", (self.py.None(),))
+            .map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn palette_values_are_none(
+        &mut self,
+        values: &Self::PaletteValues,
+    ) -> Result<bool, Self::Error> {
+        Ok(values.is_none())
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn palette_values_iter(
+        &mut self,
+        values: Self::PaletteValues,
+    ) -> Result<Self::PaletteIterator, Self::Error> {
+        values.try_iter().map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn next_palette_entry(
+        &mut self,
+        values: &mut Self::PaletteIterator,
+    ) -> Result<Option<Self::PaletteEntry>, Self::Error> {
+        values.next().transpose().map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn palette_entry_is_alpha(
+        &mut self,
+        mode: &Self::PaletteMode,
+        index: usize,
+    ) -> Result<bool, Self::Error> {
+        let length = imageops_global_or_builtin(self.py, "len")?.call1((mode,))?;
+        let palette_index = PyInt::new(self.py, index);
+        let channel_index = palette_index.as_any().rem(length)?;
+        let channel = mode.get_item(channel_index)?;
+        let is_not_alpha = channel.rich_compare("A", CompareOp::Ne)?.is_truthy()?;
+        Ok(!is_not_alpha)
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn palette_lut_entry(
+        &mut self,
+        lut: &Self::Lut,
+        entry: &Self::PaletteEntry,
+    ) -> Result<Self::PaletteEntry, Self::Error> {
+        lut.get_item(entry).map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn new_palette_builder(&mut self) -> Result<Self::PaletteBuilder, Self::Error> {
+        Ok(PyList::empty(self.py))
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn append_palette_entry(
+        &mut self,
+        builder: &mut Self::PaletteBuilder,
+        entry: Self::PaletteEntry,
+    ) -> Result<(), Self::Error> {
+        builder.append(entry).map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    fn put_palette(
+        &mut self,
+        image: Self::Image,
+        values: Self::PaletteBuilder,
+        mode: Self::PaletteMode,
+    ) -> Result<Self::Output, Self::Error> {
+        image.call_method1("putpalette", (values, mode))?;
+        Ok(image)
     }
 }
 

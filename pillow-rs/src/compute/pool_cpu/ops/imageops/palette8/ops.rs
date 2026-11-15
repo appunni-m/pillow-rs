@@ -11,8 +11,8 @@ use crate::error::PilError;
 use crate::raster::Mode;
 use crate::raster::{DynamicImage, GrayImage, RgbImage};
 
-// NO_PILLOW_SUPPORT: Pillow's ImageOps.invert rejects P. This Rust strategy
-// inverts the native palette indices and preserves the attached palette.
+// NO_PILLOW_SUPPORT: this low-level Rust Invert operation transforms native
+// P index bytes; Pillow's ImageOps wrapper instead transforms palette entries.
 declare_invert_native_mode!(
     ImagePalette8,
     Input,
@@ -83,12 +83,12 @@ pub(crate) const AUTOCONTRAST_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     "Autocontrast applies its byte lookup table directly to native palette indices",
 );
 
-// NO_PILLOW_SUPPORT: Pillow's ImageOps._lut rejects P. These native strategies
-// transform palette indices and preserve the Rust image's attached palette.
+// NO_PILLOW_SUPPORT: these low-level Rust operations transform native P index
+// bytes; Pillow's ImageOps wrappers instead transform palette entries.
 // TODO(pillow-rs#3ptb): add target-only parity for this direct Rust strategy's
 // P index output, palette retention, and Default/SSE2/NEON/Wasm SIMD128
-// selection and fallback. The ImageOps wrapper's distinct P rejection is
-// covered by the Pillow parity corpus.
+// selection and fallback. The Python ImageOps wrappers use a separate palette
+// transformation path and retain Pillow parity.
 pub(crate) const POSTERIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Posterize,
     Mode::ImagePalette8,
@@ -98,12 +98,12 @@ pub(crate) const POSTERIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     "Posterize applies its byte lookup table directly to native palette indices",
 );
 
-// NO_PILLOW_SUPPORT: Pillow's ImageOps._lut rejects P; this native strategy
-// solarizes index bytes and preserves the Rust image's attached palette.
+// NO_PILLOW_SUPPORT: this low-level Rust operation solarizes native P index
+// bytes; Pillow's ImageOps wrapper instead transforms palette entries.
 // TODO(pillow-rs#3ptb): add target-only parity for this direct Rust strategy's
 // P index output, palette retention, and Default/SSE2/NEON/Wasm SIMD128
-// selection and fallback. The ImageOps wrapper's distinct P rejection is
-// covered by the Pillow parity corpus.
+// selection and fallback. The Python ImageOps wrapper uses a separate palette
+// transformation path and retains Pillow parity.
 pub(crate) const SOLARIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Solarize,
     Mode::ImagePalette8,

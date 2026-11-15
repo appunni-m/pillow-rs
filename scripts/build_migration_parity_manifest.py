@@ -1007,7 +1007,7 @@ def looks_like_error(edge: str) -> bool:
     )
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
 def operation_requirements(
     endpoint: Endpoint,
     parameters: list[dict[str, Any]],
@@ -1053,6 +1053,9 @@ def operation_requirements(
         # Keep the complete typed Brightness denominator visible: Pillow byte
         # modes, CoreOnly target-output extensions, and the three rejected modes.
         supported_modes = [mode for mode, _mode_id in BRIGHTNESS_PILLOW_MODES]
+    elif endpoint.source_path == "PIL.ImageOps.invert":
+        # Pillow's palette-aware LUT route also supports indexed P images.
+        supported_modes = list(dict.fromkeys([*supported_modes, "P"]))
     elif endpoint.source_path == "PIL.ImageChops.invert":
         # Invert has exact byte behavior across all Pillow storage modes.
         supported_modes = [mode for mode, _mode_id, _channels in CHOPS_INVERT_PILLOW_MODES]
@@ -1340,6 +1343,14 @@ def operation_requirements(
                     ["target_output", "benchmark", "coverage"],
                 )
             )
+        requirements.append(
+            requirement(
+                f"{prefix}.mode.i16-reducing-gap-extension",
+                "mode",
+                "Native I;16 filtered Resize with reducing_gap (NO_PILLOW_SUPPORT).",
+                ["target_output", "coverage"],
+            )
+        )
     if endpoint.source_path == "PIL.Image.frombytes":
         # pillow-rs exposes these exact typed carriers as Rust-only raw input
         # identities. They have recorded-output coverage but no Pillow mode.

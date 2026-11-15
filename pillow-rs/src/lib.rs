@@ -523,6 +523,8 @@ pub use crate::ops::imageops::ImageOpsPadCallbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsPadRouteCallbacks;
 #[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsPaletteLutCallbacks;
+#[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsPosterizeCallbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsScaleCallbacks;
@@ -604,6 +606,8 @@ pub use crate::ops::imageops::fit_geometry_preflight as imageops_fit_geometry_pr
 pub use crate::ops::imageops::fit_with_input as imageops_fit_with_input;
 pub use crate::ops::imageops::flip as imageops_flip;
 pub use crate::ops::imageops::grayscale as imageops_grayscale;
+#[doc(hidden)]
+pub use crate::ops::imageops::imageops_lut_with_palette_callbacks;
 pub use crate::ops::imageops::invert_ops as imageops_invert;
 #[doc(hidden)]
 pub use crate::ops::imageops::invert_with_callbacks as imageops_invert_with_callbacks;

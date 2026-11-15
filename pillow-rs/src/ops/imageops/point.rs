@@ -1,3 +1,4 @@
+use super::palette_lut::{ImageOpsPaletteLutCallbacks, imageops_lut_with_palette_callbacks};
 use super::*;
 use crate::compute::registry::support::{ModeSupport, OperationId};
 use crate::pipeline::AutocontrastOptions;
@@ -60,7 +61,7 @@ pub trait ImageOpsLutCallbacks {
 
 /// Host operations used by Pillow's ImageOps Invert wrapper.
 #[doc(hidden)]
-pub trait ImageOpsInvertCallbacks: ImageOpsLutCallbacks {
+pub trait ImageOpsInvertCallbacks: ImageOpsPaletteLutCallbacks {
     /// Build `list(range(255, -1, -1))` using the host namespace.
     fn invert_lut(&mut self) -> Result<Self::Lut, Self::Error>;
     /// Evaluate the public `image.mode == "1"` branch.
@@ -69,7 +70,7 @@ pub trait ImageOpsInvertCallbacks: ImageOpsLutCallbacks {
 
 /// Host sequence primitives used while `pillow-rs` builds an ImageOps LUT.
 #[doc(hidden)]
-pub trait ImageOpsLutBuildCallbacks: ImageOpsLutCallbacks {
+pub trait ImageOpsLutBuildCallbacks: ImageOpsPaletteLutCallbacks {
     /// A value yielded by the host's `range(256)` iterator.
     type Value;
     /// Iterator returned by the host's `range(256)` expression.
@@ -134,8 +135,9 @@ pub trait ImageOpsSolarizeCallbacks: ImageOpsLutBuildCallbacks {
     fn invert_sample(&mut self, sample: &Self::Value) -> Result<Self::Value, Self::Error>;
 }
 
-/// Applies Pillow's shared ImageOps `_lut` mode checks and public `point` call.
+/// Applies Pillow's shared `_lut` checks when `palette=False`.
 #[doc(hidden)]
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub fn imageops_lut_with_callbacks<C: ImageOpsLutCallbacks>(
     callbacks: &mut C,
     image: &C::Image,
@@ -143,12 +145,18 @@ pub fn imageops_lut_with_callbacks<C: ImageOpsLutCallbacks>(
     operation: OperationId,
 ) -> Result<C::Output, C::Error> {
     if callbacks.image_mode_is_palette(image)? {
-        operation
-            .support()
-            .for_mode(Mode::ImagePalette8)
-            .validate_mode()?;
-        return callbacks.point(image, lut);
+        return Err(PilError::NotImplementedError("mode P support coming soon".into()).into());
     }
+    imageops_lut_non_palette(callbacks, image, lut, operation)
+}
+
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+pub(super) fn imageops_lut_non_palette<C: ImageOpsLutCallbacks>(
+    callbacks: &mut C,
+    image: &C::Image,
+    lut: C::Lut,
+    operation: OperationId,
+) -> Result<C::Output, C::Error> {
     if !callbacks.image_mode_is_luma_or_rgb(image)? {
         return Err(callbacks.unsupported_mode_error(image)?);
     }
@@ -167,8 +175,9 @@ pub fn imageops_lut_with_callbacks<C: ImageOpsLutCallbacks>(
     callbacks.point(image, lut)
 }
 
-/// Runs Pillow's ImageOps Invert wrapper through the public mode and point APIs.
+/// Runs ImageOps Invert through its public mode, point, and palette paths.
 #[doc(hidden)]
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
 pub fn invert_with_callbacks<C: ImageOpsInvertCallbacks>(
     callbacks: &mut C,
     image: C::Image,
@@ -181,13 +190,14 @@ pub fn invert_with_callbacks<C: ImageOpsInvertCallbacks>(
             .validate_mode()?;
         return callbacks.point(&image, lut);
     }
-    imageops_lut_with_callbacks(callbacks, &image, lut, OperationId::ImageOpsInvert)
+    imageops_lut_with_palette_callbacks(callbacks, &image, lut, OperationId::ImageOpsInvert)
 }
 
 /// Runs ImageOps Posterize's LUT construction and shared wrapper mode route.
 /// TODO(pillow-rs#3ptb): freeze parity for a replaced `range` that mutates or
 /// raises, proving it runs before result-list allocation and P-mode admission.
 #[doc(hidden)]
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
 pub fn posterize_with_callbacks<C: ImageOpsPosterizeCallbacks>(
     callbacks: &mut C,
     image: C::Image,
@@ -206,11 +216,12 @@ pub fn posterize_with_callbacks<C: ImageOpsPosterizeCallbacks>(
         callbacks.append_lut_value(&mut builder, value)?;
     }
     let lut = callbacks.finish_lut(builder)?;
-    imageops_lut_with_callbacks(callbacks, &image, lut, OperationId::ImageOpsPosterize)
+    imageops_lut_with_palette_callbacks(callbacks, &image, lut, OperationId::ImageOpsPosterize)
 }
 
 /// Runs ImageOps Solarize's LUT construction and shared wrapper mode route.
 #[doc(hidden)]
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
 pub fn solarize_with_callbacks<C: ImageOpsSolarizeCallbacks>(
     callbacks: &mut C,
     image: C::Image,
@@ -227,7 +238,7 @@ pub fn solarize_with_callbacks<C: ImageOpsSolarizeCallbacks>(
         callbacks.append_lut_value(&mut builder, value)?;
     }
     let lut = callbacks.finish_lut(builder)?;
-    imageops_lut_with_callbacks(callbacks, &image, lut, OperationId::ImageOpsSolarize)
+    imageops_lut_with_palette_callbacks(callbacks, &image, lut, OperationId::ImageOpsSolarize)
 }
 
 /// Host operations used by the complete ImageOps Autocontrast wrapper flow.

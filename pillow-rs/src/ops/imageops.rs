@@ -14,6 +14,7 @@ mod colorize;
 mod equalize;
 mod exif;
 mod geometry;
+mod palette_lut;
 mod point;
 
 pub(crate) use color::{
@@ -61,6 +62,7 @@ pub(crate) use geometry::{
 };
 pub(crate) use geometry::{normalize_fit_bleed, normalize_fit_centering};
 pub(crate) use geometry::{scale_dimension_to_u32, scale_dimensions_preflight};
+pub use palette_lut::{ImageOpsPaletteLutCallbacks, imageops_lut_with_palette_callbacks};
 pub use point::{
     ImageOpsAutocontrastCallbacks, ImageOpsAutocontrastResultCallbacks,
     ImageOpsAutocontrastSourceCallbacks, ImageOpsInvertCallbacks, ImageOpsLutBuildCallbacks,

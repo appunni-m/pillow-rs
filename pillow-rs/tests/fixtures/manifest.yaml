@@ -11983,7 +11983,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.Image.getxmp
-      signature: getxmp(self)
+      signature: getxmp(self, *, strip_namespaces=True)
       support:
         status: supported
     requirements:
@@ -14494,6 +14494,12 @@ surfaces:
       lanes:
       - target_output
       - benchmark
+      - coverage
+    - id: PIL.Image.Image.resize.mode.i16-reducing-gap-extension
+      dimension: mode
+      description: Native I;16 filtered Resize with reducing_gap (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.Image.Image.resize.parameter-combination.legacy-001
       dimension: parameter_combination
@@ -34140,6 +34146,12 @@ surfaces:
     - id: PIL.ImageOps.invert.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageOps.invert.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
       lanes:
       - parity
       - coverage

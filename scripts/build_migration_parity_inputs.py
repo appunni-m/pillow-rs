@@ -135,6 +135,7 @@ try:
         REDUCE_MATRIX_FACTORS,
         reduce_core_only_matrix_cases,
         resize_core_only_matrix_cases,
+        resize_i16_reducing_gap_target_expectation,
         sharpness_core_only_cases,
         sharpness_core_only_matrix_cases,
     )
@@ -178,6 +179,7 @@ except ModuleNotFoundError:
         REDUCE_MATRIX_FACTORS,
         reduce_core_only_matrix_cases,
         resize_core_only_matrix_cases,
+        resize_i16_reducing_gap_target_expectation,
         sharpness_core_only_cases,
         sharpness_core_only_matrix_cases,
     )
@@ -13262,7 +13264,85 @@ def getchannel_rgb_edge_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     return cases
 
 
-# VERIFY: source=pending; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=n/a
+def imageops_palette_lut_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise palette-aware LUT output and RGBA alpha retention."""
+    if surface_id != "PIL.ImageOps":
+        return []
+
+    cases: list[dict[str, Any]] = []
+    rgb = [12, 27, 45, 55, 66, 77, 105, 127, 149, 210, 220, 230]
+    rgba = [
+        12, 27, 45, 17, 55, 66, 77, 89,
+        105, 127, 149, 201, 210, 220, 230, 250,
+    ]
+    variants = (
+        ("invert", "rgb", "RGB", {}, rgb),
+        ("invert", "rgba", "RGBA", {}, rgba),
+        ("posterize", "rgb", "RGB", {"bits": literal(3)}, rgb),
+        ("posterize", "rgba", "RGBA", {"bits": literal(3)}, rgba),
+        ("solarize", "rgb", "RGB", {"threshold": literal(128)}, rgb),
+        ("solarize", "rgba", "RGBA", {"threshold": literal(128)}, rgba),
+    )
+    for operation, suffix, palette_mode, arguments, palette in variants:
+        cases.append(
+            {
+                "case_id": f"PIL.ImageOps.{operation}.nuanced.palette-{suffix}",
+                "surface": surface_id,
+                "operation": operation,
+                "covers": [f"PIL.ImageOps.{operation}.mode.p"],
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "setup-image",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("P"),
+                            "size": literal([4, 1]),
+                            "color": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "setup-indices",
+                        "surface": "PIL.Image.Image",
+                        "operation": "putdata",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"data": literal([0, 1, 2, 3])},
+                    },
+                    {
+                        "step_id": "setup-palette",
+                        "surface": "PIL.Image.Image",
+                        "operation": "putpalette",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "data": literal(palette),
+                            "rawmode": literal(palette_mode),
+                        },
+                    },
+                    {
+                        "step_id": "call",
+                        "surface": surface_id,
+                        "operation": operation,
+                        "receiver": None,
+                        "arguments": {"image": binding("setup-image"), **arguments},
+                    },
+                    {
+                        "step_id": "palette-output",
+                        "surface": "PIL.Image.Image",
+                        "operation": "getpalette",
+                        "receiver": binding("call"),
+                        "arguments": {"rawmode": literal(palette_mode)},
+                    },
+                ],
+                "observations": ["call", "palette-output"],
+            }
+        )
+    return cases
+
+
+# VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
 def build_nuanced_cases(
     manifest: dict[str, Any],
     operations: dict[tuple[str, str], dict[str, Any]],
@@ -44593,6 +44673,7 @@ def build_nuanced_cases(
                 "observations": ["call"],
             }
         )
+    cases.extend(imageops_palette_lut_parity_cases(surface_id))
     cases.extend(append_at_end)
     cases.extend(nuanced_display_cases(surface_id, operations))
     return cases
@@ -47037,6 +47118,7 @@ def resize_argument_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     return cases
 
 
+# VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-54c98805e1054be395b820ac3ca85406; benchmark=n/a
 def resize_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     """Keep sample interpretation, palette retention and pass order observable."""
     if surface_id != "PIL.Image.Image":
@@ -47089,13 +47171,25 @@ def resize_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                         {"step_id": "materialize", "surface": surface_id, "operation": "tobytes",
                          "receiver": binding("call"), "arguments": {}},
                     ])
-                    cases.append({
+                    case = {
                         "case_id": f"{surface_id}.resize.nuanced.modes-{mode}-{geometry}-{resample}-{name}",
                         "surface": surface_id, "operation": "resize",
                         "covers": [f"{surface_id}.resize.behavior.default"],
                          "assets": assets,
                         "steps": steps, "observations": ["call", "materialize"],
-                    })
+                    }
+                    # TODO(pillow-rs#3ptb): add size/pattern variants only after
+                    # recording a distinct output for each generated input.
+                    target_expectation = resize_i16_reducing_gap_target_expectation(
+                        mode, resample, name
+                    )
+                    if target_expectation is not None:
+                        case["verification"] = "expected-output"
+                        case["covers"] = [
+                            f"{surface_id}.resize.mode.i16-reducing-gap-extension"
+                        ]
+                        case["target_expectation"] = target_expectation
+                    cases.append(case)
 
     # Exercise high-bit-depth PNGs through the public open path. Pillow
     # normalizes these to byte-backed RGB/RGBA modes (including gray+alpha as
@@ -52021,6 +52115,7 @@ def _mode_size_template_sources(
     return parsed_sources
 
 
+# VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
 def expand_mode_size_parity_cases(
     cases: list[dict[str, Any]],
     assets_root: Path,
@@ -52039,6 +52134,9 @@ def expand_mode_size_parity_cases(
         resize_mode_matrix = (
             case.get("surface") == "PIL.Image.Image"
             and case.get("operation") == "resize"
+            # Target-only snapshots describe the exact source pixels. Copying
+            # one onto a size or pattern variant would keep an unrelated output.
+            and case.get("verification") != "expected-output"
             and any(
                 requirement_id.startswith("PIL.Image.Image.resize.mode.")
                 for requirement_id in case.get("covers", [])

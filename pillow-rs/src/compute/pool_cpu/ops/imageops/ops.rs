@@ -597,12 +597,12 @@ fn rejection_error(mode: Mode) -> PilError {
 pub(crate) static INVERT_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Invert, &[], classify_mode);
 
-/// Public ImageOps wrapper contract; Python routes through public `Image.point`
-/// and Eval, while the direct Rust API retains the exact-mode Invert child.
-// TODO(pillow-rs#3ptb): Freeze P's NotImplementedError, Pillow's unsupported
-// high-depth wrapper errors, the four immediate byte-mode rejections, direct
-// Rust child-admission timing, and Python callback mode overrides in CPU
-// parity, including route receipts.
+/// Public ImageOps wrapper contract; P transforms public palette metadata, other
+/// supported modes route through public `Image.point` and Eval.
+// TODO(pillow-rs#3ptb): Freeze palette callback mutation/fault order for P,
+// Pillow's unsupported high-depth wrapper errors, the four immediate byte-mode
+// rejections, direct Rust child-admission timing, and Python mode overrides in
+// CPU parity, including route receipts.
 pub(crate) static IMAGEOPS_INVERT_SUPPORT: OperationSupport = OperationSupport::routed(
     OperationId::ImageOpsInvert,
     &[],
@@ -610,8 +610,8 @@ pub(crate) static IMAGEOPS_INVERT_SUPPORT: OperationSupport = OperationSupport::
     IMAGEOPS_INVERT_CHILDREN,
 );
 
-// TODO(pillow-rs#3ptb): verify wrapper mode/fault order, custom mode and point
-// callbacks, unsupported-mode formatting faults, and selected/fallback
+// TODO(pillow-rs#3ptb): verify wrapper mode/fault order, custom mode/point and
+// palette callbacks, unsupported-mode formatting faults, and selected/fallback
 // receipts for ImageOps Invert, Posterize, and Solarize. Their Rust-native
 // operation contracts remain separate.
 
