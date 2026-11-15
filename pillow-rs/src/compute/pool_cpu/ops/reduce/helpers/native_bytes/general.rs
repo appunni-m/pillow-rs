@@ -6,6 +6,7 @@ use crate::error::PilError;
 #[derive(Clone, Copy)]
 struct Rounding {
     multiplier: u64,
+    divider: u64,
     amend: u32,
 }
 
@@ -69,28 +70,34 @@ impl Geometry {
     }
 }
 
-// NOTE: Match Pillow's fixed-point output even when it differs from the rounded
-// arithmetic mean: for a block area greater than 2^24, the reciprocal is zero,
-// so a block filled with 1 produces 0 instead of the mathematical mean 1.
-// TODO(pillow-rs#3ptb): Add the 4,097 × 4,096 L case to frozen Reduce parity
-// and benchmark selections before those gates run.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// NOTE: When the fixed-point reciprocal floors to zero, that formula predicts
+// output 0 for a 4,097 × 4,096 L block filled with 1. Pillow 13.0 returns 1;
+// the rounded-division fallback preserves that observed public result.
+// TODO(pillow-rs#3ptb): Include the large-block case in focused Reduce
+// benchmark verification before the CPU performance gate.
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-bc19c1a1dc0a41699cfa533caa0bef8f; benchmark=pending
 fn rounding(divider: u64) -> Rounding {
     let divider = divider.max(1);
     Rounding {
         multiplier: ((1u128 << 32) / (u128::from(divider) * 256)) as u64,
+        divider,
         amend: (divider / 2) as u32,
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-bc19c1a1dc0a41699cfa533caa0bef8f; benchmark=pending
 #[inline(always)]
 fn average(sum: u64, rounding: Rounding) -> u8 {
     #[expect(
         clippy::arithmetic_side_effects,
         reason = "checked image dimensions bound the native byte sum and reciprocal product"
     )]
-    let value = ((sum + u64::from(rounding.amend)) * rounding.multiplier) >> 24;
+    let rounded_sum = sum + u64::from(rounding.amend);
+    let value = if rounding.multiplier == 0 {
+        rounded_sum / rounding.divider
+    } else {
+        (rounded_sum * rounding.multiplier) >> 24
+    };
     #[expect(
         clippy::cast_possible_truncation,
         reason = "Pillow's fixed-point byte average is in the range 0..=255"

@@ -79,9 +79,12 @@ modes.
 
 Reduce also has a dedicated Pillow `L` workload at 4,097 × 4,096 with factor
 4,097 × 4,096. Its one-valued input crosses the fixed-point reciprocal's 2^24
-area boundary and keeps the observed zero output in both parity and timing
-evidence. It is separate from the general size matrix so this boundary does not
-multiply large inputs across unrelated operations and modes.
+area boundary. Pillow 13.0 and Rust both return byte `1` in the focused parity
+case; the fixed-point formula alone predicts `0`, so the reducer uses rounded
+division when its reciprocal floors to zero. Keep this case as a standalone
+workload for the CPU performance gate. It is separate from the general size
+matrix so this boundary does not multiply large inputs across unrelated
+operations and modes.
 
 The matrix spans the 25 Rust `Mode` identities: 20 Pillow raster modes and five
 internal `NO_PILLOW_SUPPORT` modes. Each operation contributes only the
