@@ -5,7 +5,7 @@ use crate::ops::pil_resize::FilterCoeffsF64;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{ImageBuffer, Luma};
 
-// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-75cc2aeb1bde4900b01f7ce223621407; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pass@migration-parity-75cc2aeb1bde4900b01f7ce223621407; benchmark=pending
 pub(crate) fn resize<const BIG_ENDIAN: bool>(
     input: &ImageBuffer<Luma<u16>, Vec<u16>>,
     destination_width: u32,
@@ -83,14 +83,14 @@ pub(crate) fn resize<const BIG_ENDIAN: bool>(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn vertical_first(source: (u32, u32), destination: (u32, u32)) -> bool {
     source.0 != destination.0
         && source.1 != destination.1
         && !super::coefficients::horizontal_first(source, destination)
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn resize_horizontal_only<const BIG_ENDIAN: bool>(
     input: &ImageBuffer<Luma<u16>, Vec<u16>>,
     destination_width: u32,
@@ -113,7 +113,7 @@ fn resize_horizontal_only<const BIG_ENDIAN: bool>(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn resize_vertical_only<const BIG_ENDIAN: bool>(
     input: &ImageBuffer<Luma<u16>, Vec<u16>>,
     destination_width: u32,
@@ -136,7 +136,7 @@ fn resize_vertical_only<const BIG_ENDIAN: bool>(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn resize_vertical_first<const BIG_ENDIAN: bool>(
     input: &ImageBuffer<Luma<u16>, Vec<u16>>,
     destination_width: u32,
@@ -182,7 +182,7 @@ fn resize_vertical_first<const BIG_ENDIAN: bool>(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn horizontal_pass<const BIG_ENDIAN: bool>(
     source_row: &[u16],
     coefficients: &FilterCoeffsF64,
@@ -211,7 +211,7 @@ fn horizontal_pass<const BIG_ENDIAN: bool>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn vertical_sample<const BIG_ENDIAN: bool>(
     intermediate: &[u16],
     output_x: u32,

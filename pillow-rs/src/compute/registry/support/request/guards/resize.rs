@@ -114,7 +114,7 @@ pub(crate) fn resize_f32_vector_guard(input: StrategyInputs) -> GuardAssessment 
     GuardAssessment::Satisfied
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height) = match input.request {
         RequestFacts::Resize {

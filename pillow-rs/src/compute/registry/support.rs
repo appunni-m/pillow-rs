@@ -239,7 +239,7 @@ impl ImplementationSupport {
 /// specialized siblings and permitted lower-architecture fallbacks.
 // TODO(pillow-rs#3ptb): verify exact/lower architecture selection and fallback
 // reasons across each operation's declared strategy set in the frozen parity.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn prioritized_implementations<'a>(
     architectures: &'a [ImplementationSupport],
     requested: Architecture,

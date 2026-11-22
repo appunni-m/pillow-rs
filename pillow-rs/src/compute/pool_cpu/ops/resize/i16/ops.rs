@@ -17,7 +17,7 @@ pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::serial(
     super::super::helpers::support::INPUTS,
 );
 
-// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-75cc2aeb1bde4900b01f7ce223621407; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pass@migration-parity-75cc2aeb1bde4900b01f7ce223621407; benchmark=pending
 pub(crate) fn resize_selected(
     context: &crate::compute::ExecutionContext,
     selection: &StrategySelection,

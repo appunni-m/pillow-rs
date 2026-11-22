@@ -294,7 +294,7 @@ impl ExecutionContext {
     ///
     /// Required instruction sets are checked independently after this policy
     /// relation; AVX2 alone does not establish SSSE3 or FMA availability.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     #[must_use]
     pub const fn permits_architecture(self, implementation: Architecture) -> bool {
         match self.architecture {
