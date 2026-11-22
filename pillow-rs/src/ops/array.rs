@@ -175,6 +175,7 @@ const TYPE_MAP: &[TypeMapEntry] = &[
 ///
 /// Returns Pillow-compatible [`PilError::TypeError`] for unsupported type keys
 /// and [`PilError::ValueError`] for excessive dimensions.
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-91ca2fee143d41f9bb05c30d69df2a3a; benchmark=n/a
 pub fn resolve_array_layout(
     shape: &[usize],
     typestr: &str,
@@ -191,6 +192,9 @@ pub fn resolve_array_layout(
         )));
     };
 
+    if explicit_mode.is_some_and(|mode| mode != entry.mode && !entry.color_modes.contains(&mode)) {
+        return Err(PilError::ValueError("Invalid mode for data type".into()));
+    }
     let mode = explicit_mode.unwrap_or(entry.mode);
     let dimensions = shape.len();
     let maximum_dimensions = match mode {

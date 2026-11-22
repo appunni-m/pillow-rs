@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 from .enums import Resampling
-from .image import Image
+from .image import Image, _execution_context_scope
 from . import _core
 
 
@@ -71,31 +71,62 @@ def merge(mode: str, bands):
                 raise ValueError(mode_rejection)
             if band.size != bands[0].size:
                 raise ValueError(size_rejection)
-    for band in bands:
-        band.load()
-    merged = _core.image_merge(mode, bands)
-    return bands[0]._new(merged)
+    with _execution_context_scope(bands[0]):
+        for band in bands:
+            band.load()
+        merged = _core.image_merge(mode, bands)
+        return bands[0]._new(merged)
 
 
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+def _image_blend_with_context(im1, im2, alpha, context_owner, *, load_inputs):
+    """Bind a blend graph to its source route, even after eager input loads."""
+    with _execution_context_scope(context_owner):
+        if load_inputs:
+            im1.load()
+            im2.load()
+        result = _core.image_blend(im1._rust_image, im2._rust_image, alpha)
+        return context_owner._bind_current_execution_context(result)
+
+
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def blend(im1: Image, im2: Image, alpha: float) -> Image:
     """Linear interpolation between two images."""
-    return im1._new(_core.image_blend(im1._rust_image, im2._rust_image, alpha))
+    rust_result = _image_blend_with_context(
+        im1, im2, alpha, im1, load_inputs=True
+    )
+    return im1._new(rust_result)
 
 
+# TODO(pillow-rs#3ptb): verify composite output, source/paste callback order,
+# metadata, and route receipts across destination/source/mask mode combinations.
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def composite(image1: Image, image2: Image, mask: Image) -> Image:
     """Composite image1 over image2 using mask."""
-    return image2._new(
-        _core.image_composite(image1._rust_image, image2._rust_image, mask._rust_image)
-    )
+    # Pillow composes this from destination copy plus public Paste callbacks.
+    # Keep those callbacks on the destination's route after wrapper validation.
+    with _execution_context_scope(image2):
+        result = image2.copy()
+        result.paste(image1, None, mask)
+        return result
 
 
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def alpha_composite(im1: Image, im2: Image) -> Image:
     """Alpha composite im2 over im1, returning a new image.
 
     PIL: ``Image.alpha_composite(im1, im2)`` composites im2 over im1
     and returns a new RGBA image.
     """
-    return im1._new(_core.image_alpha_composite(im1._rust_image, im2._rust_image))
+    with _execution_context_scope(im1):
+        execution_context = im1._current_execution_context()
+        if execution_context is None:
+            result = _core.image_alpha_composite(im1._rust_image, im2._rust_image)
+        else:
+            result = _core.image_alpha_composite(
+                im1._rust_image, im2._rust_image, execution_context
+            )
+        return im1._new(result)
 
 
 def fromarray(obj, mode=None):

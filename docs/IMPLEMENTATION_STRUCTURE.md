@@ -19,9 +19,11 @@ requirements; their presence here does not mean they are implemented yet.
 ## 1. Backend, architecture, and mode
 
 - Backend selects the executor: CPU, later Parallel CPU, or GPU.
-- Architecture selects a CPU implementation: `default`, `neon`, `sse2`,
-  `sse3`, `ssse3`, `avx`, `avx2`, `wasm_simd128`, or another specifically
-  implemented instruction set.
+- Architecture selects a CPU implementation: `default`, target-baseline
+  strategies such as `aarch64` and `x86_64`, instruction-set strategies such
+  as `neon`, `sse2`, `sse3`, `ssse3`, `avx`, `avx2`, `wasm_simd128`, or another
+  specifically implemented architecture. A baseline strategy can preserve
+  target-specific behavior without requiring optional vector instructions.
 - SIMD is folded into CPU. Maintained vector implementations belong to
   `pool_cpu`, with architecture expressed by context. There is no independent
   SIMD executor or maintained `pool_simd` implementation after the CPU phase.
@@ -280,8 +282,12 @@ cannot establish the instruction support of every machine running a portable
 binary. Never execute AVX, AVX2, SSSE3, or another optional instruction set
 without its required capability guarantee.
 
-`Architecture::Default` selects the ordinary serial implementation. SSE3 and
-SSSE3 are different instruction sets and must not share a misleading label.
+`Architecture::Default` requests the ordinary serial policy. An operation
+may declare a target-baseline strategy such as `Aarch64` or `X86_64`; when the
+target permits it, that exact strategy can preserve build-target behavior
+while the requested policy remains Default. Record both requested policy and
+selected implementation. SSE3 and SSSE3 are different instruction sets and
+must not share a misleading label.
 An implementation requiring additional capabilities, such as FMA, must declare
 them precisely. Do not assume a higher-numbered architecture can call every
 lower-level kernel without checking the actual requirements centrally.
@@ -407,10 +413,11 @@ hardware, or introduce parallel scheduling inside its algorithm.
 
 Represent runtime choices with operation-specific concrete strategy types and
 closed enums. For example, a `PreparedResize` enum selects a concrete mode
-strategy, whose architecture enum selects Default, Neon, or an implemented
-AVX strategy. Match once at each selection/execution boundary, outside the
-pixel loops, then call concrete functions directly. An operation-specific
-trait may express a shared contract where useful; the Strategy pattern does
+strategy, whose architecture enum selects Default, a declared target-baseline
+strategy such as AArch64 or x86_64, Neon, or an implemented AVX strategy.
+Match once at each selection/execution boundary, outside the pixel loops, then
+call concrete functions directly. An operation-specific trait may express a
+shared contract where useful; the Strategy pattern does
 not require heap allocation or trait-object dispatch. Avoid a universal
 untyped strategy that moves mode branching back into helpers.
 
@@ -506,7 +513,9 @@ pillow-rs/src/compute/pool_cpu/ops/<family>/<mode>/<arch>/<files>
 ```
 
 `<family>` is the owner listed below, `<mode>` uses the exact mapping above,
-and `<arch>` is `default` or the actual instruction set implemented there.
+and `<arch>` is `default` or the exact architecture strategy implemented
+there. This includes declared target-baseline strategies such as `aarch64` or
+`x86_64`, as well as instruction-set strategies such as `neon` or `avx`.
 The `default` folder is required for the new architecture-based layout; this
 supersedes the earlier design in which serial CPU had no architecture level.
 Do not insert an additional operation or `kernels` directory into this path.

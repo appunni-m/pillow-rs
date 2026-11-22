@@ -2,6 +2,7 @@ use super::{
     Bound, Py, PyAny, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyString, PyTuple,
     PyTypeError, PyValueError, Python, c_int_from_python,
 };
+use pyo3::basic::CompareOp;
 use pyo3::types::{
     PyAnyMethods, PyBytes, PyFloat, PyListMethods, PySequence, PySequenceMethods, PyTupleMethods,
     PyTypeMethods,
@@ -454,12 +455,13 @@ pub(crate) fn palette_integer_component_from_python(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(crate) fn convert_mode_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<pillow_rs::ConvertModeInput> {
     match value {
         None => Ok(pillow_rs::ConvertModeInput::None),
+        Some(value) if !value.is_truthy()? => Ok(pillow_rs::ConvertModeInput::None),
         Some(value) => match value.extract::<String>() {
             Ok(value) => Ok(pillow_rs::Mode::from_pillow_name(&value).map_or_else(
                 || pillow_rs::ConvertModeInput::InvalidName(value),
@@ -472,18 +474,54 @@ pub(crate) fn convert_mode_input_from_python(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
-pub(crate) fn convert_palette_input_from_python(
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn convert_palette_is_adaptive_from_python(
+    py: Python<'_>,
     value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<pillow_rs::ConvertPaletteInput> {
-    match value {
-        None => Ok(pillow_rs::ConvertPaletteInput::None),
-        Some(value) => match value.extract::<String>() {
-            Ok(value) => Ok(pillow_rs::ConvertPaletteInput::Name(value)),
-            Err(_) => Ok(pillow_rs::ConvertPaletteInput::Invalid(
-                value.get_type().name()?.to_string(),
-            )),
-        },
+) -> PyResult<bool> {
+    let Some(value) = value else {
+        return Ok(false);
+    };
+    let adaptive = py
+        .import("pillow_rs.image")?
+        .getattr("Palette")?
+        .getattr("ADAPTIVE")?;
+    value.rich_compare(adaptive, CompareOp::Eq)?.is_truthy()
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn convert_matrix_from_python(value: &Bound<'_, PyAny>) -> PyResult<Vec<f64>> {
+    let length = value.len()?;
+    if !matches!(length, 4 | 12) {
+        return Err(PyTypeError::new_err(
+            "matrix must be tuple of length 4 or 12",
+        ));
+    }
+    let mut coefficients = Vec::with_capacity(length);
+    for index in 0..length {
+        // Pillow's `_convert_matrix_impl` parses coefficients with C `float`.
+        let coefficient = value.get_item(index)?.extract::<f32>()?;
+        coefficients.push(f64::from(coefficient));
+    }
+    Ok(coefficients)
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn convert_dither_input_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<pillow_rs::DitherInput> {
+    let Some(value) = value else {
+        return Ok(pillow_rs::DitherInput::None);
+    };
+    match value.extract::<i32>() {
+        Ok(value) => Ok(pillow_rs::DitherInput::SignedInteger(value)),
+        Err(_) if value.cast::<PyString>().is_ok() => {
+            Ok(pillow_rs::DitherInput::Name(value.extract::<String>()?))
+        }
+        Err(error) if error.is_instance_of::<PyTypeError>(value.py()) => Ok(
+            pillow_rs::DitherInput::Invalid(value.get_type().name()?.to_string()),
+        ),
+        Err(error) => Err(error),
     }
 }
 

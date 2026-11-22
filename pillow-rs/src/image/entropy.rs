@@ -37,20 +37,46 @@ impl Image {
 
     /// Computes entropy from the selected native histogram, ignoring extrema
     /// when a mask is present.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn entropy_with_mask_and_extrema(
         &self,
         mask: Option<&Image>,
         extrema: Option<HistogramExtrema>,
     ) -> Result<f64, PilError> {
+        self.entropy_with_mask_and_extrema_with_context(mask, extrema, None)
+    }
+
+    /// Computes entropy with a route captured by the Pillow wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn entropy_with_mask_and_extrema_with_context(
+        &self,
+        mask: Option<&Image>,
+        extrema: Option<HistogramExtrema>,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<f64, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialized_shared()?;
+        let image = routed_image.materialized_shared()?;
         operation_receipts.capture();
-        let mask_image = mask.map(Image::materialized_shared).transpose()?;
+        let routed_mask = mask.map(|mask| {
+            execution_context.map_or_else(
+                || mask.clone(),
+                |context| mask.clone().with_execution_context(context),
+            )
+        });
+        let mask_image = routed_mask
+            .as_ref()
+            .map(Image::materialized_shared)
+            .transpose()?;
         operation_receipts.capture();
         let prepared_mask = prepare_entropy_mask(image.as_ref(), mask_image)?;
         let mask_raw = prepared_mask.raw();
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, routed_context) = routed_image.cpu_arch_execution_route_advisory();
+        let context = execution_context.unwrap_or(routed_context);
         let extrema = if mask_raw.is_some() {
             None
         } else {

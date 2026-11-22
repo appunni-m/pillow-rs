@@ -2,9 +2,10 @@
 //!
 //! Exact L-mask NEON subkernel guards are declared beside each byte mode's
 //! architecture support; the same-mode generic vector strategy remains the
-//! fallback for other requests. TODO(pillow-rs#3ptb): carry the archived Rayon
-//! clipping route into the later `pool_parallel` stage if retained, then cover
-//! all mode-by-architecture paths and selection telemetry in CPU parity.
+//! fallback for other requests. TODO(pillow-rs#3ptb): port the archived Rayon
+//! clipping execution strategy to `pool_parallel` after CPU completion; keep
+//! scheduling out of this serial backend. Cover all mode-by-architecture paths
+//! and selection telemetry in CPU parity.
 
 use std::sync::Arc;
 
@@ -45,7 +46,7 @@ pub(crate) enum PreparedPaste<'a> {
     ImageRgba32F(super::rgba32f::ops::Strategy<'a>),
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -81,7 +82,7 @@ pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Paste, &[], classify_mode);
 
 impl PreparedPaste<'_> {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::One(strategy) => &strategy.selection,
@@ -112,7 +113,7 @@ impl PreparedPaste<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self {
             Self::One(strategy) => super::one::ops::execute(strategy),
@@ -148,7 +149,7 @@ impl PreparedPaste<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -215,7 +216,7 @@ pub(crate) fn prepare_pipeline<'a>(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn prepare_mode<'a>(
     image: &'a DynamicImage,
     source: Arc<DynamicImage>,
@@ -225,7 +226,7 @@ fn prepare_mode<'a>(
     region_size: (u32, u32),
     selection: StrategySelection,
 ) -> Result<PreparedPaste<'a>, PilError> {
-    macro_rules! byte_mode {
+    macro_rules! mode_strategy {
         ($variant:ident, $module:ident) => {
             if let DynamicImage::$variant(image) = image {
                 return super::$module::ops::prepare(
@@ -241,37 +242,37 @@ fn prepare_mode<'a>(
             }
         };
     }
-    byte_mode!(One, one);
-    byte_mode!(ImageLuma8, luma8);
-    byte_mode!(ImageLumaA8, luma_a8);
-    byte_mode!(ImageLaPremultiplied8, la_premultiplied8);
-    byte_mode!(ImagePalette8, palette8);
-    byte_mode!(ImagePaletteAlpha8, palette_alpha8);
-    byte_mode!(ImageRgb8, rgb8);
-    byte_mode!(ImageRgba8, rgba8);
-    byte_mode!(ImageRgbPremultiplied8, rgb_premultiplied8);
-    byte_mode!(ImageRgbx8, rgbx8);
-    byte_mode!(ImageCmyk8, cmyk8);
-    byte_mode!(ImageYCbCr8, ycbcr8);
-    byte_mode!(ImageLab8, lab8);
-    byte_mode!(ImageHsv8, hsv8);
-    byte_mode!(ImageI32, i32);
-    byte_mode!(ImageF32, f32);
-    byte_mode!(ImageI16, i16);
-    byte_mode!(ImageI16L, i16l);
-    byte_mode!(ImageI16B, i16b);
-    byte_mode!(ImageI16N, i16n);
-    byte_mode!(ImageLumaA16, luma_a16);
-    byte_mode!(ImageRgb16, rgb16);
-    byte_mode!(ImageRgba16, rgba16);
-    byte_mode!(ImageRgb32F, rgb32f);
-    byte_mode!(ImageRgba32F, rgba32f);
+    mode_strategy!(One, one);
+    mode_strategy!(ImageLuma8, luma8);
+    mode_strategy!(ImageLumaA8, luma_a8);
+    mode_strategy!(ImageLaPremultiplied8, la_premultiplied8);
+    mode_strategy!(ImagePalette8, palette8);
+    mode_strategy!(ImagePaletteAlpha8, palette_alpha8);
+    mode_strategy!(ImageRgb8, rgb8);
+    mode_strategy!(ImageRgba8, rgba8);
+    mode_strategy!(ImageRgbPremultiplied8, rgb_premultiplied8);
+    mode_strategy!(ImageRgbx8, rgbx8);
+    mode_strategy!(ImageCmyk8, cmyk8);
+    mode_strategy!(ImageYCbCr8, ycbcr8);
+    mode_strategy!(ImageLab8, lab8);
+    mode_strategy!(ImageHsv8, hsv8);
+    mode_strategy!(ImageI32, i32);
+    mode_strategy!(ImageF32, f32);
+    mode_strategy!(ImageI16, i16);
+    mode_strategy!(ImageI16L, i16l);
+    mode_strategy!(ImageI16B, i16b);
+    mode_strategy!(ImageI16N, i16n);
+    mode_strategy!(ImageLumaA16, luma_a16);
+    mode_strategy!(ImageRgb16, rgb16);
+    mode_strategy!(ImageRgba16, rgba16);
+    mode_strategy!(ImageRgb32F, rgb32f);
+    mode_strategy!(ImageRgba32F, rgba32f);
     Err(PilError::InternalError(
         "Paste mode strategy routing did not match image variant".into(),
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn secondary_facts(image: &DynamicImage) -> SecondaryInputFacts {
     SecondaryInputFacts {
         mode: image.mode(),

@@ -9,7 +9,7 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::raster::{DynamicImage, Mode};
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn classify(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageI32
@@ -45,6 +45,7 @@ fn classify(mode: Mode) -> ModeSupport {
 }
 
 /// Exact support contract for native scalar callable point operations.
+// NO_PILLOW_SUPPORT: Rust-only callable affine routes for I;16L/B/N are explicit.
 pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::PointScalar, &[], classify);
 
@@ -54,10 +55,12 @@ pub(crate) struct PreparedScalarPoint {
     selection: StrategySelection,
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn supports(mode: Mode) -> bool {
     matches!(SUPPORT.for_mode(mode), ModeSupport::Supported { .. })
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare(
     image: &Image,
     context: &ExecutionContext,
@@ -77,11 +80,13 @@ pub(crate) fn prepare(
 }
 
 impl PreparedScalarPoint {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> StrategySelection {
         self.selection
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_affine(
     prepared: PreparedScalarPoint,
     scale: f64,
@@ -103,6 +108,7 @@ pub(crate) fn execute_affine(
     Image::from_dynamic_with_mode(image, Some(mode))
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_callable<F>(
     prepared: PreparedScalarPoint,
     mut callback: F,
@@ -126,6 +132,7 @@ where
     Image::from_dynamic_with_mode(image, Some(mode))
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn apply_affine(
     image: &mut DynamicImage,
     mode: Mode,
@@ -156,6 +163,7 @@ fn apply_affine(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn apply_callable<F>(image: &mut DynamicImage, mode: Mode, callback: &mut F) -> Result<(), PilError>
 where
     F: FnMut(f64) -> Result<f64, PilError>,
@@ -184,6 +192,7 @@ where
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn mode_mismatch() -> PilError {
     PilError::InternalError("scalar point mode did not match its DynamicImage variant".into())
 }

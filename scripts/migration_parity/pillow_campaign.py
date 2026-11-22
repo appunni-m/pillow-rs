@@ -16,15 +16,15 @@ from scripts.migration_parity.pillow_fixture_adapter import (
     _to_store_tree,
     record_to_runner_case,
 )
-from scripts.parity_store import (
+from scripts.parity_store.model import (
     CaseRecord,
     ComparisonDecision,
     DifferenceRecord,
     ExecutionRecord,
     ImplementationIdentity,
     ObservationRecord,
-    canonical_value_digest,
 )
+from scripts.parity_store.values import canonical_value_digest
 
 DEFAULT_TIMEOUT_SECONDS = 3600
 

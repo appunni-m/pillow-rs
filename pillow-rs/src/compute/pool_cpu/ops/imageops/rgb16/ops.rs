@@ -5,6 +5,7 @@ use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_quantize
 declare_quantize_native_mode!(u16, "ImageRgb16", ImageRgb16);
 
 // NO_PILLOW_SUPPORT: this native mode extends ImageOps CropBorder beyond Pillow modes.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const CROP_BORDER_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::imageops::helpers::strategy::crop_border_serial_support(
         crate::raster::Mode::ImageRgb16,

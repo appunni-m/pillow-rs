@@ -35,6 +35,7 @@ macro_rules! declare_strategies {
         pub(crate) type AlphaDataStrategy<'a> = PreparedMask<AlphaDataArchitectureStrategy<'a>>;
 
 
+        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
         #[inline]
         pub(crate) fn prepare_alpha_data<'a>(
             image: &'a mask_scalar::Input,
@@ -57,6 +58,7 @@ macro_rules! declare_strategies {
         }
 
         impl AlphaDataStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
             #[inline]
             pub(crate) fn execute(self) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
                 match self.implementation {

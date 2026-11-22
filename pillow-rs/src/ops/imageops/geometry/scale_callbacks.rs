@@ -76,7 +76,7 @@ pub fn scale_size_with_callbacks<C: ImageOpsScaleCallbacks>(
     callbacks.size_pair(&width, &height)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 /// Select native or callback-driven Scale geometry, then use public wrapper calls.
 pub fn scale_with_route_callbacks<C: ImageOpsScaleRouteCallbacks>(
     callbacks: &mut C,

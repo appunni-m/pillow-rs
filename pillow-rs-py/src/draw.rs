@@ -1,7 +1,8 @@
 use crate::font::PyFont;
+use crate::image::PyExecutionContext;
 use crate::*;
 use pyo3::types::PyInt;
-use pyo3::{Py, Python, pyclass, pymethods};
+use pyo3::{Py, PyRef, Python, pyclass, pymethods};
 
 pub(super) mod custom_font_mask;
 mod floodfill;
@@ -79,6 +80,7 @@ impl PyOutline {
 #[pyclass(name = "ImageDraw")]
 pub struct PyDraw {
     draw: pillow_rs::Draw,
+    execution_context_override: Option<(Option<pillow_rs::Backend>, pillow_rs::ExecutionContext)>,
 }
 
 #[pyclass(name = "_LineCurveJointPlan")]
@@ -100,7 +102,8 @@ impl PyLineCurveJointPlan {
 #[pymethods]
 impl PyDraw {
     #[staticmethod]
-    #[pyo3(signature = (pixel, x, y, value, border=None, thresh=0, native_image=None))]
+    #[pyo3(signature = (pixel, x, y, value, border=None, thresh=0, native_image=None, execution_context=None))]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn _floodfill(
         py: Python<'_>,
         pixel: &Bound<'_, PyAny>,
@@ -110,6 +113,7 @@ impl PyDraw {
         border: Option<&Bound<'_, PyAny>>,
         thresh: i32,
         native_image: Option<&Bound<'_, PyAny>>,
+        execution_context: Option<PyRef<'_, PyExecutionContext>>,
     ) -> PyResult<()> {
         let threshold = PyInt::new(py, thresh);
         floodfill::execute(
@@ -121,12 +125,18 @@ impl PyDraw {
             border,
             threshold.as_any(),
             native_image,
+            execution_context.as_deref(),
         )
     }
 
     #[new]
-    #[pyo3(signature = (image, mode=None))]
-    fn new(image: &Bound<'_, PyImage>, mode: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+    #[pyo3(signature = (image, mode=None, execution_context=None))]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn new(
+        image: &Bound<'_, PyImage>,
+        mode: Option<&Bound<'_, PyAny>>,
+        execution_context: Option<PyRef<'_, PyExecutionContext>>,
+    ) -> PyResult<Self> {
         // Pillow's ImageDraw constructor loads the target before validating an
         // explicit drawing mode. Keep direct calls to this binding ordered the
         // same way as the Python facade; accept the raw object so PyO3 does not
@@ -142,10 +152,24 @@ impl PyDraw {
                 })
             })
             .transpose()?;
+        let execution_route = execution_context
+            .as_deref()
+            .map(|context| (context.requested_backend, context.inner));
+        let pinned_backend = execution_context
+            .as_deref()
+            .and_then(|context| context.pinned_backend);
         let borrowed = image.borrow();
-        let draw = pillow_rs::Draw::new(borrowed.inner.clone(), mode);
+        let draw = pillow_rs::Draw::new_with_execution_route(
+            borrowed.inner.clone(),
+            mode,
+            execution_route,
+            pinned_backend,
+        );
         draw.validate_mode().map_err(map_error)?;
-        Ok(PyDraw { draw })
+        Ok(PyDraw {
+            draw,
+            execution_context_override: None,
+        })
     }
 
     fn _set_palette(&mut self, data: Vec<u8>, mode: &str) -> PyResult<()> {
@@ -267,6 +291,7 @@ impl PyDraw {
             .map_err(map_error)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn bitmap(
         &mut self,
         xy: &Bound<'_, PyAny>,
@@ -282,7 +307,14 @@ impl PyDraw {
         // Keep flat and single-nested coordinate pairs on that path.
         let (x, y) = draw_bitmap_position_from_python(xy)?;
         let bmp = bitmap.borrow();
-        self.draw.bitmap(x, y, &bmp.inner, fill).map_err(map_error)
+        let result = match self.execution_context_override {
+            Some((requested_backend, context)) => {
+                self.draw
+                    .bitmap_with_context(x, y, &bmp.inner, fill, requested_backend, &context)
+            }
+            None => self.draw.bitmap(x, y, &bmp.inner, fill),
+        };
+        result.map_err(map_error)
     }
 
     fn text_ink(&mut self, fill: Option<&Bound<'_, PyAny>>) -> PyResult<i64> {
@@ -310,6 +342,9 @@ impl PyDraw {
 
     #[pyo3(name = "_draw_text_lines")]
     #[allow(clippy::too_many_arguments)]
+    // TODO(pillow-rs#3ptb): verify route-policy errors relative to the ordered
+    // Python direct-route callbacks; this binding captures context first.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn draw_text_lines(
         slf: Py<Self>,
         py: Python<'_>,
@@ -337,14 +372,18 @@ impl PyDraw {
     ) -> PyResult<()> {
         // Custom-font callbacks may re-enter this PyDraw through owner.bitmap.
         // The callback adapter takes short borrows only for direct Rust draws.
-        let mode = {
+        let (mode, requested_backend, context) = {
             let draw = slf.borrow(py);
-            draw.draw.draw_mode_identity().map_err(map_error)?
+            let mode = draw.draw.draw_mode_identity().map_err(map_error)?;
+            let (requested_backend, context) = draw.draw.execution_route().map_err(map_error)?;
+            (mode, requested_backend, context)
         };
         text_lines::draw_text_lines(
             py,
             slf,
             mode,
+            requested_backend,
+            context,
             owner,
             host_helpers_fn,
             float_fn,
@@ -369,6 +408,7 @@ impl PyDraw {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn text_color_mask(
         &mut self,
         xy: (i32, i32),
@@ -740,7 +780,38 @@ pub(super) fn text_color_mask_impl(
         .map_err(map_error)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(super) fn text_color_mask_impl_with_context(
+    draw: &mut pillow_rs::Draw,
+    xy: (i32, i32),
+    color: &Bound<'_, PyImage>,
+    coverage: &Bound<'_, PyImage>,
+    requested_backend: Option<pillow_rs::Backend>,
+    context: pillow_rs::ExecutionContext,
+) -> PyResult<()> {
+    color.call_method0("load")?;
+    coverage.call_method0("load")?;
+    let color = color.borrow();
+    let coverage = coverage.borrow();
+    draw.paste_text_color_mask_with_context(
+        xy,
+        &color.inner,
+        &coverage.inner,
+        requested_backend,
+        context,
+    )
+    .map_err(map_error)
+}
+
 impl PyDraw {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub(super) fn replace_execution_context_override(
+        &mut self,
+        context: Option<(Option<pillow_rs::Backend>, pillow_rs::ExecutionContext)>,
+    ) -> Option<(Option<pillow_rs::Backend>, pillow_rs::ExecutionContext)> {
+        std::mem::replace(&mut self.execution_context_override, context)
+    }
+
     fn draw_get_image(&self) -> PyResult<pillow_rs::Image> {
         self.draw.image_clone().map_err(map_error)
     }

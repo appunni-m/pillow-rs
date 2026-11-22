@@ -13,7 +13,7 @@ use super::default::get_data_impl;
 const SSE2_REQUIRES: &[Architecture] = &[Architecture::Sse2];
 const NEON_REQUIRES: &[Architecture] = &[Architecture::Neon];
 const WASM_REQUIRES: &[Architecture] = &[Architecture::WasmSimd128];
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 const ARCHITECTURES: &[ImplementationSupport] = &[
     ImplementationSupport::cpu(
         OperationId::GetProjection,
@@ -41,7 +41,7 @@ const ARCHITECTURES: &[ImplementationSupport] = &[
     ),
 ];
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::GetProjection,
     Mode::ImageRgb8,
@@ -50,7 +50,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     ARCHITECTURES,
 );
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute_get_data(
     image: &RgbImage,
     selection: StrategySelection,
@@ -73,7 +73,7 @@ pub(crate) fn execute_get_data(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &RgbImage,
     selection: StrategySelection,
@@ -143,7 +143,7 @@ pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::Mode
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::rgba_get_pixel_support(
         crate::raster::Mode::ImageRgb8,
     );
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel(
     image: &crate::raster::RgbImage,
     x: u32,
@@ -157,7 +157,7 @@ pub(crate) fn execute_get_pixel(
     )?;
     super::default::get_pixel_impl::execute(image, x, y)
 }
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute_get_pixel_rgb(
     image: &crate::raster::RgbImage,
     x: u32,

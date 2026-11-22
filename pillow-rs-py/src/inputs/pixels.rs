@@ -1,11 +1,12 @@
 use super::{
     Bound, PyAny, PyBytes, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyTuple, PyTypeError,
-    PyValueError, Python, c_int_from_python, chops_offset_from_python,
+    PyValueError, Python, c_int_from_python,
 };
 use pyo3::types::{
     PyAnyMethods, PyFloat, PySequence, PySequenceMethods, PyTupleMethods, PyTypeMethods,
 };
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn putpixel_value_from_python(
     value: &Bound<'_, PyAny>,
     mode: pillow_rs::Mode,
@@ -37,6 +38,7 @@ pub(crate) fn putpixel_value_from_python(
     putpixel_components_from_python(value, length, palette_color)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn putpixel_component_shape_from_python(
     value: &Bound<'_, PyAny>,
     mode: pillow_rs::Mode,
@@ -98,6 +100,7 @@ pub(crate) fn putpixel_component_shape_from_python(
     Ok((length, palette_color))
 }
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(crate) fn putpixel_components_from_python(
     value: &Bound<'_, PyAny>,
     length: usize,
@@ -136,7 +139,7 @@ pub(crate) fn putpixel_components_from_python(
                 }
             })?
         } else {
-            chops_offset_from_python(&component)? as i64
+            i64::from(c_int_from_python(&component)?)
         };
         components.push(integer);
     }
@@ -444,6 +447,7 @@ fn new_size_component(value: &Bound<'_, PySequence>, index: usize) -> PyResult<i
     c_int_from_python(&item)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn putpixel_coordinates_from_python(xy: &Bound<'_, PyAny>) -> PyResult<(i32, i32)> {
     let sequence = xy.cast::<pyo3::types::PySequence>().map_err(|_| {
         let name = if xy.is_none() {
@@ -468,6 +472,7 @@ pub(crate) fn putpixel_coordinates_from_python(xy: &Bound<'_, PyAny>) -> PyResul
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn pixel_access_coordinates_from_python(xy: &Bound<'_, PyAny>) -> PyResult<(i32, i32)> {
     // Pillow's PixelAccess accepts tuples only; its C-long coordinates narrow
     // to C int, and float coordinates truncate toward zero.
@@ -508,6 +513,8 @@ fn pixel_access_coordinate(value: &Bound<'_, PyAny>) -> PyResult<i32> {
 /// Gives float coordinates outside Pillow's C-int cast range stable Rust
 /// semantics: in-range values truncate toward zero, overflow saturates, and
 /// NaN maps to zero. Pillow's C cast has no portable result for those inputs.
+// TODO(pillow-rs#3ptb): compare NaN, infinity, and out-of-range float
+// coordinates with the pinned Pillow oracle before treating these as parity.
 fn pixel_access_float_coordinate(coordinate: f64) -> i32 {
     if coordinate.is_nan() {
         return 0;

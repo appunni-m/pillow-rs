@@ -32,6 +32,7 @@ pub(crate) enum GetDataOutput {
 }
 
 /// Validate the selected operation and resolve its architecture for a mode owner.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn selected_architecture(
     selection: StrategySelection,
     mode: Mode,
@@ -60,6 +61,7 @@ pub(crate) fn selected_architecture(
 }
 
 /// Validate an exact GetData operation selection without borrowing an output buffer.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn selected_operation_architecture(
     selection: StrategySelection,
     mode: Mode,
@@ -75,11 +77,13 @@ pub(crate) fn selected_operation_architecture(
 }
 
 /// Return the error for an architecture without a GetData specialization.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn missing_architecture(mode: Mode, architecture: Architecture) -> PilError {
     PilError::InternalError(format!("GetData has no {mode:?} {architecture:?} strategy"))
 }
 
 /// Return the error for a mode tag whose native sample buffer is malformed.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn mode_carrier_mismatch(mode: Mode) -> PilError {
     PilError::InternalError(format!(
         "GetData mode {mode:?} does not match its native raster carrier"
@@ -87,6 +91,7 @@ pub(crate) fn mode_carrier_mismatch(mode: Mode) -> PilError {
 }
 
 /// Compute the exact number of stored samples for a native channel layout.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn native_sample_count(
     width: u32,
     height: u32,
@@ -96,6 +101,7 @@ pub(crate) fn native_sample_count(
 }
 
 /// Narrow an internal native sample buffer using the mode's existing conversion.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn narrow_native_samples<T: Copy>(
     samples: &[T],
     width: u32,
@@ -112,6 +118,7 @@ pub(crate) fn narrow_native_samples<T: Copy>(
 }
 
 /// Preserve Pillow's clipped byte view of one native unsigned 16-bit band.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn narrow_luma16_samples(
     samples: &[u16],
     width: u32,
@@ -124,6 +131,7 @@ pub(crate) fn narrow_luma16_samples(
 }
 
 /// Copy one channel from tightly packed native bytes into a pre-sized output.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn write_interleaved_band(
     samples: &[u8],
@@ -139,20 +147,8 @@ pub(crate) fn write_interleaved_band(
     }
 }
 
-/// Copy one LAB channel while preserving Pillow's signed-byte a/b mapping.
-#[inline]
-pub(crate) fn write_lab_band(samples: &[u8], band: usize, output: &mut [u8]) {
-    for (destination, pixel) in output.iter_mut().zip(samples.chunks_exact(3)) {
-        *destination = match band {
-            0 => pixel[0],
-            1 => pixel[1].wrapping_sub(128),
-            2 => pixel[2].wrapping_sub(128),
-            _ => unreachable!("LAB has exactly three bands"),
-        };
-    }
-}
-
 /// Write one band from interleaved native samples without changing storage mode.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn write_native_sample_band<T: Copy>(
     samples: &[T],
@@ -178,6 +174,7 @@ pub(crate) fn write_native_sample_band<T: Copy>(
 }
 
 /// Check the caller's one-byte-per-pixel output contract before writing.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn validate_band_output(width: u32, height: u32, output: &[u8]) -> Result<(), PilError> {
     let expected =
         crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?.total_pixels();
@@ -190,6 +187,7 @@ pub(crate) fn validate_band_output(width: u32, height: u32, output: &[u8]) -> Re
 }
 
 /// Validate the native four-byte storage used by Pillow's `I` and `F` modes.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn validate_scalar_storage(
     samples: &[u8],
     width: u32,

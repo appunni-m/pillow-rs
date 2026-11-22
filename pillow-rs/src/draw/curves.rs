@@ -1,6 +1,5 @@
 use super::{Draw, DrawCircleCenterInput, normalize_draw_circle_center, validate_rounded_rect};
 use crate::error::PilError;
-use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
 impl Draw {
@@ -10,8 +9,9 @@ impl Draw {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns `ValueError("mode mismatch")` for an incompatible explicit
+    /// drawing context. Deferred pipeline execution reports later failures.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn arc(
         &mut self,
         x0: i32,
@@ -23,20 +23,17 @@ impl Draw {
         fill: (u8, u8, u8, u8),
         _width: u32,
     ) -> Result<(), PilError> {
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawArc {
-                x0,
-                y0,
-                x1,
-                y1,
-                start,
-                end,
-                fill: Some(fill),
-                width: _width,
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        self.queue_draw_op(PipelineOp::DrawArc {
+            x0,
+            y0,
+            x1,
+            y1,
+            start,
+            end,
+            fill: Some(fill),
+            width: _width,
+            alpha_blend_rgb: self.alpha_blend_rgb()?,
+        });
         Ok(())
     }
 
@@ -44,8 +41,9 @@ impl Draw {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns `ValueError("mode mismatch")` for an incompatible explicit
+    /// drawing context. Deferred pipeline execution reports later failures.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn chord(
         &mut self,
         x0: i32,
@@ -59,21 +57,18 @@ impl Draw {
         _width: u32,
     ) -> Result<(), PilError> {
         let (fill, outline) = self.shape_inks(fill, outline)?;
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawChord {
-                x0,
-                y0,
-                x1,
-                y1,
-                start,
-                end,
-                fill,
-                outline,
-                width: _width,
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        self.queue_draw_op(PipelineOp::DrawChord {
+            x0,
+            y0,
+            x1,
+            y1,
+            start,
+            end,
+            fill,
+            outline,
+            width: _width,
+            alpha_blend_rgb: self.alpha_blend_rgb()?,
+        });
         Ok(())
     }
 
@@ -81,8 +76,9 @@ impl Draw {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns `ValueError("mode mismatch")` for an incompatible explicit
+    /// drawing context. Deferred pipeline execution reports later failures.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn pieslice(
         &mut self,
         x0: i32,
@@ -96,21 +92,18 @@ impl Draw {
         _width: u32,
     ) -> Result<(), PilError> {
         let (fill, outline) = self.shape_inks(fill, outline)?;
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawPieslice {
-                x0,
-                y0,
-                x1,
-                y1,
-                start,
-                end,
-                fill,
-                outline,
-                width: _width,
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        self.queue_draw_op(PipelineOp::DrawPieslice {
+            x0,
+            y0,
+            x1,
+            y1,
+            start,
+            end,
+            fill,
+            outline,
+            width: _width,
+            alpha_blend_rgb: self.alpha_blend_rgb()?,
+        });
         Ok(())
     }
 
@@ -120,8 +113,9 @@ impl Draw {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns `ValueError("mode mismatch")` for an incompatible explicit
+    /// drawing context. Deferred pipeline execution reports later failures.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn circle(
         &mut self,
         cx: i32,
@@ -132,22 +126,25 @@ impl Draw {
         _width: u32,
     ) -> Result<(), PilError> {
         let (fill, outline) = self.shape_inks(fill, outline)?;
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawCircle {
-                cx,
-                cy,
-                radius: radius as i32,
-                fill,
-                outline,
-                width: _width,
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        self.queue_draw_op(PipelineOp::DrawCircle {
+            cx,
+            cy,
+            radius: radius as i32,
+            fill,
+            outline,
+            width: _width,
+            alpha_blend_rgb: self.alpha_blend_rgb()?,
+        });
         Ok(())
     }
 
     /// Normalizes and draws a Python-facing circle center.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ValueError("mode mismatch")` for an incompatible explicit
+    /// context after normalizing the center.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn circle_with_input(
         &mut self,
         input: DrawCircleCenterInput,
@@ -169,7 +166,9 @@ impl Draw {
     ///
     /// A negative radius that reaches a painted corner reports Pillow's
     /// invalid-box error. Deferred pipeline execution reports materialization
-    /// failures.
+    /// failures. An incompatible explicit drawing context reports
+    /// `ValueError("mode mismatch")` when a primitive is queued.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn rounded_rectangle(
         &mut self,
         x0: i32,
@@ -186,7 +185,14 @@ impl Draw {
 
     /// Draws a rounded rectangle from the diameter already computed by a
     /// Pillow-facing adapter.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ValueError("mode mismatch")` for an incompatible explicit
+    /// drawing context. Geometry and deferred execution errors retain their
+    /// existing boundaries.
     #[doc(hidden)]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn rounded_rectangle_with_diameter(
         &mut self,
         x0: i32,
@@ -235,26 +241,30 @@ impl Draw {
         if diameter < 0.0 {
             return negative_radius_result(fill, outline, _width);
         }
+        let alpha_blend_rgb = self.alpha_blend_rgb()?;
 
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawRoundedRect {
-                x0,
-                y0,
-                x1,
-                y1,
-                radius: input_diameter / 2.0,
-                fill,
-                outline,
-                width: _width,
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        self.queue_draw_op(PipelineOp::DrawRoundedRect {
+            x0,
+            y0,
+            x1,
+            y1,
+            radius: input_diameter / 2.0,
+            fill,
+            outline,
+            width: _width,
+            alpha_blend_rgb,
+        });
         Ok(())
     }
 
     /// Draws a rounded rectangle with Pillow's per-corner selection.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ValueError("mode mismatch")` when a drawing primitive is
+    /// queued with an incompatible explicit context.
     #[allow(clippy::too_many_arguments)] // Mirrors the public draw arguments and adds corner selection.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn rounded_rectangle_with_corners(
         &mut self,
         x0: i32,
@@ -284,8 +294,14 @@ impl Draw {
 
     /// Draws selected rounded-rectangle corners from an adapter-computed
     /// diameter.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ValueError("mode mismatch")` when a drawing primitive is
+    /// queued with an incompatible explicit context.
     #[doc(hidden)]
     #[allow(clippy::too_many_arguments)]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn rounded_rectangle_with_corners_diameter(
         &mut self,
         x0: i32,
@@ -309,6 +325,7 @@ impl Draw {
     }
 
     #[allow(clippy::too_many_arguments)]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn rounded_rectangle_with_partial_corners(
         &mut self,
         x0: i32,
@@ -330,6 +347,7 @@ impl Draw {
         if diameter < 0.0 {
             return negative_radius_result(fill, outline, width);
         }
+        let alpha_blend_rgb = self.alpha_blend_rgb()?;
         let corner_radius = (diameter / 2.0).floor() as i32;
         let parts = partial_rounded_rect_parts(x0, y0, x1, y1, diameter, corners);
         if let Some(color) = fill {
@@ -343,6 +361,7 @@ impl Draw {
                 corners,
                 &parts,
                 color,
+                alpha_blend_rgb,
             );
         }
         if let Some(color) = outline.filter(|color| Some(*color) != fill && width != 0) {
@@ -357,6 +376,7 @@ impl Draw {
                 corners,
                 &parts,
                 color,
+                alpha_blend_rgb,
             );
         }
         Ok(())
@@ -439,6 +459,7 @@ fn partial_rounded_rect_parts(
     .collect()
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn queue_partial_rectangle(
     draw: &mut Draw,
     x0: i32,
@@ -446,58 +467,64 @@ fn queue_partial_rectangle(
     x1: i32,
     y1: i32,
     color: (u8, u8, u8, u8),
+    alpha_blend_rgb: bool,
 ) {
-    draw.image = Image::push_op(
-        &draw.image,
-        PipelineOp::DrawRectangle {
-            x0,
-            y0,
-            x1,
-            y1,
-            fill: Some(color),
-            outline: None,
-            width: 1,
-            alpha_blend_rgb: draw.alpha_blend_rgb(),
-        },
-    );
+    draw.queue_draw_op(PipelineOp::DrawRectangle {
+        x0,
+        y0,
+        x1,
+        y1,
+        fill: Some(color),
+        outline: None,
+        width: 1,
+        alpha_blend_rgb,
+    });
 }
 
-fn queue_partial_pieslice(draw: &mut Draw, part: RoundedRectPart, color: (u8, u8, u8, u8)) {
-    draw.image = Image::push_op(
-        &draw.image,
-        PipelineOp::DrawPieslice {
-            x0: part.0,
-            y0: part.1,
-            x1: part.2,
-            y1: part.3,
-            start: part.4,
-            end: part.5,
-            fill: Some(color),
-            outline: None,
-            width: 1,
-            alpha_blend_rgb: draw.alpha_blend_rgb(),
-        },
-    );
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn queue_partial_pieslice(
+    draw: &mut Draw,
+    part: RoundedRectPart,
+    color: (u8, u8, u8, u8),
+    alpha_blend_rgb: bool,
+) {
+    draw.queue_draw_op(PipelineOp::DrawPieslice {
+        x0: part.0,
+        y0: part.1,
+        x1: part.2,
+        y1: part.3,
+        start: part.4,
+        end: part.5,
+        fill: Some(color),
+        outline: None,
+        width: 1,
+        alpha_blend_rgb,
+    });
 }
 
-fn queue_partial_arc(draw: &mut Draw, part: RoundedRectPart, color: (u8, u8, u8, u8), width: u32) {
-    draw.image = Image::push_op(
-        &draw.image,
-        PipelineOp::DrawArc {
-            x0: part.0,
-            y0: part.1,
-            x1: part.2,
-            y1: part.3,
-            start: part.4,
-            end: part.5,
-            fill: Some(color),
-            width,
-            alpha_blend_rgb: draw.alpha_blend_rgb(),
-        },
-    );
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn queue_partial_arc(
+    draw: &mut Draw,
+    part: RoundedRectPart,
+    color: (u8, u8, u8, u8),
+    width: u32,
+    alpha_blend_rgb: bool,
+) {
+    draw.queue_draw_op(PipelineOp::DrawArc {
+        x0: part.0,
+        y0: part.1,
+        x1: part.2,
+        y1: part.3,
+        start: part.4,
+        end: part.5,
+        fill: Some(color),
+        width,
+        alpha_blend_rgb,
+    });
 }
 
 #[allow(clippy::too_many_arguments)]
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn queue_partial_rounded_rect_fill(
     draw: &mut Draw,
     x0: i32,
@@ -508,12 +535,21 @@ fn queue_partial_rounded_rect_fill(
     corners: [bool; 4],
     parts: &[RoundedRectPart],
     color: (u8, u8, u8, u8),
+    alpha_blend_rgb: bool,
 ) {
     for &part in parts {
-        queue_partial_pieslice(draw, part, color);
+        queue_partial_pieslice(draw, part, color, alpha_blend_rgb);
     }
     if x1 - radius - 1 >= x0 + radius + 1 {
-        queue_partial_rectangle(draw, x0 + radius + 1, y0, x1 - radius - 1, y1, color);
+        queue_partial_rectangle(
+            draw,
+            x0 + radius + 1,
+            y0,
+            x1 - radius - 1,
+            y1,
+            color,
+            alpha_blend_rgb,
+        );
     }
     let mut left = [x0, y0, x0 + radius, y1];
     if corners[0] {
@@ -522,7 +558,15 @@ fn queue_partial_rounded_rect_fill(
     if corners[3] {
         left[3] -= radius + 1;
     }
-    queue_partial_rectangle(draw, left[0], left[1], left[2], left[3], color);
+    queue_partial_rectangle(
+        draw,
+        left[0],
+        left[1],
+        left[2],
+        left[3],
+        color,
+        alpha_blend_rgb,
+    );
     let mut right = [x1 - radius, y0, x1, y1];
     if corners[1] {
         right[1] += radius + 1;
@@ -530,10 +574,19 @@ fn queue_partial_rounded_rect_fill(
     if corners[2] {
         right[3] -= radius + 1;
     }
-    queue_partial_rectangle(draw, right[0], right[1], right[2], right[3], color);
+    queue_partial_rectangle(
+        draw,
+        right[0],
+        right[1],
+        right[2],
+        right[3],
+        color,
+        alpha_blend_rgb,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn queue_partial_rounded_rect_outline(
     draw: &mut Draw,
     x0: i32,
@@ -545,9 +598,10 @@ fn queue_partial_rounded_rect_outline(
     corners: [bool; 4],
     parts: &[RoundedRectPart],
     color: (u8, u8, u8, u8),
+    alpha_blend_rgb: bool,
 ) {
     for &part in parts {
-        queue_partial_arc(draw, part, color, width);
+        queue_partial_arc(draw, part, color, width, alpha_blend_rgb);
     }
     let width = i32::try_from(width).unwrap_or(i32::MAX);
     let mut top = [x0, y0, x1, y0 + width - 1];
@@ -557,7 +611,7 @@ fn queue_partial_rounded_rect_outline(
     if corners[1] {
         top[2] -= radius + 1;
     }
-    queue_partial_rectangle(draw, top[0], top[1], top[2], top[3], color);
+    queue_partial_rectangle(draw, top[0], top[1], top[2], top[3], color, alpha_blend_rgb);
     let mut bottom = [x0, y1 - width + 1, x1, y1];
     if corners[3] {
         bottom[0] += radius + 1;
@@ -565,7 +619,15 @@ fn queue_partial_rounded_rect_outline(
     if corners[2] {
         bottom[2] -= radius + 1;
     }
-    queue_partial_rectangle(draw, bottom[0], bottom[1], bottom[2], bottom[3], color);
+    queue_partial_rectangle(
+        draw,
+        bottom[0],
+        bottom[1],
+        bottom[2],
+        bottom[3],
+        color,
+        alpha_blend_rgb,
+    );
 
     let mut left = [x0, y0, x0 + width - 1, y1];
     if corners[0] {
@@ -574,7 +636,15 @@ fn queue_partial_rounded_rect_outline(
     if corners[3] {
         left[3] -= radius + 1;
     }
-    queue_partial_rectangle(draw, left[0], left[1], left[2], left[3], color);
+    queue_partial_rectangle(
+        draw,
+        left[0],
+        left[1],
+        left[2],
+        left[3],
+        color,
+        alpha_blend_rgb,
+    );
     let mut right = [x1 - width + 1, y0, x1, y1];
     if corners[1] {
         right[1] += radius + 1;
@@ -582,5 +652,13 @@ fn queue_partial_rounded_rect_outline(
     if corners[2] {
         right[3] -= radius + 1;
     }
-    queue_partial_rectangle(draw, right[0], right[1], right[2], right[3], color);
+    queue_partial_rectangle(
+        draw,
+        right[0],
+        right[1],
+        right[2],
+        right[3],
+        color,
+        alpha_blend_rgb,
+    );
 }

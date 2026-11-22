@@ -5,6 +5,7 @@ use crate::raster::{ImageBuffer, Luma};
 
 pub(crate) type U16LumaImage = ImageBuffer<Luma<u16>, Vec<u16>>;
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn map_u16<F>(image: &mut U16LumaImage, mut map: F) -> Result<(), PilError>
 where
     F: FnMut(u16) -> Result<u16, PilError>,

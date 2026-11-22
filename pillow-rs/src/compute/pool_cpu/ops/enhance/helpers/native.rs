@@ -16,6 +16,7 @@ pub(crate) fn blend_u8(base: u8, sample: u8, alpha: f32) -> u8 {
 }
 
 /// Applies Pillow Brightness's zero-image Blend rule to omitted physical lanes.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn carry_brightness_hidden_lanes(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -80,6 +81,7 @@ pub(crate) fn carry_brightness_hidden_lanes(
 }
 
 /// Applies the native Color Saturation blend to retained omitted physical lanes.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn carry_color_saturation_hidden_lanes(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -119,6 +121,7 @@ pub(crate) fn carry_color_saturation_hidden_lanes(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn clone_color_saturation_lanes(
     lanes: Option<&HiddenPixelLanes>,
     lane_count: usize,
@@ -131,6 +134,7 @@ fn clone_color_saturation_lanes(
     Ok(Some(lanes.clone()))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn color_saturation_rgb_lanes(
     lanes: Option<&HiddenPixelLanes>,
     lane_count: usize,

@@ -22,6 +22,7 @@ pub(crate) fn facts<P: Pixel>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn luma_constant(luma: &GrayImage, alpha: u8) -> GrayAlphaImage {
     let mut output = GrayAlphaImage::new(luma.width(), luma.height());
     for (destination, source) in output.pixels_mut().zip(luma.pixels()) {

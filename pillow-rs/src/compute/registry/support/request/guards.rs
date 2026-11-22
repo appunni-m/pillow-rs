@@ -29,10 +29,10 @@ pub(super) use mutation::{
     native_pointwise_bytes_guard, native_pointwise_bytes_including_empty_guard,
     native_transpose_bytes_guard, paste_l_mask_neon_guard, pixel_span_guard, pixel_write_run_guard,
     put_alpha_bytes_guard, put_data_native_guard, reduce_native_byte_vector_guard,
-    rgba_transpose_avx2_guard,
+    rgba_transpose_avx2_guard, rgba_transpose_x86_64_tiled_guard,
 };
 pub(super) use resize::{
     resize_byte_boxed_nearest_vector_guard, resize_byte_boxed_vector_guard,
-    resize_byte_native_vector_guard, resize_byte_nearest_vector_guard, resize_filtered_fma_guard,
-    resize_i32_neon_guard, resize_luma16_vector_guard,
+    resize_byte_native_vector_guard, resize_byte_nearest_vector_guard, resize_f32_vector_guard,
+    resize_filtered_fma_guard, resize_i32_neon_guard, resize_luma16_vector_guard,
 };

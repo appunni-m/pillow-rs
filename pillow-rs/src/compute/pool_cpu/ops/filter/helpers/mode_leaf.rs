@@ -38,6 +38,7 @@ macro_rules! native_filter_mode_leaf {
         $la_special:expr,
         $filter5x5_impl:path
     ) => {
+        // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
         pub(crate) fn execute(
             image: &crate::raster::DynamicImage,
             request: $crate::compute::pool_cpu::ops::filter::ops::FilterRequest,
@@ -128,6 +129,7 @@ macro_rules! native_filter_mode_leaf {
                         input.width() as usize,
                         input.height() as usize,
                         $channels,
+                        $crate::raster::Mode::$variant,
                         request,
                     )?;
                     let Some(output) = output else {

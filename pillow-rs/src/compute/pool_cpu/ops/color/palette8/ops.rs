@@ -35,10 +35,12 @@ pub(crate) struct Prepared<'a> {
 }
 
 impl Prepared<'_> {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let bytes = match self.selection.implementation.architecture {
             Architecture::Default => {
@@ -68,6 +70,7 @@ impl Prepared<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     dest_map: &'a [u8],

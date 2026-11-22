@@ -2,6 +2,7 @@ use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::raster::RgbaImage;
 
 /// Blend four stored bytes while leaving the owning mode strategy in control.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply<const ALPHA_CHANNEL: bool>(
     canvas: &mut RgbaImage,
     x: i32,

@@ -29,7 +29,7 @@ pub(crate) use terminals::{
 
 // ── Router ─────────────────────────────────────────────────────────────────
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn route_decision(
     ops: &[PipelineOp],
     explicit: Option<Backend>,
@@ -98,7 +98,7 @@ fn route_decision(
     )) // universal fallback
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn backend_label(backend: Backend) -> &'static str {
     match backend {
         Backend::Cpu => "CPU",
@@ -136,7 +136,7 @@ impl PreparedExecution {
 }
 
 /// Executes one family-prepared CPU operation using the pipeline's routed context.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_prepared_cpu_arch_operation(
     prepared: &PreparedExecution,
     op: &PipelineOp,
@@ -163,7 +163,7 @@ pub(crate) fn execute_prepared_cpu_arch_operation(
 /// The raster strategy owns indices and per-pixel alpha. The Image wrapper
 /// owns the generated palette and source-metadata policy, so keep those
 /// results together across the lazy materialization boundary.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_prepared_cpu_arch_convert_output(
     prepared: &PreparedExecution,
     op: &PipelineOp,
@@ -217,19 +217,24 @@ pub(crate) fn execute_prepared_cpu_arch_convert_output(
     )
 }
 
-/// Performs the route and validation phases before a source image is
-/// materialized. Keeping this separate preserves the explicit-backend contract
-/// while allowing the actual backend phase to be measured later.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-pub(crate) fn prepare_execution(
+/// Prepares a pipeline while retaining a context injected by its composed caller.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(crate) fn prepare_execution_with_context(
     ops: &[PipelineOp],
     requested_backend: Option<Backend>,
+    injected_context: Option<ExecutionContext>,
 ) -> Result<PreparedExecution, PilError> {
     let timed = pipeline_telemetry_enabled();
     let route_start = timed.then(pipeline_timestamp).flatten();
     let (selected_backend, fallback_reason, support_checked) =
         route_decision(ops, requested_backend)?;
-    let context = ExecutionContext::for_routed_backend(selected_backend);
+    // A composed CPU context only governs CPU-owned execution. Preserve the
+    // backend's own context whenever routing selects an actual GPU executor.
+    let context = if selected_backend == Backend::Gpu {
+        ExecutionContext::for_routed_backend(selected_backend)
+    } else {
+        injected_context.unwrap_or_else(|| ExecutionContext::for_routed_backend(selected_backend))
+    };
     let route_ns = elapsed_ns(route_start);
 
     let validation_start = timed.then(pipeline_timestamp).flatten();
@@ -258,7 +263,7 @@ pub(crate) fn prepare_execution(
 ///
 /// Returns [`PilError::ValueError`] for an unavailable backend or the first
 /// operation without a native implementation on the selected backend.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<(), PilError> {
     let executor_backend = if backend == Backend::Simd {
         Backend::Cpu
@@ -356,7 +361,7 @@ pub(crate) fn merge_pipeline_resource_telemetry(
 /// backend phase when telemetry is enabled. The logical source identity is a
 /// typed `Mode`; CPU strategy selection always reads the exact mode from the
 /// supplied `DynamicImage`.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_prepared(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
@@ -368,7 +373,7 @@ pub(crate) fn execute_prepared(
 
 /// Executes a prepared pipeline with palette metadata resolved by its image
 /// wrapper. The mode-bearing raster still owns the current mode identity.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_prepared_with_palette(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
@@ -493,7 +498,7 @@ fn reset_execution_telemetry() {
     let _ = take_pipeline_resize_coeff_cache_stats();
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_prepared_on_backend(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
@@ -552,6 +557,7 @@ fn execute_prepared_on_backend(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn record_prepared_backend_telemetry(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
@@ -605,7 +611,7 @@ fn clear_failed_execution_telemetry() {
 }
 
 /// Shared-result counterpart to [`execute_prepared_with_palette`].
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_prepared_shared_with_palette(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],

@@ -4,6 +4,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage};
 use wide::u8x16;
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn scalar(source: &[u8], dest_map: &[u8]) -> Vec<u8> {
     let inverse = inverse_map(dest_map);
     source
@@ -12,6 +13,7 @@ pub(crate) fn scalar(source: &[u8], dest_map: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn vector(source: &[u8], dest_map: &[u8]) -> Result<Vec<u8>, PilError> {
     let inverse = inverse_map(dest_map);
     let tables = std::array::from_fn(|table| {
@@ -35,6 +37,7 @@ pub(crate) fn vector(source: &[u8], dest_map: &[u8]) -> Result<Vec<u8>, PilError
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn palette_image(
     width: u32,
     height: u32,
@@ -45,6 +48,7 @@ pub(crate) fn palette_image(
     Ok(DynamicImage::ImagePalette8(image))
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn inverse_map(dest_map: &[u8]) -> [u8; 256] {
     let mut inverse = [0u8; 256];
     for (new_index, &old_index) in dest_map.iter().enumerate() {
@@ -53,6 +57,7 @@ fn inverse_map(dest_map: &[u8]) -> [u8; 256] {
     inverse
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn native_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     let low = input & u8x16::splat(0x0f);
     let high: u8x16 = input >> 4u32;

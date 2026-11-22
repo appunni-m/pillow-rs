@@ -7,6 +7,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::{
 use crate::error::PilError;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn supports<I>(plan: &BytePlan<'_, I>) -> bool
 where
     I: std::ops::Deref<Target = crate::raster::DynamicImage>,
@@ -17,6 +18,7 @@ where
         && plan.mask.is_none()
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute<I>(plan: &BytePlan<'_, I>) -> Result<Vec<u8>, PilError>
 where
     I: std::ops::Deref<Target = crate::raster::DynamicImage>,
@@ -76,6 +78,7 @@ where
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn copy_row(source: &[u8], destination: &mut [u8]) {
     debug_assert_eq!(source.len() % 4, 0);
     debug_assert_eq!(destination.len(), source.len() / 4 * 3);
@@ -85,6 +88,7 @@ fn copy_row(source: &[u8], destination: &mut [u8]) {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn checked_stride(width: u32, channels: usize) -> Result<usize, PilError> {
     usize::try_from(width)
         .map_err(|_| overflow("image width"))?
@@ -92,12 +96,14 @@ fn checked_stride(width: u32, channels: usize) -> Result<usize, PilError> {
         .ok_or_else(|| overflow("row stride"))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn invalid_shape(part: &'static str) -> PilError {
     PilError::InternalError(format!(
         "RGBA-to-RGB Paste {part} row did not match its plan"
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn overflow(part: &'static str) -> PilError {
     PilError::OverflowError(format!("RGBA-to-RGB Paste {part} overflowed"))
 }

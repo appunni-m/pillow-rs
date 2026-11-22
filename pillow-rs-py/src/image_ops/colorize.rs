@@ -144,7 +144,7 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_imageops_colorize_with_callbacks(
     py: Python<'_>,

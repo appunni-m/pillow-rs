@@ -2,6 +2,7 @@ use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Luma};
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply(
     image: DynamicImage,
     x: i32,

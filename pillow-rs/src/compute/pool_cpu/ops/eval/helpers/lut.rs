@@ -7,6 +7,7 @@ use crate::raster::buffer::HiddenPixelLanes;
 /// Restores the omitted lanes written by Pillow's mode-specific Point loops.
 /// Point allocates clean output storage and writes only its declared bands, so
 /// compact-mode padding/intervening lanes remain zero in the result.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn initialize_point_hidden_lanes(output: &mut DynamicImage) -> Result<(), PilError> {
     let Some(lane_count) = output.mode().hidden_pixel_lane_count() else {
         return Ok(());

@@ -92,8 +92,11 @@ fn resize_indices(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-fn nearest_indices(source_size: u32, output_size: u32) -> Option<Vec<usize>> {
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(in crate::compute::pool_cpu::ops::resize) fn nearest_indices(
+    source_size: u32,
+    output_size: u32,
+) -> Option<Vec<usize>> {
     if source_size == 0 || output_size == 0 {
         return None;
     }
@@ -112,8 +115,8 @@ fn nearest_indices(source_size: u32, output_size: u32) -> Option<Vec<usize>> {
     Some(indices)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-fn boxed_nearest_indices(
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(in crate::compute::pool_cpu::ops::resize) fn boxed_nearest_indices(
     source_size: u32,
     output_size: u32,
     box_start: f64,

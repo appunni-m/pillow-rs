@@ -268,6 +268,7 @@ pub struct PreparedTransformOutput {
 
 impl TransformMeshAccumulator {
     /// Returns the allocated destination image after the streamed records run.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn finish(mut self) -> Result<Image, PilError> {
         let mode = self.prepared.mode;
         let data = [0.0; 12];
@@ -316,6 +317,7 @@ impl Image {
     /// Pillow's `fill` argument is unused for these built-in transform methods;
     /// `fillcolor` controls pixels outside the transformed area. Keep `_fill`
     /// at this boundary because the host binding forwards Pillow's signature.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn transform_public(
         &self,
         size: (u32, u32),
@@ -332,6 +334,7 @@ impl Image {
 
     /// Resolves a transform destination fill after the wrapper has captured
     /// the output mode and before it evaluates method data callbacks.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_fill_for_mode(
         &self,
@@ -349,7 +352,7 @@ impl Image {
     }
 
     /// Allocates the MESH destination and captures its backend and architecture route.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_mesh_public(
         &self,
@@ -361,12 +364,24 @@ impl Image {
     }
 
     /// Allocates an exact-mode destination and captures its backend/architecture context.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_output_public(
         &self,
         prepared: PreparedTransformFill,
         size: (u32, u32),
+    ) -> Result<PreparedTransformOutput, PilError> {
+        self.prepare_transform_output_public_with_context(prepared, size, None)
+    }
+
+    /// Allocates a Transform destination with the host wrapper's captured route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn prepare_transform_output_public_with_context(
+        &self,
+        prepared: PreparedTransformFill,
+        size: (u32, u32),
+        execution_context: Option<crate::compute::ExecutionContext>,
     ) -> Result<PreparedTransformOutput, PilError> {
         if self.mode_identity()? != prepared.mode {
             return Err(PilError::InternalError(
@@ -375,7 +390,8 @@ impl Image {
         }
         crate::checked_dims::CheckedDims::new(size.0, size.1, 1)?;
         let output = empty_transform_output(self, size, prepared.fill, prepared.palette_fill)?;
-        let (_, context) = self.cpu_arch_execution_route_advisory();
+        let (_, routed_context) = self.cpu_arch_execution_route_advisory();
+        let context = execution_context.unwrap_or(routed_context);
         Ok(PreparedTransformOutput {
             output,
             prepared,
@@ -385,7 +401,7 @@ impl Image {
     }
 
     /// Starts a MESH accumulator from the destination allocated before callbacks.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_mesh_from_output_public(
         &self,
@@ -416,7 +432,7 @@ impl Image {
     }
 
     /// Applies one QUAD-shaped MESH record to the reusable destination.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn apply_transform_mesh_record_public(
         &self,
@@ -487,7 +503,7 @@ impl Image {
     }
 
     /// Executes the built-in Transform method with a previously resolved fill.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn transform_prepared_public(
         &self,
@@ -536,7 +552,7 @@ impl Image {
 
     /// Executes a non-MESH host Transform into the destination prepared before
     /// Python method-data callbacks ran.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn transform_prepared_output_public(
         &self,

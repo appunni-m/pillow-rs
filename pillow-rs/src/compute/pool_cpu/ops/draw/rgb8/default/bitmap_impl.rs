@@ -15,6 +15,7 @@ enum NativeMask<'a> {
 }
 
 impl<'a> NativeMask<'a> {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn from_image(mode: Mode, image: &'a DynamicImage) -> Option<Self> {
         match (mode, image) {
             (Mode::One, DynamicImage::One(image)) => Some(Self::One(image.as_raw())),
@@ -27,6 +28,7 @@ impl<'a> NativeMask<'a> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[inline]
     fn coverage(&self, pixel_index: usize) -> u8 {
         match self {
@@ -37,12 +39,14 @@ impl<'a> NativeMask<'a> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[inline]
     fn is_premultiplied(&self) -> bool {
         matches!(self, Self::RgbPremultiplied(_))
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply(
     image: &DynamicImage,
     mask_image: &DynamicImage,
@@ -91,6 +95,7 @@ pub(crate) fn apply(
     Ok(Some(DynamicImage::ImageRgb8(output)))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply_raw(
     image: DynamicImage,
     x: i32,
@@ -134,6 +139,7 @@ pub(crate) fn apply_raw(
     Ok(DynamicImage::ImageRgb8(output))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn draw_mask<const PREMULTIPLIED: bool, C>(
     image: &mut RgbImage,
     mask_width: u32,
@@ -193,6 +199,7 @@ where
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline]
 fn blend_pixel<const PREMULTIPLIED: bool>(
     destination: &mut [u8],

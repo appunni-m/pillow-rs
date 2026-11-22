@@ -10,13 +10,14 @@ use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 use wide::f64x8;
 
+use super::super::super::helpers::native_nearest::nearest_indices;
 use super::super::super::helpers::strategy::require_architecture;
 use super::super::super::helpers::typed_nearest::BoxBounds;
 use super::LANES;
 use super::kernels;
 use super::plan::{self, HorizontalPlan};
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute(
     context: &ExecutionContext,
     input: &RgbaImage,
@@ -68,7 +69,7 @@ pub(crate) fn execute(
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn resize_nearest(
     input: &RgbaImage,
     width: u32,
@@ -119,27 +120,9 @@ fn resize_nearest(
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-fn nearest_indices(source_size: u32, output_size: u32) -> Option<Vec<usize>> {
-    if source_size == 0 || output_size == 0 {
-        return None;
-    }
-    let scale = f64::from(source_size) / f64::from(output_size);
-    let mut position = scale * 0.5;
-    let mut indices = Vec::with_capacity(usize::try_from(output_size).ok()?);
-    for _ in 0..output_size {
-        let index = position as u32;
-        indices.push(if index >= source_size {
-            usize::try_from(source_size - 1).ok()?
-        } else {
-            usize::try_from(index).ok()?
-        });
-        position += scale;
-    }
-    Some(indices)
-}
-
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// Always round the horizontal pass first; ResizeI32Neon admission routes
+// filtered shapes requiring Pillow's vertical-first order to Default.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_filtered(
     source: &[i32],
     source_width: usize,
@@ -177,7 +160,7 @@ fn execute_filtered(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn horizontal_pass(
     source: &[i32],
     source_width: usize,
@@ -229,7 +212,7 @@ fn horizontal_pass(
     Ok((blocks, used_neon))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn horizontal_wide_block(
     source_row: &[i32],
     block: &plan::HorizontalBlock,
@@ -246,7 +229,7 @@ fn horizontal_wide_block(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn vertical_pass(
     intermediate: &[i32],
     output_width: usize,
@@ -302,7 +285,7 @@ fn vertical_pass(
     Ok((blocks, used_neon))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn vertical_wide_block(
     intermediate: &[i32],
     row_width: usize,
@@ -330,7 +313,7 @@ fn vertical_wide_block(
     Ok(sums.to_array().map(|value| round_up(value) as i32))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn write_output_block(
     output: &mut [u8],
     output_row: usize,
@@ -351,7 +334,7 @@ fn write_output_block(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn record_path(blocks: u64, used_neon: bool) {
     crate::compute::record_pipeline_operation_vector_blocks(blocks);
     crate::compute::record_pipeline_operation_scalar_tail(0);
@@ -362,7 +345,7 @@ fn record_path(blocks: u64, used_neon: bool) {
     });
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn invalid_plan() -> PilError {
     PilError::InternalError("ImageI32 NEON Resize plan did not match its source layout".into())
 }

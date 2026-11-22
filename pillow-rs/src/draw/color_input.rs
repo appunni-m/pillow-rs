@@ -72,13 +72,9 @@ fn draw_byte(value: i64) -> u8 {
     value.clamp(0, 255) as u8
 }
 
-fn draw_component_byte(mode: Mode, channel: usize, value: i64) -> Result<u8, PilError> {
-    let value = draw_c_int_byte(value)?;
-    if mode == Mode::ImageLab8 && matches!(channel, 1 | 2) {
-        Ok(value.wrapping_add(128))
-    } else {
-        Ok(value)
-    }
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+fn draw_component_byte(value: i64) -> Result<u8, PilError> {
+    draw_c_int_byte(value)
 }
 
 fn resolve_integer_color(mode: Mode, value: i64) -> Result<(u8, u8, u8, u8), PilError> {
@@ -127,6 +123,7 @@ fn resolve_integer_color(mode: Mode, value: i64) -> Result<(u8, u8, u8, u8), Pil
     })
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn resolve_component_color(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
     if is_l16_mode(mode) {
         if values.len() != 1 {
@@ -165,15 +162,15 @@ fn resolve_component_color(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8
     match values {
         [r, g, b] => Ok((
             draw_byte(*r),
-            draw_component_byte(mode, 1, *g)?,
-            draw_component_byte(mode, 2, *b)?,
+            draw_component_byte(*g)?,
+            draw_component_byte(*b)?,
             255,
         )),
         [r, g, b, a] => Ok((
             draw_byte(*r),
-            draw_component_byte(mode, 1, *g)?,
-            draw_component_byte(mode, 2, *b)?,
-            draw_component_byte(mode, 3, *a)?,
+            draw_component_byte(*g)?,
+            draw_component_byte(*b)?,
+            draw_component_byte(*a)?,
         )),
         _ => Err(draw_color_error()),
     }

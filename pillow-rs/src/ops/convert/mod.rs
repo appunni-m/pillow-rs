@@ -13,6 +13,6 @@ pub(crate) fn palette_alpha_for_lazy_convert(image: &crate::image::Image) -> Opt
 }
 
 pub use input::{
-    ConvertModeInput, ConvertPaletteInput, DitherInput, normalize_convert_dither,
-    validate_convert_dither,
+    ConvertInputPlan, ConvertMatrixTruthiness, ConvertModeInput, ConvertPaletteInput, DitherInput,
+    normalize_convert_dither, validate_convert_dither,
 };

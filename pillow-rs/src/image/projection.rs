@@ -24,21 +24,37 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization or mode-specific projection
     /// fails.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn getprojection(&self) -> Result<ProjectionAxes, PilError> {
-        if let Some(projection) = self.try_getprojection_putpixel_pipeline()? {
+        self.getprojection_with_context(None)
+    }
+
+    /// Returns projections using a route captured by the Pillow wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getprojection_with_context(
+        &self,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<ProjectionAxes, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
+        if let Some(projection) = routed_image.try_getprojection_putpixel_pipeline()? {
             return Ok(projection);
         }
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialized_shared()?;
+        let image = routed_image.materialized_shared()?;
         operation_receipts.capture();
-        if matches!(self, Image::Loaded(_) | Image::Paletted(_))
-            && let Some(projection) = self.try_getprojection_eager_backend(image.as_ref())?
+        if matches!(&routed_image, Image::Loaded(_) | Image::Paletted(_))
+            && let Some(projection) =
+                routed_image.try_getprojection_eager_backend(image.as_ref(), execution_context)?
         {
             return Ok(projection);
         }
         let (selected_backend, only_active_backend, context) =
-            self.cpu_arch_execution_route_advisory_with_policy();
+            routed_image.cpu_arch_execution_route_advisory_with_policy();
+        let context = execution_context.unwrap_or(context);
         let requested_backend = only_active_backend.then_some(selected_backend).flatten();
         let fallback_reason = selected_backend
             .filter(|backend| *backend == Backend::Gpu)
@@ -57,13 +73,15 @@ impl Image {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn try_getprojection_eager_backend(
         &self,
         image: &DynamicImage,
+        execution_context: Option<crate::compute::ExecutionContext>,
     ) -> Result<Option<ProjectionAxes>, PilError> {
-        let (selected_backend, only_active_backend, cpu_context) =
+        let (selected_backend, only_active_backend, routed_cpu_context) =
             self.cpu_arch_execution_route_with_policy()?;
+        let cpu_context = execution_context.unwrap_or(routed_cpu_context);
         let Some(backend) = selected_backend else {
             return Ok(None);
         };

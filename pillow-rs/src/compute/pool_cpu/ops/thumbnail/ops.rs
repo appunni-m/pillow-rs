@@ -47,7 +47,7 @@ const COMPOSED_OPERATIONS: &[OperationId] = &[
     OperationId::ResizeBoxed,
 ];
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -222,8 +222,7 @@ pub(crate) fn prepare_rgb_putpixel_thumbnail<'a>(
         false,
     );
     let unboxed_resize_selection = select_child_mode(
-        &crate::compute::pool_cpu::ops::resize::ops::SUPPORT,
-        Mode::ImageRgb8,
+        crate::compute::pool_cpu::ops::resize::ops::SUPPORT.for_mode(Mode::ImageRgb8),
         reduced_facts,
         context,
     )?;
@@ -311,7 +310,7 @@ impl PreparedThumbnail<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn select_mode(
     inputs: OperationInputs<'_>,
     mode: Mode,
@@ -336,7 +335,7 @@ fn select_mode(
 }
 
 /// Prepares a mode-preserving Thumbnail operation and its nested strategies.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -399,7 +398,7 @@ pub(crate) fn prepare_pipeline<'a>(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn prepare_composed_strategies<'a>(
     inputs: OperationInputs<'a>,
     mode: Mode,
@@ -430,18 +429,32 @@ fn prepare_composed_strategies<'a>(
     }
 
     let mut resize_facts = reduced_resize_facts(inputs, request.factors)?;
-    let support = if request.resize_reducing_gap.is_some() {
+    let resize_selection = if request.resize_reducing_gap.is_some() {
         resize_facts = resize_facts.with_boxed_resize(
             request.output.0,
             request.output.1,
             request.filter,
             request.bounds(),
         );
-        crate::compute::pool_cpu::ops::resize::ops::alpha_reducing_gap_support()
+        let support = match crate::compute::pool_cpu::ops::resize::ops::select_reducing_gap_child(
+            mode, false, true,
+        ) {
+            Some((OperationId::ResizeBoxed, Some(support))) => support,
+            _ => {
+                return Err(PilError::InternalError(
+                    "Thumbnail reducing-gap ResizeBoxed has no declared support".into(),
+                ));
+            }
+        };
+        select_child_mode(support, resize_facts, context)?
     } else if request.use_unboxed_resize {
         resize_facts =
             resize_facts.with_resize(request.output.0, request.output.1, request.filter, false);
-        &crate::compute::pool_cpu::ops::resize::ops::SUPPORT
+        select_child_mode(
+            crate::compute::pool_cpu::ops::resize::ops::SUPPORT.for_mode(mode),
+            resize_facts,
+            context,
+        )?
     } else {
         resize_facts = resize_facts.with_boxed_resize(
             request.output.0,
@@ -449,9 +462,12 @@ fn prepare_composed_strategies<'a>(
             request.filter,
             request.bounds(),
         );
-        &crate::compute::pool_cpu::ops::resize::ops::BOXED_SUPPORT
+        select_child_mode(
+            crate::compute::pool_cpu::ops::resize::ops::BOXED_SUPPORT.for_mode(mode),
+            resize_facts,
+            context,
+        )?
     };
-    let resize_selection = select_child_mode(support, mode, resize_facts, context)?;
     selections.push(resize_selection);
     Ok(ThumbnailChildren {
         reduce_plan,
@@ -460,7 +476,7 @@ fn prepare_composed_strategies<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn reduced_resize_facts(
     inputs: OperationInputs<'_>,
     factors: (u32, u32),
@@ -498,14 +514,13 @@ fn reduced_resize_facts(
     Ok(facts)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn select_child_mode(
-    support: &'static OperationSupport,
-    mode: Mode,
+    support: ModeSupport,
     facts: crate::compute::registry::support::StrategyInputs,
     context: &ExecutionContext,
 ) -> Result<StrategySelection, PilError> {
-    match support.for_mode(mode).assess(context, facts)? {
+    match support.assess(context, facts)? {
         SupportAssessment::Ready(selection) => Ok(selection),
         SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
         SupportAssessment::Deferred { .. } => Err(PilError::InternalError(
@@ -514,7 +529,7 @@ fn select_child_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn execute_thumbnail(plan: PreparedThumbnail<'_>) -> Result<DynamicImage, PilError> {
     if plan.width == 0 || plan.height == 0 {
         return Err(PilError::ValueError("thumbnail size must be > 0".into()));
@@ -565,7 +580,7 @@ fn execute_thumbnail(plan: PreparedThumbnail<'_>) -> Result<DynamicImage, PilErr
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn resize_thumbnail_work_image(
     image: &DynamicImage,
     palette: crate::compute::registry::support::PaletteInput<'_>,

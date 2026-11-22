@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 const MODE: Mode = Mode::ImageRgb8;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
@@ -23,9 +24,7 @@ pub(crate) fn merge(
         source,
         remaining,
         MODE,
-        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three {
-            lab_encoding: false,
-        },
+        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three,
     )
 }
 
@@ -51,9 +50,7 @@ fn interleave_byte_bands(
     crate::compute::pool_cpu::ops::composite::helpers::merge::preserve_merged_padding(
         &mut output,
         MODE,
-        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three {
-            lab_encoding: false,
-        },
+        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three,
         pixels,
     )?;
     Ok(output)

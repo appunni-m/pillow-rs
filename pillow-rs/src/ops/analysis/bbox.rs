@@ -16,12 +16,28 @@ impl Image {
     /// # Errors
     ///
     /// Returns an error when materialization or strategy preparation fails.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn getbbox(&self, alpha_only: bool) -> Result<Option<(u32, u32, u32, u32)>, PilError> {
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        self.getbbox_with_execution_context(alpha_only, None)
+    }
+
+    /// Returns a bounding box using a route captured by the Pillow wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getbbox_with_execution_context(
+        &self,
+        alpha_only: bool,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Option<(u32, u32, u32, u32)>, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialized_shared()?;
+        let image = routed_image.materialized_shared()?;
         operation_receipts.capture();
+        let (requested_backend, routed_context) = routed_image.cpu_arch_execution_route_advisory();
+        let context = execution_context.unwrap_or(routed_context);
         let telemetry = if Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
             // source graph operation receipts are restored separately.

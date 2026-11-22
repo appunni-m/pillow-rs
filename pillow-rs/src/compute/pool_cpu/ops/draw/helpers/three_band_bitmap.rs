@@ -7,7 +7,8 @@ use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{Rgb, RgbImage};
 
 /// Blend a three-byte raster without adding an intermediate alpha channel.
-pub(crate) fn apply<const RGB_PREMULTIPLIED_IS_OPAQUE: bool>(
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(crate) fn apply(
     canvas: &mut RgbImage,
     x: i32,
     y: i32,
@@ -27,12 +28,7 @@ pub(crate) fn apply<const RGB_PREMULTIPLIED_IS_OPAQUE: bool>(
     for mask_y in region.y_start..region.y_end {
         let image_y = image_y_start + (mask_y - region.y_start);
         for mask_x in region.x_start..region.x_end {
-            let mask_coverage = mask.coverage(mask_x, mask_y);
-            let coverage = if RGB_PREMULTIPLIED_IS_OPAQUE && mask.is_premultiplied() {
-                u8::MAX
-            } else {
-                mask_coverage
-            };
+            let coverage = mask.coverage(mask_x, mask_y);
             if mask.should_skip(coverage) {
                 continue;
             }
@@ -71,6 +67,7 @@ pub(crate) fn apply<const RGB_PREMULTIPLIED_IS_OPAQUE: bool>(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[inline]
 fn blend_pixel(
     background: Rgb<u8>,

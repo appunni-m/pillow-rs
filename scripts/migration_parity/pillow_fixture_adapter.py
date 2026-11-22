@@ -9,9 +9,12 @@ import hashlib
 import json
 from collections.abc import Iterable
 from pathlib import Path
+import sys
 from typing import Any
 
-from scripts import run_migration_parity as parity
+parity = sys.modules.get("__main__")
+if parity is None or not hasattr(parity, "ENCODED_INPUTS"):
+    from scripts import run_migration_parity as parity
 from scripts.migration_parity.fixture_io import open_binary as open_fixture_binary
 from scripts.migration_parity.fixture_io import read_bytes as read_fixture_bytes
 from scripts.parity_store import (
@@ -20,7 +23,7 @@ from scripts.parity_store import (
     CaseStep,
     ExpectedObservation,
     FaultContract,
-    EvidenceStore,
+    InputCorpusStore,
     ObservationSelector,
     canonical_value_digest,
 )
@@ -28,7 +31,7 @@ from scripts.migration_parity.streaming_json import iter_object_array
 
 PROJECT_ID = "pillow-rs"
 IMPORTER_SCHEMA = "pillow-rs-parity-import@2"
-MAX_IMPORT_CASES = 200
+MAX_IMPORT_CASES = 10_000
 MAX_IMPORT_BYTES = 64 * 1024 * 1024
 MAX_DIRECT_CASE_LOOKUP = 64
 
@@ -63,7 +66,7 @@ class _HashingTextReader:
 
 
 def import_manifest(
-    store: EvidenceStore,
+    store: InputCorpusStore,
     manifest_path: Path,
     *,
     case_ids: Iterable[str] | None = None,
@@ -145,7 +148,15 @@ def import_manifest(
     pending_case_ids = (
         None if requested_case_ids is None else requested_case_ids - existing_case_ids
     )
-    if pending_case_ids is None:
+    completed_case_count = None
+    if requested_case_ids is None:
+        with store.transaction():
+            completed_case_count = store.completed_case_import_count(
+                PROJECT_ID, specification_digest, IMPORTER_SCHEMA
+            )
+    if completed_case_count is not None:
+        scan_paths = ()
+    elif pending_case_ids is None:
         scan_paths = input_paths
     elif not pending_case_ids:
         scan_paths = ()
@@ -156,13 +167,25 @@ def import_manifest(
     imported = 0
     skipped_existing = len(existing_case_ids)
     total_cases: int | None = 0 if requested_case_ids is None else None
+    if completed_case_count is not None:
+        skipped_existing = completed_case_count
+        total_cases = completed_case_count
     selected_cases = 0
     found_case_ids = set(existing_case_ids)
+    document_case_counts: dict[str, int] = {}
     for relative in scan_paths:
         document_path = parity.FIXTURE_ROOT / relative
         document_digest = document_digests[relative]
+        existing_ordinals = (
+            set()
+            if requested_case_ids is not None
+            else store.existing_case_ordinals(
+                PROJECT_ID, specification_digest, relative
+            )
+        )
         batch: list[CaseRecord] = []
         batch_bytes = 0
+        document_case_count = 0
         with open_fixture_binary(document_path) as source:
             hashing_source = _HashingTextReader(source)
             for source_ordinal, raw_case in enumerate(
@@ -171,6 +194,10 @@ def import_manifest(
                 if requested_case_ids is None:
                     assert total_cases is not None
                     total_cases += 1
+                    document_case_count += 1
+                    if source_ordinal in existing_ordinals:
+                        skipped_existing += 1
+                        continue
                 elif raw_case["case_id"] not in pending_case_ids:
                     continue
                 case_id = raw_case["case_id"]
@@ -205,12 +232,28 @@ def import_manifest(
                 raise ValueError(
                     f"parity input changed after validation: {document_path}"
                 )
+        if requested_case_ids is None:
+            document_case_counts[relative] = document_case_count
         if batch:
             attempted = len(batch)
             with store.transaction():
                 added = store.insert_cases(batch)
             imported += added
             skipped_existing += attempted - added
+
+    if requested_case_ids is None and completed_case_count is None:
+        assert total_cases is not None
+        with store.transaction():
+            store.record_completed_case_import(
+                PROJECT_ID,
+                specification_digest,
+                IMPORTER_SCHEMA,
+                total_cases,
+                [
+                    (relative, document_digests[relative], document_case_counts[relative])
+                    for relative in input_paths
+                ],
+            )
 
     if requested_case_ids is not None and found_case_ids != requested_case_ids:
         missing = sorted(requested_case_ids - found_case_ids)
@@ -220,12 +263,12 @@ def import_manifest(
         "documents": len(input_docs),
         "cases_in_manifest": total_cases,
         "selected_cases": (
-            len(requested_case_ids) if requested_case_ids is not None else selected_cases
+            len(requested_case_ids) if requested_case_ids is not None else total_cases
         ),
         "filtered_cases": (
             None
             if requested_case_ids is not None
-            else total_cases - selected_cases
+            else 0
         ),
         "import_scope": "selected" if requested_case_ids is not None else "full",
         "new_cases": imported,
@@ -272,7 +315,7 @@ def _candidate_case_documents(
 
 
 def iter_profile_batches(
-    store: EvidenceStore,
+    store: InputCorpusStore,
     specification_digest: bytes,
     profile_id: str,
     *,
@@ -356,7 +399,7 @@ def record_to_runner_case(record: CaseRecord) -> dict[str, Any]:
 
 
 def _register_catalog(
-    store: EvidenceStore,
+    store: InputCorpusStore,
     manifest: dict[str, Any],
     specification_digest: bytes,
     profiles: dict[str, dict[str, Any]],
@@ -507,7 +550,9 @@ def _make_case_record(
         for item in raw_case.get("target_expectation", {}).get("observations", [])
     )
     estimated_bytes = len(
-        json.dumps(raw_case, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        json.dumps(raw_case, separators=(",", ":"), ensure_ascii=False).encode(
+            "utf-8", "surrogatepass"
+        )
     ) + sum(len(asset.content or b"") for asset in assets)
 
     return CaseRecord(

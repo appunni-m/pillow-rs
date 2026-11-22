@@ -114,11 +114,37 @@ fn paste_invalid_component(value: &Bound<'_, PyAny>) -> pillow_rs::PasteColorCom
     }
 }
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
 pub(crate) fn paste_source_from_python(
     value: &Bound<'_, PyAny>,
     mode: pillow_rs::Mode,
 ) -> PyResult<pillow_rs::PasteSourceInput> {
-    if let Some(image) = image_from_python(value) {
+    paste_source_from_python_with_image_wrappers(value, mode, true)
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+pub(crate) fn paste_source_from_imaging_core(
+    value: &Bound<'_, PyAny>,
+    mode: pillow_rs::Mode,
+) -> PyResult<pillow_rs::PasteSourceInput> {
+    paste_source_from_python_with_image_wrappers(value, mode, false)
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+fn paste_source_from_python_with_image_wrappers(
+    value: &Bound<'_, PyAny>,
+    mode: pillow_rs::Mode,
+    accept_image_wrappers: bool,
+) -> PyResult<pillow_rs::PasteSourceInput> {
+    let image = if accept_image_wrappers {
+        image_from_python(value)
+    } else {
+        value
+            .cast::<PyImage>()
+            .ok()
+            .map(|image| image.borrow().inner.clone())
+    };
+    if let Some(image) = image {
         return Ok(pillow_rs::PasteSourceInput::Image(Box::new(image)));
     }
     if mode == pillow_rs::Mode::ImageF32 {
@@ -166,6 +192,7 @@ pub(crate) fn paste_source_from_python(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
 pub(crate) fn paste_box_coordinate_from_python(value: &Bound<'_, PyAny>) -> PyResult<i64> {
     // PyO3's c_long extractor calls PyLong_AsLong, matching the `(i)` field
     // conversion used by Pillow's PyArg_ParseTuple parser. Check C-int range
@@ -181,7 +208,11 @@ pub(crate) fn paste_box_coordinate_from_python(value: &Bound<'_, PyAny>) -> PyRe
     Ok(i64::from(coordinate))
 }
 
-fn paste_box_sequence_coordinates(value: &Bound<'_, PyAny>, _py: Python<'_>) -> PyResult<Vec<i64>> {
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+pub(crate) fn paste_box_sequence_coordinates(
+    value: &Bound<'_, PyAny>,
+    _py: Python<'_>,
+) -> PyResult<Vec<i64>> {
     let Ok(sequence) = value.cast::<PySequence>() else {
         let type_name = value.get_type().name()?.to_string();
         return Err(pyo3::exceptions::PyTypeError::new_err(format!(

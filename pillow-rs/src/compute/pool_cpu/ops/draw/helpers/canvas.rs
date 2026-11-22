@@ -49,6 +49,7 @@ impl<P: Pixel<Subpixel = u8>, const CHANNELS: usize> DrawCanvas
         self.height
     }
 
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     fn put_rgba(&mut self, x: u32, y: u32, color: [u8; 4]) {
         let index = y as usize * self.width as usize + x as usize;
         let alpha_blend_rgb = self.alpha_blend_rgb;

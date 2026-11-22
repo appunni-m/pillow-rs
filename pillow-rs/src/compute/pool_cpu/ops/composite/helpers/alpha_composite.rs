@@ -37,6 +37,7 @@ pub(crate) fn apply<const CHANNELS: usize>(
 /// Its typed Rust carrier stores only luma and alpha, so the two intermediate
 /// color lanes must follow the same compositing arithmetic as the visible
 /// luma channel.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn preserve_luma_alpha_lanes(
     source: &GrayAlphaImage,
     destination: &GrayAlphaImage,
@@ -181,6 +182,7 @@ fn luma_alpha_lanes_for_pixel(
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn alpha_composite_pixel<const CHANNELS: usize>(source: &[u8], destination: &mut [u8]) {
     let source_alpha = u32::from(source[CHANNELS - 1]);
     if source_alpha == 0 {

@@ -12,6 +12,7 @@ pub(crate) struct PasteRegion {
 }
 
 /// Computes one interleaved byte row range without overflowing its extent.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[must_use]
 pub(crate) fn checked_row_range(
     row: u32,
@@ -30,6 +31,7 @@ pub(crate) fn checked_row_range(
 
 impl PasteRegion {
     /// Clips the requested source region against the destination canvas.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[must_use]
     pub(crate) fn clipped(
         x: i64,
@@ -57,6 +59,7 @@ impl PasteRegion {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[must_use]
     pub(crate) const fn is_empty(self) -> bool {
         self.width == 0 || self.height == 0

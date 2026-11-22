@@ -1,10 +1,10 @@
-//! Direct one-byte sampling and thresholding for Pillow's bilevel Resize mode.
+//! Direct one-byte sampling for Pillow's bilevel Resize mode.
 
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::GrayImage;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &GrayImage,
     width: u32,
@@ -19,11 +19,7 @@ pub(crate) fn execute(
         filter,
         bounds,
     )?;
-    let mut output = GrayImage::from_raw(width, height, bytes).ok_or_else(|| {
+    GrayImage::from_raw(width, height, bytes).ok_or_else(|| {
         PilError::ValueError("one-byte Resize failed to create its output plane".into())
-    })?;
-    for pixel in output.pixels_mut() {
-        pixel[0] = if pixel[0] >= 128 { 255 } else { 0 };
-    }
-    Ok(output)
+    })
 }

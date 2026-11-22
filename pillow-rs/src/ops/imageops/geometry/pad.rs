@@ -107,6 +107,7 @@ pub fn pad_fill_preflight(
 
 /// Runs the custom-protocol Pad fallback while keeping its decisions in core.
 #[doc(hidden)]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub fn pad_fallback_with_callbacks<C: ImageOpsPadCallbacks>(
     callbacks: &mut C,
     size: &C::Value,

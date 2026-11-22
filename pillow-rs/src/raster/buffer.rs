@@ -507,7 +507,7 @@ where
     P: Pixel,
     Container: Deref<Target = [P::Subpixel]> + DerefMut,
 {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     fn inner_pixels_mut(&mut self) -> &mut [P::Subpixel] {
         self.invalidate_hidden_pixel_lanes();
         let len = Self::image_buffer_len(self.width, self.height).unwrap_or(0);
@@ -522,12 +522,12 @@ where
     // bypasses invalidation; DynamicImage::put_pixel updates its lane sidecar.
     // TODO(pillow-rs#3ptb): keep downstream Paste/Histogram outcomes in CPU
     // parity; this mode-free buffer cannot infer Pillow's physical lanes.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     fn invalidate_hidden_pixel_lanes(&mut self) {
         self.hidden_pixel_lanes = None;
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     /// Returns an iterator over the mutable pixels of this image.
     pub fn pixels_mut(&mut self) -> PixelsMut<'_, P> {
         PixelsMut {
@@ -537,14 +537,14 @@ where
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     /// Returns an iterator over the mutable rows of this image.
     pub fn rows_mut(&mut self) -> RowsMut<'_, P> {
         self.invalidate_hidden_pixel_lanes();
         RowsMut::with_image(&mut self.data, self.width, self.height)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     /// Enumerates over the pixels of the image.
     pub fn enumerate_pixels_mut(&mut self) -> EnumeratePixelsMut<'_, P> {
         let width = self.width;
@@ -556,7 +556,7 @@ where
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     /// Enumerates over the rows of the image.
     pub fn enumerate_rows_mut(&mut self) -> EnumerateRowsMut<'_, P> {
         let width = self.width;
@@ -567,7 +567,7 @@ where
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     /// Gets a reference to the mutable pixel at location `(x, y)`.
     #[inline]
     #[track_caller]
@@ -586,7 +586,7 @@ where
         <P as Pixel>::from_slice_mut(&mut self.data[pixel_indices])
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     /// Gets a reference to the mutable pixel at location `(x, y)` or returns
     /// `None` if the index is out of the bounds `(width, height)`.
     pub fn get_pixel_mut_checked(&mut self, x: u32, y: u32) -> Option<&mut P> {
@@ -607,7 +607,7 @@ where
             .map(|pixel_indices| <P as Pixel>::from_slice_mut(pixel_indices))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     /// Puts a pixel at location `(x, y)`.
     ///
     /// # Panics

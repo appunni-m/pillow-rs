@@ -1,4 +1,4 @@
-"""PostgreSQL implementation of the project-neutral parity storage API."""
+"""PostgreSQL input catalog with retained compatibility for historical evidence."""
 
 from __future__ import annotations
 
@@ -37,7 +37,11 @@ _MIGRATIONS = Path(__file__).parent / "migrations"
 
 
 class PostgresStore:
-    """Typed relational parity catalog and evidence store."""
+    """Typed relational input corpus store.
+
+    Result-table methods remain for compatibility with older local databases,
+    but the active corpus importer uses only the input-store port.
+    """
 
     def __init__(self, connection: Any):
         self.connection = connection
@@ -263,6 +267,167 @@ class PostgresStore:
             (project_id, specification_digest, list(case_ids)),
         ).fetchall()
         return {str(row[0]) for row in rows}
+
+    def existing_case_ordinals(
+        self,
+        project_id: str,
+        specification_digest: bytes,
+        source_document: str,
+    ) -> set[int]:
+        rows = self.connection.execute(
+            "SELECT source_ordinal FROM parity_case WHERE project_id = %s "
+            "AND specification_digest = %s AND source_document = %s",
+            (project_id, specification_digest, source_document),
+        ).fetchall()
+        return {int(row[0]) for row in rows}
+
+    def completed_case_import_count(
+        self,
+        project_id: str,
+        specification_digest: bytes,
+        importer_identity: str,
+    ) -> int | None:
+        row = self.connection.execute(
+            "SELECT case_count, document_count FROM parity_completed_case_import "
+            "WHERE project_id = %s AND specification_digest = %s "
+            "AND importer_identity = %s",
+            (project_id, specification_digest, importer_identity),
+        ).fetchone()
+        if row is None:
+            return None
+        recorded_count = int(row[0])
+        recorded_document_count = int(row[1])
+        expected_rows = self.connection.execute(
+            "SELECT d.source_path, d.document_sha256, d.case_count, s.document_sha256 "
+            "FROM parity_completed_case_import_document AS d "
+            "LEFT JOIN parity_specification_document AS s "
+            "ON s.project_id = d.project_id "
+            "AND s.specification_digest = d.specification_digest "
+            "AND s.source_path = d.source_path "
+            "WHERE d.project_id = %s AND d.specification_digest = %s "
+            "AND d.importer_identity = %s ORDER BY d.source_path",
+            (project_id, specification_digest, importer_identity),
+        ).fetchall()
+        if len(expected_rows) != recorded_document_count:
+            return None
+        if any(
+            spec_digest is None or bytes(document_digest) != bytes(spec_digest)
+            for _path, document_digest, _count, spec_digest in expected_rows
+        ):
+            return None
+        actual_rows = self.connection.execute(
+            "SELECT source_document, source_document_digest, COUNT(*) "
+            "FROM parity_case WHERE project_id = %s AND specification_digest = %s "
+            "GROUP BY source_document, source_document_digest ORDER BY source_document",
+            (project_id, specification_digest),
+        ).fetchall()
+        if len(actual_rows) != len({str(row[0]) for row in actual_rows}):
+            return None
+        expected = {
+            str(path): (bytes(digest), int(count))
+            for path, digest, count, _spec_digest in expected_rows
+        }
+        actual = {
+            str(path): (bytes(digest), int(count))
+            for path, digest, count in actual_rows
+        }
+        if set(actual) - set(expected):
+            return None
+        for path, (digest, count) in expected.items():
+            if actual.get(path, (digest, 0)) != (digest, count):
+                return None
+        actual_count = sum(count for _digest, count in actual.values())
+        return recorded_count if recorded_count == actual_count else None
+
+    def record_completed_case_import(
+        self,
+        project_id: str,
+        specification_digest: bytes,
+        importer_identity: str,
+        case_count: int,
+        documents: Sequence[tuple[str, bytes, int]],
+    ) -> None:
+        if case_count < 0:
+            raise ValueError("completed case-import count cannot be negative")
+        if len(documents) != len({path for path, _digest, _count in documents}):
+            raise ValueError("completed case-import documents contain duplicate paths")
+        if any(len(digest) != 32 or count < 0 for _path, digest, count in documents):
+            raise ValueError("completed case-import document metadata is invalid")
+        if sum(count for _path, _digest, count in documents) != case_count:
+            raise ValueError("completed case-import document counts do not sum to total")
+        registered_rows = self.connection.execute(
+            "SELECT source_path, document_sha256 FROM parity_specification_document "
+            "WHERE project_id = %s AND specification_digest = %s "
+            "AND source_path = ANY(%s)",
+            (project_id, specification_digest, [path for path, _digest, _count in documents]),
+        ).fetchall()
+        registered_documents = {
+            str(path): bytes(digest) for path, digest in registered_rows
+        }
+        if registered_documents != {
+            path: digest for path, digest, _count in documents
+        }:
+            raise ValueError(
+                "completed case-import documents differ from the registered snapshot"
+            )
+        stored_rows = self.connection.execute(
+            "SELECT source_document, source_document_digest, COUNT(*) "
+            "FROM parity_case WHERE project_id = %s AND specification_digest = %s "
+            "GROUP BY source_document, source_document_digest ORDER BY source_document",
+            (project_id, specification_digest),
+        ).fetchall()
+        if len(stored_rows) != len({str(row[0]) for row in stored_rows}):
+            raise ValueError("stored case rows mix source digests for one document")
+        stored = {
+            str(path): (bytes(digest), int(count))
+            for path, digest, count in stored_rows
+        }
+        expected = {
+            path: (digest, count) for path, digest, count in documents if count > 0
+        }
+        if stored != expected:
+            raise ValueError(
+                "completed case-import documents do not match stored source coverage"
+            )
+        self.connection.execute(
+            "INSERT INTO parity_completed_case_import "
+            "(project_id, specification_digest, importer_identity, case_count, "
+            "document_count, completed_at) VALUES (%s, %s, %s, %s, %s, %s) "
+            "ON CONFLICT (project_id, specification_digest, importer_identity) "
+            "DO UPDATE SET case_count = EXCLUDED.case_count, "
+            "document_count = EXCLUDED.document_count, "
+            "completed_at = EXCLUDED.completed_at",
+            (
+                project_id,
+                specification_digest,
+                importer_identity,
+                case_count,
+                len(documents),
+                datetime.now(timezone.utc),
+            ),
+        )
+        self.connection.execute(
+            "DELETE FROM parity_completed_case_import_document WHERE project_id = %s "
+            "AND specification_digest = %s AND importer_identity = %s",
+            (project_id, specification_digest, importer_identity),
+        )
+        if documents:
+            self._executemany(
+                "INSERT INTO parity_completed_case_import_document "
+                "(project_id, specification_digest, importer_identity, source_path, "
+                "document_sha256, case_count) VALUES (%s, %s, %s, %s, %s, %s)",
+                [
+                    (
+                        project_id,
+                        specification_digest,
+                        importer_identity,
+                        path,
+                        digest,
+                        count,
+                    )
+                    for path, digest, count in documents
+                ],
+            )
 
     def register_operations(
         self,
@@ -512,6 +677,7 @@ class PostgresStore:
             with self.connection.transaction():
                 records = self.load_cases(project_id, specification_digest, selected)
             yield records, selected_bytes
+            del records
 
     def selected_case_digests(
         self,
@@ -1091,7 +1257,11 @@ class PostgresStore:
                     (
                         global_ids[base + node.local_id],
                         node.kind,
-                        node.text_value,
+                        (
+                            None
+                            if node.text_value is None
+                            else node.text_value.encode("utf-8", "surrogatepass")
+                        ),
                         node.integer_value,
                         node.boolean_value,
                         node.float64_bits,
@@ -1119,7 +1289,11 @@ class PostgresStore:
                     (
                         global_ids[base + child.parent_local_id],
                         child.child_ordinal,
-                        child.object_key,
+                        (
+                            None
+                            if child.object_key is None
+                            else child.object_key.encode("utf-8", "surrogatepass")
+                        ),
                         global_ids[base + child.child_local_id],
                     )
                 )
@@ -1360,7 +1534,7 @@ class PostgresStore:
             return {}
         rows = self.connection.execute(
             "WITH RECURSIVE node_tree(root_value_id, value_id, parent_value_id, child_ordinal, object_key) AS ("
-            "SELECT value_id, value_id, NULL::BIGINT, NULL::INTEGER, NULL::TEXT FROM parity_value WHERE value_id = ANY(%s) "
+            "SELECT value_id, value_id, NULL::BIGINT, NULL::INTEGER, NULL::BYTEA FROM parity_value WHERE value_id = ANY(%s) "
             "UNION ALL SELECT tree.root_value_id, child.child_value_id, child.parent_value_id, child.child_ordinal, child.object_key "
             "FROM node_tree AS tree JOIN parity_value_child AS child ON child.parent_value_id = tree.value_id) "
             "SELECT tree.root_value_id, tree.value_id, tree.parent_value_id, tree.child_ordinal, tree.object_key, "
@@ -1377,6 +1551,8 @@ class PostgresStore:
         for row in rows:
             root_id, value_id, parent_id, ordinal, key = row[:5]
             if parent_id is not None:
+                if key is not None:
+                    key = bytes(key).decode("utf-8", "surrogatepass")
                 children[int(parent_id)].append((int(ordinal), key, int(value_id)))
             if row[10] is not None:
                 blob_digests.add(bytes(row[10]))
@@ -1452,13 +1628,15 @@ class PostgresStore:
         return by_case
 
 
-def _dimension_fields(value: DimensionValue) -> tuple[str, str | None, int | None, bool | None]:
+def _dimension_fields(
+    value: DimensionValue,
+) -> tuple[str, bytes | None, int | None, bool | None]:
     if isinstance(value, bool):
         return "boolean", None, None, value
     if isinstance(value, int):
         return "integer", None, value, None
     if isinstance(value, str):
-        return "text", value, None, None
+        return "text", value.encode("utf-8", "surrogatepass"), None, None
     raise TypeError(f"unsupported dimension value: {type(value).__name__}")
 
 
@@ -1507,12 +1685,14 @@ def _support_dimension_row(
 
 def _dimension_value(
     kind: str,
-    text_value: str | None,
+    text_value: bytes | memoryview | str | None,
     integer_value: Any,
     boolean_value: bool | None,
 ) -> DimensionValue:
     if kind == "text" and text_value is not None:
-        return text_value
+        if isinstance(text_value, str):
+            return text_value
+        return bytes(text_value).decode("utf-8", "surrogatepass")
     if kind == "integer" and integer_value is not None:
         return int(integer_value)
     if kind == "boolean" and boolean_value is not None:

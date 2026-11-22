@@ -15,6 +15,7 @@ pub(crate) fn prepare<'a>(image: &'a Input, mask: MaskStrategy<'a>) -> Kernel<'a
     AlphaDataInput { image, mask }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     Ok(DynamicImage::ImageLumaA8(helpers::luma_mask(

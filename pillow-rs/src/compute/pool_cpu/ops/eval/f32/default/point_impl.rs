@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::RgbaImage;
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn affine(image: &mut RgbaImage, scale: f64, offset: f64) {
     for pixel in image.pixels_mut() {
         let value = f32::from_le_bytes(pixel.0);
@@ -10,6 +11,7 @@ pub(crate) fn affine(image: &mut RgbaImage, scale: f64, offset: f64) {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn callable<F>(image: &mut RgbaImage, callback: &mut F) -> Result<(), PilError>
 where
     F: FnMut(f64) -> Result<f64, PilError>,

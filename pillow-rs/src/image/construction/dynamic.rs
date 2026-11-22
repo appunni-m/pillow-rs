@@ -4,7 +4,7 @@ use crate::raster::{DynamicImage, Mode};
 use super::{Image, initialize_new_hidden_lanes};
 
 impl Image {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(super) fn new_dynamic_image(
         width: u32,
         height: u32,
@@ -127,16 +127,12 @@ impl Image {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn new_lab8_dynamic_image(width: u32, height: u32, color: (u8, u8, u8, u8)) -> DynamicImage {
         DynamicImage::ImageLab8(crate::raster::RgbImage::from_pixel(
             width,
             height,
-            crate::raster::Rgb([
-                color.0,
-                color.1.wrapping_add(128),
-                color.2.wrapping_add(128),
-            ]),
+            crate::raster::Rgb([color.0, color.1, color.2]),
         ))
     }
 

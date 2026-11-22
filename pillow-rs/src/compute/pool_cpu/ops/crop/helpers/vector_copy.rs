@@ -5,6 +5,7 @@ use crate::compute::pool_cpu::ops::crop::helpers::crop::CropRegion;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Luma};
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn crop_luma16(
     image: &ImageBuffer<Luma<u16>, Vec<u16>>,
     region: CropRegion,

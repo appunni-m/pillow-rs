@@ -1,5 +1,5 @@
 use super::{Bound, PyAny, PyResult, PyTypeError, PyValueError, c_int_from_python};
-use pyo3::types::PyAnyMethods;
+use pyo3::types::{PyAnyMethods, PyTypeMethods};
 
 pub(crate) fn filter_size_from_python(
     size: &Bound<'_, PyAny>,
@@ -35,26 +35,26 @@ pub(crate) fn _clear_migration_test_fault() {
     pillow_rs::clear_fault();
 }
 
-pub(crate) fn blur_radius_pair_from_python(
-    radius: Option<&Bound<'_, PyAny>>,
-    default: f64,
-) -> PyResult<(f64, f64)> {
-    match radius {
-        None => Ok((default, default)),
-        Some(value) => {
-            if let Ok(radius) = value.extract::<f64>() {
-                return Ok((radius, radius));
-            }
-            let values = value.extract::<Vec<f64>>().map_err(|_| {
-                PyTypeError::new_err("radius must be a number or a sequence of two numbers")
-            })?;
-            if values.len() != 2 {
-                return Err(PyTypeError::new_err(format!(
-                    "argument 1 must be sequence of length 2, not {}",
-                    values.len()
-                )));
-            }
-            Ok((values[0], values[1]))
-        }
+// TODO(pillow-rs#3ptb): freeze private ImagingCore radius sequence and
+// element-conversion errors against the Pillow parity receipt.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+pub(crate) fn blur_radius_pair_from_python(radius: &Bound<'_, PyAny>) -> PyResult<(f64, f64)> {
+    let type_name = radius.get_type().name()?.to_string();
+    let values = radius
+        .try_iter()
+        .map_err(|_| {
+            PyTypeError::new_err(format!(
+                "argument 1 must be sequence of length 2, not {type_name}"
+            ))
+        })?
+        .collect::<PyResult<Vec<_>>>()?;
+    if values.len() != 2 {
+        return Err(PyTypeError::new_err(format!(
+            "argument 1 must be sequence of length 2, not {}",
+            values.len()
+        )));
     }
+    let radius_x = values[0].extract::<f64>()?;
+    let radius_y = values[1].extract::<f64>()?;
+    Ok((radius_x, radius_y))
 }

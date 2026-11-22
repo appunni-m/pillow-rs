@@ -185,12 +185,14 @@ pub fn imagefont_text_split_with_callbacks<C: ImageFontTextPositionCallbacks>(
 
 /// Measure a single ImageText.Text line with its mode-specific font mask mode.
 #[doc(hidden)]
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// TODO(pillow-rs#3ptb): verify long advances and RGBA color-font mode receipts.
 pub fn imagefont_text_length(
     font: &FreeTypeFont,
     mode: Mode,
     embedded_color: bool,
     text: ImageFontTextInput,
-) -> Result<f32, PilError> {
+) -> Result<f64, PilError> {
     let text = text.into_font_text()?;
     if text.as_ref().contains('\n') {
         return Err(PilError::ValueError(
@@ -316,7 +318,8 @@ pub fn imagefont_getmetrics(font: &FreeTypeFont) -> (u32, u32) {
 }
 
 /// Return Pillow's public text length in pixels.
-pub fn imagefont_getlength(font: &FreeTypeFont, text: &str) -> Result<f32, PilError> {
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub fn imagefont_getlength(font: &FreeTypeFont, text: &str) -> Result<f64, PilError> {
     font.getlength(text)
 }
 
@@ -390,25 +393,28 @@ pub fn imagefont_is_scalable(font: &FreeTypeFont) -> bool {
 }
 
 /// Return Pillow's public text length for byte text.
-pub fn imagefont_getlength_bytes(font: &FreeTypeFont, text: &[u8]) -> Result<f32, PilError> {
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub fn imagefont_getlength_bytes(font: &FreeTypeFont, text: &[u8]) -> Result<f64, PilError> {
     font.getlength_bytes(text)
 }
 
 /// Return Pillow's public text length with optional layout arguments.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn imagefont_getlength_with_options(
     font: &FreeTypeFont,
     text: &str,
     options: &ImageFontTextOptions,
-) -> Result<f32, PilError> {
+) -> Result<f64, PilError> {
     font.getlength_with_options(text, options)
 }
 
 /// Return Pillow's public text length for byte text with optional layout arguments.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn imagefont_getlength_bytes_with_options(
     font: &FreeTypeFont,
     text: &[u8],
     options: &ImageFontTextOptions,
-) -> Result<f32, PilError> {
+) -> Result<f64, PilError> {
     font.getlength_bytes_with_options(text, options)
 }
 
@@ -594,24 +600,26 @@ pub fn imagefont_textbbox_at_with_optional_font_input(
 }
 
 /// Return text length using Pillow's optional draw-font rules.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn imagefont_getlength_with_optional_font(
     font: Option<&FreeTypeFont>,
     size: Option<f32>,
     text: &str,
     options: &ImageFontTextOptions,
-) -> Result<f32, PilError> {
+) -> Result<f64, PilError> {
     crate::font::with_text_font(font, size, |font| {
         font.getlength_with_options(text, options)
     })
 }
 
 /// Return text length using optional-font rules and host-classified text input.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn imagefont_getlength_with_optional_font_input(
     font: Option<&FreeTypeFont>,
     size: Option<f32>,
     text: ImageFontTextInput,
     options: &ImageFontTextOptions,
-) -> Result<f32, PilError> {
+) -> Result<f64, PilError> {
     crate::font::with_text_font(font, size, |font| {
         font.getlength_input_with_options(text, options)
     })
@@ -776,11 +784,13 @@ pub fn imagefont_getmask2_input_with_options(
 }
 
 /// Return text length for host-classified text input with optional layout.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// TODO(pillow-rs#3ptb): verify long advances and mode-specific font flags.
 pub fn imagefont_getlength_input_with_options(
     font: &FreeTypeFont,
     text: ImageFontTextInput,
     options: &ImageFontTextOptions,
-) -> Result<f32, PilError> {
+) -> Result<f64, PilError> {
     font.getlength_input_with_options(text, options)
 }
 

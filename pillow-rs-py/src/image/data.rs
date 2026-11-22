@@ -1,8 +1,30 @@
+use super::execution::{ExecutionRoute, route_from_context, route_pending_image};
 use super::{PyImage, RsImage};
 use crate::*;
 use pyo3::exceptions::PyBufferError;
 use pyo3::prelude::PyModule;
 use pyo3::pymethods;
+use pyo3::types::PyTupleMethods;
+
+type ImageExecutionRoute = (Option<pillow_rs::Backend>, pillow_rs::ExecutionContext);
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+fn update_image_with_route<T: Send>(
+    slf: Py<PyImage>,
+    py: Python<'_>,
+    route: ExecutionRoute,
+    operation: impl FnOnce(&mut pillow_rs::Image, ExecutionRoute) -> Result<T, pillow_rs::PilError>
+    + Send,
+) -> PyResult<T> {
+    let inner = slf.bind(py).borrow().inner.clone();
+    let (result, inner) = py.detach(move || {
+        let mut inner = inner;
+        let result = operation(&mut inner, route);
+        (result, inner)
+    });
+    slf.bind(py).borrow_mut().inner = inner;
+    result.map_err(map_error)
+}
 
 fn palette_alpha_bytes(value: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
     let memoryview = PyModule::import(value.py(), "builtins")?
@@ -85,6 +107,7 @@ fn prepare_palette_putpixel<'py>(
 // and invalid coordinate error order after the CPU source gate.
 // Pillow ImagingCore adds each negative coordinate to its matching dimension
 // before applying the common bounds check for getpixel and putpixel.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn image_coordinates_in_bounds(
     image: &pillow_rs::Image,
     (x, y): (i32, i32),
@@ -120,10 +143,11 @@ fn image_sequence_len(width: u32, height: u32) -> PyResult<usize> {
     Ok(length)
 }
 
-fn load_pyimage(image: &Py<PyImage>, py: Python<'_>) -> PyResult<()> {
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+fn load_pyimage(image: &Py<PyImage>, route: ExecutionRoute, py: Python<'_>) -> PyResult<()> {
     let inner = image.bind(py).borrow().inner.clone();
     let (result, inner) = py.detach(move || {
-        let mut inner = inner;
+        let mut inner = route_pending_image(inner, route);
         let result = inner.load();
         (result, inner)
     });
@@ -182,6 +206,7 @@ fn formatted_pixel_to_python(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn validate_imaging_core_palette_ink(
     value: &Bound<'_, PyAny>,
     mode: pillow_rs::Mode,
@@ -195,9 +220,9 @@ fn validate_imaging_core_palette_ink(
     }
     let tuple = value.cast::<PyTuple>().ok();
     let accepted = match mode {
-        pillow_rs::Mode::ImagePalette8 => tuple.is_some_and(|tuple| tuple.len().ok() == Some(1)),
+        pillow_rs::Mode::ImagePalette8 => tuple.is_some_and(|tuple| tuple.len() == 1),
         pillow_rs::Mode::ImagePaletteAlpha8 => {
-            tuple.is_some_and(|tuple| matches!(tuple.len(), Ok(1 | 2)))
+            tuple.is_some_and(|tuple| matches!(tuple.len(), 1 | 2))
         }
         _ => true,
     };
@@ -214,6 +239,7 @@ fn validate_imaging_core_palette_ink(
     Err(pyo3::exceptions::PyTypeError::new_err(message))
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn putpixel_imaging_core(
     slf: Py<PyImage>,
     xy: &Bound<'_, PyAny>,
@@ -221,13 +247,16 @@ fn putpixel_imaging_core(
     py: Python<'_>,
 ) -> PyResult<()> {
     let coordinates = putpixel_coordinates_from_python(xy)?;
-    putpixel_imaging_core_at(slf, coordinates, value, py)
+    let route = route_from_context(None, py);
+    putpixel_imaging_core_at(slf, coordinates, value, route, py)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn putpixel_imaging_core_at(
     slf: Py<PyImage>,
     coordinates: (i32, i32),
     value: &Bound<'_, PyAny>,
+    route: ExecutionRoute,
     py: Python<'_>,
 ) -> PyResult<()> {
     let image = slf.bind(py).borrow().inner.clone();
@@ -235,64 +264,88 @@ fn putpixel_imaging_core_at(
     let mode = image.mode_identity().map_err(map_error)?;
     validate_imaging_core_palette_ink(value, mode)?;
     let value = putpixel_value_from_python(value, mode)?;
-    slf.bind(py)
-        .borrow_mut()
-        .inner
-        .putpixel_value(x, y, value)
-        .map_err(map_error)
+    let mut image = slf.bind(py).borrow_mut();
+    putpixel_value_with_route(&mut image.inner, x, y, value, route).map_err(map_error)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn getpixel_at(
     image: pillow_rs::Image,
     coordinates: (i32, i32),
+    execution_route: Option<ImageExecutionRoute>,
     py: Python<'_>,
 ) -> PyResult<Py<PyAny>> {
     let xy = image_coordinates_in_bounds(&image, coordinates)?;
     if let Some(rgb) = image
-        .getpixel_rgb_if_loaded(xy.0, xy.1)
+        .getpixel_rgb_if_loaded_with_execution_route(xy.0, xy.1, execution_route)
         .map_err(map_error)?
     {
         return PyTuple::new(py, rgb)?.into_py_any(py);
     }
     let value = py
-        .detach(move || image.getpixel_formatted(xy.0, xy.1))
+        .detach(move || image.getpixel_formatted_with_execution_route(xy.0, xy.1, execution_route))
         .map_err(map_error)?;
     formatted_pixel_to_python(py, value)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn putpixel_value_with_route(
+    image: &mut pillow_rs::Image,
+    x: u32,
+    y: u32,
+    value: pillow_rs::PutPixelValue,
+    route: ExecutionRoute,
+) -> Result<(), pillow_rs::PilError> {
+    let result = match route {
+        Some(route) => {
+            image.putpixel_value_with_context(x, y, value, route.requested_backend, route.context)
+        }
+        None => image.putpixel_value(x, y, value),
+    };
+    if result.is_ok()
+        && let Some(backend) = route.and_then(|route| route.pinned_backend)
+    {
+        *image = image.clone().use_backend(backend);
+    }
+    result
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+fn putpixel_exact_rgb_tuple(
+    image: &Bound<'_, PyImage>,
+    x: u32,
+    y: u32,
+    [red, green, blue]: [u8; 3],
+    route: ExecutionRoute,
+) -> PyResult<()> {
+    let mut image = image.borrow_mut();
+    let result = match route {
+        Some(route) => {
+            image
+                .inner
+                .putpixel_with_execution_context(x, y, red, green, blue, 255, route.context)
+        }
+        None => image.inner.putpixel(x, y, red, green, blue, 255),
+    };
+    if result.is_ok()
+        && let Some(backend) = route.and_then(|route| route.pinned_backend)
+    {
+        image.inner = image.inner.clone().use_backend(backend);
+    }
+    result.map_err(map_error)
+}
+
 #[pymethods]
 impl PyImage {
-    fn setmode(&mut self, mode: &str) -> PyResult<()> {
-        let target = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
-            map_error(pillow_rs::PilError::ValueError(
-                "image has wrong mode".into(),
-            ))
-        })?;
-        self.inner.imaging_core_setmode(target).map_err(map_error)
-    }
-
-    fn putband(slf: Py<Self>, source: Py<Self>, band: i32, py: Python<'_>) -> PyResult<()> {
-        let source = source.bind(py).borrow().inner.clone();
-        slf.bind(py)
-            .borrow_mut()
-            .inner
-            .imaging_core_putband(&source, band)
-            .map_err(map_error)
-    }
-
-    fn fillband(&mut self, band: i32, color: i32) -> PyResult<()> {
-        self.inner
-            .imaging_core_fillband(band, color)
-            .map_err(map_error)
-    }
-
     fn __len__(&self) -> PyResult<usize> {
         let (width, height) = self.inner.size().map_err(map_error)?;
         image_sequence_len(width, height)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn __getitem__(slf: Py<Self>, index: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        load_pyimage(&slf, py)?;
+        let route = route_from_context(None, py);
+        load_pyimage(&slf, route, py)?;
         let index = image_sequence_index(index, py)?;
         let (width, height) = slf.bind(py).borrow().inner.size().map_err(map_error)?;
         let length = image_sequence_len(width, height)?;
@@ -346,12 +399,45 @@ impl PyImage {
         }
     }
 
+    // TODO(pillow-rs#3ptb): verify packed palette bytes, rawmode faults, the
+    // missing-palette error, and direct-filter callback output in CPU parity.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+    #[pyo3(signature = (*args))]
+    fn getpalette(&self, args: &Bound<'_, PyTuple>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if args.len() > 1 {
+            return Err(PyTypeError::new_err(format!(
+                "function takes at most 1 argument ({} given)",
+                args.len()
+            )));
+        }
+        let rawmode = if args.is_empty() {
+            self.inner.palette_mode().map(str::to_owned)
+        } else {
+            Some(args.get_item(0)?.extract::<String>()?)
+        };
+        let rawmode = rawmode.as_deref().unwrap_or("RGB");
+        let palette = self
+            .inner
+            .getpalette_rawmode(rawmode)
+            .map_err(map_error)?
+            .ok_or_else(|| PyValueError::new_err("image has no palette"))?;
+        Ok(PyBytes::new(py, &palette).into())
+    }
+
     fn indexed_color_table(&self) -> PyResult<Vec<(u8, u8, u8)>> {
         self.inner.indexed_color_table().map_err(map_error)
     }
 
     fn palette_mode(&self) -> Option<String> {
         self.inner.palette_mode().map(str::to_owned)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+    fn getpalettemode(&self) -> PyResult<String> {
+        self.inner
+            .palette_mode()
+            .map(str::to_owned)
+            .ok_or_else(|| PyValueError::new_err("image has no palette"))
     }
 
     fn has_attached_palette(&self) -> bool {
@@ -362,11 +448,22 @@ impl PyImage {
         self.inner.has_transparency_data()
     }
 
-    fn apply_transparency(&mut self, py: Python<'_>) -> PyResult<()> {
-        py.detach(|| self.inner.apply_transparency())
-            .map_err(map_error)
+    // TODO(pillow-rs#3ptb): verify transparency commits, palette metadata,
+    // errors, and route receipts at the active materialization boundary.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn apply_transparency(slf: Py<Self>, py: Python<'_>) -> PyResult<()> {
+        let route = route_from_context(None, py);
+        update_image_with_route(slf, py, route, |image, route| match route {
+            Some(route) => {
+                image.apply_transparency_with_execution_context(route.pinned_backend, route.context)
+            }
+            None => image.apply_transparency(),
+        })
     }
 
+    // TODO(pillow-rs#3ptb): verify palette edits, partial mutations on errors,
+    // and route receipts for public and callback-created calls.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     #[pyo3(signature = (data, rawmode="RGB"))]
     fn putpalette(
         slf: Py<Self>,
@@ -376,12 +473,21 @@ impl PyImage {
     ) -> PyResult<()> {
         let data = data.extract::<Vec<u8>>()?;
         let rawmode = rawmode.to_owned();
-        let mut image = slf.bind(py).borrow_mut();
-        let image = &mut image.inner;
-        py.detach(|| image.putpalette(&data, &rawmode))
-            .map_err(map_error)
+        let route = route_from_context(None, py);
+        update_image_with_route(slf, py, route, move |image, route| match route {
+            Some(route) => image.putpalette_with_execution_context(
+                &data,
+                &rawmode,
+                route.pinned_backend,
+                route.context,
+            ),
+            None => image.putpalette(&data, &rawmode),
+        })
     }
 
+    // TODO(pillow-rs#3ptb): verify single-entry alpha writes, truncation,
+    // errors, and active-route receipts after any source materialization.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn putpalettealpha(
         slf: Py<Self>,
         index: &Bound<'_, PyAny>,
@@ -390,23 +496,44 @@ impl PyImage {
     ) -> PyResult<()> {
         let index = index.extract::<i32>()?;
         let alpha = alpha.extract::<i32>()?;
-        let mut image = slf.bind(py).borrow_mut();
-        let image = &mut image.inner;
-        py.detach(|| image.putpalettealpha(index, alpha))
-            .map_err(map_error)
+        let route = route_from_context(None, py);
+        update_image_with_route(slf, py, route, move |image, route| match route {
+            Some(route) => image.putpalettealpha_with_execution_context(
+                index,
+                alpha,
+                route.pinned_backend,
+                route.context,
+            ),
+            None => image.putpalettealpha(index, alpha),
+        })
     }
 
+    // TODO(pillow-rs#3ptb): verify alpha-table prefix semantics, buffer faults,
+    // errors, and active-route receipts after any source materialization.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn putpalettealphas(slf: Py<Self>, values: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
         let values = palette_alpha_bytes(values)?;
-        let mut image = slf.bind(py).borrow_mut();
-        let image = &mut image.inner;
-        py.detach(|| image.putpalettealphas(&values))
-            .map_err(map_error)
+        let route = route_from_context(None, py);
+        update_image_with_route(slf, py, route, move |image, route| match route {
+            Some(route) => image.putpalettealphas_with_execution_context(
+                &values,
+                route.pinned_backend,
+                route.context,
+            ),
+            None => image.putpalettealphas(&values),
+        })
     }
 
-    fn commit_palette_alpha(&mut self, py: Python<'_>) -> PyResult<()> {
-        py.detach(|| self.inner.commit_palette_alpha())
-            .map_err(map_error)
+    // TODO(pillow-rs#3ptb): verify raw-palette alpha commit output and route
+    // receipts for pending decoder and callback-created images.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn commit_palette_alpha(slf: Py<Self>, py: Python<'_>) -> PyResult<()> {
+        let route = route_from_context(None, py);
+        update_image_with_route(slf, py, route, |image, route| match route {
+            Some(route) => image
+                .commit_palette_alpha_with_execution_context(route.pinned_backend, route.context),
+            None => image.commit_palette_alpha(),
+        })
     }
 
     fn get_child_images(&self) -> Vec<PyImage> {
@@ -433,18 +560,27 @@ impl PyImage {
     }
 
     /// Return getdata formatted as PIL expects.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (band=None, execution_context=None))]
     fn getdata_formatted(
         slf: Py<Self>,
         band: Option<&Bound<'_, PyAny>>,
+        execution_context: Option<pyo3::PyRef<'_, super::PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<Py<PyAny>> {
         // Extract a custom index object before borrowing the image: its
         // `__index__` method may re-enter and mutate this wrapper.
         let band = band.map(|value| value.extract::<i32>()).transpose()?;
-        let image = slf.bind(py).borrow();
-        let image = &image.inner;
+        let route = route_from_context(execution_context, py);
+        let execution_route = route.map(|route| (route.requested_backend, route.context));
+        let image = slf.bind(py).borrow().inner.clone();
+        let image = route_pending_image(image, route);
+        let image = &image;
         if let Some(band) = band {
-            if let Some(values) = image.getdata_band_view(band).map_err(map_error)? {
+            if let Some(values) = image
+                .getdata_band_view_with_execution_route(band, execution_route)
+                .map_err(map_error)?
+            {
                 // Copy owned P/L storage directly into the immutable Python
                 // snapshot, avoiding a Rust-side buffer and extra detach.
                 return Ok(PyBytes::new(py, values).into());
@@ -453,8 +589,10 @@ impl PyImage {
             if matches!(image, RsImage::Loaded(_) | RsImage::Paletted(_)) {
                 let output_len = image.getdata_band_len(band).map_err(map_error)?;
                 let bytes = PyBytes::new_with(py, output_len, |output| {
-                    py.detach(|| image.getdata_band_into(band, output))
-                        .map_err(map_error)
+                    py.detach(|| {
+                        image.getdata_band_into_with_execution_route(band, output, execution_route)
+                    })
+                    .map_err(map_error)
                 })?;
                 return Ok(bytes.into());
             }
@@ -463,8 +601,10 @@ impl PyImage {
                 .detach(|| image.getdata_band_len(band))
                 .map_err(map_error)?;
             let bytes = PyBytes::new_with(py, output_len, |output| {
-                py.detach(|| image.getdata_band_into(band, output))
-                    .map_err(map_error)
+                py.detach(|| {
+                    image.getdata_band_into_with_execution_route(band, output, execution_route)
+                })
+                .map_err(map_error)
             })?;
             return Ok(bytes.into());
         }
@@ -479,12 +619,14 @@ impl PyImage {
                 | pillow_rs::Mode::ImageI16B
                 | pillow_rs::Mode::ImageI16N
         ) {
-            let values = py.detach(|| image.getdata(None)).map_err(map_error)?;
+            let values = py
+                .detach(|| image.getdata_with_execution_route(None, execution_route))
+                .map_err(map_error)?;
             return Ok(PyBytes::new(py, &values).into());
         }
 
         let formatted = py
-            .detach(|| image.getdata_formatted(band))
+            .detach(|| image.getdata_formatted_with_execution_route(band, execution_route))
             .map_err(map_error)?;
         Python::attach(|py| match formatted {
             // A selected band is already a one-byte-per-pixel snapshot.
@@ -516,23 +658,27 @@ impl PyImage {
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (xy, execution_context=None))]
     fn getpixel_formatted(
         slf: Py<Self>,
         xy: &Bound<'_, PyAny>,
+        execution_context: Option<pyo3::PyRef<'_, super::PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<Py<PyAny>> {
         // Pillow loads before tuple(xy); conversion can execute user code and
         // therefore must happen after releasing the image borrow.
-        load_pyimage(&slf, py)?;
+        let route = route_from_context(execution_context, py);
+        load_pyimage(&slf, route, py)?;
         let coordinates = py
             .import("builtins")?
             .getattr("tuple")?
             .call1((xy,))?
             .cast_into::<PyTuple>()?;
-        if coordinates.len()? != 2 {
+        if coordinates.len() != 2 {
             return Err(PyValueError::new_err(format!(
                 "expected tuple of length 2, but got tuple of length {}",
-                coordinates.len()?
+                coordinates.len()
             )));
         }
         // Match Pillow's C-int range and error while allowing __index__ hooks
@@ -540,38 +686,82 @@ impl PyImage {
         let x = c_int_from_python(&coordinates.get_item(0)?)?;
         let y = c_int_from_python(&coordinates.get_item(1)?)?;
         let image = slf.bind(py).borrow().inner.clone();
-        getpixel_at(image, (x, y), py)
+        let execution_route = route.map(|route| (route.requested_backend, route.context));
+        getpixel_at(image, (x, y), execution_route, py)
     }
 
     fn getpixel(slf: Py<Self>, xy: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        Self::getpixel_formatted(slf, xy, py)
+        Self::getpixel_formatted(slf, xy, None, py)
     }
 
     /// Read through a stored PixelAccess view with Pillow's tuple parser.
-    fn pixel_access_getpixel(&self, xy: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (xy, execution_context=None))]
+    fn pixel_access_getpixel(
+        &self,
+        xy: &Bound<'_, PyAny>,
+        execution_context: Option<pyo3::PyRef<'_, super::PyExecutionContext>>,
+        py: Python<'_>,
+    ) -> PyResult<Py<PyAny>> {
         let coordinates = pixel_access_coordinates_from_python(xy)?;
-        getpixel_at(self.inner.clone(), coordinates, py)
+        let route = route_from_context(execution_context, py);
+        let execution_route = route.map(|route| (route.requested_backend, route.context));
+        getpixel_at(self.inner.clone(), coordinates, execution_route, py)
     }
 
     /// Write through a stored PixelAccess view without public palette lookup.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (xy, value, execution_context=None))]
     fn pixel_access_putpixel(
         slf: Py<Self>,
         xy: &Bound<'_, PyAny>,
         value: &Bound<'_, PyAny>,
+        execution_context: Option<pyo3::PyRef<'_, super::PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<()> {
         let coordinates = pixel_access_coordinates_from_python(xy)?;
-        putpixel_imaging_core_at(slf, coordinates, value, py)
+        let route = route_from_context(execution_context, py);
+        putpixel_imaging_core_at(slf, coordinates, value, route, py)
     }
 
     /// Validate a deletion key; Pillow's PixelAccess deletion is otherwise a no-op.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn pixel_access_delete(&self, xy: &Bound<'_, PyAny>) -> PyResult<()> {
         let coordinates = pixel_access_coordinates_from_python(xy)?;
         image_coordinates_in_bounds(&self.inner, coordinates)?;
         Ok(())
     }
 
+    /// Creates a mutable PixelAccess view with this image's active route.
+    // TODO(pillow-rs#3ptb): verify direct factory result, coordinate and pixel
+    // faults, mutation visibility, and selected/fallback receipts.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn pixel_access(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let route = super::execution::route_from_context(None, py);
+        let execution_context = match route {
+            Some(route) => super::execution::PyExecutionContext {
+                inner: route.context,
+                requested_backend: route.requested_backend,
+                pinned_backend: route.pinned_backend,
+            },
+            None => {
+                let image = slf.bind(py).borrow().inner.clone();
+                let (requested_backend, inner) =
+                    image.capture_cpu_execution_route().map_err(map_error)?;
+                super::execution::PyExecutionContext {
+                    inner,
+                    requested_backend,
+                    pinned_backend: image.backend(),
+                }
+            }
+        };
+        let execution_context = Py::new(py, execution_context)?;
+        let pixel_access = py.import("pillow_rs.image")?.getattr("PixelAccess")?;
+        Ok(pixel_access.call1((slf, execution_context))?.unbind())
+    }
+
     /// Write one pixel through the mode-native ImagingCore callback contract.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn putpixel(
         slf: Py<Self>,
         xy: &Bound<'_, PyAny>,
@@ -581,35 +771,63 @@ impl PyImage {
         putpixel_imaging_core(slf, xy, value, py)
     }
 
-    #[pyo3(signature = (data, scale=1.0, offset=0.0))]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (data, scale=1.0, offset=0.0, execution_context=None))]
     fn putdata_formatted(
         slf: &Bound<'_, Self>,
         data: &Bound<'_, PyAny>,
         scale: f64,
         offset: f64,
+        execution_context: Option<pyo3::PyRef<'_, super::PyExecutionContext>>,
+        py: Python<'_>,
     ) -> PyResult<()> {
-        putdata::putdata_formatted(slf, data, scale, offset)
+        let route = route_from_context(execution_context, py);
+        let execution_route = route.map(|route| (route.requested_backend, route.context));
+        let result = putdata::putdata_formatted(slf, data, scale, offset, execution_route);
+        if result.is_ok()
+            && let Some(backend) = route.and_then(|route| route.pinned_backend)
+        {
+            let mut image = slf.try_borrow_mut()?;
+            image.inner = image.inner.clone().use_backend(backend);
+        }
+        result
     }
 
-    #[pyo3(signature = (data, scale=1.0, offset=0.0))]
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (data, scale=1.0, offset=0.0, execution_context=None))]
     fn putdata(
         slf: &Bound<'_, Self>,
         data: &Bound<'_, PyAny>,
         scale: f64,
         offset: f64,
+        execution_context: Option<pyo3::PyRef<'_, super::PyExecutionContext>>,
+        py: Python<'_>,
     ) -> PyResult<()> {
-        putdata::putdata_formatted(slf, data, scale, offset)
+        let route = route_from_context(execution_context, py);
+        let execution_route = route.map(|route| (route.requested_backend, route.context));
+        let result = putdata::putdata_formatted(slf, data, scale, offset, execution_route);
+        if result.is_ok()
+            && let Some(backend) = route.and_then(|route| route.pinned_backend)
+        {
+            let mut image = slf.try_borrow_mut()?;
+            image.inner = image.inner.clone().use_backend(backend);
+        }
+        result
     }
 
     /// Mode-aware putpixel: expands values according to PIL's per-mode semantics.
-    #[pyo3(signature = (xy, value, info=None))]
+    #[pyo3(signature = (xy, value, info=None, execution_context=None))]
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn putpixel_mode(
         slf: Py<Self>,
         xy: &Bound<'_, PyAny>,
         value: &Bound<'_, PyAny>,
         info: Option<&Bound<'_, PyDict>>,
+        execution_context: Option<pyo3::PyRef<'_, super::PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<()> {
+        let route = route_from_context(execution_context, py);
         let (mode, palette_mode) = {
             let image = slf.bind(py).borrow();
             (
@@ -656,17 +874,12 @@ impl PyImage {
             && prepared.is_none()
             && let Some([r, g, b]) = exact_rgb_tuple_from_python(value)
         {
-            return slf
-                .bind(py)
-                .borrow_mut()
-                .inner
-                .putpixel(x, y, r, g, b, 255)
-                .map_err(map_error);
+            return putpixel_exact_rgb_tuple(slf.bind(py), x, y, [r, g, b], route);
         }
         let value = match prepared {
             Some(pillow_rs::PutPixelValue::Components(mut values)) if deferred_alpha.is_some() => {
                 if let Some(alpha) = deferred_alpha {
-                    values[1] = chops_offset_from_python(&alpha)? as i64;
+                    values[1] = i64::from(c_int_from_python(&alpha)?);
                 }
                 pillow_rs::PutPixelValue::Components(values)
             }
@@ -687,14 +900,31 @@ impl PyImage {
                     // send that normalized pixel directly instead of
                     // resolving the same mode again in putpixel_value.
                     let bytes = value.to_le_bytes();
-                    image
-                        .inner
-                        .putpixel(x, y, bytes[0], bytes[1], bytes[2], bytes[3])
+                    let result = match route {
+                        Some(route) => image.inner.putpixel_with_execution_context(
+                            x,
+                            y,
+                            bytes[0],
+                            bytes[1],
+                            bytes[2],
+                            bytes[3],
+                            route.context,
+                        ),
+                        None => image
+                            .inner
+                            .putpixel(x, y, bytes[0], bytes[1], bytes[2], bytes[3]),
+                    };
+                    if result.is_ok()
+                        && let Some(backend) = route.and_then(|route| route.pinned_backend)
+                    {
+                        image.inner = image.inner.clone().use_backend(backend);
+                    }
+                    result
                 }
-                value => image.inner.putpixel_value(x, y, value),
+                value => putpixel_value_with_route(&mut image.inner, x, y, value, route),
             }
         } else {
-            image.inner.putpixel_value(x, y, value)
+            putpixel_value_with_route(&mut image.inner, x, y, value, route)
         };
         result.map_err(map_error)
     }

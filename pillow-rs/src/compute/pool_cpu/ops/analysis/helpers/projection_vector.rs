@@ -12,7 +12,7 @@ pub(crate) struct VectorProjection {
 }
 
 /// Preserve the archived grouped CMYK SIMD scan and its scalar edge handling.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn cmyk_projection(image: &RgbaImage) -> VectorProjection {
     let row_bytes = image.width() as usize * 4;
     let block_bytes = if row_bytes >= 64 {
@@ -49,7 +49,7 @@ pub(crate) fn cmyk_projection(image: &RgbaImage) -> VectorProjection {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn rgb_block_has_nonzero(block: &[u8], zero: u8x16) -> (bool, u64) {
     let mut vectors = block.chunks_exact(16);
     let first_lanes: [u8; 16] = vectors
@@ -74,7 +74,9 @@ fn rgb_block_has_nonzero(block: &[u8], zero: u8x16) -> (bool, u64) {
 }
 
 /// Preserve the archived RGB 48-byte block scan and scalar remainder.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// TODO(pillow-rs#3ptb): verify RGB GetProjection selected receipts after
+// counting only scalar tail pixels the vector strategy actually scans.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn rgb_projection(image: &RgbImage) -> VectorProjection {
     let (width, height) = (image.width() as usize, image.height() as usize);
     let mut horizontal = vec![0; width];
@@ -99,6 +101,7 @@ pub(crate) fn rgb_projection(image: &RgbImage) -> VectorProjection {
     {
         let mut blocks = row.chunks_exact(48);
         let mut row_nonzero = false;
+        let mut scalar_tail_scanned = 0u64;
         if all_columns_covered {
             row_nonzero = blocks.clone().any(|block| {
                 let (nonzero, scanned) = rgb_block_has_nonzero(block, zero);
@@ -106,10 +109,13 @@ pub(crate) fn rgb_projection(image: &RgbImage) -> VectorProjection {
                 nonzero
             });
             if !row_nonzero {
-                row_nonzero = blocks
-                    .remainder()
-                    .chunks_exact(3)
-                    .any(|pixel| pixel.iter().any(|sample| *sample != 0));
+                for pixel in blocks.remainder().chunks_exact(3) {
+                    scalar_tail_scanned = scalar_tail_scanned.saturating_add(1);
+                    if pixel.iter().any(|sample| *sample != 0) {
+                        row_nonzero = true;
+                        break;
+                    }
+                }
             }
         } else {
             for (block_index, block) in blocks.by_ref().enumerate() {
@@ -138,6 +144,7 @@ pub(crate) fn rgb_projection(image: &RgbImage) -> VectorProjection {
                 let tail = blocks.remainder();
                 let tail_start = row.len() - tail.len();
                 for (tail_index, pixel) in tail.chunks_exact(3).enumerate() {
+                    scalar_tail_scanned = scalar_tail_scanned.saturating_add(1);
                     if pixel.iter().any(|sample| *sample != 0) {
                         let column = &mut horizontal[tail_start / 3 + tail_index];
                         if *column == 0 {
@@ -153,8 +160,8 @@ pub(crate) fn rgb_projection(image: &RgbImage) -> VectorProjection {
                 }
             }
         }
-        let remainder = row.chunks_exact(48).remainder();
-        scalar_tail = scalar_tail.saturating_add((remainder.len() / 3) as u64);
+        // The vertical-only shortcut can stop before reaching the tail.
+        scalar_tail = scalar_tail.saturating_add(scalar_tail_scanned);
         vertical[y] = u32::from(row_nonzero);
     }
 

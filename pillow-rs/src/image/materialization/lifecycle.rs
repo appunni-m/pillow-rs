@@ -162,6 +162,19 @@ impl Image {
         Ok(())
     }
 
+    /// Forces a lazy image through the architecture captured by its caller.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn load_with_execution_context(
+        &mut self,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        let mut routed = self.clone().with_execution_context(context);
+        routed.load()?;
+        *self = routed;
+        Ok(())
+    }
+
     /// Returns whether this handle can reuse successfully materialized pixels.
     pub fn is_materialized(&self) -> bool {
         match self {
@@ -200,6 +213,7 @@ impl Image {
                     palette,
                     palette_alpha,
                     ops.preserves_palette(),
+                    ops.execution_context(),
                 )?;
             }
             Image::Loaded(_) | Image::Paletted(_) => {}

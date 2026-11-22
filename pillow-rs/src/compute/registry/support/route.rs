@@ -38,7 +38,7 @@ pub enum OperationRouteStage {
 ///
 /// Multiple paths are listed in dispatch order. The wrapper evaluates the
 /// declared guards; the operation-level support view exposes those predicates,
-/// fast paths, and child operations.
+/// fast paths, child operations, and any request-specific child mode strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OperationRoutePath {
     /// Return a same-mode independent image without extracting a channel.
@@ -65,6 +65,9 @@ pub enum OperationRoutePath {
         operation: OperationId,
         /// Every wrapper predicate that must pass before this path is selected.
         guards: &'static [OperationRouteGuard],
+        /// Exact mode strategy to assess instead of the child's ordinary
+        /// operation support.
+        support: Option<ModeSupport>,
     },
     /// Queue one child operation for every logical band.
     PipelineChildrenPerBand(OperationId),
@@ -81,8 +84,14 @@ pub enum OperationRouteGuard {
     NonEmptyInput,
     /// A Draw bitmap request matches one declared raster/context/mask triple.
     DrawBitmapRouteIn(&'static [(Mode, Mode, Mode)]),
+    /// A zero-stroke embedded-color Text request composes the declared Paste child.
+    DrawEmbeddedColorTextPaste,
     /// The raster's logical pixel count must not exceed this bound.
     PixelCountAtMost(u64),
+    /// Resize selected a non-identity pre-reduction from its reducing-gap plan.
+    ReducingGapPreReductionSelected,
+    /// Resize selected its fused straight-alpha reducing-gap implementation.
+    ReducingGapFusedResizeSelected,
     /// The raster stores exactly one byte for each logical pixel.
     ByteStorageLengthMatchesPixelCount,
 }
@@ -100,14 +109,23 @@ pub struct OperationRouteInputs {
     pub loaded_image: Option<bool>,
     /// Whether the stored byte length matches the logical pixel count.
     pub byte_storage_length_matches_pixel_count: Option<bool>,
+    /// Whether Resize selected its reducing-gap pre-reduction child.
+    pub reducing_gap_pre_reduction_selected: Option<bool>,
+    /// Whether Resize selected its fused straight-alpha reducing-gap path.
+    pub reducing_gap_fused_resize_selected: Option<bool>,
     /// Draw context mode, when the wrapper request has one.
     pub draw_context_mode: Option<Mode>,
     /// Draw bitmap mask mode, when the wrapper request has one.
     pub bitmap_mask_mode: Option<Mode>,
+    /// Whether the Draw Text request carries an embedded-color glyph mask.
+    pub draw_embedded_color: Option<bool>,
+    /// Whether embedded-color Text avoids the separate stroke composition pass.
+    pub draw_text_stroke_width_zero: Option<bool>,
 }
 
 impl OperationRouteGuard {
     /// Evaluates this wrapper predicate against facts resolved by its caller.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[must_use]
     pub fn matches(self, input_mode: Mode, inputs: OperationRouteInputs) -> bool {
         match self {
@@ -123,28 +141,61 @@ impl OperationRouteGuard {
                 .draw_context_mode
                 .zip(inputs.bitmap_mask_mode)
                 .is_some_and(|(context, mask)| routes.contains(&(input_mode, context, mask))),
+            Self::DrawEmbeddedColorTextPaste => {
+                let context_matches = inputs.draw_context_mode.is_some_and(|context| {
+                    context == input_mode
+                        || (input_mode == Mode::ImageRgb8 && context == Mode::ImageRgba8)
+                });
+                context_matches
+                    && inputs.draw_embedded_color == Some(true)
+                    && inputs.draw_text_stroke_width_zero == Some(true)
+            }
             Self::PixelCountAtMost(maximum) => {
                 u64::from(inputs.width) * u64::from(inputs.height) <= maximum
+            }
+            Self::ReducingGapPreReductionSelected => {
+                inputs.reducing_gap_pre_reduction_selected.unwrap_or(false)
+            }
+            Self::ReducingGapFusedResizeSelected => {
+                inputs.reducing_gap_fused_resize_selected.unwrap_or(false)
             }
         }
     }
 }
 
 impl OperationRoutePath {
+    /// Returns the selected child and any request-specific support contract.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    #[must_use]
+    pub fn conditional_pipeline_child_contract(
+        self,
+        input_mode: Mode,
+        inputs: OperationRouteInputs,
+    ) -> Option<(OperationId, Option<ModeSupport>)> {
+        let Self::ConditionalPipelineChild {
+            operation,
+            guards,
+            support,
+        } = self
+        else {
+            return None;
+        };
+        guards
+            .iter()
+            .all(|guard| guard.matches(input_mode, inputs))
+            .then_some((operation, support))
+    }
+
     /// Returns the selected child when this conditional pipeline path matches.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[must_use]
     pub fn conditional_pipeline_child(
         self,
         input_mode: Mode,
         inputs: OperationRouteInputs,
     ) -> Option<OperationId> {
-        let Self::ConditionalPipelineChild { operation, guards } = self else {
-            return None;
-        };
-        guards
-            .iter()
-            .all(|guard| guard.matches(input_mode, inputs))
-            .then_some(operation)
+        self.conditional_pipeline_child_contract(input_mode, inputs)
+            .map(|(operation, _)| operation)
     }
 }
 

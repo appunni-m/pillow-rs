@@ -610,7 +610,9 @@ def validate_manifest(manifest: Any, *, manifest_path: Path | None = None) -> di
         for relative in paths:
             if not relative.startswith(f"inputs/{lane}/") or not relative.endswith(".json"):
                 raise _error(f"manifest.input_index.{lane}", "indexed path must stay beneath its lane root")
-            if manifest_path is not None and not (manifest_path.parent / relative).is_file():
+            if manifest_path is not None and not fixture_exists(
+                manifest_path.parent / relative
+            ):
                 raise _error(f"manifest.input_index.{lane}", f"missing indexed file {relative}")
     components = _list(manifest["coverage_components"], "manifest.coverage_components")
     component_ids: set[str] = set()

@@ -121,6 +121,56 @@ REDUCE_MATRIX_FACTORS = {
     "factor-2x3": (2, 3),
 }
 
+# Pillow 13 rejects these I;16 filtered Resize calls when reducing_gap is
+# requested, while the Rust CPU strategy supports native u16 samples. Freeze
+# the observed Rust outputs as target-only contracts; the source-side error is
+# not parity behavior.
+# These values came from the failed-only CPU receipt
+# migration-parity-6d5894a4590d45f9b572ee545c5ed3b8. Keep their input case IDs
+# and bytes in resize_mode_parity_cases.
+_RESIZE_I16_REDUCING_GAP_TARGET_OUTPUTS: dict[tuple[str, int, str], str] = {
+    ("I;16", 1, "fractional-box-gap"): "oYPzgNGKLHdEeKF8dXVGcgSEEIDjdxVjPopQiQty",
+    ("I;16", 1, "gap-two"): "vINughONxnaReBV96XXmdCCDln4ket9h/ochieJx",
+    ("I;16", 2, "fractional-box-gap"): "NoCRgb+GSXjEemp9t3Ybdw6C8X6edk9pbIU1h8B0",
+    ("I;16", 2, "gap-two"): "0oC5ghWJH3gjehB+9HZfeMCBaX5qeJNoUoOOhml0",
+    ("I;16", 3, "fractional-box-gap"): "oYH1gZaJ+nZ5eUV94HXdc+mCM39Cd49mPojLiJNz",
+    ("I;16", 3, "gap-two"): "4IGWg/GLynbPech9CXbMdU+C3n1aeZNlvYVziHFz",
+    ("I;16", 4, "fractional-box-gap"): "2YHrhKiLxnGAhYF8a3aXdkWCWXnTf8pp8YglfV5u",
+    ("I;16", 4, "gap-two"): "eX4Li+yNyXFkgw5/RHZ7dXl+EHTSfXptCoyAgqx4",
+    ("I;16", 5, "fractional-box-gap"): "yH1cg7aHenXPfUmA2HkdcomDkIE+d95pV43siYh1",
+    ("I;16", 5, "gap-two"): "Un71hWiLsHVKfl6BK3mbc8iCt362eRRpwYlqidx0",
+    ("I;16B", 1, "fractional-box-gap"): "UFFbefqg22vbkdibx3Y3pA6Ie5vji2VvooA5m8mZ",
+    ("I;16B", 1, "gap-two"): "slE6esekB2ablFOWA3bfoPeKZJxzhcdzB4AokyyV",
+    ("I;16B", 2, "fractional-box-gap"): "6Fs5dFKclXe0lPyVvn0Mnh2Gt5hFhl5r7Yo5lKyU",
+    ("I;16B", 2, "gap-two"): "RF27dFadEnOLlW6QvXyUnBWHr5nHf8duM4nHju6Q",
+    ("I;16B", 3, "fractional-box-gap"): "01TcddCfMnFwk8OZ9XmMovmED5shiqVr8ITWmuiX",
+    ("I;16B", 3, "gap-two"): "V1bidrujqmtklqCUf3h1n1uHcJvngjFwyYNIk1GT",
+    ("I;16B", 4, "fractional-box-gap"): "vZoDwAiBs3XEpnZBc39BpYBDCIYxZLrCqYmTzcBG",
+    ("I;16B", 4, "gap-two"): "v1u+ZQK7MFTHsaGPoWkNl1J+h5mzf7aDp2nTvb+T",
+    ("I;16B", 5, "fractional-box-gap"): "UlIRa++hTXSbm3So6YMcqzV9xKG1jJtnS5LtqRGa",
+    ("I;16B", 5, "gap-two"): "cVjhbJKoXmqXn9egxH/HpRF/taDJgSNtQY8LoiuV",
+    ("I;16L", 1, "fractional-box-gap"): "24D2hMaLy4iqhaqJh4lZgFSD0I1re1WGYYAJfKaA",
+    ("I;16L", 1, "gap-two"): "uIGZhW6L/4dGhJqJ3IiGgN6Dbo3XduyFV4PwfCmA",
+    ("I;16L", 2, "fractional-box-gap"): "VoIUhsOKJogeiGyHcogJgryDlolGe2yF+4AgfRSB",
+    ("I;16L", 2, "gap-two"): "bIN7hoqJIYdUhoSGJ4j/gk2ExYlFeNaEsIIvfr2A",
+    ("I;16L", 3, "fractional-box-gap"): "f4G8hS6LPIj5hr+IpoiogdqDe4u8e/OFGYA1fKaA",
+    ("I;16L", 3, "gap-two"): "soJxhoeKTodxhUeIHojpgTKEYYt0d5KF0YJ7fTiA",
+    ("I;16L", 4, "fractional-box-gap"): "VHVyitqFVoa3i7OQhIdHgIR8uYieeyKFNoLcfc95",
+    ("I;16L", 4, "gap-two"): "64IEjRWMO4N6hbeJNIL7gnaGT4hjfB6IB38Td9x9",
+    ("I;16L", 5, "fractional-box-gap"): "b4DHhkuNi4eEiS6KeIj2gUiEFImJfPSFM330eBB/",
+    ("I;16L", 5, "gap-two"): "Y4K2h5eLQYYAh0aJn4figYGE64hkeaaFTH+YelB+",
+    ("I;16N", 1, "fractional-box-gap"): "a1qMhG6koT+T5GlrZziEmMKig0Nfj3pKbKqVxYzi",
+    ("I;16N", 1, "gap-two"): "cmeN1mpGoquTFWhWaJ2D177ShQZgvXq7cPyPKYmV",
+    ("I;16N", 2, "fractional-box-gap"): "ZpiQDW8roauUMGuFdzd9b7GfimVfEH1ycQuOt4/S",
+    ("I;16N", 2, "gap-two"): "bvWQVWsko9uTWGt5d/x+P64qilhgV3yDc4CK+I1y",
+    ("I;16N", 3, "fractional-box-gap"): "aPqQu2qVo/aTzGqLb+F/nrrih5BdtXxmbpmRjo/z",
+    ("I;16N", 3, "gap-two"): "cO+R1WWypiGS42n3cJ1/lrfuiDFfGXxvcnyLk4zW",
+    ("I;16N", 4, "fractional-box-gap"): "YbxHg2UOXziwcIHSXgF8QWXYbEaFQ3UxhvhoRFR5",
+    ("I;16N", 4, "gap-two"): "ffuo/2BgsjyL7HJTfNl3z7QEi8xe/5Lxbvx+vpK0",
+    ("I;16N", 5, "fractional-box-gap"): "YNihXWg/pOyUH3Q1gM54abOgjIhadYlgaPGIVZaA",
+    ("I;16N", 5, "gap-two"): "bvWjrl5SqbSQs3WDgG95oLJ0iqBeP4YsbCKDfZPd",
+}
+
 _MODE_MATRIX_CHANNELS = {
     **CORE_ONLY_CHANNELS,
     "La": 2,
@@ -1010,6 +1060,7 @@ def _core_only_sample_kind(mode: str) -> str:
     raise ValueError(f"missing CoreOnly sample kind for {mode}")
 
 
+# VERIFY: source=reviewed@2026-11-14; parity=migration-parity-98309ff3437a4036ba57464b540e3700; benchmark=n/a
 def _core_only_getbbox_value(
     mode: str,
     sample_kind: str,
@@ -1017,13 +1068,31 @@ def _core_only_getbbox_value(
     width: int,
     height: int,
 ) -> list[int] | None:
+    """Record GetBBox's default alpha-only semantics for native alpha modes."""
     channels = _MODE_MATRIX_CHANNELS[mode]
     sample_formats = {"u16n": "=H", "f32n": "=f"}
     sample_format = sample_formats[sample_kind]
     pixel_format = f"{sample_format[0]}{channels}{sample_format[1]}"
+    alpha_channel = {
+        "ImageLumaA16": 1,
+        "ImageRgba16": 3,
+        "ImageRgba32F": 3,
+    }.get(mode)
+    item_size = struct.calcsize(sample_format)
     bounds = [width, height, -1, -1]
     for index, pixel in enumerate(struct.iter_unpack(pixel_format, source)):
-        if any(sample != 0 for sample in pixel):
+        if sample_kind == "f32n":
+            lanes = (alpha_channel,) if alpha_channel is not None else range(channels)
+            pixel_nonzero = any(
+                struct.unpack_from("=I", source, (index * channels + lane) * item_size)[0]
+                != 0
+                for lane in lanes
+            )
+        elif alpha_channel is not None:
+            pixel_nonzero = pixel[alpha_channel] != 0
+        else:
+            pixel_nonzero = any(sample != 0 for sample in pixel)
+        if pixel_nonzero:
             x = index % width
             y = index // width
             bounds[0] = min(bounds[0], x)
@@ -1620,7 +1689,7 @@ def resize_core_only_matrix_cases(
     assets_root: Path,
     selected_mode_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Record native nearest-Resize outputs for every internal raster mode."""
+    """Record native nearest-Resize outputs for internal high-depth modes."""
 
     cases: list[dict[str, Any]] = []
     for mode, mode_id, sample_kind, _samples in CHOPS_DUPLICATE_CORE_ONLY_MODES:
@@ -1916,7 +1985,7 @@ def putdata_core_only_matrix_cases(
                             {"step_id": "call", "value": None},
                             {
                                 "step_id": "observe-receiver",
-                                "value": _native_image_result_record(mode, bytes(output), width, height),
+                                "value": _native_bytes_result_record(bytes(output)),
                             }
                         ]
                     },
@@ -2018,9 +2087,7 @@ def putdata_core_only_full_frame_cases(
                                 {"step_id": "call", "value": None},
                                 {
                                     "step_id": "observe-receiver",
-                                    "value": _native_image_result_record(
-                                        mode, output, width, height
-                                    ),
+                                    "value": _native_bytes_result_record(output),
                                 }
                             ]
                         },
@@ -2410,6 +2477,44 @@ def _native_image_result_record(
         "info": {} if info is _DEFAULT_TARGET_IMAGE_INFO else info,
         "palette": None,
         "bytes": base64.b64encode(raw).decode("ascii"),
+    }
+
+
+# VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
+def _native_bytes_result_record(raw: bytes) -> dict[str, Any]:
+    """Encode the public byte value returned by Image.tobytes()."""
+
+    return {
+        "kind": "bytes",
+        "encoding": "base64",
+        "data": base64.b64encode(raw).decode("ascii"),
+    }
+
+
+# VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-54c98805e1054be395b820ac3ca85406; benchmark=n/a
+def resize_i16_reducing_gap_target_expectation(
+    mode: str,
+    resample: int,
+    variant: str,
+) -> dict[str, Any] | None:
+    """Return one frozen output for an I;16 reducing-gap extension route."""
+    encoded = _RESIZE_I16_REDUCING_GAP_TARGET_OUTPUTS.get((mode, resample, variant))
+    if encoded is None:
+        return None
+    raw = base64.b64decode(encoded, validate=True)
+    if len(raw) != 30:
+        raise ValueError("I;16 Resize snapshots must contain a 5 × 3 u16 output")
+    return {
+        "observations": [
+            {
+                "step_id": "call",
+                "value": _native_image_result_record(mode, raw, 5, 3),
+            },
+            {
+                "step_id": "materialize",
+                "value": _native_bytes_result_record(raw),
+            },
+        ]
     }
 
 

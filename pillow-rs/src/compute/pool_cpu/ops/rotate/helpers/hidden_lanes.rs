@@ -16,6 +16,7 @@ use super::geometry::{discrete_fast_angle, identity_contract, rotate_geometry};
 /// callback repeats the first band into physical bytes 1 and 2; LA converts
 /// through premultiplied `La` and back, so the same rule applies to the returned
 /// luma. Filtered three-band callbacks leave byte 3 at the output fill value.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn finish(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -91,6 +92,7 @@ fn finish_discrete(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn finish_nearest(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -249,6 +251,7 @@ fn validate_selection(selection: &StrategySelection, mode: Mode) -> Result<(), P
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn finish_filtered(
     mode: Mode,
     output: &mut DynamicImage,
@@ -318,6 +321,7 @@ fn source_lane_bytes(
     Ok(values)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn hidden_fill(mode: Mode, request: RotateRequest) -> (u8, u8, u8, u8) {
     let fill = request.fill.unwrap_or((0, 0, 0, 0));
     match mode.hidden_pixel_lane_count() {

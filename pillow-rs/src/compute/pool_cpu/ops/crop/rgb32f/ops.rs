@@ -12,6 +12,7 @@ use crate::raster::{DynamicImage, Mode};
 use super::super::helpers::crop::CropRegion;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Crop,
     Mode::ImageRgb32F,

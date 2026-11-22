@@ -1,3 +1,4 @@
+use crate::compute::registry::support::OperationId;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
@@ -141,7 +142,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError::ValueError`] for invalid dimensions or unknown filters.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
     pub fn resize(
         &self,
         size: (i64, i64),
@@ -170,11 +171,11 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Returns [`PilError`] for invalid dimensions, filter, gap, or source bounds.
+    /// Returns [`PilError`] for negative dimensions, filter, gap, or source bounds.
     // TODO(pillow-rs#3ptb): parity-check zero/negative-size factor and
-    // reducer-first fault order, typed I;16 reducing-gap output, safe-box and
+    // reducer-first fault order, safe-box and
     // final-bound faults, input extraction, lazy decode, mode, and identity.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn resize_with_options(
         &self,
         size: (i64, i64),
@@ -219,7 +220,7 @@ impl Image {
                 (source_w, source_h),
             )?;
         }
-        let (w, h) = positive_dimensions(size, "height and width must be > 0")?;
+        let (w, h) = nonnegative_dimensions(size, "height and width must be >= 0")?;
         if let Some(identity_resize) =
             self.identity_boxed_nearest_resize(filter, (w, h), (source_w, source_h), mode, bounds)?
         {
@@ -230,13 +231,24 @@ impl Image {
         if let Some(gap) = reducing_gap
             && !matches!(filter, ResampleFilter::Nearest)
         {
-            if matches!(mode, Mode::ImageLumaA8 | Mode::ImageRgba8) {
-                reducing_gap_for_kernel =
-                    reducing_gap::prepare(bounds, gap, filter, (w, h), (source_w, source_h))?
-                        .map(|_| gap);
-            } else {
-                (source, bounds) =
-                    apply_reducing_gap(source, bounds, gap, filter, (w, h), (source_w, source_h))?;
+            if let Some(plan) =
+                reducing_gap::prepare(bounds, gap, filter, (w, h), (source_w, source_h))?
+            {
+                match crate::compute::pool_cpu::ops::resize::ops::select_reducing_gap_child(
+                    mode, true, true,
+                ) {
+                    Some((OperationId::ResizeBoxed, Some(_))) => {
+                        reducing_gap_for_kernel = Some(gap);
+                    }
+                    Some((OperationId::Reduce, _)) => {
+                        (source, bounds) = apply_reducing_gap(source, plan)?;
+                    }
+                    _ => {
+                        return Err(PilError::InternalError(
+                            "Resize reducing-gap plan has no declared child".into(),
+                        ));
+                    }
+                }
             }
         }
         let source_size = source.size()?;
@@ -266,7 +278,7 @@ impl Image {
     /// public `Image.reduce` method before the core performs the final resize.
     /// Invalid or inapplicable plans return `None`; the ordinary resize path
     /// remains responsible for reporting the corresponding public error.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn resize_reducing_gap_plan(
         &self,
@@ -433,12 +445,45 @@ impl Image {
     ///
     /// Returns [`PilError`] for an invalid filter, reduction gap, or source
     /// image that cannot be resized.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn thumbnail_with_plan(
         &mut self,
         plan: ThumbnailPlan,
         filter: Option<ResampleInput>,
         reducing_gap: Option<f64>,
+    ) -> Result<(), PilError> {
+        self.thumbnail_with_plan_and_route(plan, filter, reducing_gap, None)
+    }
+
+    /// Applies a prepared thumbnail under the caller's backend and architecture.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn thumbnail_with_plan_and_execution_route(
+        &mut self,
+        plan: ThumbnailPlan,
+        filter: Option<ResampleInput>,
+        reducing_gap: Option<f64>,
+        pinned_backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.thumbnail_with_plan_and_route(
+            plan,
+            filter,
+            reducing_gap,
+            Some((pinned_backend, context)),
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn thumbnail_with_plan_and_route(
+        &mut self,
+        plan: ThumbnailPlan,
+        filter: Option<ResampleInput>,
+        reducing_gap: Option<f64>,
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
     ) -> Result<(), PilError> {
         let deferable_putpixel_prefix = self.has_deferable_rgb_putpixel_prefix();
         let source_size = self.size()?;
@@ -458,6 +503,7 @@ impl Image {
             // Pillow's resize reaches reducing-gap division before the native
             // resize rejects a zero target dimension, except in modes whose
             // resize strategy forces nearest-neighbor sampling.
+            self.apply_thumbnail_execution_route(route);
             let mode = self.materialized_shared()?.mode();
             let effective_filter =
                 crate::compute::pool_cpu::ops::resize::ops::effective_filter(mode, filter);
@@ -470,6 +516,7 @@ impl Image {
             // Pillow's aspect-preserving size can be positive even when the
             // source has a zero dimension. Its subsequent Image.resize call
             // then rejects the zero-sized source before any pixels are produced.
+            self.apply_thumbnail_execution_route(route);
             self.materialized_shared()?;
             return Err(PilError::ValueError("height and width must be > 0".into()));
         }
@@ -481,13 +528,34 @@ impl Image {
                 reducing_gap,
             );
         if !can_defer {
+            self.apply_thumbnail_execution_route(route);
             self.materialized_shared()?;
         }
         let mode = match self.known_mode_identity() {
             Some(mode) => mode,
-            None => self.materialized_shared()?.mode(),
+            None => {
+                self.apply_thumbnail_execution_route(route);
+                self.materialized_shared()?.mode()
+            }
         };
-        self.thumbnail_with_filter(dimensions, &mut filter, mode, reducing_gap)
+        self.thumbnail_with_filter(dimensions, &mut filter, mode, reducing_gap)?;
+        self.apply_thumbnail_execution_route(route);
+        Ok(())
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn apply_thumbnail_execution_route(
+        &mut self,
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
+    ) {
+        if let Some((pinned_backend, context)) = route {
+            *self = self
+                .clone()
+                .with_backend_and_execution_context(pinned_backend, context);
+        }
     }
 
     // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
@@ -672,9 +740,9 @@ fn validate_resize_box(
     crate::compute::pool_cpu::ops::resize::helpers::boxed_crop::validate_bounds(bounds, size)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-fn positive_dimensions(size: (i64, i64), message: &str) -> Result<(u32, u32), PilError> {
-    if size.0 <= 0 || size.1 <= 0 {
+// VERIFY: source=reviewed@2026-11-14; parity=migration-parity-429006958d5e400a9a88ba5f500bc888; benchmark=pending
+fn nonnegative_dimensions(size: (i64, i64), message: &str) -> Result<(u32, u32), PilError> {
+    if size.0 < 0 || size.1 < 0 {
         return Err(PilError::ValueError(message.into()));
     }
     let width = u32::try_from(size.0)

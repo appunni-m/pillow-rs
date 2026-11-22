@@ -126,7 +126,7 @@ operation_support!(OFFSET_SUPPORT, ChopsOffset, NO_INPUTS);
 operation_support!(DUPLICATE_SUPPORT, ChopsDuplicate, NO_INPUTS);
 operation_support!(INVERT_SUPPORT, ChopsInvert, NO_INPUTS);
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn support_for_mode(operation: OperationId, mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::support(operation),
@@ -157,12 +157,12 @@ fn support_for_mode(operation: OperationId, mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn mode_support(mode: Mode, operation: OperationId) -> ModeSupport {
     mode_support_with_architectures(mode, operation, &[])
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn mode_support_with_architectures(
     mode: Mode,
     operation: OperationId,
@@ -266,7 +266,7 @@ pub(super) fn mode_support_with_architectures(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn binary_inputs_for(operation: OperationId, mode: Mode) -> Option<&'static [InputContract]> {
     if !is_byte_binary(operation) {
         return None;
@@ -286,7 +286,7 @@ fn binary_inputs_for(operation: OperationId, mode: Mode) -> Option<&'static [Inp
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn is_byte_binary(operation: OperationId) -> bool {
     matches!(
         operation,
@@ -305,7 +305,7 @@ fn is_byte_binary(operation: OperationId) -> bool {
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn internal_mode(mode: Mode) -> bool {
     matches!(
         mode,
@@ -317,7 +317,7 @@ fn internal_mode(mode: Mode) -> bool {
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn rejected(mode: Mode, reason: &'static str) -> ModeSupport {
     ModeSupport::Rejected {
         mode,
@@ -336,7 +336,7 @@ pub(crate) enum ChopsRequest {
 }
 
 impl ChopsRequest {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn operation(self) -> OperationId {
         match self {
             Self::Binary(operation) => match operation {
@@ -390,12 +390,12 @@ pub(crate) struct PreparedChopsFusion<'a> {
 }
 
 impl PreparedChopsFusion<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<super::helpers::fusion::FusedChopsOutput, PilError> {
         let mut output =
             execute_fused_multiply_screen(self.image, &self.other, self.mode, &self.selection)?;
@@ -416,7 +416,7 @@ impl PreparedChopsFusion<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_fused_multiply_screen(
     image: &DynamicImage,
     other: &DynamicImage,
@@ -435,12 +435,12 @@ fn execute_fused_multiply_screen(
 }
 
 impl ChopsExecutionPlan {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn can_execute_in_place(&self, image: &DynamicImage) -> bool {
         if self.selection.implementation.architecture == Architecture::Default
             || image.mode() != self.mode
@@ -453,6 +453,8 @@ impl ChopsExecutionPlan {
         {
             return false;
         }
+        // The selected Add/Sub guard already checked both operands' dimensions
+        // and exact byte layouts; the in-place kernel checks dimensions again.
         if image.width() == 0 || image.height() == 0 {
             return image.as_bytes().is_empty();
         }
@@ -461,7 +463,7 @@ impl ChopsExecutionPlan {
         bytes.len() % height == 0 && bytes.len() / height >= 8
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self, image: &DynamicImage) -> Result<DynamicImage, PilError> {
         let selection = &self.selection;
         let other = self.other.as_deref();
@@ -478,7 +480,7 @@ impl ChopsExecutionPlan {
         Ok(output)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute_in_place(self, image: &mut DynamicImage) -> Result<(), PilError> {
         let selection = &self.selection;
         if !self.can_execute_in_place(image) {
@@ -514,18 +516,18 @@ impl ChopsExecutionPlan {
 }
 
 impl PreparedChops<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         self.plan.selection()
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         self.plan.execute(self.image)
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -542,7 +544,7 @@ pub(crate) fn prepare_pipeline<'a>(
 
 // TODO(pillow-rs#3ptb): Freeze lazy secondary-mode rejection versus decode-
 // failure ordering for binary Chops preparation and verify its exact output.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(crate) fn prepare_plan(
     input: OperationInputs<'_>,
     op: &PipelineOp,
@@ -604,7 +606,7 @@ pub(crate) fn prepare_plan(
 
 /// Prepares the archived fused Multiply-then-Screen formula when both steps
 /// share an operand and admit the same exact mode and architecture strategy.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_fused_multiply_screen<'a>(
     image: &'a DynamicImage,
     multiply: &PipelineOp,
@@ -696,7 +698,7 @@ pub(crate) fn prepare_fused_multiply_screen<'a>(
     }))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn secondary(op: &PipelineOp) -> Option<&Arc<Image>> {
     match op {
         PipelineOp::Add { other, .. }
@@ -718,7 +720,7 @@ fn secondary(op: &PipelineOp) -> Option<&Arc<Image>> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn request(op: &PipelineOp) -> Result<ChopsRequest, PilError> {
     let request = match op {
         PipelineOp::Add { scale, offset, .. } => ChopsRequest::Binary(BinaryOperation::Add {
@@ -755,7 +757,7 @@ fn request(op: &PipelineOp) -> Result<ChopsRequest, PilError> {
     Ok(request)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn execute_shared(
     image: &DynamicImage,
     request: ChopsRequest,

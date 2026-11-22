@@ -2,6 +2,7 @@ use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply(
     image: DynamicImage,
     x: i32,
@@ -45,6 +46,7 @@ pub(crate) fn apply(
     Ok(DynamicImage::ImageCmyk8(canvas))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply_luma_mask(
     image: &DynamicImage,
     mask_image: &DynamicImage,
@@ -65,6 +67,7 @@ pub(crate) fn apply_luma_mask(
     Some(DynamicImage::ImageCmyk8(canvas))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn blend_luma_rows(
     canvas: &mut crate::raster::RgbaImage,
     mask: &[u8],
@@ -111,6 +114,7 @@ fn blend_luma_rows(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline]
 fn blend(ink: u8, background: u8, coverage: u8) -> u8 {
     if coverage == 255 {

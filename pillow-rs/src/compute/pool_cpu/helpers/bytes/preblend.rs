@@ -1,4 +1,5 @@
 /// Apply Pillow's byte `PREBLEND` operation to a premultiplied source sample.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[expect(
     clippy::arithmetic_side_effects,
     reason = "byte PREBLEND intermediates are bounded below u32::MAX"

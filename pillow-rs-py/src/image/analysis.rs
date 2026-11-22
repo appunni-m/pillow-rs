@@ -1,4 +1,5 @@
 use super::arrays::image_info_to_python;
+use super::execution::{PyExecutionContext, route_from_context, route_pending_image};
 use crate::*;
 use pyo3::basic::CompareOp;
 use pyo3::pymethods;
@@ -22,8 +23,9 @@ fn imaging_core_mask(mask: Option<&Bound<'_, PyAny>>) -> PyResult<Option<pillow_
 
 #[pymethods]
 impl PyImage {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn getextrema(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.getextrema_formatted(py)
+        self.getextrema_formatted(None, py)
     }
 
     /// Expose ImagingCore's low-level color count to Filter callbacks.
@@ -32,11 +34,12 @@ impl PyImage {
         maxcolors: &Bound<'_, PyAny>,
         py: Python<'_>,
     ) -> PyResult<Option<Py<PyAny>>> {
-        Self::getcolors_formatted(slf, Some(maxcolors), Some(false), py)
+        Self::getcolors_formatted(slf, Some(maxcolors), Some(false), None, py)
     }
 
     /// ImagingCore orders optional arguments as extrema, then mask.
     #[pyo3(signature = (extrema=None, mask=None))]
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn histogram(
         slf: Py<Self>,
         extrema: Option<&Bound<'_, PyAny>>,
@@ -44,17 +47,27 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<Vec<u32>> {
         let mask = imaging_core_mask(mask)?;
+        let route = route_from_context(None, py);
+        let execution_context = route.map(|route| route.context);
         let inner = slf.bind(py).borrow().inner.clone();
+        let inner = route_pending_image(inner, route);
         let mode = inner.mode_identity().map_err(map_error)?;
         // ImagingCore parses an I/F range before the native histogram sees
         // the mask; the native masked histogram then ignores that range.
         let extrema = histogram_extrema_from_python(extrema, mode, false)?;
-        py.detach(move || inner.histogram_with_mask_and_extrema(mask.as_ref(), extrema))
-            .map_err(map_error)
+        py.detach(move || {
+            inner.histogram_with_mask_and_extrema_with_context(
+                mask.as_ref(),
+                extrema,
+                execution_context,
+            )
+        })
+        .map_err(map_error)
     }
 
     /// ImagingCore orders optional arguments as extrema, then mask.
     #[pyo3(signature = (extrema=None, mask=None))]
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn entropy(
         slf: Py<Self>,
         extrema: Option<&Bound<'_, PyAny>>,
@@ -62,27 +75,51 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<f64> {
         let mask = imaging_core_mask(mask)?;
+        let route = route_from_context(None, py);
+        let execution_context = route.map(|route| route.context);
         let inner = slf.bind(py).borrow().inner.clone();
+        let inner = route_pending_image(inner, route);
         let mode = inner.mode_identity().map_err(map_error)?;
         let extrema = histogram_extrema_from_python(extrema, mode, false)?;
-        py.detach(move || inner.entropy_with_mask_and_extrema(mask.as_ref(), extrema))
-            .map_err(map_error)
+        py.detach(move || {
+            inner.entropy_with_mask_and_extrema_with_context(
+                mask.as_ref(),
+                extrema,
+                execution_context,
+            )
+        })
+        .map_err(map_error)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (alpha_only=None, execution_context=None))]
     fn getbbox(
         &self,
         alpha_only: Option<bool>,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<Option<(u32, u32, u32, u32)>> {
         let alpha_only = alpha_only.unwrap_or(true);
-        py.detach(|| self.inner.getbbox(alpha_only))
+        let route = route_from_context(execution_context, py);
+        let execution_context = route.map(|route| route.context);
+        let inner = route_pending_image(self.inner.clone(), route);
+        py.detach(move || inner.getbbox_with_execution_context(alpha_only, execution_context))
             .map_err(map_error)
     }
 
     /// Return extrema formatted as PIL expects.
-    fn getextrema_formatted(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (execution_context=None))]
+    fn getextrema_formatted(
+        &self,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
+        py: Python<'_>,
+    ) -> PyResult<Py<PyAny>> {
+        let route = route_from_context(execution_context, py);
+        let execution_context = route.map(|route| route.context);
+        let inner = route_pending_image(self.inner.clone(), route);
         let formatted = py
-            .detach(|| self.inner.getextrema_formatted())
+            .detach(move || inner.getextrema_formatted_with_context(execution_context))
             .map_err(map_error)?;
         Python::attach(|py| match formatted {
             pillow_rs::FormattedExtrema::Empty => Ok(py.None()),
@@ -134,24 +171,31 @@ impl PyImage {
         })
     }
 
-    #[pyo3(signature = (mask=None))]
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (mask=None, execution_context=None))]
     fn stat_formatted(
         &self,
         mask: Option<&Bound<'_, PyAny>>,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<Py<PyAny>> {
         let mask = imageops_mask_from_python(mask)?;
+        let route = route_from_context(execution_context, py);
+        let execution_context = route.map(|route| route.context);
+        let inner = route_pending_image(self.inner.clone(), route);
         let result = py
-            .detach(|| self.inner.stat_formatted_with_mask(mask))
+            .detach(move || inner.stat_formatted_with_mask_and_context(mask, execution_context))
             .map_err(map_error)?;
         stat_result_to_python(&result)
     }
 
-    #[pyo3(signature = (mask=None, extrema=None))]
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (mask=None, extrema=None, execution_context=None))]
     fn histogram_with_input(
         slf: Py<Self>,
         mask: Option<&Bound<'_, PyAny>>,
         extrema: Option<&Bound<'_, PyAny>>,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<Vec<u32>> {
         let mask = image_analysis_mask_from_python(mask)?;
@@ -170,20 +214,33 @@ impl PyImage {
                 .map_err(map_error)?
         };
         let extrema = histogram_extrema_from_python(extrema, mode, masked)?;
+        let route = route_from_context(execution_context, py);
+        let execution_context = route.map(|route| route.context);
         let inner = slf.bind(py).borrow().inner.clone();
-        py.detach(move || inner.histogram_with_input_and_extrema(mask, extrema))
-            .map_err(map_error)
+        let inner = route_pending_image(inner, route);
+        py.detach(move || {
+            inner.histogram_with_input_and_extrema_with_context(mask, extrema, execution_context)
+        })
+        .map_err(map_error)
     }
 
     /// Return getcolors formatted as PIL expects.
-    #[pyo3(signature = (maxcolors=None, histogram_mode=None))]
+    #[pyo3(signature = (maxcolors=None, histogram_mode=None, execution_context=None))]
+    // The Python Image.getcolors adapter passes the result of its overridable
+    // `self.mode in ("1", "L", "P")` branch after loading. Keep that branch
+    // decision as a bool; pixel strategies use the actual DynamicImage mode.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn getcolors_formatted(
         slf: Py<Self>,
         maxcolors: Option<&Bound<'_, PyAny>>,
         histogram_mode: Option<bool>,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<Option<Py<PyAny>>> {
+        let route = route_from_context(execution_context, py);
+        let execution_context = route.map(|route| route.context);
         let inner = slf.bind(py).borrow().inner.clone();
+        let inner = route_pending_image(inner, route);
         let mode = inner.mode_identity().map_err(map_error)?;
         let rust_histogram_mode = matches!(
             mode,
@@ -191,7 +248,7 @@ impl PyImage {
         );
         let histogram_mode = histogram_mode.unwrap_or(rust_histogram_mode);
         let formatted = if histogram_mode {
-            py.detach(move || inner.getcolors_via_histogram_mode())
+            py.detach(move || inner.getcolors_via_histogram_mode_with_context(execution_context))
                 .map_err(map_error)?
         } else {
             let maxcolors = maxcolors
@@ -200,7 +257,12 @@ impl PyImage {
                 .unwrap_or(256);
             py.detach({
                 let inner = inner.clone();
-                move || inner.getcolors_via_low_level_mode_with_signed_limit(maxcolors)
+                move || {
+                    inner.getcolors_via_low_level_mode_with_signed_limit_and_context(
+                        maxcolors,
+                        execution_context,
+                    )
+                }
             })
             .map_err(map_error)?
         };
@@ -226,15 +288,27 @@ impl PyImage {
         Ok(Some(values.into_py_any(py)?))
     }
 
-    fn getprojection(&mut self, py: Python<'_>) -> PyResult<(Vec<u32>, Vec<u32>)> {
-        py.detach(|| self.inner.getprojection()).map_err(map_error)
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (execution_context=None))]
+    fn getprojection(
+        &self,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
+        py: Python<'_>,
+    ) -> PyResult<(Vec<u32>, Vec<u32>)> {
+        let route = route_from_context(execution_context, py);
+        let execution_context = route.map(|route| route.context);
+        let inner = route_pending_image(self.inner.clone(), route);
+        py.detach(move || inner.getprojection_with_context(execution_context))
+            .map_err(map_error)
     }
 
-    #[pyo3(signature = (mask=None, extrema=None))]
+    #[pyo3(signature = (mask=None, extrema=None, execution_context=None))]
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn entropy_with_input(
         slf: Py<Self>,
         mask: Option<&Bound<'_, PyAny>>,
         extrema: Option<&Bound<'_, PyAny>>,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<f64> {
         let mask = image_analysis_mask_from_python(mask)?;
@@ -253,9 +327,14 @@ impl PyImage {
                 .map_err(map_error)?
         };
         let extrema = histogram_extrema_from_python(extrema, mode, masked)?;
+        let route = route_from_context(execution_context, py);
+        let execution_context = route.map(|route| route.context);
         let inner = slf.bind(py).borrow().inner.clone();
-        py.detach(move || inner.entropy_with_input_and_extrema(mask, extrema))
-            .map_err(map_error)
+        let inner = route_pending_image(inner, route);
+        py.detach(move || {
+            inner.entropy_with_input_and_extrema_with_context(mask, extrema, execution_context)
+        })
+        .map_err(map_error)
     }
 
     fn compatibility_info(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {

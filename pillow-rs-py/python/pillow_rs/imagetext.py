@@ -66,9 +66,11 @@ class Text(Generic[AnyStr]):
         self.stroke_width = 0
         self.stroke_fill = None
 
+    # VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     def embed_color(self) -> None:
-        if self.mode not in ("RGB", "RGBA"):
-            raise ValueError("Embedded color supported only in RGB and RGBA modes")
+        # NO_PILLOW_SUPPORT: Pillow limits embedded-color Text to RGB/RGBA.
+        # The Rust core composes RGBA glyphs through the destination's typed
+        # Convert and Paste strategies for every Pillow image mode.
         self.embedded_color = True
 
     def stroke(self, width: float = 0, fill: _Ink | None = None) -> None:
@@ -84,6 +86,7 @@ class Text(Generic[AnyStr]):
             return "RGBA"
         return "L"
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def get_length(self) -> float:
         if self._can_get_length_in_core():
             return self.font._rust_font._image_text_get_length(

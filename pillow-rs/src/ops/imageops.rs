@@ -7,8 +7,7 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::resize::{ResampleInput, parse_resample, parse_resample_input};
 use crate::pipeline::PipelineOp;
-use std::sync::Arc;
-
+mod autocontrast;
 mod color;
 mod colorize;
 mod equalize;
@@ -17,6 +16,13 @@ mod geometry;
 mod palette_lut;
 mod point;
 
+pub use autocontrast::{
+    ImageOpsAutocontrastCallbacks, ImageOpsAutocontrastLoopIndex,
+    ImageOpsAutocontrastResultCallbacks, ImageOpsAutocontrastSourceCallbacks, autocontrast,
+    autocontrast_lut_from_histogram, autocontrast_lut_with_callbacks,
+    autocontrast_result_from_lut_with_callbacks, autocontrast_with_callbacks,
+    autocontrast_with_mask, autocontrast_with_options, autocontrast_with_options_and_mask,
+};
 pub(crate) use color::{
     resolve_imageops_color, resolve_pad_palette_fill, resolve_palette_tuple_bytes,
 };
@@ -31,6 +37,7 @@ pub use exif::{
     EXIF_XMP_ATTRIBUTE_PREFIX, EXIF_XMP_ATTRIBUTE_SUFFIX, EXIF_XMP_ELEMENT_PREFIX,
     EXIF_XMP_ELEMENT_SUFFIX, ImageOpsExifXmpValue, exif_get_orientation, exif_remove_orientation,
     exif_remove_xmp_orientation, exif_transpose, exif_transpose_with_orientation,
+    exif_transpose_with_orientation_and_context,
 };
 pub(crate) use geometry::fit_box_coordinates;
 pub use geometry::{
@@ -58,19 +65,15 @@ pub use geometry::{
 };
 pub(crate) use geometry::{
     contain_dimensions_from_sizes, contain_returns_empty_image, cover_dimensions_from_sizes,
-    round_positive_ties_even, validate_aspect_resize_dimensions,
+    round_positive_ties_even, validate_aspect_resize_dimensions, validate_cover_resize_dimensions,
 };
 pub(crate) use geometry::{normalize_fit_bleed, normalize_fit_centering};
 pub(crate) use geometry::{scale_dimension_to_u32, scale_dimensions_preflight};
 pub use palette_lut::{ImageOpsPaletteLutCallbacks, imageops_lut_with_palette_callbacks};
 pub use point::{
-    ImageOpsAutocontrastCallbacks, ImageOpsAutocontrastResultCallbacks,
-    ImageOpsAutocontrastSourceCallbacks, ImageOpsInvertCallbacks, ImageOpsLutBuildCallbacks,
-    ImageOpsLutCallbacks, ImageOpsPosterizeCallbacks, ImageOpsSolarizeCallbacks, autocontrast,
-    autocontrast_lut_from_histogram, autocontrast_lut_with_callbacks,
-    autocontrast_result_from_lut_with_callbacks, autocontrast_with_callbacks,
-    autocontrast_with_mask, autocontrast_with_options, autocontrast_with_options_and_mask, flip,
-    grayscale, imageops_lut_with_callbacks, invert_ops, invert_with_callbacks, mirror, posterize,
+    ImageOpsInvertCallbacks, ImageOpsLutBuildCallbacks, ImageOpsLutCallbacks,
+    ImageOpsPosterizeCallbacks, ImageOpsSolarizeCallbacks, flip, grayscale,
+    imageops_lut_with_callbacks, invert_ops, invert_with_callbacks, mirror, posterize,
     posterize_with_callbacks, solarize, solarize_comparison_table, solarize_with_callbacks,
     solarize_with_input,
 };

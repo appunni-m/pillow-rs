@@ -1,22 +1,14 @@
 // ============================================================================
-// AS PER DESIGN — DO NOT REMOVE:
-//   The pixel-loop macros in this module are the ONLY approved way to
-//   parallelize pixel loops. Direct use of rayon::par_iter() on raw pixel data
-//   is banned because it:
-//     (a) Can produce cache-thrashing access patterns when not row-aligned
-//     (b) May introduce non-deterministic floating-point accumulation order
-//     (c) Makes it hard to audit which operations are parallelized
-//
-//   When adding a new operation, parallelize it using these macros.
-//   When the operation is deterministic and safe to parallelize, use par_rows!.
-//   When row-level parallelism could cause artifacts (e.g., filters with
-//   boundary conditions), use par_tiles! instead.
-//
-//   These helpers are opt-in with the `parallel` Cargo feature. Keep policy
-//   checks aligned with the scripts and CI jobs that actually exist.
+// Deferred Parallel CPU scheduling helpers:
+//   These macros are feature-gated migration material for `pool_parallel`.
+//   Do not call them from `pool_cpu`; CPU execution stays serial. When the
+//   parallel backend is implemented, its strategies must receive that
+//   backend's injected ExecutionContext and choose row/tile scheduling there.
+//   Keep row-aligned access and deterministic accumulation requirements when
+//   adapting these helpers to the dedicated backend.
 // ============================================================================
-// TODO(pillow-rs#3ptb): keep these scheduling helpers owned by the later
-// `pool_parallel` backend and pass its selected context to their callers.
+// TODO(pillow-rs#3ptb): move these feature-gated helpers under the later
+// `pool_parallel` backend and pass its selected context to every caller.
 
 /// Parallelize pixel iteration over image rows.
 ///

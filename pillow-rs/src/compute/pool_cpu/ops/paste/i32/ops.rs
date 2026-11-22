@@ -33,6 +33,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     destination: &'a RgbaImage,
     source: Arc<DynamicImage>,
@@ -55,6 +56,7 @@ pub(crate) fn prepare<'a>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
 pub(crate) fn execute<I>(strategy: BytePlan<'_, I>) -> Result<DynamicImage, PilError>
 where
     I: std::ops::Deref<Target = DynamicImage>,

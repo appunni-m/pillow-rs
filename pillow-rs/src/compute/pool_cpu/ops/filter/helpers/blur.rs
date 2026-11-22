@@ -362,6 +362,7 @@ fn blur_parameters(radius: f32) -> (usize, u32, u32) {
 /// PIL-style box blur with fractional radius support.
 /// Uses sliding-window accumulator with fixed-point (24-bit) arithmetic.
 /// Matches PIL order: ALL horizontal passes first, then ALL vertical passes.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn pil_box_blur(
     raw: &[u8],
     width: u32,
@@ -369,8 +370,18 @@ fn pil_box_blur(
     channels: usize,
     radius: f32,
     passes: u32,
+    fuse_three_passes: bool,
 ) -> Result<Option<Vec<u8>>, PilError> {
-    pil_box_blur_xy(raw, width, height, channels, radius, radius, passes)
+    pil_box_blur_xy(
+        raw,
+        width,
+        height,
+        channels,
+        radius,
+        radius,
+        passes,
+        fuse_three_passes,
+    )
 }
 
 /// PIL-style box blur with independent horizontal and vertical radii.
@@ -378,6 +389,7 @@ fn pil_box_blur(
 /// Pillow's `ImagingBoxBlur` applies every horizontal pass with `xradius`,
 /// then every vertical pass with `yradius`. Keeping the fixed-point weights
 /// separate is required for `BoxBlur((xradius, yradius))`.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn pil_box_blur_xy(
     raw: &[u8],
     width: u32,
@@ -386,10 +398,21 @@ fn pil_box_blur_xy(
     radius_x: f32,
     radius_y: f32,
     passes: u32,
+    fuse_three_passes: bool,
 ) -> Result<Option<Vec<u8>>, PilError> {
-    pil_box_blur_xy_impl(raw, width, height, channels, radius_x, radius_y, passes)
+    pil_box_blur_xy_impl(
+        raw,
+        width,
+        height,
+        channels,
+        radius_x,
+        radius_y,
+        passes,
+        fuse_three_passes,
+    )
 }
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn pil_box_blur_xy_impl(
     raw: &[u8],
     w_u32: u32,
@@ -398,6 +421,7 @@ fn pil_box_blur_xy_impl(
     radius_x: f32,
     radius_y: f32,
     passes: u32,
+    fuse_three_passes: bool,
 ) -> Result<Option<Vec<u8>>, PilError> {
     if box_blur_input_is_noop(w_u32, h_u32, radius_x, radius_y) {
         return Ok(None);
@@ -449,7 +473,8 @@ fn pil_box_blur_xy_impl(
         return Ok(Some(output));
     }
 
-    let fuse_three_horizontal_passes = passes == 3 && (1..=4).contains(&channels);
+    let fuse_three_horizontal_passes =
+        fuse_three_passes && passes == 3 && (1..=4).contains(&channels);
 
     let pass_context = BoxBlurPassContext {
         width,
@@ -478,12 +503,14 @@ fn pil_box_blur_xy_impl(
 // ── Rank filter ──
 
 /// Execute Gaussian blur over native interleaved byte samples.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(crate) fn execute_gaussian_blur_native_bytes(
     raw: &[u8],
     width: u32,
     height: u32,
     channels: usize,
     sigma: f32,
+    fuse_three_passes: bool,
 ) -> Result<Option<Vec<u8>>, PilError> {
     let sigma = sigma.abs();
     if sigma == 0.0 {
@@ -496,6 +523,7 @@ pub(crate) fn execute_gaussian_blur_native_bytes(
         channels,
         gaussian_blur_box_radius(sigma),
         3,
+        fuse_three_passes,
     )
 }
 
@@ -598,6 +626,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn validate_native_byte_blur_selec
 }
 
 /// Execute a box blur over native interleaved byte samples.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(crate) fn execute_box_blur_native_bytes(
     raw: &[u8],
     width: u32,
@@ -608,10 +637,11 @@ pub(crate) fn execute_box_blur_native_bytes(
     if radius == 0 {
         return Ok(None);
     }
-    pil_box_blur(raw, width, height, channels, radius as f32, 1)
+    pil_box_blur(raw, width, height, channels, radius as f32, 1, false)
 }
 
 /// Execute BoxBlurXY over native interleaved byte samples.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(crate) fn execute_box_blur_xy_native_bytes(
     raw: &[u8],
     width: u32,
@@ -620,9 +650,19 @@ pub(crate) fn execute_box_blur_xy_native_bytes(
     radius_x: f32,
     radius_y: f32,
     passes: u32,
+    fuse_three_passes: bool,
 ) -> Result<Option<Vec<u8>>, PilError> {
     if radius_x == 0.0 && radius_y == 0.0 {
         return Ok(None);
     }
-    pil_box_blur_xy(raw, width, height, channels, radius_x, radius_y, passes)
+    pil_box_blur_xy(
+        raw,
+        width,
+        height,
+        channels,
+        radius_x,
+        radius_y,
+        passes,
+        fuse_three_passes,
+    )
 }

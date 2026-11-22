@@ -16,6 +16,7 @@ use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_quantize
 // exact YCbCr strategy over its native three-byte samples.
 declare_quantize_native_mode!(u8, "ImageYCbCr8", ImageYCbCr8);
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const CROP_BORDER_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::imageops::helpers::strategy::crop_border_serial_support(
         crate::raster::Mode::ImageYCbCr8,

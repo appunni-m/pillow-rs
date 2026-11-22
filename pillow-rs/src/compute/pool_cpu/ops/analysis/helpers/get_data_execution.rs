@@ -10,7 +10,7 @@ use crate::raster::{DynamicImage, Mode};
 use super::super::helpers::get_data::{GetDataOutput, GetDataRequest};
 use super::GET_DATA_BAND_INTO_SUPPORT;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Returns the band count or the existing mode error for caller-owned reads.
 pub(crate) fn get_data_band_into_count(mode: Mode) -> Result<usize, PilError> {
     match GET_DATA_BAND_INTO_SUPPORT.for_mode(mode) {
@@ -27,7 +27,7 @@ pub(crate) fn get_data_band_into_count(mode: Mode) -> Result<usize, PilError> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Returns whether caller-owned band reads have a declared mode strategy.
 pub(crate) fn supports_get_data_band_into(mode: Mode) -> bool {
     matches!(
@@ -38,7 +38,7 @@ pub(crate) fn supports_get_data_band_into(mode: Mode) -> bool {
 
 // TODO(pillow-rs#3ptb): Move GPU eligibility into its support declaration when
 // that descriptor can compose this CPU terminal contract.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Returns whether the existing terminal band route can preserve this mode.
 pub(crate) fn supports_get_data_band_terminal(
     mode: Mode,
@@ -82,7 +82,7 @@ pub(crate) fn supports_get_data_band_terminal(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn validate_get_data_selection(
     selection: StrategySelection,
     mode: Mode,
@@ -97,7 +97,7 @@ fn validate_get_data_selection(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn execute_get_data_request(
     image: &DynamicImage,
     selection: StrategySelection,
@@ -187,7 +187,7 @@ fn execute_get_data_request(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Run the full-buffer strategy selected for a mode-bearing raster.
 pub(crate) fn get_data(
     image: &DynamicImage,
@@ -202,7 +202,7 @@ pub(crate) fn get_data(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Allocate and fill one band using the selected GetDataBand strategy.
 pub(crate) fn get_data_band(
     image: &DynamicImage,
@@ -218,7 +218,7 @@ pub(crate) fn get_data_band(
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Fill one band using the selected caller-owned GetDataBandInto strategy.
 pub(crate) fn get_data_band_into(
     image: &DynamicImage,
@@ -231,7 +231,7 @@ pub(crate) fn get_data_band_into(
     get_data_band_into_request(image, band, selection, output)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn get_data_band_into_request(
     image: &DynamicImage,
     band: usize,
@@ -253,7 +253,7 @@ fn get_data_band_into_request(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Preserve the owned palette-index view while using the Palette8 strategy.
 pub(crate) fn get_data_palette_indices_band_into(
     indices: &[u8],
@@ -265,7 +265,7 @@ pub(crate) fn get_data_palette_indices_band_into(
     super::super::palette8::ops::write_palette_indices_band(indices, selection, band, output)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Return scalar `I;16*` values through the exact mode's GetData implementation.
 pub(crate) fn get_data_integer_samples(
     image: &DynamicImage,
@@ -300,7 +300,7 @@ pub(crate) fn get_data_integer_samples(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Return scalar `I` and `F` values through their exact mode strategies.
 pub(crate) fn get_data_scalar_samples(
     image: &DynamicImage,
@@ -325,7 +325,7 @@ pub(crate) fn get_data_scalar_samples(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Borrow an untransformed single-band byte plane for the direct view fast path.
 pub(crate) fn get_data_band_byte_view(
     image: &DynamicImage,
@@ -346,7 +346,7 @@ pub(crate) fn get_data_band_byte_view(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Borrow an owned palette index plane under the Palette8 GetData strategy.
 pub(crate) fn get_data_palette_indices_view(
     indices: &[u8],

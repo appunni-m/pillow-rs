@@ -5,9 +5,10 @@ use crate::ops::pil_resize::FilterCoeffs;
 
 use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
     byte_coefficients_fit_i32, byte_coefficients_fit_source, fixed_point_to_u8_i32,
+    horizontal_first,
 };
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-2bfa926483a74aacabb70f25db18f807; benchmark=pending
 pub(crate) fn execute(
     source: &[u8],
     source_size: (u32, u32),
@@ -15,6 +16,9 @@ pub(crate) fn execute(
     horizontal: &FilterCoeffs,
     vertical: &FilterCoeffs,
 ) -> Option<Vec<u8>> {
+    if !horizontal_first(source_size, destination_size) {
+        return None;
+    }
     let (source_width, source_height) = (source_size.0 as usize, source_size.1 as usize);
     let (output_width, output_height) = (destination_size.0 as usize, destination_size.1 as usize);
     let source_dims = CheckedDims::new(source_size.0, source_size.1, 4).ok()?;

@@ -39,20 +39,46 @@ impl Image {
 
     /// Computes a masked histogram, applying a native `I`/`F` range only when
     /// no mask is present.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn histogram_with_mask_and_extrema(
         &self,
         mask: Option<&Image>,
         extrema: Option<HistogramExtrema>,
     ) -> Result<Vec<u32>, PilError> {
+        self.histogram_with_mask_and_extrema_with_context(mask, extrema, None)
+    }
+
+    /// Computes a masked histogram with a parent's captured CPU context.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn histogram_with_mask_and_extrema_with_context(
+        &self,
+        mask: Option<&Image>,
+        extrema: Option<HistogramExtrema>,
+        context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Vec<u32>, PilError> {
+        let routed_image = context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialized_shared()?;
+        let image = routed_image.materialized_shared()?;
         operation_receipts.capture();
-        let mask_image = mask.map(Image::materialized_shared).transpose()?;
+        let routed_mask = mask.map(|mask| {
+            context.map_or_else(
+                || mask.clone(),
+                |context| mask.clone().with_execution_context(context),
+            )
+        });
+        let mask_image = routed_mask
+            .as_ref()
+            .map(Image::materialized_shared)
+            .transpose()?;
         operation_receipts.capture();
         let prepared_mask = prepare_histogram_mask(image.as_ref(), mask_image)?;
         let mask_raw = prepared_mask.raw();
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, routed_context) = self.cpu_arch_execution_route_advisory();
+        let context = context.unwrap_or(routed_context);
         let extrema = if mask_raw.is_some() {
             None
         } else {

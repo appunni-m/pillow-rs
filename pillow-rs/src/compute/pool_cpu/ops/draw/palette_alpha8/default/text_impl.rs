@@ -5,6 +5,7 @@ use crate::compute::pool_cpu::ops::draw::TextComposeResult;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Pixel};
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply<const RGBA_MASK: bool>(
     mut image: DynamicImage,
     x: i32,

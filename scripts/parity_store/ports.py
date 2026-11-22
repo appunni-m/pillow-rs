@@ -1,4 +1,4 @@
-"""Project-neutral catalog and evidence-store ports."""
+"""Project-neutral immutable-input and historical evidence-store ports."""
 
 from __future__ import annotations
 
@@ -15,13 +15,13 @@ from .model import (
 )
 
 
-class EvidenceStore(Protocol):
-    """Typed catalog and evidence boundary for project parity adapters.
+class InputCorpusStore(Protocol):
+    """Typed boundary for importing and selecting immutable parity inputs.
 
     Concrete stores keep their database connection, SQL dialect, transaction
-    implementation, migrations, and physical result-table layout behind this
-    port. Project importers and the shared campaign coordinator can therefore
-    use the same interface without depending on a database driver.
+    implementation, migrations, and physical input-table layout behind this
+    port. Importers can use the shared input catalog without depending on a
+    database driver or a run-results store.
     """
 
     def migrate(self) -> None:
@@ -65,6 +65,32 @@ class EvidenceStore(Protocol):
         case_ids: Sequence[str],
     ) -> set[str]:
         """Return requested cases already imported for a snapshot."""
+
+    def existing_case_ordinals(
+        self,
+        project_id: str,
+        specification_digest: bytes,
+        source_document: str,
+    ) -> set[int]:
+        """Return imported source ordinals for one document in a snapshot."""
+
+    def completed_case_import_count(
+        self,
+        project_id: str,
+        specification_digest: bytes,
+        importer_identity: str,
+    ) -> int | None:
+        """Return the verified full-import count for an exact snapshot and importer."""
+
+    def record_completed_case_import(
+        self,
+        project_id: str,
+        specification_digest: bytes,
+        importer_identity: str,
+        case_count: int,
+        documents: Sequence[tuple[str, bytes, int]],
+    ) -> None:
+        """Record the verified case count and per-document coverage for a full import."""
 
     def register_operations(
         self,
@@ -126,6 +152,27 @@ class EvidenceStore(Protocol):
     ) -> list[tuple[str, bytes]]:
         """Return the exact selected case IDs and immutable input digests."""
 
+    def iter_case_batches(
+        self,
+        project_id: str,
+        specification_digest: bytes,
+        *,
+        maximum_cases: int,
+        maximum_estimated_bytes: int,
+        profile_id: str,
+        case_ids: Sequence[str] | None,
+    ) -> Iterable[tuple[Sequence[CaseRecord], int]]:
+        """Yield bounded case batches with their estimated materialization size."""
+
+
+class EvidenceStore(InputCorpusStore, Protocol):
+    """Historical execution-evidence extension of the input-corpus port.
+
+    The current PostgreSQL input workflow does not invoke these methods or
+    write execution results. They remain for compatibility with already
+    recorded local evidence and older campaign integrations.
+    """
+
     def register_identity(self, identity: ImplementationIdentity) -> None:
         """Persist or verify an immutable implementation identity."""
 
@@ -142,18 +189,6 @@ class EvidenceStore(Protocol):
         source_identity_digest: bytes | None = None,
     ) -> None:
         """Freeze a campaign's selected cases and execution identities."""
-
-    def iter_case_batches(
-        self,
-        project_id: str,
-        specification_digest: bytes,
-        *,
-        maximum_cases: int,
-        maximum_estimated_bytes: int,
-        profile_id: str,
-        case_ids: Sequence[str] | None,
-    ) -> Iterable[tuple[Sequence[CaseRecord], int]]:
-        """Yield bounded case batches with their estimated materialization size."""
 
     def start_batch(
         self,

@@ -275,6 +275,7 @@ fn draw_rounded_rect_spans(
     writer.into_image().map(Some)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_rounded_rect_native(
     img: &DynamicImage,
     x0: i32,

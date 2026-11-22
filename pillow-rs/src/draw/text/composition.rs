@@ -6,6 +6,7 @@ use crate::raster::DynamicImage;
 
 impl Draw {
     /// Replaces the wrapper raster while retaining source Image metadata.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(super) fn apply_text_output(
         &mut self,
         mode: Mode,
@@ -30,6 +31,7 @@ impl Draw {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn replace_paletted_text_output(&mut self, image: DynamicImage) -> Result<(), PilError> {
         let DynamicImage::ImagePalette8(indices) = image else {
             return Err(PilError::InternalError(

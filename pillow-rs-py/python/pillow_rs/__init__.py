@@ -35,7 +35,13 @@ from . import imagestat as ImageStat
 from . import imagesequence as ImageSequence
 from .enums import Dither, ImageFormat, ImageMode, Palette, Resampling, Transform, Transpose
 from ._core import DecompressionBombError
-from .image import Image, ImageTransformHandler, SupportsGetData
+from .image import (
+    Image,
+    ImagePointHandler,
+    ImagePointTransform,
+    ImageTransformHandler,
+    SupportsGetData,
+)
 from .operations import (
     alpha_composite, blend, composite, convert, crop, effect_mandelbrot, effect_noise, eval, fromarray, frombuffer, frombytes,
     linear_gradient, merge, new, open, radial_gradient, resize, rotate, save,
@@ -52,7 +58,7 @@ __all__ = [
     "ImageEnhance", "ImageFilter", "ImageFont",
     "ImagePalette", "ImageStat", "ImageSequence",
     "Resampling", "Transform", "Transpose", "Dither", "Palette",
-    "ImageTransformHandler", "SupportsGetData",
+    "ImagePointHandler", "ImagePointTransform", "ImageTransformHandler", "SupportsGetData",
     "open", "new", "save", "resize", "crop", "rotate", "convert", "merge", "blend", "composite",
     "linear_gradient", "radial_gradient", "effect_mandelbrot", "effect_noise", "eval", "frombuffer", "fromarray", "frombytes",
     "alpha_composite",

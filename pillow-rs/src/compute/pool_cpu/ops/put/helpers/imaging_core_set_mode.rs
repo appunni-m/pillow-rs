@@ -16,6 +16,7 @@ const RGB_FAMILY_INPUTS: &[InputContract] = &[InputContract::CallerValidatedSetM
     targets: &[Mode::ImageRgb8, Mode::ImageRgba8, Mode::ImageRgbx8],
 }];
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     let inputs = match mode {
         Mode::One | Mode::ImageLuma8 => ONE_L_INPUTS,
@@ -65,6 +66,7 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 pub(crate) static IMAGING_CORE_SET_MODE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::ImagingCoreSetMode, &[], classify_mode);
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn select(
     mode: Mode,
     target: Mode,
@@ -75,6 +77,7 @@ pub(crate) fn select(
     support.select_serial(context)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &mut DynamicImage,
     target: Mode,

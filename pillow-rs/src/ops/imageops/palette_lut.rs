@@ -73,7 +73,7 @@ pub trait ImageOpsPaletteLutCallbacks: ImageOpsLutCallbacks {
 
 /// Applies Pillow's `_lut(..., palette=True)` route and its public palette APIs.
 #[doc(hidden)]
-// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn imageops_lut_with_palette_callbacks<C: ImageOpsPaletteLutCallbacks>(
     callbacks: &mut C,
     image: &C::Image,
@@ -90,14 +90,15 @@ pub fn imageops_lut_with_palette_callbacks<C: ImageOpsPaletteLutCallbacks>(
     super::point::imageops_lut_non_palette(callbacks, image, lut, operation)
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn imageops_palette_lut<C: ImageOpsPaletteLutCallbacks>(
     callbacks: &mut C,
     image: &C::Image,
     lut: &C::Lut,
 ) -> Result<C::Output, C::Error> {
     let copied = callbacks.copy_palette_image(image)?;
-    if callbacks.palette_is_none(&copied)? && callbacks.palette_is_none(&copied)? {
+    // Pillow's `_lut` reads `im.palette` once for this assertion.
+    if callbacks.palette_is_none(&copied)? {
         return Err(callbacks.palette_assertion_error());
     }
     let mode = callbacks.palette_mode(&copied)?;

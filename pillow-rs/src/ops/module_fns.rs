@@ -16,9 +16,13 @@ use crate::raster::Mode;
 
 mod point;
 pub use point::{
-    EvalInputKind, eval, eval_callable, eval_float, eval_point_callable, eval_point_mode,
-    eval_point_mode_replicated_for_image, eval_point_transform, eval_replicated,
-    eval_replicated_for_image, eval_validated, make_float_lut, make_lut, validate_eval_input,
+    EvalInputKind, eval, eval_callable, eval_float, eval_float_with_execution_context,
+    eval_point_callable, eval_point_mode, eval_point_mode_replicated_for_image,
+    eval_point_mode_replicated_for_image_with_execution_context,
+    eval_point_mode_with_execution_context, eval_point_transform,
+    eval_point_transform_with_execution_context, eval_replicated, eval_replicated_for_image,
+    eval_replicated_for_image_with_execution_context, eval_validated,
+    eval_validated_with_execution_context, make_float_lut, make_lut, validate_eval_input,
 };
 
 /// Creates an image from raw bytes using Pillow's supported raw decoder.
@@ -90,6 +94,21 @@ pub fn alpha_composite(im1: &Image, im2: &Image) -> Result<Image, PilError> {
     let mut result = im1.copy();
     result.alpha_composite(im2, (0, 0), (0, 0))?;
     Ok(result)
+}
+
+/// Composites under a route captured by a composed public caller.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+#[doc(hidden)]
+pub fn alpha_composite_with_execution_context(
+    im1: &Image,
+    im2: &Image,
+    context: crate::compute::ExecutionContext,
+) -> Result<Image, PilError> {
+    let background = im1.clone().with_execution_context(context);
+    let overlay = im2.clone().with_execution_context(context);
+    let mut result = background.copy();
+    result.alpha_composite(&overlay, (0, 0), (0, 0))?;
+    Ok(result.with_execution_context(context))
 }
 
 type MergeLayoutContract = (
@@ -395,8 +414,12 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
 ///
 /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
 /// materialization failures.
+// TODO(pillow-rs#3ptb): verify call-time EffectNoise context and selected/
+// fallback receipts across the frozen CPU architecture matrix.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn effect_noise(image: &Image, sigma: f64) -> Result<Image, PilError> {
-    Ok(Image::push_op(image, PipelineOp::EffectNoise { sigma }))
+    let (_, context) = image.cpu_arch_execution_route_advisory();
+    Ok(Image::push_op(image, PipelineOp::EffectNoise { sigma }).with_execution_context(context))
 }
 
 /// Generates a Gaussian-noise `L` image for Pillow's module-level effect.
@@ -424,6 +447,7 @@ pub fn effect_spread(image: &Image, distance: u32) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::ValueError`] when `mode` is unsupported, or another
 /// [`PilError`] when raw image construction fails.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn linear_gradient(mode: Mode) -> Result<Image, PilError> {
     let generated = crate::compute::execute_eager_cpu_linear_gradient(mode)?;
     Image::from_generated_dynamic(generated, mode)
@@ -438,6 +462,7 @@ pub fn linear_gradient(mode: Mode) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::ValueError`] when `mode` is unsupported, or another
 /// [`PilError`] when raw image construction fails.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn radial_gradient(mode: Mode) -> Result<Image, PilError> {
     let generated = crate::compute::execute_eager_cpu_radial_gradient(mode)?;
     Image::from_generated_dynamic(generated, mode)
@@ -453,6 +478,7 @@ pub fn radial_gradient(mode: Mode) -> Result<Image, PilError> {
 /// Returns [`PilError::ValueError`] for zero size, negative extent dimensions,
 /// or `quality < 2`. Returns [`PilError::DimensionError`] when allocation
 /// checks fail.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn effect_mandelbrot(
     size: (u32, u32),
     extent: (f64, f64, f64, f64),

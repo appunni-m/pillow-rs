@@ -6,6 +6,7 @@ const RGB_TO_RGBA_SHUFFLE: [u8; 16] = [0, 1, 2, 12, 3, 4, 5, 13, 6, 7, 8, 14, 9,
 const RGBA_TO_RGB_SHUFFLE: [u8; 16] = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 0, 0, 0, 0];
 
 /// Inserts an opaque or supplied alpha byte into one four-pixel RGB block.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn rgb_to_rgba_block(source: &[u8], alpha: u8) -> [u8; 16] {
     debug_assert_eq!(source.len(), 12);
@@ -17,6 +18,7 @@ pub(crate) fn rgb_to_rgba_block(source: &[u8], alpha: u8) -> [u8; 16] {
 }
 
 /// Drops alpha from up to four native RGBA pixels into one RGB block.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn rgba_to_rgb_block(source: &[u8]) -> [u8; 12] {
     debug_assert!(source.len() <= 16 && source.len() % 4 == 0);

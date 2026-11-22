@@ -90,7 +90,6 @@ pub trait DrawTextRouteCallbacks {
 }
 
 /// Select the direct FreeType route, keeping host checks in Pillow order.
-/// TODO(pillow-rs#3ptb): freeze direct/custom Draw route and callback ordering.
 #[doc(hidden)]
 pub fn draw_uses_direct_text_route<C: DrawTextRouteCallbacks>(
     draw_mode: Mode,
@@ -211,9 +210,48 @@ impl Draw {
 
     /// Paste a custom font's RGBA glyph colors through the existing Paste
     /// mode strategy, using the mask alpha as coverage.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn paste_text_color_mask(
         &mut self,
         position: (i32, i32),
+        color: &crate::image::Image,
+        coverage: &crate::image::Image,
+    ) -> Result<(), PilError> {
+        Self::validate_text_color_mask(color, coverage)?;
+        let (requested_backend, context) = self.cpu_execution_context()?;
+        self.execute_text_color_mask_with_context(
+            position,
+            color,
+            coverage,
+            requested_backend,
+            context,
+        )
+    }
+
+    /// Paste a custom font's RGBA glyph colors with the parent Draw strategy's
+    /// already selected backend and architecture.
+    #[doc(hidden)]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub fn paste_text_color_mask_with_context(
+        &mut self,
+        position: (i32, i32),
+        color: &crate::image::Image,
+        coverage: &crate::image::Image,
+        requested_backend: Option<crate::compute::Backend>,
+        context: ExecutionContext,
+    ) -> Result<(), PilError> {
+        Self::validate_text_color_mask(color, coverage)?;
+        self.execute_text_color_mask_with_context(
+            position,
+            color,
+            coverage,
+            requested_backend,
+            context,
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn validate_text_color_mask(
         color: &crate::image::Image,
         coverage: &crate::image::Image,
     ) -> Result<(), PilError> {
@@ -223,11 +261,116 @@ impl Draw {
         if !matches!(coverage.mode_identity()?, Mode::One | Mode::ImageLuma8) {
             return Err(PilError::ValueError("bad transparency mask".into()));
         }
-        self.image.paste_at(
+        Ok(())
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn execute_text_color_mask_with_context(
+        &mut self,
+        position: (i32, i32),
+        color: &crate::image::Image,
+        coverage: &crate::image::Image,
+        requested_backend: Option<crate::compute::Backend>,
+        context: ExecutionContext,
+    ) -> Result<(), PilError> {
+        let output = self.image.execute_paste_at_with_context(
             crate::ops::paste::PasteSource::Image(Box::new(color.clone())),
-            Some(position),
-            Some(coverage),
+            position,
+            coverage,
+            requested_backend,
+            context,
+        )?;
+        if let Some(output) = output {
+            self.replace_draw_output(output);
+        }
+        Ok(())
+    }
+
+    /// Converts an RGBA glyph mask into Pillow's color-source and coverage
+    /// images, composes them through the destination mode's Paste strategy,
+    /// and restores eager Draw mutation semantics.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn paste_embedded_color_mask(
+        &mut self,
+        position: (i32, i32),
+        size: (u32, u32),
+        mut rgba_mask: Vec<u8>,
+        ink_alpha: u8,
+        requested_backend: Option<crate::compute::Backend>,
+        context: &ExecutionContext,
+    ) -> Result<(), PilError> {
+        let expected_bytes =
+            crate::checked_dims::CheckedDims::new(size.0, size.1, 4)?.total_bytes();
+        if rgba_mask.len() != expected_bytes {
+            return Err(PilError::InternalError(
+                "embedded-color font mask did not match its RGBA dimensions".into(),
+            ));
+        }
+        let mut coverage = Vec::with_capacity(expected_bytes / 4);
+        for pixel in rgba_mask.chunks_exact_mut(4) {
+            coverage.push(pixel[3]);
+            pixel[3] = ink_alpha;
+        }
+        let color = crate::image::Image::frombytes_owned(Mode::ImageRgba8, size, rgba_mask)?;
+        let coverage = crate::image::Image::frombytes_owned(Mode::ImageLuma8, size, coverage)?;
+        self.paste_text_color_mask_with_context(
+            position,
+            &color,
+            &coverage,
+            requested_backend,
+            *context,
         )
+    }
+
+    /// Read fill opacity from its semantic lane, using opaque alpha for modes
+    /// whose fourth stored byte is color, padding, or a numeric sample.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn embedded_color_ink_alpha(mode: Mode, ink: Option<i64>, fill: (u8, u8, u8, u8)) -> u8 {
+        match mode {
+            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
+                ink.map_or(fill.1, |value| value.to_le_bytes()[1])
+            }
+            Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 => {
+                ink.map_or(fill.3, |value| value.to_le_bytes()[3])
+            }
+            _ => 255,
+        }
+    }
+
+    /// Selects the declared child route for embedded-color Text composition.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn embedded_color_paste_route_selected(
+        raster_mode: Mode,
+        context_mode: Mode,
+        embedded_color: bool,
+        stroke_width: f32,
+        size: (u32, u32),
+    ) -> Result<bool, PilError> {
+        let route_inputs = crate::compute::registry::support::OperationRouteInputs {
+            requested_backend: None,
+            width: size.0,
+            height: size.1,
+            loaded_image: None,
+            byte_storage_length_matches_pixel_count: None,
+            reducing_gap_pre_reduction_selected: None,
+            reducing_gap_fused_resize_selected: None,
+            draw_context_mode: Some(context_mode),
+            bitmap_mask_mode: None,
+            draw_embedded_color: Some(embedded_color),
+            draw_text_stroke_width_zero: Some(stroke_width == 0.0),
+        };
+        let child = crate::compute::pool_cpu::ops::draw::ops::SUPPORT
+            .conditional_pipeline_child(raster_mode, route_inputs);
+        match child {
+            Some(crate::compute::registry::support::OperationId::Paste) => Ok(true),
+            Some(_) => Err(PilError::InternalError(
+                "Draw Text selected an unexpected composed child".into(),
+            )),
+            None if embedded_color && stroke_width == 0.0 => Err(PilError::InternalError(
+                "Draw Text support omitted its embedded-color Paste child".into(),
+            )),
+            None => Ok(false),
+        }
     }
 
     fn pack_text_ink(fill: (u8, u8, u8, u8)) -> i64 {
@@ -275,6 +418,9 @@ impl Draw {
     ///
     /// Returns [`PilError`] when text option validation, font rendering, or
     /// destination materialization fails.
+    // TODO(pillow-rs#brg0): rerun the exact CPU `text.mode.cmyk` and
+    // `text.nuanced.stroked-rgba` output cases after CPU source closure.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn text_with_options(
         &mut self,
         x: i32,
@@ -337,6 +483,10 @@ impl Draw {
 
     /// Draws multiline text using the same line stepping as Pillow's public
     /// `ImageDraw.multiline_text` path.
+    // TODO(pillow-rs#brg0): rerun the exact CPU centered-anchor, explicit-font-
+    // size, three-line-spacing, and CMYK multiline output cases after source
+    // closure; retain frozen case IDs and output bytes.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn multiline_text_with_options(
         &mut self,
         x: f64,
@@ -358,6 +508,7 @@ impl Draw {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn multiline_text_with_options_ref(
         &mut self,
         x: f64,
@@ -371,14 +522,66 @@ impl Draw {
         let lines = text.split('\n');
         let positioned =
             multiline_text_positions(x, y, &lines, font, spacing, options, self.effective_mode()?)?;
+        self.validate_text_options(options)?;
+        let (requested_backend, context) = self.cpu_execution_context()?;
+        self.draw_positioned_text_lines(
+            positioned,
+            font,
+            fill,
+            options,
+            requested_backend,
+            &context,
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn multiline_text_with_options_ref_with_context(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: FontTextRef<'_>,
+        font: &crate::font::FreeTypeFont,
+        fill: (u8, u8, u8, u8),
+        spacing: f64,
+        options: &crate::font::ImageFontTextOptions,
+        requested_backend: Option<crate::compute::Backend>,
+        context: &ExecutionContext,
+    ) -> Result<(), PilError> {
+        let lines = text.split('\n');
+        let positioned =
+            multiline_text_positions(x, y, &lines, font, spacing, options, self.effective_mode()?)?;
+        self.validate_text_options(options)?;
+        self.draw_positioned_text_lines(positioned, font, fill, options, requested_backend, context)
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn draw_positioned_text_lines<'a>(
+        &mut self,
+        positioned: Vec<crate::font::text_layout::PositionedTextLine<'a>>,
+        font: &crate::font::FreeTypeFont,
+        fill: (u8, u8, u8, u8),
+        options: &crate::font::ImageFontTextOptions,
+        requested_backend: Option<crate::compute::Backend>,
+        context: &ExecutionContext,
+    ) -> Result<(), PilError> {
         for line in positioned {
             let mut line_options = options.clone();
             line_options.anchor = Some(line.anchor);
-            self.draw_text_at(line.x, line.y, line.text, font, fill, &line_options)?;
+            self.draw_text_at(
+                line.x,
+                line.y,
+                line.text,
+                font,
+                fill,
+                &line_options,
+                requested_backend,
+                context,
+            )?;
         }
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn draw_text_at(
         &mut self,
         x: f64,
@@ -387,10 +590,21 @@ impl Draw {
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
+        requested_backend: Option<crate::compute::Backend>,
+        context: &ExecutionContext,
     ) -> Result<(), PilError> {
         let mut options = options.clone();
         options.start = Some((x.fract(), y.fract()));
-        self.text_with_options_inner(x as i32, y as i32, text, font, fill, &options)?;
+        self.text_with_options_inner_with_context(
+            x as i32,
+            y as i32,
+            text,
+            font,
+            fill,
+            &options,
+            requested_backend,
+            context,
+        )?;
         Ok(())
     }
 
@@ -431,7 +645,40 @@ impl Draw {
         })
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    /// Draw multiline text with an execution route selected by its parent.
+    #[doc(hidden)]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[allow(clippy::too_many_arguments)]
+    pub fn multiline_text_with_optional_font_input_with_context(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: crate::font::ImageFontTextInput,
+        font: Option<&crate::font::FreeTypeFont>,
+        fill: (u8, u8, u8, u8),
+        spacing: f64,
+        size: Option<f32>,
+        options: &crate::font::ImageFontTextOptions,
+        requested_backend: Option<crate::compute::Backend>,
+        context: &ExecutionContext,
+    ) -> Result<(), PilError> {
+        crate::font::with_text_font(font, size, |font| {
+            let text = text.into_font_text()?;
+            self.multiline_text_with_options_ref_with_context(
+                x,
+                y,
+                text.as_ref(),
+                font,
+                fill,
+                spacing,
+                options,
+                requested_backend,
+                context,
+            )
+        })
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn text_with_options_inner(
         &mut self,
         x: i32,
@@ -443,12 +690,44 @@ impl Draw {
     ) -> Result<(u32, u32), PilError> {
         self.validate_text_options(options)?;
         let (requested_backend, context) = self.cpu_execution_context()?;
+        self.text_with_options_inner_with_context(
+            x,
+            y,
+            text,
+            font,
+            fill,
+            options,
+            requested_backend,
+            &context,
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn text_with_options_inner_with_context(
+        &mut self,
+        x: i32,
+        y: i32,
+        text: FontTextRef<'_>,
+        font: &crate::font::FreeTypeFont,
+        fill: (u8, u8, u8, u8),
+        options: &crate::font::ImageFontTextOptions,
+        requested_backend: Option<crate::compute::Backend>,
+        context: &ExecutionContext,
+    ) -> Result<(u32, u32), PilError> {
         let telemetry =
             crate::compute::begin_eager_cpu_operation_telemetry("DrawText", requested_backend);
         let mut operation_receipts =
             crate::compute::PipelineOperationTelemetryCapture::begin_preserving_current();
-        let result =
-            self.text_with_options_inner_selected(x, y, text, font, fill, options, &context);
+        let result = self.text_with_options_inner_selected(
+            x,
+            y,
+            text,
+            font,
+            fill,
+            options,
+            requested_backend,
+            context,
+        );
         let output_bytes = if result.is_ok() {
             self.image
                 .materialized_shared()
@@ -479,7 +758,7 @@ impl Draw {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn text_with_options_inner_selected(
         &mut self,
         x: i32,
@@ -488,6 +767,7 @@ impl Draw {
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
+        requested_backend: Option<crate::compute::Backend>,
         context: &ExecutionContext,
     ) -> Result<((u32, u32), Option<StrategySelection>), PilError> {
         if options.stroke_width != 0.0
@@ -503,6 +783,7 @@ impl Draw {
                 font,
                 stroke_fill,
                 &stroke_options,
+                requested_backend,
                 context,
             )?;
 
@@ -511,16 +792,32 @@ impl Draw {
             fill_options.stroke_filled = false;
             fill_options.stroke_fill = None;
             fill_options.ink = Some(Self::pack_text_ink(fill));
-            let (width, height, fill_selection) =
-                self.text_render_and_compose(x, y, text, font, fill, &fill_options, context)?;
+            let (width, height, fill_selection) = self.text_render_and_compose(
+                x,
+                y,
+                text,
+                font,
+                fill,
+                &fill_options,
+                requested_backend,
+                context,
+            )?;
             return Ok(((width, height), fill_selection.or(stroke_selection)));
         }
-        let (width, height, selection) =
-            self.text_render_and_compose(x, y, text, font, fill, options, context)?;
+        let (width, height, selection) = self.text_render_and_compose(
+            x,
+            y,
+            text,
+            font,
+            fill,
+            options,
+            requested_backend,
+            context,
+        )?;
         Ok(((width, height), selection))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn text_render_and_compose(
         &mut self,
         x: i32,
@@ -529,6 +826,7 @@ impl Draw {
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
+        requested_backend: Option<crate::compute::Backend>,
         context: &ExecutionContext,
     ) -> Result<(u32, u32, Option<StrategySelection>), PilError> {
         let mode = self.effective_mode()?;
@@ -594,6 +892,26 @@ impl Draw {
         let execution_mode = selection.implementation.mode;
         let draw_x = x.saturating_add(offset.0);
         let draw_y = y.saturating_add(offset.1);
+        if Self::embedded_color_paste_route_selected(
+            raster_mode,
+            mode,
+            options.embedded_color,
+            options.stroke_width,
+            (w, h),
+        )? {
+            // The explicit RGBA drawing context may differ from RGB storage;
+            // it owns the semantic ink lane used by the composed Paste.
+            let ink_alpha = Self::embedded_color_ink_alpha(mode, options.ink, fill);
+            self.paste_embedded_color_mask(
+                (draw_x, draw_y),
+                (w, h),
+                mask,
+                ink_alpha,
+                requested_backend,
+                context,
+            )?;
+            return Ok((w, h, Some(selection)));
+        }
         let output = crate::compute::pool_cpu::ops::draw::ops::apply_text(
             selection,
             crate::compute::pool_cpu::ops::draw::TextComposeInput {

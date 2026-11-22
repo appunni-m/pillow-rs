@@ -6,6 +6,7 @@ use crate::raster::{DynamicImage, GrayImage, Mode, RgbImage, RgbaImage};
 
 const WRONG_MODE: &str = "image has wrong mode";
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn set_mode(image: &mut DynamicImage, target: Mode) -> Result<(), PilError> {
     let source = image.mode();
     if source == target {
@@ -24,6 +25,7 @@ pub(crate) fn set_mode(image: &mut DynamicImage, target: Mode) -> Result<(), Pil
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn one_to_luma(image: &mut DynamicImage) -> Result<(), PilError> {
     let mut pixels = match take_image(image) {
         DynamicImage::One(pixels) => pixels,
@@ -41,6 +43,7 @@ fn one_to_luma(image: &mut DynamicImage) -> Result<(), PilError> {
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn luma_to_one(image: &mut DynamicImage) -> Result<(), PilError> {
     let mut pixels = match take_image(image) {
         DynamicImage::ImageLuma8(pixels) => pixels,
@@ -58,6 +61,7 @@ fn luma_to_one(image: &mut DynamicImage) -> Result<(), PilError> {
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn rgb_to_four_byte_mode(image: &mut DynamicImage, target: Mode) -> Result<(), PilError> {
     let DynamicImage::ImageRgb8(source) = image else {
         return Err(PilError::InternalError(
@@ -99,6 +103,7 @@ fn rgb_to_four_byte_mode(image: &mut DynamicImage, target: Mode) -> Result<(), P
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn four_byte_to_rgb(image: &mut DynamicImage) -> Result<(), PilError> {
     let source = match image {
         DynamicImage::ImageRgba8(source) | DynamicImage::ImageRgbx8(source) => source,
@@ -136,6 +141,7 @@ fn four_byte_to_rgb(image: &mut DynamicImage) -> Result<(), PilError> {
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn rgba_to_rgbx(image: &mut DynamicImage) -> Result<(), PilError> {
     let pixels = match take_image(image) {
         DynamicImage::ImageRgba8(pixels) => pixels,
@@ -150,6 +156,7 @@ fn rgba_to_rgbx(image: &mut DynamicImage) -> Result<(), PilError> {
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn rgbx_to_rgba(image: &mut DynamicImage) -> Result<(), PilError> {
     let mut pixels = match take_image(image) {
         DynamicImage::ImageRgbx8(pixels) => pixels,
@@ -167,10 +174,12 @@ fn rgbx_to_rgba(image: &mut DynamicImage) -> Result<(), PilError> {
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn take_image(image: &mut DynamicImage) -> DynamicImage {
     std::mem::replace(image, DynamicImage::One(GrayImage::new(0, 0)))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn checked_pixel_count(width: u32, height: u32) -> Result<usize, PilError> {
     usize::try_from(width)
         .ok()
@@ -182,6 +191,7 @@ fn checked_pixel_count(width: u32, height: u32) -> Result<usize, PilError> {
         .ok_or_else(|| PilError::DimensionError("ImagingCore mode-change size overflow".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn reserved_bytes(pixel_count: usize, channels: usize) -> Result<Vec<u8>, PilError> {
     let byte_count = pixel_count.checked_mul(channels).ok_or_else(|| {
         PilError::DimensionError("ImagingCore mode-change byte count overflow".into())

@@ -2,6 +2,7 @@
 
 use wide::u8x16;
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn copy_native_bytes(source: &[u8], output: &mut [u8]) -> Option<(u64, u64)> {
     if source.len() != output.len() {
@@ -17,13 +18,13 @@ pub(crate) fn copy_native_bytes(source: &[u8], output: &mut [u8]) -> Option<(u64
         output[offset..offset + 16].copy_from_slice(&block.to_array());
         vector_blocks = vector_blocks.saturating_add(1);
     }
-    let scalar_tail = source.len() - vector_len;
-    if scalar_tail != 0 {
+    let tail_len = source.len() - vector_len;
+    if tail_len != 0 {
         let mut padded = [0u8; 16];
-        padded[..scalar_tail].copy_from_slice(&source[vector_len..]);
+        padded[..tail_len].copy_from_slice(&source[vector_len..]);
         let block = u8x16::new(padded);
-        output[vector_len..].copy_from_slice(&block.to_array()[..scalar_tail]);
+        output[vector_len..].copy_from_slice(&block.to_array()[..tail_len]);
         vector_blocks = vector_blocks.saturating_add(1);
     }
-    Some((vector_blocks, scalar_tail as u64))
+    Some((vector_blocks, 0))
 }

@@ -1,5 +1,9 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
+
+// TODO(pillow-rs#brg0): rerun the exact CPU CMYK text and multiline-text
+// output cases after source closure; compare the raw four channel bytes.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn apply<const RGBA_MASK: bool>(
     mut image: DynamicImage,
     x: i32,
@@ -19,6 +23,9 @@ pub(crate) fn apply<const RGBA_MASK: bool>(
     for text_y in 0..height {
         for text_x in 0..width {
             let pixel_index = (text_y * width + text_x) as usize;
+            // Pillow's DrawBitmap reaches fill_mask_L or fill_mask_RGBA:
+            // L masks use their byte, RGBA masks use alpha, and both blend
+            // every physical destination lane, including all four CMYK bytes.
             let coverage = crate::compute::pool_cpu::ops::draw::helpers::text_mask::coverage::<
                 RGBA_MASK,
             >(pixels, pixel_index);

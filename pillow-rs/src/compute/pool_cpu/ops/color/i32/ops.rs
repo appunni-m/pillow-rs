@@ -6,7 +6,9 @@ crate::compute::pool_cpu::ops::color::helpers::convert::binary::declare_mode_str
 
 use crate::compute::{
     Architecture,
-    registry::support::{InputContract, ModeSupport, OperationId, StrategySelection},
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
+    },
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
@@ -31,6 +33,14 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &[],
 );
 
+pub(crate) const CONVERT_TRANSPARENT_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::ConvertTransparent,
+    Mode::ImageI32,
+    OutputModeRule::ByTargetMode,
+    super::super::ops::TRANSPARENT_I32_INPUTS,
+    &[],
+);
+
 pub(crate) fn execute(
     source: &RgbaImage,
     target: Mode,
@@ -40,6 +50,23 @@ pub(crate) fn execute(
         Architecture::Default => super::default::convert_impl::execute(source, target),
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared I architecture".into(),
+        )),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn execute_transparent(
+    source: &RgbaImage,
+    target: Mode,
+    key: [u8; 3],
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::default::convert_transparent_impl::execute(source, target, key)
+        }
+        _ => Err(PilError::InternalError(
+            "ConvertTransparent selected an undeclared I architecture".into(),
         )),
     }
 }

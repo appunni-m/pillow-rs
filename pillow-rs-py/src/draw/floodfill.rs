@@ -197,20 +197,32 @@ fn tuple_or_scalar<'py>(py: Python<'py>, value: &Bound<'py, PyAny>) -> PyResult<
     PyTuple::new(py, [value.clone()]).map(|tuple| tuple.into_any())
 }
 
-fn prepare_native_image(
-    native_image: Option<&Bound<'_, PyAny>>,
+/// Prepares Mode and routing context without replacing the host PixelAccess.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn prepare_strategy(
+    strategy_image: Option<&Bound<'_, PyAny>>,
+    execution_context: Option<&crate::image::PyExecutionContext>,
 ) -> PyResult<Option<pillow_rs::PreparedFloodFill>> {
-    let Some(native_image) = native_image else {
+    let Some(strategy_image) = strategy_image else {
         return Ok(None);
     };
-    let Ok(image) = native_image.extract::<PyRef<'_, PyImage>>() else {
+    let Ok(image) = strategy_image.extract::<PyRef<'_, PyImage>>() else {
         return Ok(None);
     };
-    pillow_rs::prepare_floodfill(&image.inner)
-        .map(Some)
-        .map_err(super::map_error)
+    let prepared = execution_context.map_or_else(
+        || pillow_rs::prepare_floodfill(&image.inner),
+        |context| {
+            pillow_rs::prepare_floodfill_with_execution_route(
+                &image.inner,
+                context.requested_backend,
+                &context.inner,
+            )
+        },
+    );
+    prepared.map(Some).map_err(super::map_error)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn execute<'py>(
     py: Python<'py>,
     pixel: &Bound<'py, PyAny>,
@@ -220,8 +232,9 @@ pub(super) fn execute<'py>(
     border: Option<&Bound<'py, PyAny>>,
     threshold: &Bound<'py, PyAny>,
     native_image: Option<&Bound<'py, PyAny>>,
+    execution_context: Option<&crate::image::PyExecutionContext>,
 ) -> PyResult<()> {
-    let prepared = prepare_native_image(native_image)?;
+    let prepared = prepare_strategy(native_image, execution_context)?;
     let point = Point {
         x: x.clone(),
         y: y.clone(),

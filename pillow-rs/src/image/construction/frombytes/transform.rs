@@ -176,7 +176,6 @@ fn storage_transform_row(
             input,
             output,
         ),
-        RawDecoderTransform::LabBias => lab_bias(input, output),
         RawDecoderTransform::SwapBytes16 => swap_bytes_16(input, output),
         RawDecoderTransform::InvertBytes => invert_bytes(input, output),
         RawDecoderTransform::ReverseBits => reverse_bits(input, output),
@@ -660,14 +659,6 @@ fn read_u64(sample: &[u8], order: RawByteOrder) -> u64 {
         RawByteOrder::Little => u64::from_le_bytes(bytes),
         RawByteOrder::Big => u64::from_be_bytes(bytes),
         RawByteOrder::Native => u64::from_ne_bytes(bytes),
-    }
-}
-
-fn lab_bias(input: &[u8], output: &mut [u8]) {
-    for (source, destination) in input.chunks_exact(3).zip(output.chunks_exact_mut(3)) {
-        destination[0] = source[0];
-        destination[1] = source[1] ^ 128;
-        destination[2] = source[2] ^ 128;
     }
 }
 

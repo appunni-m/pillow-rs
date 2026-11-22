@@ -42,6 +42,12 @@ pub(crate) fn sample_coordinates(
     }
 }
 
+/// Applies fused multiply-add lane arithmetic within the already selected
+/// mode/architecture Rotate strategy. Target features choose vector lowering;
+/// the fallback keeps the same fused scalar operation per lane.
+// TODO(pillow-rs#3ptb): verify Rotate output and selected-architecture receipts
+// for every bilinear mode/architecture pair in the frozen CPU parity matrix.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn fused_mul_add(a: f64x8, b: f64x8, c: f64x8) -> f64x8 {
     #[cfg(any(

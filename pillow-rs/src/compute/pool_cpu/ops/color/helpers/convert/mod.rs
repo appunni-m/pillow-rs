@@ -16,5 +16,6 @@ pub(crate) mod pixel;
 pub(crate) mod premultiplied;
 pub(crate) mod prepared;
 pub(super) mod target_compositions;
+pub(crate) mod transparent;
 pub(crate) use target_compositions::classify_target_composition;
 pub(crate) mod wide;

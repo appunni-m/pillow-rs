@@ -5,7 +5,7 @@ use crate::compute::registry::support::{
 };
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn support(
     operation: OperationId,
     mode: Mode,
@@ -14,11 +14,6 @@ pub(crate) const fn support(
     architectures: &'static [ImplementationSupport],
 ) -> ModeSupport {
     match mode {
-        Mode::One => ModeSupport::Rejected {
-            mode,
-            reason: "conversion from 1 to LA not supported",
-            kind: RejectionKind::ValueError,
-        },
         Mode::ImageLab8 => ModeSupport::Rejected {
             mode,
             reason: "conversion from LAB to RGBA not supported",
@@ -68,7 +63,8 @@ pub(crate) const fn support(
             architectures,
             "native high-depth alpha output extends Pillow putalpha",
         ),
-        Mode::ImageLuma8
+        Mode::One
+        | Mode::ImageLuma8
         | Mode::ImageLumaA8
         | Mode::ImageLaPremultiplied8
         | Mode::ImagePalette8
@@ -113,6 +109,7 @@ macro_rules! declare_strategies {
         pub(crate) type AlphaStrategy<'a> = PreparedAlpha<AlphaArchitectureStrategy<'a>>;
 
 
+        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
         #[inline]
         pub(crate) fn prepare_alpha<'a>(
             image: &'a alpha_scalar::Input, alpha: u8, ctx: &AlphaContext,
@@ -135,6 +132,7 @@ macro_rules! declare_strategies {
         }
 
         impl AlphaStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
             #[inline]
             pub(crate) fn execute(self) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
                 match self.implementation {

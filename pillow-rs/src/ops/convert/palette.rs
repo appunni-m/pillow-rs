@@ -9,6 +9,7 @@ use crate::raster::{DynamicImage, Mode};
 /// Per-entry alpha table Pillow applies when converting a palette image to an
 /// alpha band: a single transparent index becomes 0 with everything else 255,
 /// a PNG `tRNS` table is used verbatim.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn palette_alpha_for_convert(img: &Image) -> Option<Vec<u8>> {
     if let Some(transparency) = img.pending_palette_transparency() {
         return match transparency {
@@ -26,12 +27,13 @@ pub(super) fn palette_alpha_for_convert(img: &Image) -> Option<Vec<u8>> {
     img.palette_alpha().filter(|alpha| !alpha.is_empty())
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn convert_prepared_palette(
     image: &Image,
     source_mode: Mode,
     target: Mode,
     dither: Option<&str>,
+    context_override: Option<crate::compute::ExecutionContext>,
 ) -> Result<Image, PilError> {
     let is_scalar_source = matches!(source_mode, Mode::ImageI32 | Mode::ImageF32);
     let should_parse_dither =
@@ -77,7 +79,8 @@ pub(super) fn convert_prepared_palette(
         matrix: None,
         dither: prepared_dither,
     };
-    let (selected_backend, context) = image.cpu_arch_execution_route()?;
+    let (selected_backend, routed_context) = image.cpu_arch_execution_route()?;
+    let context = context_override.unwrap_or(routed_context);
     let fallback_reason = (selected_backend == Some(Backend::Gpu)).then(|| {
         format!(
             "Convert palette metadata is produced by the CPU wrapper route; used CPU {:?}",
@@ -122,7 +125,7 @@ pub(super) fn convert_prepared_palette(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn wrap_prepared_palette(
     image: &Image,
     target: Mode,

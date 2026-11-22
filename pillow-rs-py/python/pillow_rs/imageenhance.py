@@ -1,5 +1,5 @@
 """ImageEnhance — brightness, contrast, color, sharpness adjustment. Pillow-compatible."""
-from .image import Image
+from .image import Image, _execution_context_scope
 
 
 class _Enhance:
@@ -7,25 +7,35 @@ class _Enhance:
     def __init__(self, image: Image):
         self.image = image
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def enhance(self, factor: float):
-        return Image(self._apply(factor))
+        with _execution_context_scope(self.image):
+            rust_image = self._apply(factor)
+            rust_image = self.image._bind_current_execution_context(rust_image)
+            return Image(rust_image)
 
 
 class Brightness(_Enhance):
     """Adjust brightness. 1.0 = unchanged, 0.0 = black."""
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def _apply(self, factor):
         return self.image._rust_image.enhance_brightness(factor)
 
 
 class Color(_Enhance):
     """Adjust color saturation. 1.0 = unchanged, 0.0 = grayscale."""
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def __init__(self, image: Image):
         super().__init__(image)
         self.intermediate_mode = "LA" if "A" in image.getbands() else "L"
+        execution_context = None
         if self.intermediate_mode == image.mode:
             self.degenerate = image
         else:
-            self.degenerate = Image(image._rust_image.color_degenerate())
+            with _execution_context_scope(image):
+                execution_context = image._current_execution_context()
+                degenerate = image._rust_image.color_degenerate(execution_context)
+            self.degenerate = Image(degenerate)
             self.degenerate._copy_info_state_from(image)
             if image.mode in ("RGB", "P") and "transparency" in image.info:
                 transparency = image.info["transparency"]
@@ -34,8 +44,11 @@ class Color(_Enhance):
                     warnings.warn("Palette images with Transparency expressed in bytes should be converted to RGBA images")
                     self.degenerate._info.pop("transparency", None)
                 elif transparency is not None:
-                    self.degenerate._info["transparency"] = image._rust_image.color_transparency(transparency)
+                    self.degenerate._info["transparency"] = image._rust_image.color_transparency(
+                        transparency, execution_context
+                    )
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def enhance(self, factor: float):
         # Blend(degenerate, image, 0.0) is an independent copy of degenerate.
         # Keep Blend's mode/size validation and metadata-loading behavior on
@@ -50,7 +63,8 @@ class Color(_Enhance):
             and self.image.size == self.degenerate.size
             and not self.degenerate._transpose_loads_info
         ):
-            result = self.degenerate.copy()
+            with _execution_context_scope(self.image):
+                result = self.degenerate.copy()
             result._copy_info_state_from(self.degenerate)
             return result
 
@@ -68,22 +82,42 @@ class Color(_Enhance):
             and self.image.size == self.degenerate.size
             and not self.degenerate._transpose_loads_info
         ):
-            result = self.image.copy()
+            with _execution_context_scope(self.image):
+                result = self.image.copy()
             result._copy_info_state_from(self.degenerate)
             return result
-        from .operations import blend
-        return blend(self.degenerate, self.image, factor)
+        from .operations import _image_blend_with_context
+        rust_result = _image_blend_with_context(
+            self.degenerate,
+            self.image,
+            factor,
+            self.image,
+            load_inputs=True,
+        )
+        return self.degenerate._new(rust_result)
 
 
 class Contrast(_Enhance):
     """Adjust contrast. 1.0 = unchanged, 0.0 = solid gray."""
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def __init__(self, image: Image):
         super().__init__(image)
-        self.degenerate = Image(image._rust_image.contrast_degenerate())
+        with _execution_context_scope(image):
+            execution_context = image._current_execution_context()
+            degenerate = image._rust_image.contrast_degenerate(execution_context)
+        self.degenerate = Image(degenerate)
 
+    # VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     def _apply(self, factor):
-        from . import _core
-        return _core.image_blend(self.degenerate._rust_image, self.image._rust_image, factor)
+        from .operations import _image_blend_with_context
+
+        return _image_blend_with_context(
+            self.degenerate,
+            self.image,
+            factor,
+            self.image,
+            load_inputs=False,
+        )
 
 
 class Sharpness(_Enhance):
@@ -96,8 +130,13 @@ class Sharpness(_Enhance):
         # filter, so validate its own Rust support contract here.
         image._rust_image.preflight_enhance_sharpness()
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def _apply(self, factor):
         return self.image._rust_image.enhance_sharpness(factor)
 
+    # TODO(pillow-rs#3ptb): verify factor-protocol callbacks, faults, selected
+    # and fallback receipts, and public-call latency in the CPU matrix.
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def enhance(self, factor: float):
-        return self.image._new(self._apply(factor))
+        with _execution_context_scope(self.image):
+            return self.image._new(self._apply(factor))

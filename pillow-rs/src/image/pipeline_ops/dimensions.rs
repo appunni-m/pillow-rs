@@ -73,6 +73,7 @@ fn known_rotated_dimensions(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 fn known_contain_cover_dimensions(
     width: u32,
     height: u32,
@@ -80,6 +81,9 @@ fn known_contain_cover_dimensions(
     target_height: u32,
     cover: bool,
 ) -> Option<(u32, u32)> {
+    if cover && height == 0 && target_height != 0 {
+        return Some((target_width, 0));
+    }
     if width == 0 || height == 0 || target_width == 0 || target_height == 0 {
         return None;
     }

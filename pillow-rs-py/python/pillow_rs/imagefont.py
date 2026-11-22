@@ -268,6 +268,7 @@ class FreeTypeFont:
             stroke_width, anchor
         ))
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def getlength(self, text, mode="", direction=None, features=None, language=None):
         _string_length_check(text)
         return self._rust_font.getlength_with_options(

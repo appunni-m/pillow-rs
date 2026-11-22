@@ -3,7 +3,7 @@
 use crate::pipeline::ResampleFilter;
 use crate::raster::Rgba32FImage;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &Rgba32FImage,
     width: u32,

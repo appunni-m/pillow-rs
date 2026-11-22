@@ -20,6 +20,7 @@ static ARCHITECTURES: [ImplementationSupport; 3] = luma16_copy_architectures(
     StrategyGuard::NativeCropBytes { channels: 2 },
 );
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Crop,
     Mode::ImageI16N,

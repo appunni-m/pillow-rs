@@ -67,6 +67,7 @@ fn simd_write_clipped_ellipse_spans(
 /// byte SIMD span writes.  The geometry helper emits the same ordered spans
 /// as the CPU canvas; this adapter owns the destination buffer and therefore
 /// preserves repeated-span blending without entering a CPU pixel loop.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_ellipse_native(
     img: &DynamicImage,
     x0: i32,
@@ -123,6 +124,7 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_ellipse_
     writer.into_image().map(Some)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_arc_native(
     img: &DynamicImage,
     x0: i32,
@@ -181,6 +183,7 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_arc_nati
     writer.into_image().map(Some)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_chord_native(
     img: &DynamicImage,
     x0: i32,
@@ -256,6 +259,7 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_chord_na
     writer.into_image().map(Some)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_pieslice_native(
     img: &DynamicImage,
     x0: i32,
@@ -390,7 +394,7 @@ fn polygon_fill_intervals(
     rows
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+// VERIFY: source=reviewed@2026-11-21; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
 pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_polygon_native(
     img: &DynamicImage,
     points: &[(i32, i32)],

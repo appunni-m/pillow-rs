@@ -155,9 +155,9 @@ pub trait ImageOpsEqualizeCallbacks {
 /// before the public histogram callback. After building the LUT, separate
 /// wrapper-mode callbacks reproduce Pillow's `_lut` checks before public `point`.
 // TODO(pillow-rs#3ptb): freeze wrapper output, mask fault order, mode-property
-// changes across `_lut` checks, formatting faults, and terminal selection
-// receipts.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// changes across `_lut` checks, formatting faults, and route receipts proving
+// one captured context reaches public Convert, Histogram, and Point callbacks.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn equalize_with_callbacks<C: ImageOpsEqualizeCallbacks>(
     callbacks: &mut C,
@@ -198,7 +198,7 @@ pub fn equalize_with_callbacks<C: ImageOpsEqualizeCallbacks>(
     callbacks.point(&image, lut)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn equalize_lut_with_callbacks<C: ImageOpsEqualizeCallbacks>(
     callbacks: &mut C,
     histogram: &C::Histogram,
@@ -260,7 +260,7 @@ fn equalize_lut_with_callbacks<C: ImageOpsEqualizeCallbacks>(
 /// or another [`PilError`] when mode detection fails.
 // TODO(pillow-rs#3ptb): Verify this lazy Rust API's mode/architecture route,
 // output, and fallback receipts in the frozen CPU matrix.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode_identity()?;
     OperationId::Equalize
@@ -271,7 +271,7 @@ pub fn equalize(image: &Image) -> Result<Image, PilError> {
 }
 
 /// Builds the Equalize lookup table from counts collected by a host wrapper.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn equalize_lut_from_histogram(image: &Image, histogram: &[u32]) -> Result<Vec<u8>, PilError> {
     let lut =
@@ -288,7 +288,7 @@ pub fn equalize_lut_from_histogram(image: &Image, histogram: &[u32]) -> Result<V
 }
 
 /// Equalizes an image after validating an optional Pillow mask.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, PilError> {
     match mask {
         ImageOpsMask::None => equalize(image),

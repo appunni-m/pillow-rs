@@ -7,6 +7,7 @@ use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{GrayAlphaImage, Pixel, Rgb};
 
 /// Write a gray-alpha carrier without changing its exact mode identity.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply(
     canvas: &mut GrayAlphaImage,
     x: i32,
@@ -46,6 +47,7 @@ pub(crate) fn apply(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn blend_pixel(
     canvas: &mut GrayAlphaImage,
     x: u32,

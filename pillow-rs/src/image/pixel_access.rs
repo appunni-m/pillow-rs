@@ -22,8 +22,13 @@ pub enum PutPixelValue {
     Invalid,
 }
 
+type PutPixelExecutionRoute = (
+    Option<crate::compute::Backend>,
+    crate::compute::ExecutionContext,
+);
 mod palette;
 mod palette_components;
+mod putpixel;
 
 pub use palette_components::PaletteColorComponent;
 use palette_components::{
@@ -37,7 +42,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError::IndexError`] when coordinates are outside the image.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn getpixel(&self, x: u32, y: u32) -> Result<(u8, u8, u8, u8), PilError> {
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let img = self.materialized_shared()?;
@@ -74,10 +79,39 @@ impl Image {
     /// loaded `RGB` image backed by three-byte RGB pixels. Callers can then
     /// preserve deferred decoding and pipeline execution on their ordinary
     /// materialization path. Coordinates are checked before reading a pixel.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[doc(hidden)]
     #[inline]
     pub fn getpixel_rgb_if_loaded(&self, x: u32, y: u32) -> Result<Option<[u8; 3]>, PilError> {
+        self.getpixel_rgb_if_loaded_with_context(x, y, None)
+    }
+
+    /// Reads an already-loaded native RGB pixel with a wrapper-captured route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getpixel_rgb_if_loaded_with_context(
+        &self,
+        x: u32,
+        y: u32,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Option<[u8; 3]>, PilError> {
+        let execution_route =
+            execution_context.map(|context| (self.cpu_arch_execution_route_advisory().0, context));
+        self.getpixel_rgb_if_loaded_with_execution_route(x, y, execution_route)
+    }
+
+    /// Reads an already-loaded native RGB pixel with a captured backend/architecture route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getpixel_rgb_if_loaded_with_execution_route(
+        &self,
+        x: u32,
+        y: u32,
+        execution_route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
+    ) -> Result<Option<[u8; 3]>, PilError> {
         let Image::Loaded(data) = self else {
             return Ok(None);
         };
@@ -87,7 +121,8 @@ impl Image {
         if x >= data.image.width() || y >= data.image.height() {
             return Err(PilError::IndexError("image index out of range".into()));
         }
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, context) =
+            execution_route.unwrap_or_else(|| self.cpu_arch_execution_route_advisory());
         let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_pixel(
             Mode::ImageRgb8,
             &context,
@@ -109,8 +144,39 @@ impl Image {
     }
 
     /// Returns one pixel with Pillow's mode-specific scalar or tuple shape.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // TODO(pillow-rs#3ptb): verify mode outputs, input faults, and exact
+    // architecture/fallback receipts for GetPixel and stored PixelAccess.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn getpixel_formatted(&self, x: u32, y: u32) -> Result<FormattedPixelValue, PilError> {
+        self.getpixel_formatted_with_context(x, y, None)
+    }
+
+    /// Returns one pixel using a route captured by a host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getpixel_formatted_with_context(
+        &self,
+        x: u32,
+        y: u32,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<FormattedPixelValue, PilError> {
+        let execution_route =
+            execution_context.map(|context| (self.cpu_arch_execution_route_advisory().0, context));
+        self.getpixel_formatted_with_execution_route(x, y, execution_route)
+    }
+
+    /// Returns one pixel using a captured backend/architecture route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getpixel_formatted_with_execution_route(
+        &self,
+        x: u32,
+        y: u32,
+        execution_route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
+    ) -> Result<FormattedPixelValue, PilError> {
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let img = self.materialized_shared()?;
         operation_receipts.capture();
@@ -118,7 +184,8 @@ impl Image {
         if x >= width || y >= height {
             return Err(PilError::IndexError("image index out of range".into()));
         }
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, context) =
+            execution_route.unwrap_or_else(|| self.cpu_arch_execution_route_advisory());
         let selection =
             crate::compute::pool_cpu::ops::analysis::ops::select_get_pixel(img.mode(), &context)?;
         let value = crate::compute::pool_cpu::ops::analysis::ops::execute_get_pixel(
@@ -152,18 +219,12 @@ impl Image {
     /// Returns [`PilError::IndexError`] when coordinates are outside the image,
     /// or another [`PilError`] when image size lookup requires decoding and that
     /// fails.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn putpixel(&mut self, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) -> Result<(), PilError> {
         let (w, h) = self.size()?;
         if x >= w || y >= h {
             return Err(PilError::IndexError("image index out of range".into()));
         }
-        let (r, g, b) = if self.known_mode_identity() == Some(crate::raster::Mode::ImageLab8) {
-            // The public LAB bands expose signed A/B values, while the shared
-            // RGB8 raster stores them with Pillow's unsigned +128 bias.
-            (r, g.wrapping_add(128), b.wrapping_add(128))
-        } else {
-            (r, g, b)
-        };
         let (color, palette_index, updated_palette) = if self.has_palette_mode() {
             if a != 255 {
                 return Err(PilError::ValueError(
@@ -193,6 +254,24 @@ impl Image {
             *palette = Some(updated_palette);
         }
         *self = new_self;
+        Ok(())
+    }
+
+    /// Queues a byte pixel write under a route captured by a host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putpixel_with_execution_context(
+        &mut self,
+        x: u32,
+        y: u32,
+        r: u8,
+        g: u8,
+        b: u8,
+        a: u8,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.putpixel(x, y, r, g, b, a)?;
+        *self = self.clone().with_execution_context(context);
         Ok(())
     }
 
@@ -276,6 +355,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns the same errors as [`Image::putpixel`].
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8) -> Result<(), PilError> {
         let (width, height) = self.size()?;
         if x >= width || y >= height {
@@ -334,8 +414,19 @@ impl Image {
     /// conversion here so `putpixel` preserves Pillow's modulo-65536 behavior
     /// for negative and over-range values without routing the value through the
     /// eight-bit `PipelineOp::PutPixel` representation.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn putpixel_l16(&mut self, x: u32, y: u32, value: i64) -> Result<(), PilError> {
+        self.putpixel_l16_with_route(x, y, value, None)
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn putpixel_l16_with_route(
+        &mut self,
+        x: u32,
+        y: u32,
+        value: i64,
+        route: Option<PutPixelExecutionRoute>,
+    ) -> Result<(), PilError> {
         let (width, height) = self.size()?;
         if x >= width || y >= height {
             return Err(PilError::IndexError("image index out of range".into()));
@@ -350,21 +441,24 @@ impl Image {
                 "putpixel I;16 storage mismatch".into(),
             ));
         }
-        self.putpixel_sample_at(
+        self.putpixel_sample_at_with_route(
             mode,
             pixel_index,
             crate::compute::pool_cpu::ops::put::ops::PutPixelValueAtInput::Luma16(value as u16),
+            route,
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-    fn putpixel_sample_at(
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn putpixel_sample_at_with_route(
         &mut self,
         mode: Mode,
         pixel_index: usize,
         input: crate::compute::pool_cpu::ops::put::ops::PutPixelValueAtInput,
+        route: Option<PutPixelExecutionRoute>,
     ) -> Result<(), PilError> {
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, context) =
+            route.unwrap_or_else(|| self.cpu_arch_execution_route_advisory());
         let selection =
             crate::compute::pool_cpu::ops::put::ops::select_put_pixel_value_at(mode, &context)?;
 
@@ -408,21 +502,24 @@ impl Image {
     /// floating-point sample. The ordinary byte-oriented mode helper remains
     /// intentionally narrow for `L`, `1`, and `P` inputs. The source raster's
     /// exact identity determines whether the value is stored as I32 or F32.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn putpixel_mode_scalar(&mut self, x: u32, y: u32, value: f64) -> Result<(), PilError> {
         let (width, height) = self.size()?;
         if x >= width || y >= height {
             return Err(PilError::IndexError("image index out of range".into()));
         }
         let image_mode = self.mode_identity()?;
-        self.putpixel_mode_scalar_for_mode(x, y, value, image_mode)
+        self.putpixel_mode_scalar_for_mode(x, y, value, image_mode, None)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn putpixel_mode_scalar_for_mode(
         &mut self,
         x: u32,
         y: u32,
         value: f64,
         image_mode: Mode,
+        route: Option<PutPixelExecutionRoute>,
     ) -> Result<(), PilError> {
         let (width, height) = self.size()?;
         if x >= width || y >= height {
@@ -436,10 +533,11 @@ impl Image {
             .and_then(|row| row.checked_add(x as usize))
             .ok_or_else(|| PilError::DimensionError("pixel index overflow".into()))?;
         let bytes = super::data_access::putpixel_numeric_bytes(image_mode, value)?;
-        self.putpixel_sample_at(
+        self.putpixel_sample_at_with_route(
             image_mode,
             pixel_index,
             crate::compute::pool_cpu::ops::put::ops::PutPixelValueAtInput::NumericBytes(bytes),
+            route,
         )
     }
 
@@ -452,6 +550,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns a palette allocation or component-range error.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn prepare_putpixel_palette(
         &mut self,
         value: PutPixelValue,
@@ -821,107 +920,5 @@ impl Image {
         }
         self.replace_indexed_palette(&palette, "RGBA")?;
         Ok(index as u8)
-    }
-
-    /// Applies Pillow's public `putpixel` scalar/tuple normalization.
-    pub fn putpixel_value(&mut self, x: u32, y: u32, value: PutPixelValue) -> Result<(), PilError> {
-        let allocates_palette_color = self.has_palette_samples()
-            && matches!(&value, PutPixelValue::Components(values) if matches!(values.len(), 3 | 4));
-        let value = if allocates_palette_color {
-            let reserved = self.palette_reserved_indices();
-            self.prepare_putpixel_palette(value, &reserved)?
-        } else {
-            self.prepare_putpixel_palette(value, &[])?
-        };
-        let mode = self.mode_identity()?;
-        match value {
-            PutPixelValue::Integer(value) => {
-                if is_l16_identity(mode) {
-                    return self.putpixel_l16(x, y, value);
-                }
-                if mode == Mode::ImageI32 {
-                    // getink narrows the signed integer before storage. Going
-                    // through f64 first loses low bits and saturates on cast.
-                    return self.putpixel_mode_scalar_for_mode(x, y, f64::from(value as i32), mode);
-                }
-                if mode == Mode::ImageF32 {
-                    return self.putpixel_mode_scalar_for_mode(x, y, value as f64, mode);
-                }
-                if matches!(mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
-                    return self.putpixel_mode_for_mode(x, y, value.clamp(0, 255) as u8, mode);
-                }
-                // Multiband integer ink is ABGR, including alpha in bits
-                // 24..31 for two-band images. A singleton tuple takes this
-                // same path; its member is not a clipped first component.
-                let bytes = value.to_le_bytes();
-                self.putpixel(x, y, bytes[0], bytes[1], bytes[2], bytes[3])
-            }
-            PutPixelValue::Float(value) => {
-                if mode == Mode::ImageF32 {
-                    self.putpixel_mode_scalar_for_mode(x, y, value, mode)
-                } else {
-                    Err(if mode.is_single_character_pillow_mode() {
-                        PilError::TypeError("color must be int or single-element tuple".into())
-                    } else {
-                        PilError::TypeError("color must be int or tuple".into())
-                    })
-                }
-            }
-            PutPixelValue::Invalid => Err(if mode.is_single_character_pillow_mode() {
-                PilError::TypeError("color must be int or single-element tuple".into())
-            } else {
-                // Pillow routes non-integral component sequences through its
-                // tuple-arity validator, rather than the scalar tuple error.
-                PilError::TypeError(
-                    "color must be int, or tuple of one, three or four elements".into(),
-                )
-            }),
-            PutPixelValue::Components(values) => {
-                if let [value] = values.as_slice() {
-                    return self.putpixel_value(x, y, PutPixelValue::Integer(*value));
-                }
-                let bands = mode.band_count();
-                let palette_color = matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
-                    && matches!(values.len(), 3 | 4);
-                if !palette_color
-                    && ((bands == 1)
-                        || (bands == 2 && values.len() != 2)
-                        || (bands >= 3 && !matches!(values.len(), 3 | 4)))
-                {
-                    return Err(PilError::TypeError(
-                        match bands {
-                            1 => "color must be int or single-element tuple",
-                            2 => "color must be int, or tuple of one or two elements",
-                            _ => "color must be int, or tuple of one, three or four elements",
-                        }
-                        .into(),
-                    ));
-                }
-                let bytes: Vec<u8> = values
-                    .iter()
-                    .map(|&value| value.clamp(0, 255) as u8)
-                    .collect();
-                match bytes.as_slice() {
-                    [value, alpha] => self.putpixel(x, y, *value, *value, *value, *alpha),
-                    [r, g, b] => self.putpixel(x, y, *r, *g, *b, 255),
-                    [r, g, b, a] => self.putpixel(x, y, *r, *g, *b, *a),
-                    _ => Err(PilError::InternalError(
-                        "validated putpixel arity changed".into(),
-                    )),
-                }
-            }
-            PutPixelValue::FloatComponents(values) => match values.as_slice() {
-                [value] if mode == Mode::ImageF32 => {
-                    self.putpixel_mode_scalar_for_mode(x, y, *value, mode)
-                }
-                _ => Err(if mode.is_single_character_pillow_mode() {
-                    PilError::TypeError("color must be int or single-element tuple".into())
-                } else {
-                    PilError::TypeError(
-                        "color must be int, or tuple of one, three or four elements".into(),
-                    )
-                }),
-            },
-        }
     }
 }

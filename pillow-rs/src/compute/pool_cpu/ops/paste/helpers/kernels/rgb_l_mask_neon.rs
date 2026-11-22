@@ -9,6 +9,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::{
 use crate::error::PilError;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn try_execute<I>(
     plan: &BytePlan<'_, I>,
     mode: Mode,
@@ -113,6 +114,7 @@ where
     Ok(Some(output))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn blend_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
     #[expect(
         clippy::arithmetic_side_effects,
@@ -146,6 +148,7 @@ fn blend_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
     blend_vector8_tail(source, destination, mask, vector_len8);
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn blend_neon_prefix(
     source: &[u8],
     destination: &mut [u8],
@@ -185,6 +188,7 @@ fn blend_neon_prefix(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn blend_vector16_row(
     source: &[u8],
     destination: &mut [u8],
@@ -210,6 +214,7 @@ fn blend_vector16_row(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn blend_vector8_row(source: &[u8], destination: &mut [u8], mask: &[u8], start: usize, end: usize) {
     for start in (start..end).step_by(8) {
         let end = start
@@ -229,6 +234,7 @@ fn blend_vector8_row(source: &[u8], destination: &mut [u8], mask: &[u8], start: 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn blend_vector8_tail(source: &[u8], destination: &mut [u8], mask: &[u8], start: usize) {
     let tail = source.len().saturating_sub(start);
     if tail != 0 {
@@ -252,6 +258,7 @@ fn blend_vector8_tail(source: &[u8], destination: &mut [u8], mask: &[u8], start:
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 #[inline]
 fn blend_neon_block(source: &[u8], destination: &mut [u8], mask: &[u8], start: usize) {
@@ -306,10 +313,12 @@ fn blend_neon_block(source: &[u8], destination: &mut [u8], mask: &[u8], start: u
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn invalid_shape(part: &'static str) -> PilError {
     PilError::InternalError(format!("NEON Paste {part} row did not match its plan"))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn overflow(part: &'static str) -> PilError {
     PilError::OverflowError(format!("NEON Paste {part} overflowed"))
 }

@@ -29,7 +29,7 @@ pub(crate) enum PreparedAlphaComposite<'a> {
     ImageRgba8(super::rgba8::ops::Strategy<'a>),
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageLumaA8 => super::luma_a8::ops::SUPPORT,
@@ -69,7 +69,7 @@ pub(crate) static ALPHA_COMPOSITE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::AlphaComposite, &[], classify_mode);
 
 impl PreparedAlphaComposite<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::ImageLumaA8(strategy) => strategy.selection(),
@@ -77,7 +77,7 @@ impl PreparedAlphaComposite<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self {
             Self::ImageLumaA8(strategy) => strategy.execute(),
@@ -86,7 +86,7 @@ impl PreparedAlphaComposite<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn assess(
     inputs: OperationInputs<'_>,
     source: crate::compute::registry::support::SecondaryInputFacts,
@@ -100,7 +100,7 @@ pub(crate) fn assess(
     classify_mode(inputs.mode()).assess(ctx, facts)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     source: Arc<DynamicImage>,
@@ -137,7 +137,7 @@ pub(crate) fn prepare<'a>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -154,7 +154,7 @@ pub(crate) fn prepare_pipeline<'a>(
 }
 
 /// Prepares the full-frame RGBA fusion using each operation's declared strategy.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_mirror_fusion<'a>(
     image: &'a DynamicImage,
     alpha_composite: &PipelineOp,
@@ -231,14 +231,14 @@ macro_rules! composite_module_modes {
 
 macro_rules! define_composite_module_routes {
     ($($mode:ident => $module:ident),+ $(,)?) => {
-        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
         fn composite_support(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::COMPOSITE_MODULE_MODE_SUPPORT,)+
             }
         }
 
-        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
         fn execute_composite_mode(
             mode: Mode,
             source: &DynamicImage,
@@ -279,12 +279,12 @@ pub(crate) struct PreparedCompositeModule<'a> {
 }
 
 impl PreparedCompositeModule<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         execute_composite_mode(
             self.mode,
@@ -297,7 +297,7 @@ impl PreparedCompositeModule<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn prepare_composite_module<'a>(
     input: OperationInputs<'a>,
     destination: Arc<DynamicImage>,
@@ -322,7 +322,7 @@ fn prepare_composite_module<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_composite_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -359,7 +359,7 @@ const BLEND_RGBA: &[Mode] = &[
 ];
 const BLEND_WRONG_MODES: &[Mode] = &[Mode::One, Mode::ImagePalette8, Mode::ImagePaletteAlpha8];
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 const fn blend_input_contract(modes: &'static [Mode]) -> InputContract {
     InputContract::BlendInputs {
         compatible_modes: modes,
@@ -386,7 +386,7 @@ const BLEND_RGBA_VECTOR_MODES: &[Mode] = &[
 const BLEND_AVX_FMA: &[Architecture] = &[Architecture::AvxFma];
 const BLEND_NEON: &[Architecture] = &[Architecture::Neon];
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 const fn blend_vector_architectures(
     mode: Mode,
     channels: u8,
@@ -439,7 +439,7 @@ static BLEND_RGB_PREMULTIPLIED_ARCHITECTURES: [ImplementationSupport; 2] =
 static BLEND_RGBX_ARCHITECTURES: [ImplementationSupport; 2] =
     blend_vector_architectures(Mode::ImageRgbx8, 4, BLEND_RGBA_VECTOR_MODES);
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn blend_support(mode: Mode) -> ModeSupport {
     let (inputs, architectures) = match mode {
         Mode::ImageLuma8 => (BLEND_LUMA_INPUT, &BLEND_L_ARCHITECTURES[..]),
@@ -501,12 +501,12 @@ pub(crate) struct PreparedBlendModule<'a> {
 }
 
 impl PreparedBlendModule<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         execute_blend_mode(
             self.mode,
@@ -518,7 +518,7 @@ impl PreparedBlendModule<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_blend_module<'a>(
     input: OperationInputs<'a>,
     other: Arc<DynamicImage>,
@@ -538,7 +538,7 @@ pub(crate) fn prepare_blend_module<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_blend_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -551,7 +551,7 @@ pub(crate) fn prepare_blend_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_blend_module)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_blend_mode(
     mode: Mode,
     source: &DynamicImage,
@@ -641,7 +641,7 @@ const MERGE_SSE2: &[Architecture] = &[Architecture::Sse2];
 const MERGE_NEON: &[Architecture] = &[Architecture::Neon];
 const MERGE_WASM_SIMD128: &[Architecture] = &[Architecture::WasmSimd128];
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 const fn merge_native_architecture(
     mode: Mode,
     channels: u8,
@@ -662,7 +662,7 @@ const fn merge_native_architecture(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 const fn merge_portable_architectures(mode: Mode, channels: u8) -> [ImplementationSupport; 3] {
     [
         merge_native_architecture(
@@ -757,19 +757,19 @@ pub(crate) struct PreparedMerge<'a> {
 }
 
 impl PreparedMerge<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         execute_merge_mode(self.mode, self.source, &self.remaining, &self.selection)
     }
 }
 
 /// Merge's support mode is the requested output identity, not its first band.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn merge_support(target_mode: Mode) -> ModeSupport {
     let (input, output) = match target_mode {
         Mode::One
@@ -823,7 +823,7 @@ pub(crate) static MERGE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Merge, &[], merge_support)
         .with_rejected_output(OutputModeRule::ByTargetMode);
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn merge_facts(
     input: OperationInputs<'_>,
     target: Mode,
@@ -868,7 +868,7 @@ fn merge_facts(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn select_merge(
     target: Mode,
     facts: StrategyInputs,
@@ -883,7 +883,7 @@ fn select_merge(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_merge<'a>(
     input: OperationInputs<'a>,
     target: Mode,
@@ -904,7 +904,7 @@ pub(crate) fn prepare_merge<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_merge_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -917,7 +917,7 @@ pub(crate) fn prepare_merge_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_merge)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_merge_mode(
     mode: Mode,
     source: &DynamicImage,

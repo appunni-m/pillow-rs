@@ -7,8 +7,11 @@ type Luma16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 ///
 /// Pillow's `Paste.c` addresses both bytes for an L mask. The `1`, `RGBA`, and
 /// `RGBa` paths step through the raw row byte prefix at one byte per mask
-/// pixel; RGBa uses alpha coverage with PREBLEND. The selected mask strategy
-/// is fixed before the loop, with no sample projection or full-frame rewrite.
+/// pixel; RGBa uses alpha coverage with PREBLEND. `storage_offset` maps those
+/// mode-byte offsets onto the native u16 carrier for the declared byte order.
+/// The selected mask strategy is fixed before the loop, without projection or
+/// a full-frame rewrite.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn apply<const SWAP_BYTES: bool>(
     canvas: &mut Luma16Image,
     x: i32,
@@ -59,6 +62,7 @@ pub(crate) fn apply<const SWAP_BYTES: bool>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn apply_mask<
     const SWAP_BYTES: bool,
     const BINARY: bool,
@@ -123,6 +127,7 @@ fn apply_mask<
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[inline(always)]
 fn storage_offset<const SWAP_BYTES: bool>(public_offset: usize) -> usize {
     if SWAP_BYTES {

@@ -2,6 +2,9 @@ use crate::compute::pool_cpu::ops::draw::{BitmapMask, three_band_bitmap};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
+// TODO(pillow-rs#3ptb): verify LAB×RGBa bitmap PREBLEND output across varied
+// destination bytes, zero mask alpha, and retained hidden fourth lanes.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn apply(
     image: DynamicImage,
     x: i32,
@@ -15,9 +18,7 @@ pub(crate) fn apply(
         return Err(PilError::ValueError("mode mismatch".into()));
     };
     let mut hidden_lanes = canvas.take_hidden_pixel_lanes();
-    // Pillow overwrites LAB pixels for RGBa bitmap masks, even when the mask
-    // alpha is zero; other declared mask modes retain their coverage blend.
-    three_band_bitmap::apply::<true>(
+    three_band_bitmap::apply(
         &mut canvas,
         x,
         y,

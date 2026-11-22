@@ -1,6 +1,7 @@
 //! Host-callback flood fill with Pillow's public mutation and fault boundaries.
 
 use crate::compute::registry::support::StrategySelection;
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::raster::Mode;
@@ -111,11 +112,21 @@ pub trait FloodFillAccess {
 pub struct PreparedFloodFill {
     mode: Mode,
     selection: StrategySelection,
+    requested_backend: Option<Backend>,
 }
 
 impl PreparedFloodFill {
-    pub(crate) const fn new(mode: Mode, selection: StrategySelection) -> Self {
-        Self { mode, selection }
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub(crate) const fn new(
+        mode: Mode,
+        selection: StrategySelection,
+        requested_backend: Option<Backend>,
+    ) -> Self {
+        Self {
+            mode,
+            selection,
+            requested_backend,
+        }
     }
 
     pub(crate) const fn mode(&self) -> Mode {
@@ -124,6 +135,11 @@ impl PreparedFloodFill {
 
     pub(crate) const fn selection(&self) -> &StrategySelection {
         &self.selection
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub(crate) const fn requested_backend(&self) -> Option<Backend> {
+        self.requested_backend
     }
 }
 
@@ -138,15 +154,39 @@ pub enum FloodFillError<E> {
 
 /// Selects the exact CPU mode strategy from the image's stored raster identity
 /// and routed execution context.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn prepare_floodfill(image: &Image) -> Result<PreparedFloodFill, PilError> {
     let mode = image.mode_identity()?;
-    let (_, context) = image.cpu_arch_execution_route_advisory();
-    crate::compute::pool_cpu::ops::draw::ops::prepare_floodfill(mode, &context)
+    let (requested_backend, context) = image.cpu_arch_execution_route_advisory();
+    prepare_floodfill_for_mode(mode, requested_backend, &context)
+}
+
+/// Selects flood-fill strategy from a host-captured backend and architecture.
+// TODO(pillow-rs#3ptb): verify FloodFill output, callback/error order, and
+// selected/fallback receipts across the frozen CPU mode/architecture matrix.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+#[doc(hidden)]
+pub fn prepare_floodfill_with_execution_route(
+    image: &Image,
+    requested_backend: Option<Backend>,
+    context: &ExecutionContext,
+) -> Result<PreparedFloodFill, PilError> {
+    let mode = image.mode_identity()?;
+    prepare_floodfill_for_mode(mode, requested_backend, context)
+}
+
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn prepare_floodfill_for_mode(
+    mode: Mode,
+    requested_backend: Option<Backend>,
+    context: &ExecutionContext,
+) -> Result<PreparedFloodFill, PilError> {
+    crate::compute::pool_cpu::ops::draw::ops::prepare_floodfill(mode, context, requested_backend)
 }
 
 /// Executes Pillow-compatible flood fill through the supplied host callbacks.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn execute_floodfill<A: FloodFillAccess>(
     prepared: Option<&PreparedFloodFill>,
@@ -157,7 +197,9 @@ pub fn execute_floodfill<A: FloodFillAccess>(
     threshold: A::Threshold,
 ) -> Result<(), FloodFillError<A::Error>> {
     if let Some(prepared) = prepared {
-        return crate::compute::pool_cpu::ops::draw::ops::execute_floodfill(
+        let mut operation_receipts =
+            crate::compute::PipelineOperationTelemetryCapture::begin_preserving_current();
+        let result = crate::compute::pool_cpu::ops::draw::ops::execute_floodfill(
             prepared,
             access,
             seed,
@@ -165,6 +207,16 @@ pub fn execute_floodfill<A: FloodFillAccess>(
             border.as_ref(),
             &threshold,
         );
+        operation_receipts.capture();
+        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
+            "FloodFill",
+            prepared.requested_backend(),
+            0,
+            "FloodFill executes through synchronous PixelAccess callbacks",
+            *prepared.selection(),
+            operation_receipts,
+        );
+        return result;
     }
     crate::compute::pool_cpu::ops::draw::helpers::floodfill::run(
         access,

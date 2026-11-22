@@ -3,8 +3,12 @@ use super::{
     imageops_unsupported_mode_error,
 };
 use crate::map_error;
+use pyo3::exceptions::{PyAttributeError, PyNameError, PyUnboundLocalError};
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
-use pyo3::types::{PyAnyMethods, PyInt, PyIterator, PyList, PyModuleMethods, PySlice, PyTuple};
+use pyo3::types::{
+    PyAnyMethods, PyBool, PyFloat, PyInt, PyIterator, PyList, PyListMethods, PyModuleMethods,
+    PyRange, PySlice, PyTuple, PyTupleMethods,
+};
 use pyo3::{pyfunction, wrap_pyfunction};
 
 struct PythonAutocontrastLutCallbacks<'py> {
@@ -26,12 +30,14 @@ enum AutocontrastCallbackError {
 }
 
 impl From<pillow_rs::PilError> for AutocontrastCallbackError {
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn from(error: pillow_rs::PilError) -> Self {
         Self::Core(error)
     }
 }
 
 impl From<PyErr> for AutocontrastCallbackError {
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn from(error: PyErr) -> Self {
         Self::Python(error)
     }
@@ -46,10 +52,12 @@ impl<'py> pillow_rs::ImageOpsAutocontrastSourceCallbacks
     type PreserveTone = Bound<'py, PyAny>;
     type Error = AutocontrastCallbackError;
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn convert_to_luma(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error> {
         image.call_method1("convert", ("L",)).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn histogram(
         &mut self,
         image: &Self::Image,
@@ -58,6 +66,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastSourceCallbacks
         image.call_method1("histogram", (mask,)).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn preserve_tone_is_truthy(&mut self, value: &Self::PreserveTone) -> Result<bool, Self::Error> {
         value.is_truthy().map_err(Into::into)
     }
@@ -68,27 +77,32 @@ impl<'py> pillow_rs::ImageOpsAutocontrastResultCallbacks for PythonAutocontrastC
     type Output = Bound<'py, PyAny>;
     type Error = AutocontrastCallbackError;
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn image_mode_is_palette(&mut self) -> Result<bool, Self::Error> {
         let mode = self.image.getattr("mode")?;
         imageops_mode_equals(self.py, &mode, "P").map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn image_mode_is_luma_or_rgb(&mut self) -> Result<bool, Self::Error> {
         let mode = self.image.getattr("mode")?;
         imageops_mode_is_luma_or_rgb(self.py, &mode).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn image_mode_is_rgb(&mut self) -> Result<bool, Self::Error> {
         let mode = self.image.getattr("mode")?;
         imageops_mode_equals(self.py, &mode, "RGB").map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn palette_mode_error(&mut self) -> Result<Self::Error, Self::Error> {
         Ok(AutocontrastCallbackError::Python(
             pyo3::exceptions::PyNotImplementedError::new_err("mode P support coming soon"),
         ))
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn unsupported_mode_error(&mut self) -> Result<Self::Error, Self::Error> {
         let mode = self.image.getattr("mode")?;
         Ok(AutocontrastCallbackError::Python(
@@ -96,6 +110,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastResultCallbacks for PythonAutocontrastC
         ))
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn lut_length(&mut self, lut: &Self::Lut) -> Result<usize, Self::Error> {
         imageops_global_or_builtin(self.py, "len")?
             .call1((lut,))?
@@ -103,16 +118,19 @@ impl<'py> pillow_rs::ImageOpsAutocontrastResultCallbacks for PythonAutocontrastC
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn repeat_lut(&mut self, lut: Self::Lut) -> Result<Self::Lut, Self::Error> {
         let doubled = lut.add(&lut)?;
         doubled.add(&lut).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn point(&mut self, lut: Self::Lut) -> Result<Self::Output, Self::Error> {
         self.image.call_method1("point", (lut,)).map_err(Into::into)
     }
 }
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn autocontrast_callback_error(error: AutocontrastCallbackError) -> PyErr {
     match error {
         AutocontrastCallbackError::Core(error) => map_error(error),
@@ -120,15 +138,119 @@ fn autocontrast_callback_error(error: AutocontrastCallbackError) -> PyErr {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+fn imageops_global_or_builtin_if_present<'py>(
+    py: Python<'py>,
+    name: &str,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    match imageops_global_or_builtin(py, name) {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if error.is_instance_of::<PyNameError>(py) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+fn autocontrast_cutoff_has_builtin_values(cutoff: Option<&Bound<'_, PyAny>>) -> bool {
+    let Some(cutoff) = cutoff else {
+        return true;
+    };
+    if cutoff.is_exact_instance_of::<PyTuple>() {
+        let Ok(values) = cutoff.cast::<PyTuple>() else {
+            return false;
+        };
+        return values.len() == 2
+            && values
+                .iter()
+                .all(|value| is_builtin_autocontrast_number(&value));
+    }
+    is_builtin_autocontrast_number(cutoff)
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+fn is_builtin_autocontrast_number(value: &Bound<'_, PyAny>) -> bool {
+    value.is_exact_instance_of::<PyInt>()
+        || value.is_exact_instance_of::<PyFloat>()
+        || value.is_exact_instance_of::<PyBool>()
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+fn autocontrast_unbound_local(py: Python<'_>, name: &str) -> PyResult<PyErr> {
+    let version = py.import("sys")?.getattr("version_info")?;
+    let major = version.get_item(0)?.extract::<u8>()?;
+    let minor = version.get_item(1)?.extract::<u8>()?;
+    let message = if major > 3 || minor >= 11 {
+        format!("cannot access local variable '{name}' where it is not associated with a value")
+    } else {
+        format!("local variable '{name}' referenced before assignment")
+    };
+    Ok(PyUnboundLocalError::new_err(message))
+}
+
 impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCallbacks<'py> {
     type Value = Bound<'py, PyAny>;
     type Iterator = Bound<'py, PyIterator>;
     type Error = AutocontrastCallbackError;
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn native_lut_path_is_safe(
+        &mut self,
+        channel: &Self::Value,
+        cutoff: Option<&Self::Value>,
+    ) -> Result<bool, Self::Error> {
+        if !channel.is_exact_instance_of::<PyList>()
+            || channel
+                .cast::<PyList>()
+                .map_err(PyErr::from)?
+                .iter()
+                .any(|value| !value.is_exact_instance_of::<PyInt>())
+            || !autocontrast_cutoff_has_builtin_values(cutoff)
+        {
+            return Ok(false);
+        }
+        let Some(int) = imageops_global_or_builtin_if_present(self.py, "int")? else {
+            return Ok(false);
+        };
+        let Some(list) = imageops_global_or_builtin_if_present(self.py, "list")? else {
+            return Ok(false);
+        };
+        let Some(range) = imageops_global_or_builtin_if_present(self.py, "range")? else {
+            return Ok(false);
+        };
+        if !int.is(&self.py.get_type::<PyInt>())
+            || !list.is(&self.py.get_type::<PyList>())
+            || !range.is(&self.py.get_type::<PyRange>())
+        {
+            return Ok(false);
+        }
+        if cutoff.is_none() {
+            return Ok(true);
+        }
+        let Some(sum) = imageops_global_or_builtin_if_present(self.py, "sum")? else {
+            return Ok(false);
+        };
+        let imageops = self.py.import("pillow_rs.imageops")?;
+        let expected = match imageops.getattr("_AUTOCONTRAST_FAST_BUILTINS") {
+            Ok(expected) => expected,
+            Err(error) if error.is_instance_of::<PyAttributeError>(self.py) => {
+                return Ok(false);
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let expected = match expected.cast::<PyTuple>() {
+            Ok(expected) if expected.len() == 1 => expected,
+            _ => return Ok(false),
+        };
+        let expected = expected.get_item(0)?;
+        Ok(sum.is(&expected))
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn new_lut(&mut self) -> Result<Self::Value, Self::Error> {
         Ok(PyList::empty(self.py).into_any())
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn channel_starts(&mut self, histogram: &Self::Value) -> Result<Self::Iterator, Self::Error> {
         // Python evaluates the `range` name before evaluating `len(histogram)`.
         let range = imageops_global_or_builtin(self.py, "range")?;
@@ -137,6 +259,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         PyIterator::from_object(&starts).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn next_channel_start(
         &mut self,
         starts: &mut Self::Iterator,
@@ -144,6 +267,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         starts.next().transpose().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn histogram_channel(
         &mut self,
         histogram: &Self::Value,
@@ -154,6 +278,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         histogram.get_item(slice).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn ignore_is_integer(&mut self, ignore: &Self::Value) -> Result<bool, Self::Error> {
         let is_instance = imageops_global_or_builtin(self.py, "isinstance")?;
         let integer_type = imageops_global_or_builtin(self.py, "int")?;
@@ -163,10 +288,12 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn ignore_indices(&mut self, ignore: &Self::Value) -> Result<Self::Iterator, Self::Error> {
         PyIterator::from_object(ignore).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn next_ignore_index(
         &mut self,
         indices: &mut Self::Iterator,
@@ -174,6 +301,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         indices.next().transpose().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn zero_histogram_bin(
         &mut self,
         channel: &mut Self::Value,
@@ -182,6 +310,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         channel.set_item(index, 0).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn histogram_bin(
         &mut self,
         channel: &Self::Value,
@@ -190,6 +319,24 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         channel.get_item(index).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn histogram_bin_at(
+        &mut self,
+        channel: &Self::Value,
+        index: &Self::Value,
+    ) -> Result<Self::Value, Self::Error> {
+        channel.get_item(index).map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn sum_histogram_channel(&mut self, channel: &Self::Value) -> Result<Self::Value, Self::Error> {
+        imageops_global_or_builtin(self.py, "sum")?
+            .call1((channel,))
+            .map(|value| value.into_any())
+            .map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn cutoff_component(
         &mut self,
         cutoff: &Self::Value,
@@ -198,10 +345,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         cutoff.get_item(index).map_err(Into::into)
     }
 
-    fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error> {
-        left.add(right).map_err(Into::into)
-    }
-
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn multiply(
         &mut self,
         left: &Self::Value,
@@ -210,19 +354,31 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         left.mul(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn floor_divide_by_hundred(&mut self, value: &Self::Value) -> Result<Self::Value, Self::Error> {
         value
             .floor_div(PyInt::new(self.py, 100))
             .map_err(Into::into)
     }
 
-    fn int_value(&mut self, value: &Self::Value) -> Result<Self::Value, Self::Error> {
-        imageops_global_or_builtin(self.py, "int")?
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn int_function(&mut self) -> Result<Self::Value, Self::Error> {
+        imageops_global_or_builtin(self.py, "int").map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn call_int_function(
+        &mut self,
+        function: &Self::Value,
+        value: &Self::Value,
+    ) -> Result<Self::Value, Self::Error> {
+        function
             .call1((value,))
             .map(|value| value.into_any())
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn greater_than(
         &mut self,
         left: &Self::Value,
@@ -231,6 +387,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         left.gt(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn subtract(
         &mut self,
         left: &Self::Value,
@@ -239,6 +396,99 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         left.sub(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn add_values(
+        &mut self,
+        left: &Self::Value,
+        right: &Self::Value,
+    ) -> Result<Self::Value, Self::Error> {
+        left.add(right).map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn divide_float_255_by(&mut self, value: &Self::Value) -> Result<Self::Value, Self::Error> {
+        PyFloat::new(self.py, 255.0)
+            .as_any()
+            .div(value)
+            .map(|value| value.into_any())
+            .map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn negate_value(&mut self, value: &Self::Value) -> Result<Self::Value, Self::Error> {
+        value.neg().map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn lut_value_is_negative(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
+        value.lt(PyInt::new(self.py, 0)).map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn lut_value_exceeds_byte(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
+        value.gt(PyInt::new(self.py, 255)).map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn lut_scan_indices(&mut self, reverse: bool) -> Result<Self::Iterator, Self::Error> {
+        let range = imageops_global_or_builtin(self.py, "range")?;
+        let values = if reverse {
+            range.call1((255, -1, -1))?
+        } else {
+            range.call1((256,))?
+        };
+        PyIterator::from_object(&values).map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn non_identity_lut_bounds(
+        &mut self,
+        high: Option<&pillow_rs::ImageOpsAutocontrastLoopIndex<Self::Value>>,
+        low: Option<&pillow_rs::ImageOpsAutocontrastLoopIndex<Self::Value>>,
+    ) -> Result<Option<(Self::Value, Self::Value)>, Self::Error> {
+        let high = match high {
+            Some(pillow_rs::ImageOpsAutocontrastLoopIndex::Native(index)) => {
+                PyInt::new(self.py, *index).into_any()
+            }
+            Some(pillow_rs::ImageOpsAutocontrastLoopIndex::Host(high)) => high.clone(),
+            None => return Err(autocontrast_unbound_local(self.py, "hi")?.into()),
+        };
+        let low = match low {
+            Some(pillow_rs::ImageOpsAutocontrastLoopIndex::Native(index)) => {
+                PyInt::new(self.py, *index).into_any()
+            }
+            Some(pillow_rs::ImageOpsAutocontrastLoopIndex::Host(low)) => low.clone(),
+            None => return Err(autocontrast_unbound_local(self.py, "lo")?.into()),
+        };
+        if high.le(&low)? {
+            Ok(None)
+        } else {
+            Ok(Some((high.clone(), low.clone())))
+        }
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn append_lut_value(
+        &mut self,
+        lut: &mut Self::Value,
+        value: &Self::Value,
+    ) -> Result<(), Self::Error> {
+        lut.call_method1("append", (value,))?;
+        Ok(())
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn extend_identity_lut(&mut self, lut: &mut Self::Value) -> Result<(), Self::Error> {
+        let extend = lut.getattr("extend")?;
+        let list = imageops_global_or_builtin(self.py, "list")?;
+        let range = imageops_global_or_builtin(self.py, "range")?;
+        let values = range.call1((256,))?;
+        let identity = list.call1((values,))?;
+        extend.call1((identity,))?;
+        Ok(())
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn subtract_from_histogram_bin(
         &mut self,
         channel: &mut Self::Value,
@@ -251,6 +501,20 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         channel.set_item(index, result).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn subtract_from_histogram_bin_at(
+        &mut self,
+        channel: &mut Self::Value,
+        index: &Self::Value,
+        value: &Self::Value,
+    ) -> Result<(), Self::Error> {
+        let bin = channel.get_item(index)?;
+        let subtract = self.py.import("operator")?.getattr("isub")?;
+        let result = subtract.call1((bin, value))?;
+        channel.set_item(index, result).map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn clear_histogram_bin(
         &mut self,
         channel: &mut Self::Value,
@@ -259,10 +523,21 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         channel.set_item(index, 0).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn clear_histogram_bin_at(
+        &mut self,
+        channel: &mut Self::Value,
+        index: &Self::Value,
+    ) -> Result<(), Self::Error> {
+        channel.set_item(index, 0).map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn cutoff_is_nonpositive(&mut self, cutoff: &Self::Value) -> Result<bool, Self::Error> {
         cutoff.le(PyInt::new(self.py, 0)).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn histogram_bin_is_truthy(
         &mut self,
         channel: &Self::Value,
@@ -271,14 +546,31 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         channel.get_item(index)?.is_truthy().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn histogram_bin_at_is_truthy(
+        &mut self,
+        channel: &Self::Value,
+        index: &Self::Value,
+    ) -> Result<bool, Self::Error> {
+        channel.get_item(index)?.is_truthy().map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn zero_value(&mut self) -> Result<Self::Value, Self::Error> {
         Ok(PyInt::new(self.py, 0).into_any())
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn byte_maximum_value(&mut self) -> Result<Self::Value, Self::Error> {
+        Ok(PyInt::new(self.py, 255).into_any())
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn cutoff_is_truthy(&mut self, cutoff: &Self::Value) -> Result<bool, Self::Error> {
         cutoff.is_truthy().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn cutoff_is_tuple(&mut self, cutoff: &Self::Value) -> Result<bool, Self::Error> {
         let is_instance = imageops_global_or_builtin(self.py, "isinstance")?;
         let tuple_type = imageops_global_or_builtin(self.py, "tuple")?;
@@ -288,12 +580,14 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn duplicate_cutoff(&mut self, cutoff: &Self::Value) -> Result<Self::Value, Self::Error> {
         PyTuple::new(self.py, [cutoff.clone(), cutoff.clone()])
             .map(|value| value.into_any())
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn extend_lut(&mut self, lut: &mut Self::Value, channel_lut: &[u8]) -> Result<(), Self::Error> {
         let channel_lut = PyList::new(self.py, channel_lut)?;
         lut.call_method1("extend", (channel_lut,))?;
@@ -301,6 +595,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
     }
 }
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_autocontrast_with_callbacks(
     py: Python<'_>,
@@ -331,6 +626,7 @@ fn ops_autocontrast_with_callbacks(
     .map_err(autocontrast_callback_error)
 }
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(ops_autocontrast_with_callbacks, module)?)?;
     Ok(())

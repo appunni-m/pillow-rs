@@ -1,6 +1,6 @@
 use super::{
     Bound, Py, PyAny, PyBytes, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyString,
-    PyTuple, PyTypeError, PyValueError, Python, chops_offset_from_python, map_error,
+    PyTuple, PyTypeError, PyValueError, Python, map_error,
 };
 use pyo3::types::PyAnyMethods;
 use pyo3::types::PyBytesMethods;

@@ -2,7 +2,9 @@
 //!
 //! TODO(pillow-rs#3ptb): expand parity across every exact mode and available
 //! architecture, including the archived SIMD admissions, unsupported-mode
-//! fallbacks, I;16 vector-copy tails, and CropBorder empty/error cases. Source
+//! fallbacks, I;16 vector-copy tails, and CropBorder empty/error cases. Also
+//! verify crop load/error order and P/PA palette plus metadata preservation for
+//! empty, full-box, and out-of-bounds results. Source
 //! review found the archived ordinary-byte SIMD route only copied row spans;
 //! it admitted 1/L/P, LA/PA, RGB/HSV/YCbCr, and RGBA/CMYK/RGBa/RGBX/I/F when
 //! storage matched. The active Default `ByteCrop` preserves the same native
@@ -41,7 +43,7 @@ pub(crate) struct CropRequest {
 }
 
 impl CropRequest {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn region(self, size: (u32, u32)) -> Result<CropRegion, PilError> {
         CropRegion::new(size.0, size.1, self.left, self.top, self.right, self.bottom)
     }
@@ -53,7 +55,7 @@ macro_rules! declare_crop_modes {
             $($mode(super::$module::ops::Strategy<'a>),)+
         }
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
         fn classify_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::SUPPORT,)+
@@ -61,7 +63,7 @@ macro_rules! declare_crop_modes {
         }
 
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
         fn prepare_mode<'a>(
             image: &'a DynamicImage,
             region: CropRegion,
@@ -74,14 +76,14 @@ macro_rules! declare_crop_modes {
         }
 
         impl PreparedCrop<'_> {
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self {
                     $(Self::$mode(strategy) => strategy.selection(),)+
                 }
             }
 
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self {
                     $(Self::$mode(strategy) => super::$module::ops::execute(strategy),)+
@@ -126,7 +128,7 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
     classify_mode,
 );
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     request: CropRequest,
@@ -135,7 +137,7 @@ pub(crate) fn prepare<'a>(
     prepare_mode(image, request.region((image.width(), image.height()))?, ctx)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

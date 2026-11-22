@@ -325,7 +325,7 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
         round.call1((centered_difference,)).map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn paste_at(
         &mut self,
         output: &mut Self::Image,
@@ -334,15 +334,16 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
         offset: &Self::Value,
     ) -> Result<(), Self::Error> {
         let paste = output.getattr("paste")?;
-        let result = match axis {
+        super::preserve_pinned_backend_after(resized, output, || match axis {
             pillow_rs::ImageOpsPadAxis::Horizontal => {
                 paste.call1((resized.clone(), (offset.clone(), 0)))
             }
             pillow_rs::ImageOpsPadAxis::Vertical => {
                 paste.call1((resized.clone(), (0, offset.clone())))
             }
-        };
-        result.map(|_| ()).map_err(Into::into)
+        })
+        .map(|_| ())
+        .map_err(Into::into)
     }
 }
 
@@ -518,7 +519,7 @@ fn pad_callback_error(error: PadCallbackError) -> PyErr {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_pad_with_route_callbacks(
     py: Python<'_>,

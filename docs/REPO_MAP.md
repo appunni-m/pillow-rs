@@ -12,7 +12,11 @@ workflow.
 | `pillow-rs-parallel/` | Optional PyPI companion wheel for the Rayon-backed Parallel CPU extension |
 | `pillow-rs-js/` | WASM bindings, npm runtime entry points, Node/browser runners |
 | `pillow-rs/tests/fixtures/manifest.yaml` | Selected public contract and indexed input files |
+| `scripts/parity_store/` | Project-neutral typed input model, importer/store port, and PostgreSQL adapter; historical result schema retained |
+| `scripts/migration_parity/` | Pillow-specific manifest, case, oracle, target, and comparator adapters |
 | `scripts/` | Maintained generators, runners, receipt validators, release and documentation tools |
+| `docs/PARITY_FRAMEWORK.md` | Project-neutral immutable-input storage contract, conformance rules, and adoption guide |
+| `docs/PARITY_STORE.md` | Persistent PostgreSQL input-store operations and the first Pillow integration |
 | `docs/` | Public guides and explicitly versioned generated evidence |
 | `.github/workflows/` | Validation, benchmark, Pages, and package-release automation |
 | `scripts/data/migration-authority-v0.yaml` | Hash-pinned provenance used to regenerate the public inventory |
@@ -1182,6 +1186,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- premultiplied.rs
 |   |   |   |       |   |   |   |-- prepared.rs
 |   |   |   |       |   |   |   |-- target_compositions.rs
+|   |   |   |       |   |   |   |-- transparent.rs
 |   |   |   |       |   |   |   `-- wide.rs
 |   |   |   |       |   |   |-- lab_kernel.rs
 |   |   |   |       |   |   |-- lab_to_srgb.rs
@@ -1197,6 +1202,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- i16/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   |-- convert_transparent_impl.rs
 |   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- neon/
@@ -1257,6 +1263,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- i32/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   |-- convert_transparent_impl.rs
 |   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
@@ -1291,6 +1298,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- convert.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   |-- convert_transparent_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- remap_palette_impl.rs
 |   |   |   |       |   |   |-- helpers/
@@ -1352,6 +1360,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- one/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   |-- convert_transparent_impl.rs
 |   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- i16.rs
@@ -1411,6 +1420,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- convert_impl.rs
 |   |   |   |       |   |   |   |-- convert_lab_impl.rs
+|   |   |   |       |   |   |   |-- convert_transparent_impl.rs
 |   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- layout.rs
@@ -2341,6 +2351,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgb8/
+|   |   |   |       |   |   |-- avx2/
+|   |   |   |       |   |   |   |-- draw_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- bitmap_impl.rs
 |   |   |   |       |   |   |   |-- draw_impl.rs
@@ -5125,6 +5138,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extract_band_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
+|   |   |   |       |   |   |   |-- put_alpha_impl.rs
 |   |   |   |       |   |   |   |-- put_data_impl.rs
 |   |   |   |       |   |   |   `-- put_pixel_impl.rs
 |   |   |   |       |   |   |-- mod.rs
@@ -5679,16 +5694,34 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- resize_impl.rs
 |   |   |   |       |   |-- f32/
+|   |   |   |       |   |   |-- aarch64/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- avx/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
+|   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- filtered.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- nearest.rs
-|   |   |   |       |   |   |   `-- resize_impl.rs
+|   |   |   |       |   |   |   |-- resize.rs
+|   |   |   |       |   |   |   |-- vector/
+|   |   |   |       |   |   |   |   `-- boxed.rs
+|   |   |   |       |   |   |   `-- vector.rs
 |   |   |   |       |   |   |-- mod.rs
-|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- resize_impl.rs
 |   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- alpha_samples.rs
 |   |   |   |       |   |   |-- boxed_crop.rs
@@ -7169,7 +7202,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |           |   |   |-- flip_impl.rs
 |   |   |   |           |   |   |-- mirror_impl.rs
 |   |   |   |           |   |   |-- mod.rs
-|   |   |   |           |   |   |-- rotate270_tiled.rs
 |   |   |   |           |   |   `-- transpose_impl.rs
 |   |   |   |           |   |-- mod.rs
 |   |   |   |           |   |-- neon/
@@ -7177,7 +7209,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |           |   |-- ops.rs
 |   |   |   |           |   |-- sse2/
 |   |   |   |           |   |   `-- transpose_impl.rs
-|   |   |   |           |   `-- wasm_simd128/
+|   |   |   |           |   |-- wasm_simd128/
+|   |   |   |           |   |   `-- transpose_impl.rs
+|   |   |   |           |   `-- x86_64/
+|   |   |   |           |       |-- mod.rs
+|   |   |   |           |       |-- rotate270_tiled.rs
 |   |   |   |           |       `-- transpose_impl.rs
 |   |   |   |           |-- rgbx8/
 |   |   |   |           |   |-- default/
@@ -7578,6 +7614,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- construction.rs
 |   |   |   |-- data_access/
 |   |   |   |   |-- get.rs
+|   |   |   |   |-- imaging_core.rs
 |   |   |   |   `-- put.rs
 |   |   |   |-- data_access.rs
 |   |   |   |-- encode.rs
@@ -7598,7 +7635,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- pipeline_ops.rs
 |   |   |   |-- pixel_access/
 |   |   |   |   |-- palette.rs
-|   |   |   |   `-- palette_components.rs
+|   |   |   |   |-- palette_components.rs
+|   |   |   |   `-- putpixel.rs
 |   |   |   |-- pixel_access.rs
 |   |   |   |-- projection/
 |   |   |   |   `-- putpixel_pipeline.rs
@@ -7631,6 +7669,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- enhance.rs
 |   |   |   |-- filter.rs
 |   |   |   |-- imageops/
+|   |   |   |   |-- autocontrast.rs
 |   |   |   |   |-- color.rs
 |   |   |   |   |-- colorize/
 |   |   |   |   |   |-- mod.rs
@@ -7647,6 +7686,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- pad_route.rs
 |   |   |   |   |   `-- scale_callbacks.rs
 |   |   |   |   |-- geometry.rs
+|   |   |   |   |-- palette_lut.rs
 |   |   |   |   `-- point.rs
 |   |   |   |-- imageops.rs
 |   |   |   |-- lut_hardlight.bin
@@ -7659,6 +7699,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- param_filters.rs
 |   |   |   |-- paste/
 |   |   |   |   |-- color.rs
+|   |   |   |   |-- context_execution.rs
 |   |   |   |   |-- input.rs
 |   |   |   |   |-- operations.rs
 |   |   |   |   `-- types.rs
@@ -7817,10 +7858,15 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |-- image/
 |       |   |-- analysis.rs
 |       |   |-- arrays.rs
+|       |   |-- chops.rs
 |       |   |-- constructors.rs
 |       |   |-- creation.rs
+|       |   |-- crop.rs
 |       |   |-- data.rs
 |       |   |-- enhance.rs
+|       |   |-- execution.rs
+|       |   |-- filters.rs
+|       |   |-- imaging_core.rs
 |       |   |-- mod.rs
 |       |   |-- operations.rs
 |       |   |-- point.rs
@@ -7829,7 +7875,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |   |-- quantize.rs
 |       |   |-- sequence.rs
 |       |   `-- transform.rs
-|       |-- image_chops.rs
 |       |-- image_color.rs
 |       |-- image_filter.rs
 |       |-- image_ops/
@@ -7906,6 +7951,8 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- implementation_structure/
     |   |-- __init__.py
     |   `-- audit.py
+    |-- import_parity_inputs_postgres.py
+    |-- initialize_parity_db.py
     |-- lint.sh
     |-- list_migration_gpu_adapters.py
     |-- migration_benchmark_adapter.py
@@ -7935,13 +7982,16 @@ It is a navigation aid, not an API-support or coverage claim.
     |   |-- __init__.py
     |   |-- campaign.py
     |   |-- compose.yaml
+    |   |-- connection.py
     |   |-- initialize_local_env.py
     |   |-- migrations/
     |   |   |-- 0001_core.sql
     |   |   |-- 0002_specification_documents.sql
     |   |   |-- 0003_execution_outcomes.sql
     |   |   |-- 0004_packed_numeric_arrays.sql
-    |   |   `-- 0005_run_oracle_identity.sql
+    |   |   |-- 0005_run_oracle_identity.sql
+    |   |   |-- 0006_lossless_typed_text.sql
+    |   |   `-- 0007_completed_case_imports.sql
     |   |-- model.py
     |   |-- ports.py
     |   |-- postgres.py
@@ -7973,7 +8023,6 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- run_migration_imagesequence_native_cases.py
     |-- run_migration_js_parity.py
     |-- run_migration_parity.py
-    |-- run_migration_parity_postgres.py
     |-- run_migration_pillow_coverage.py
     |-- run_migration_rust_coverage.py
     |-- run_pillow_simd_benchmark.py

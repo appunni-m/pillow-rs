@@ -123,7 +123,7 @@ pub(crate) fn crop_buffer<P: Pixel>(
 
 impl DynamicImage {
     /// Returns the exact raster identity from this image's existing variant tag.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[must_use]
     pub const fn mode(&self) -> Mode {
         for_each_raster_identity!(dynamic_image_mode, self)
@@ -713,7 +713,7 @@ impl GenericImageView for DynamicImage {
 use super::traits::GenericImage as GenericImageTrait;
 
 impl GenericImageTrait for DynamicImage {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
         // These mode-tagged compact carriers retain bytes outside the logical
         // pixel. GenericImage writes only that logical pixel, so keep the

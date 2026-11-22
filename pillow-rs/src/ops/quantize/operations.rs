@@ -10,7 +10,7 @@ use super::input::QuantizePalette;
 impl Image {
     /// Applies Pillow's public quantize defaults and validation before the
     /// algorithm-specific implementation runs.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn quantize_with_input(
         &self,
         colors: Option<i32>,
@@ -24,7 +24,7 @@ impl Image {
 
     /// Host-adapter entry retaining a wrapper-visible Mode for Pillow's
     /// supplied-palette admission while execution still reads DynamicImage.
-    // VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
     #[doc(hidden)]
     pub fn quantize_with_visible_mode(
         &self,
@@ -34,6 +34,30 @@ impl Image {
         palette: QuantizePalette,
         dither: Option<bool>,
         visible_mode: Option<Mode>,
+    ) -> Result<Image, PilError> {
+        self.quantize_with_visible_mode_and_context(
+            colors,
+            method,
+            kmeans,
+            palette,
+            dither,
+            visible_mode,
+            None,
+        )
+    }
+
+    /// Quantizes while retaining the route captured by the Pillow wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn quantize_with_visible_mode_and_context(
+        &self,
+        colors: Option<i32>,
+        method: Option<i32>,
+        kmeans: Option<i32>,
+        palette: QuantizePalette,
+        dither: Option<bool>,
+        visible_mode: Option<Mode>,
+        execution_context: Option<crate::compute::ExecutionContext>,
     ) -> Result<Image, PilError> {
         let colors = colors.unwrap_or(256);
         let source_mode = self.mode_identity()?;
@@ -83,16 +107,18 @@ impl Image {
                 method,
                 dither.unwrap_or(true),
                 visible_mode,
+                execution_context,
             );
         }
         let kmeans = kmeans.unwrap_or(0);
         crate::compute::pool_cpu::ops::imageops::ops::validate_kmeans_count(i64::from(kmeans))?;
-        self.quantize(
+        self.quantize_with_execution_context(
             colors as u32,
             kmeans as u32,
             None,
             dither.unwrap_or(true),
             method,
+            execution_context,
         )
     }
 
@@ -101,7 +127,7 @@ impl Image {
     /// Pillow's `Image.quantize(palette=...)` preserves the reference palette
     /// and uses its entries as destination colors; an absent table uses the
     /// source-mode L or WEB palette instead.
-    // VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
     fn quantize_to_palette(
         &self,
         palette_image: Option<&Image>,
@@ -109,15 +135,27 @@ impl Image {
         method: u32,
         dither: bool,
         visible_mode: Option<Mode>,
+        execution_context: Option<crate::compute::ExecutionContext>,
     ) -> Result<Image, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialize()?;
+        let image = routed_image.materialize()?;
         operation_receipts.capture();
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, routed_context) = routed_image.cpu_arch_execution_route_advisory();
+        let context = execution_context.unwrap_or(routed_context);
+        let routed_palette = palette_image.map(|palette| {
+            execution_context.map_or_else(
+                || palette.clone(),
+                |context| palette.clone().with_execution_context(context),
+            )
+        });
         with_quantize_receipt(operation_receipts, requested_backend, || {
             crate::compute::pool_cpu::ops::imageops::ops::execute_with_palette(
                 &image,
-                palette_image,
+                routed_palette.as_ref(),
                 colors,
                 method,
                 dither,
@@ -144,7 +182,7 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when `colors` is outside 1..=256, or
     /// another [`PilError`] when materialization fails.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn quantize(
         &self,
         colors: u32,
@@ -153,11 +191,31 @@ impl Image {
         _dither: bool,
         method: u32,
     ) -> Result<Image, PilError> {
+        self.quantize_with_execution_context(colors, kmeans, _palette, _dither, method, None)
+    }
+
+    /// Reduces colors using a route captured by the Pillow wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn quantize_with_execution_context(
+        &self,
+        colors: u32,
+        kmeans: u32,
+        _palette: Option<&Image>,
+        _dither: bool,
+        method: u32,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Image, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialize()?;
+        let image = routed_image.materialize()?;
         operation_receipts.capture();
-        let palette = self.palette_input();
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let palette = routed_image.palette_input();
+        let (requested_backend, routed_context) = routed_image.cpu_arch_execution_route_advisory();
+        let context = execution_context.unwrap_or(routed_context);
         with_quantize_receipt(operation_receipts, requested_backend, || {
             let prepared = crate::compute::pool_cpu::ops::imageops::ops::prepare_quantize(
                 &image, palette, colors, kmeans, method, &context,
@@ -168,7 +226,7 @@ impl Image {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn with_quantize_receipt(
     mut operation_receipts: PipelineOperationTelemetryCapture,
     requested_backend: Option<crate::compute::Backend>,

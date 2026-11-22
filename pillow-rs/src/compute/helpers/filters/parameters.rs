@@ -2,17 +2,23 @@
 
 const BOX_BLUR_SCALE: u32 = 1 << 24;
 
-/// Calculate Pillow's three-pass Gaussian-to-box radius without changing its
-/// f32 input or f64 intermediate arithmetic.
-pub(crate) fn gaussian_blur_three_pass_radius(sigma: f32) -> f32 {
-    let passes = 3.0f64;
-    let sigma2 = f64::from(sigma) * f64::from(sigma) / passes;
-    let l_val = ((12.0 * sigma2 + 1.0).sqrt() - 1.0) / 2.0;
-    let l = l_val.floor();
+/// Calculate Pillow's Gaussian-to-box radius using the C float evaluation
+/// order for a requested pass count.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn gaussian_blur_radius(sigma: f32, passes: u32) -> f32 {
+    let sigma2 = sigma * sigma / passes as f32;
+    let box_length = (12.0 * f64::from(sigma2) + 1.0).sqrt() as f32;
+    let l = ((f64::from(box_length) - 1.0) / 2.0).floor() as f32;
     let l1 = l + 1.0;
     let a_num = (2.0 * l + 1.0) * (l * l1 - 3.0 * sigma2);
     let a_den = 6.0 * (sigma2 - l1 * l1);
-    (l + a_num / a_den) as f32
+    l + a_num / a_den
+}
+
+/// Calculate Pillow's default three-pass Gaussian-to-box radius.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn gaussian_blur_three_pass_radius(sigma: f32) -> f32 {
+    gaussian_blur_radius(sigma, 3)
 }
 
 /// Return Pillow's fixed-point box parameters for one radius.

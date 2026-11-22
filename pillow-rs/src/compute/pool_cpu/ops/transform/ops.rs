@@ -8,13 +8,24 @@
 //! and alpha/padding behavior. `fill.rs` handles palette index/color
 //! normalization and errors. Keep mesh on Default: its archived adapter
 //! groups scalar samples but has no vector kernel.
+//! The scalar F32 transform helpers preserve compile-target floating-point
+//! exception and NaN-payload behavior (notably on Wasm); they are shared by
+//! Default and SIMD routes and do not select an operation architecture.
 //! TODO(pillow-rs#3ptb): verify every mode/method/filter and architecture,
-//! including unavailable-architecture and Default fallback receipts, plus
+//! including unavailable-architecture and Default fallback receipts; compare
+//! Python LA/RGBA recursive premultiplied-mode routing with direct typed Rust
+//! fused alpha strategies, including output and callback/error order; and verify
 //! empty-mesh P palette retention with a non-default source palette.
+//! TODO(pillow-rs#3ptb): confirm the Wasm scalar floating-point compatibility
+//! helpers match the pinned oracle for NaNs and exceptional arithmetic before
+//! treating those compile-target semantics as closed.
 //! `super::helpers::hidden_lanes` composes omitted physical bytes after the selected
 //! mode/architecture kernel. Nearest sampling follows that architecture's
 //! sampler; filtered LA/La/PA repeats the resulting first band into physical
 //! lanes 1 and 2, while filtered three-band modes retain the output fill byte.
+// TODO(pillow-rs#3ptb): verify public prepared Transform and deferred
+// PipelineOp routes preserve identical PA palette and palette-alpha metadata,
+// including empty results, in the frozen CPU output and receipt matrix.
 
 use crate::compute::pool_cpu::ops::transform::helpers::strategy::{self, Strategy};
 use crate::compute::registry::support::{
@@ -40,7 +51,7 @@ pub(crate) struct TransformRequest<'a> {
 }
 
 impl TransformRequest<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn method_code(self) -> u8 {
         match self.method {
             TransformMethod::Affine => 0,
@@ -50,7 +61,7 @@ impl TransformRequest<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(super) fn facts(self) -> RequestFacts {
         RequestFacts::Transform {
             method: self.method_code(),
@@ -62,7 +73,7 @@ impl TransformRequest<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn from_pipeline(op: &PipelineOp) -> Result<TransformRequest<'_>, PilError> {
         let PipelineOp::Transform {
             w,
@@ -89,7 +100,7 @@ impl TransformRequest<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -154,12 +165,12 @@ pub(crate) struct PreparedTransform<'a> {
 }
 
 impl PreparedTransform<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         strategy::selection(&self.strategy)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let source = self.strategy.implementation.image;
         let request = self.strategy.implementation.request;
@@ -193,7 +204,7 @@ impl PreparedTransform<'_> {
         Ok(output)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn execute_into(self, output: &mut DynamicImage) -> Result<(), PilError> {
         let source = self.strategy.implementation.image;
         let request = self.strategy.implementation.request;
@@ -232,7 +243,7 @@ impl PreparedTransform<'_> {
         super::helpers::hidden_lanes::finish(source, output, request, &selection)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn apply_mesh_record(
         &self,
         output: &mut DynamicImage,
@@ -314,7 +325,7 @@ impl PreparedTransform<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn apply_byte_mesh_record(
     mode: Mode,
     input: &DynamicImage,
@@ -368,7 +379,7 @@ fn apply_byte_mesh_record(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn apply_i16_mesh_record(
     mode: Mode,
     input: &DynamicImage,
@@ -422,7 +433,7 @@ fn apply_i16_mesh_record(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn prepare_mode<'a>(
     image: &'a DynamicImage,
     request: TransformRequest<'a>,
@@ -464,7 +475,7 @@ fn prepare_mode<'a>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     request: TransformRequest<'a>,
@@ -476,7 +487,7 @@ pub(crate) fn prepare<'a>(
     Ok(PreparedTransform { mode, strategy })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -487,7 +498,7 @@ pub(crate) fn prepare_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_transform)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn finish_mesh_records(
     mode: Mode,
     output: &mut DynamicImage,

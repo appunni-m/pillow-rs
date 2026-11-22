@@ -51,6 +51,7 @@ pub use construction::{
     validate_open_source_bytes,
 };
 mod data_access;
+pub use data_access::ImagingCoreTransparencyKey;
 pub(crate) use data_access::ScalarImageSamples;
 #[path = "image/encode.rs"]
 mod encode;
@@ -84,8 +85,10 @@ pub use statistics::{StatResult, StatValue, stat_from_histogram, stat_from_list}
 
 /// A decoded P-mode (palette) image.
 /// `indices` holds one byte per pixel (the palette index, 0-255).
-/// `palette` holds zero to 768 bytes of retained RGB triples. Missing entries
-/// are black when the indexed image must be expanded for color operations.
+/// `palette` holds retained RGB triples. Pillow-compatible byte export checks
+/// the 768-byte limit after palette attachment, so an oversized table can be
+/// stored before that deferred validation runs. Missing entries are black
+/// when the indexed image must be expanded for color operations.
 #[derive(Debug, Clone)]
 pub struct PalettedData {
     /// Mode-tagged palette index bytes, one byte per pixel.
@@ -326,7 +329,7 @@ pub enum FormattedExtrema {
 pub enum Image {
     /// Fully decoded, ready to process or save, with retained source metadata.
     Loaded(LoadedData),
-    /// Fully decoded P-mode (palette) image: index bytes + 768-byte palette.
+    /// Fully decoded P-mode (palette) image with retained index and palette data.
     Paletted(PalettedData),
     /// Byte buffer not yet decoded — lazy.
     Bytes {

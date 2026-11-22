@@ -34,6 +34,7 @@ fn check_channels<const CHANNELS: usize, const ACTIVE: usize>() -> Result<(), Pi
 }
 
 /// Applies Pillow Filter's zeroed omitted lanes, then its Sharpness Blend.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn carry_hidden_lanes<P>(
     source: &ImageBuffer<P, Vec<u8>>,
     output: &mut DynamicImage,
@@ -100,6 +101,7 @@ where
     replace_sharpness_lanes(output, Some(lanes))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn default_sharpness_lanes(
     mode: Mode,
     lane_count: usize,
@@ -303,6 +305,7 @@ where
         .ok_or_else(|| PilError::ValueError(BUFFER_ERROR.into()))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Apply the neighborhood blend to native f32 samples without clipping values.
 pub(crate) fn execute_f32<const CHANNELS: usize, const ACTIVE: usize>(
     source: &[f32],
@@ -322,27 +325,27 @@ pub(crate) fn execute_f32<const CHANNELS: usize, const ACTIVE: usize>(
     let mut output = source.to_vec();
     for y in 0..height {
         for x in 0..width {
+            // CoreOnly edges bypass blending so every f32 bit pattern is preserved.
+            if x == 0 || x + 1 == width || y == 0 || y + 1 == height {
+                continue;
+            }
             let index = y * row_stride + x * CHANNELS;
             for channel in 0..ACTIVE {
                 let sample = index + channel;
-                let smooth = if x > 0 && x + 1 < width && y > 0 && y + 1 < height {
-                    let above = sample - row_stride;
-                    let below = sample + row_stride;
-                    let left = CHANNELS;
-                    let right = CHANNELS;
-                    (source[below - left]
-                        + source[below]
-                        + source[below + right]
-                        + source[sample - left]
-                        + source[sample] * 5.0
-                        + source[sample + right]
-                        + source[above - left]
-                        + source[above]
-                        + source[above + right])
-                        / 13.0
-                } else {
-                    source[sample]
-                };
+                let above = sample - row_stride;
+                let below = sample + row_stride;
+                let left = CHANNELS;
+                let right = CHANNELS;
+                let smooth = (source[below - left]
+                    + source[below]
+                    + source[below + right]
+                    + source[sample - left]
+                    + source[sample] * 5.0
+                    + source[sample + right]
+                    + source[above - left]
+                    + source[above]
+                    + source[above + right])
+                    / 13.0;
                 output[sample] = alpha.mul_add(source[sample] - smooth, smooth);
             }
         }
@@ -433,6 +436,7 @@ pub(crate) fn execute_f32_carrier_image(
         .ok_or_else(|| PilError::ValueError(BUFFER_ERROR.into()))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn execute_f32_carrier(
     source: &[u8],
     width: u32,
@@ -453,24 +457,24 @@ fn execute_f32_carrier(
     let mut output = source.to_vec();
     for y in 0..height {
         for x in 0..width {
+            // CoreOnly edges bypass blending so every f32 bit pattern is preserved.
+            if x == 0 || x + 1 == width || y == 0 || y + 1 == height {
+                continue;
+            }
             let index = y * row_stride + x;
             let original = read_f32(source, index);
-            let smooth = if x > 0 && x + 1 < width && y > 0 && y + 1 < height {
-                let above = index - row_stride;
-                let below = index + row_stride;
-                (read_f32(source, below - 1)
-                    + read_f32(source, below)
-                    + read_f32(source, below + 1)
-                    + read_f32(source, index - 1)
-                    + original * 5.0
-                    + read_f32(source, index + 1)
-                    + read_f32(source, above - 1)
-                    + read_f32(source, above)
-                    + read_f32(source, above + 1))
-                    / 13.0
-            } else {
-                original
-            };
+            let above = index - row_stride;
+            let below = index + row_stride;
+            let smooth = (read_f32(source, below - 1)
+                + read_f32(source, below)
+                + read_f32(source, below + 1)
+                + read_f32(source, index - 1)
+                + original * 5.0
+                + read_f32(source, index + 1)
+                + read_f32(source, above - 1)
+                + read_f32(source, above)
+                + read_f32(source, above + 1))
+                / 13.0;
             write_f32(&mut output, index, alpha.mul_add(original - smooth, smooth));
         }
     }

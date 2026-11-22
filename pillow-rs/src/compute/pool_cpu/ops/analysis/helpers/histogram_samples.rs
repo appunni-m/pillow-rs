@@ -13,38 +13,24 @@ use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 
 /// Counts byte channels directly, without constructing another raster.
-// Exact-mode owners opt into the repeated hidden lane only for two-band modes
-// whose masked Histogram result uses it. Plain LA keeps its stored alpha band.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-pub(crate) fn byte_bands<P, const MASKED_SECOND_FROM_FIRST_BAND: bool>(
-    image: &ImageBuffer<P, Vec<u8>>,
-    mask_raw: Option<&[u8]>,
-) -> Vec<u32>
+// Pillow 13.0 reads the second band of masked two-band images from physical
+// lane 3, which is the native alpha sample in each compact carrier.
+// TODO(pillow-rs#3ptb): verify masked LA/La/PA alpha bins with varied masks and
+// retained hidden-lane values against the pinned Pillow 13.0 output.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+pub(crate) fn byte_bands<P>(image: &ImageBuffer<P, Vec<u8>>, mask_raw: Option<&[u8]>) -> Vec<u32>
 where
     P: Pixel<Subpixel = u8>,
 {
     let channels = usize::from(P::CHANNEL_COUNT);
     let mut histogram = vec![0u32; 256 * channels];
-    let hidden_lanes = image.hidden_pixel_lanes();
     if let Some(mask) = mask_raw {
         for (index, pixel) in image.pixels().enumerate() {
             if mask[index] == 0 {
                 continue;
             }
             let samples = pixel.channels();
-            for (band, &stored_sample) in samples.iter().enumerate() {
-                // Some exact two-band modes expose their masked second-band
-                // value through the repeated hidden lane.
-                let sample = if MASKED_SECOND_FROM_FIRST_BAND && band == 1 {
-                    hidden_lanes
-                        .filter(|lanes| lanes.lane_count() > 0)
-                        .and_then(|lanes| lanes.for_pixel(index))
-                        .and_then(|lanes| lanes.first())
-                        .copied()
-                        .unwrap_or(samples[0])
-                } else {
-                    stored_sample
-                };
+            for (band, &sample) in samples.iter().enumerate() {
                 histogram[band * 256 + usize::from(sample)] += 1;
             }
         }
@@ -173,15 +159,15 @@ fn f32_byte_bin(sample: f32) -> usize {
     normalized.mul_add(255.0, 0.0).round() as usize
 }
 
-/// Preserves Pillow's I;16 byte-prefix histogram using native-endian samples.
+/// Preserves Pillow 13.0's I;16 byte-prefix histogram using native-endian samples.
 ///
-/// Pillow 12.2 aliases its row pointers as `image8` for two-byte pixels, then
-/// reads `image8[y][x]` in `Histo.c`. That counts the first `width` raw bytes
-/// of every row, restarting the byte lane at each row; odd widths do not
-/// continue the previous row's high/low-byte alternation.
+/// Pillow's `Storage.c` aliases `image8` for two-byte pixels, and `Histo.c`
+/// reads `image8[y][x]`. That counts the first `width` raw bytes of every row,
+/// restarting the byte lane at each row; odd widths do not continue the
+/// previous row's high/low-byte alternation.
 // TODO(pillow-rs#3ptb): freeze exact I;16 endian, odd-width row-prefix, and
 // masked byte-selection parity cases.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn l16_byte_prefix_native(
     image: &ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     mask_raw: Option<&[u8]>,
@@ -190,7 +176,7 @@ pub(crate) fn l16_byte_prefix_native(
 }
 
 /// Preserves Pillow's little-endian I;16L byte-prefix histogram.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn l16_byte_prefix_little_endian(
     image: &ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     mask_raw: Option<&[u8]>,
@@ -199,7 +185,7 @@ pub(crate) fn l16_byte_prefix_little_endian(
 }
 
 /// Preserves Pillow's big-endian I;16B byte-prefix histogram.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn l16_byte_prefix_big_endian(
     image: &ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     mask_raw: Option<&[u8]>,
@@ -208,7 +194,7 @@ pub(crate) fn l16_byte_prefix_big_endian(
 }
 
 /// Bins the archived byte prefix while keeping endian choice compile-time.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn l16_byte_prefix<const BIG_ENDIAN: bool>(
     image: &ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     mask_raw: Option<&[u8]>,
@@ -241,7 +227,7 @@ fn l16_byte_prefix<const BIG_ENDIAN: bool>(
     histogram
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 fn l16_prefix_byte<const BIG_ENDIAN: bool>(samples: &[u16], x: usize) -> u8 {
     let lane = x & 1;

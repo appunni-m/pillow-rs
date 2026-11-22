@@ -1,10 +1,11 @@
 //! Direct scalar-word sampling for Pillow's ImageI32 Resize mode.
 
 use crate::checked_dims::CheckedDims;
+use crate::compute::pool_cpu::ops::resize::helpers::native_nearest::nearest_indices;
 use crate::error::PilError;
 use crate::raster::RgbaImage;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &[i32],
     source_size: (u32, u32),
@@ -13,13 +14,13 @@ pub(crate) fn execute(
     let (width, height) = destination_size;
     let dims = CheckedDims::new(width, height, 4)?;
     let mut output = vec![0_i32; dims.total_pixels()];
-    ordinary_samples(source, source_size, destination_size, &mut output);
+    ordinary_samples(source, source_size, destination_size, &mut output)?;
     let bytes = encode(&output, dims.total_bytes());
     RgbaImage::from_raw(width, height, bytes)
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_boxed(
     input: &RgbaImage,
     destination_size: (u32, u32),
@@ -82,30 +83,30 @@ pub(crate) fn execute_boxed(
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn ordinary_samples(
     source: &[i32],
     source_size: (u32, u32),
     destination_size: (u32, u32),
     output: &mut [i32],
-) {
-    let (source_width, source_height) = source_size;
-    let (width, height) = destination_size;
-    for y in 0..height {
-        let source_y = (((f64::from(y) + 0.5) * f64::from(source_height) / f64::from(height))
-            .floor() as i64)
-            .clamp(0, i64::from(source_height) - 1) as u32;
-        for x in 0..width {
-            let source_x = (((f64::from(x) + 0.5) * f64::from(source_width) / f64::from(width))
-                .floor() as i64)
-                .clamp(0, i64::from(source_width) - 1) as u32;
-            output[(y * width + x) as usize] =
-                source[(source_y * source_width + source_x) as usize];
+) -> Result<(), PilError> {
+    let x_indices = nearest_indices(source_size.0, destination_size.0)
+        .ok_or_else(|| PilError::InternalError("resize_i: invalid nearest width".into()))?;
+    let y_indices = nearest_indices(source_size.1, destination_size.1)
+        .ok_or_else(|| PilError::InternalError("resize_i: invalid nearest height".into()))?;
+    let source_width = source_size.0 as usize;
+    let output_width = destination_size.0 as usize;
+    for (output_y, &source_y) in y_indices.iter().enumerate() {
+        let source_row = source_y * source_width;
+        let output_row = output_y * output_width;
+        for (output_x, &source_x) in x_indices.iter().enumerate() {
+            output[output_row + output_x] = source[source_row + source_x];
         }
     }
+    Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn encode(samples: &[i32], byte_count: usize) -> Vec<u8> {
     let mut bytes = vec![0_u8; byte_count];
     for (sample, output) in samples.iter().zip(bytes.chunks_exact_mut(4)) {

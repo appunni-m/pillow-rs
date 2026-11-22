@@ -2,6 +2,7 @@ use crate::compute::pool_cpu::ops::draw::{BitmapMask, three_band_bitmap};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn apply(
     image: DynamicImage,
     x: i32,
@@ -15,7 +16,7 @@ pub(crate) fn apply(
         return Err(PilError::ValueError("mode mismatch".into()));
     };
     let mut hidden_lanes = canvas.take_hidden_pixel_lanes();
-    three_band_bitmap::apply::<false>(
+    three_band_bitmap::apply(
         &mut canvas,
         x,
         y,

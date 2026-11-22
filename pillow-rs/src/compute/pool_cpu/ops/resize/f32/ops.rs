@@ -1,8 +1,8 @@
 //! Exact ImageF32 mode dispatch for ordinary and boxed Resize.
 //!
-//! The operation-level prepared selection chooses the AVX FMA strategy for
-//! eligible filtered work. Default uses the portable ordered f64 multiply-add
-//! path; nearest, empty, and unboxed identity requests remain Default.
+//! Prepared selection chooses the exact mode and architecture strategy. The
+//! portable Default sequence uses a fixed 16-product grouping; AArch64 keeps
+//! its distinct 4-product grouping, while vector leaves own their ISA route.
 
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
@@ -13,22 +13,99 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
-static RESIZE_ARCHITECTURES: [ImplementationSupport; 1] = [ImplementationSupport::cpu(
-    OperationId::Resize,
-    Mode::ImageF32,
-    Architecture::AvxFma,
-    cfg!(target_arch = "x86_64"),
-    &[Architecture::AvxFma],
-    StrategyGuard::ResizeFilteredFma,
-)];
-static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 1] = [ImplementationSupport::cpu(
-    OperationId::ResizeBoxed,
-    Mode::ImageF32,
-    Architecture::AvxFma,
-    cfg!(target_arch = "x86_64"),
-    &[Architecture::AvxFma],
-    StrategyGuard::ResizeFilteredFma,
-)];
+// TODO(pillow-rs#3ptb): Verify F32 Resize pixels, selected/fallback receipts,
+// and per-architecture latency in the frozen CPU campaign.
+static RESIZE_ARCHITECTURES: [ImplementationSupport; 5] = [
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageF32,
+        Architecture::AvxFma,
+        cfg!(target_arch = "x86_64"),
+        &[Architecture::AvxFma],
+        StrategyGuard::ResizeFilteredFma,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageF32,
+        Architecture::Sse2,
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2"
+        )),
+        &[Architecture::Sse2],
+        StrategyGuard::ResizeF32Vector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageF32,
+        Architecture::Neon,
+        cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+        &[Architecture::Neon],
+        StrategyGuard::ResizeF32Vector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageF32,
+        Architecture::WasmSimd128,
+        cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+        &[Architecture::WasmSimd128],
+        StrategyGuard::ResizeF32Vector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageF32,
+        Architecture::Aarch64,
+        cfg!(target_arch = "aarch64"),
+        &[],
+        StrategyGuard::Always,
+    ),
+];
+
+static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 5] = [
+    ImplementationSupport::cpu(
+        OperationId::ResizeBoxed,
+        Mode::ImageF32,
+        Architecture::AvxFma,
+        cfg!(target_arch = "x86_64"),
+        &[Architecture::AvxFma],
+        StrategyGuard::ResizeFilteredFma,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::ResizeBoxed,
+        Mode::ImageF32,
+        Architecture::Sse2,
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2"
+        )),
+        &[Architecture::Sse2],
+        StrategyGuard::ResizeF32Vector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::ResizeBoxed,
+        Mode::ImageF32,
+        Architecture::Neon,
+        cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+        &[Architecture::Neon],
+        StrategyGuard::ResizeF32Vector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::ResizeBoxed,
+        Mode::ImageF32,
+        Architecture::WasmSimd128,
+        cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+        &[Architecture::WasmSimd128],
+        StrategyGuard::ResizeF32Vector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::ResizeBoxed,
+        Mode::ImageF32,
+        Architecture::Aarch64,
+        cfg!(target_arch = "aarch64"),
+        &[],
+        StrategyGuard::Always,
+    ),
+];
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Resize,
@@ -45,7 +122,7 @@ pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::cpu(
     &RESIZE_BOXED_ARCHITECTURES,
 );
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn resize(
     context: &ExecutionContext,
     image: &DynamicImage,
@@ -90,9 +167,9 @@ pub(crate) fn resize(
     Ok(DynamicImage::ImageF32(output))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn resize_selected(
-    _context: &ExecutionContext,
+    context: &ExecutionContext,
     selection: &StrategySelection,
     input: &RgbaImage,
     width: u32,
@@ -105,9 +182,25 @@ fn resize_selected(
         Architecture::Default => {
             super::default::resize_impl::execute(input, width, height, filter, bounds)
         }
+        #[cfg(target_arch = "aarch64")]
+        Architecture::Aarch64 => super::aarch64::resize_impl::execute(
+            context, input, width, height, filter, bounds, selection,
+        ),
         #[cfg(target_arch = "x86_64")]
         Architecture::AvxFma => super::avx::resize_impl::execute(
-            _context, input, width, height, filter, bounds, selection,
+            context, input, width, height, filter, bounds, selection,
+        ),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Sse2 => super::sse2::resize_impl::execute(
+            context, input, width, height, filter, bounds, selection,
+        ),
+        #[cfg(target_arch = "aarch64")]
+        Architecture::Neon => super::neon::resize_impl::execute(
+            context, input, width, height, filter, bounds, selection,
+        ),
+        #[cfg(target_arch = "wasm32")]
+        Architecture::WasmSimd128 => super::wasm_simd128::resize_impl::execute(
+            context, input, width, height, filter, bounds, selection,
         ),
         _ => Err(PilError::InternalError(format!(
             "ImageF32 Resize received non-F32 implementation selection {architecture:?}"

@@ -1,5 +1,88 @@
 # CPU refactor source and evidence inventory
 
+2026-11-21 Active-source boundary scan: no active `pool_cpu` module/import
+references the inert legacy archive, no Rayon scheduling appears in maintained
+`pool_cpu`, and no `todo!()`/`unimplemented!()` remains in the reviewed CPU
+operation, core operation, and raster source. Remaining
+`NotImplementedError` returns are explicit support contracts. This source
+scan does not establish cfg reachability or compilation; those remain post-
+review gates.
+
+2026-11-21 AlphaComposite source correction: its Python facade now preserves
+Pillow's sequence type/length order, uncoerced coordinate comparisons and
+destination arithmetic, and full-image Crop shortcuts. The PyO3 `i64` geometry
+planner was removed from the host route; Rust still owns alpha-composite pixels.
+Callback/error order, empty regions, exact output/metadata, shared execution
+context, selector/fallback receipts, and latency remain pending under
+`pillow-rs#3ptb`.
+
+## Latest focused CPU parity status (2026-11-20)
+
+The original CPU/default corpus selected 177,881 cases (173,118 passed,
+4,526 failed, 237 not_run). Rerunning only the 4,526 failed IDs passed 4,425
+and failed 101; rerunning only those 101 reproduced all 101 failures. Focused
+retries resolved 60 of the 101 residual IDs. The remaining 41 outcomes were
+40 I;16-family Resize calls with `reducing_gap` and one I-to-PNG encoder case.
+
+Pillow 13.0 rejects the 40 filtered I;16 `reducing_gap` routes with
+`ValueError("image has wrong mode")`, so these Rust extensions use recorded
+expected-output contracts rather than Pillow comparisons. The original 40
+inputs remain 33×29; size and pattern variants need their own expected outputs.
+The first 40/40 target-only receipt (`migration-parity-54c98805e1054be395b820ac3ca85406`)
+used dirty revision `2cd6f6a`; it became stale after the I;16 resampling
+pass-order and fused-arithmetic changes. Rerunning those same 40 IDs on current
+`develop` revision `0d5c0e4` passed 40/40 with zero failures, not_run, or
+infrastructure errors (`migration-parity-75cc2aeb1bde4900b01f7ce223621407`).
+The execution receipt records 40 completed CPU calls, no fallback, and all 40
+complete terminal receipts. This verifies the recorded Rust outputs, not Pillow
+parity. The current-manifest retry of the 42 saved failed IDs ran CPU/Default
+with the `test-api` build and checked-in fixtures. It passed 41/42 with zero
+not_run or infrastructure errors: the 40 I;16 expected-output cases and the
+target-only LAB Rotate case passed. The sole remaining mismatch is
+`PIL.Image.Image.save.nuanced.i-png`: Pillow raises
+`OSError("cannot write mode I as PNG")`, while image-slash-star raises
+`OSError("unsupported Png: encode: PNG cannot encode this image mode")`.
+This encoding error-message contract is owned by image-slash-star and is
+tracked in `image-slash-star#9h5w`. The result and attestation are
+`failed-42-current-manifest-fixtures-20261120.parity.json` and
+`failed-42-current-manifest-fixtures-20261120.attestation.json` under
+`build/migration-parity/cpu-failed-case-rerun-20261114/`. The earlier 42-ID
+retry used a stale manifest snapshot and is superseded. The current PostgreSQL
+snapshot import remains incomplete, so this focused retry used the checked-in
+fixture source. The 237 original P-mode ImageOps not_run cases later passed
+237/237 on CPU Default in
+`migration-parity-23cf405fde694c68990e28558951551e`. The old 41-ID list is
+retained as historical evidence; focused receipts remain in
+`build/migration-parity/cpu-failed-case-rerun-20261114/`.
+
+The exact 310 LAB Resize IDs that failed on an earlier dirty tree were rerun
+against current `develop` after its A/B bias conversion changed. All 310 passed
+Pillow parity with zero not_run or infrastructure errors in
+`migration-parity-5e339e0b1e114b5ea54221d8961f1b46` (CPU Default; dirty target
+revision `0d5c0e4`). The earlier 2026-11-14 LAB passes predate that source
+change and are historical only. Architecture-specific LAB paths and the
+input-copy cost remain pending the full CPU parity and benchmark gates.
+
+2026-11-20 Resize route source change: the top-level operation contract now
+declares mode-specific conditional children for reducing-gap Resize. `LA` and
+`RGBA` expose the fused serial ResizeBoxed strategy; other admitted modes
+expose the Reduce pre-reduction child. Image and Thumbnail selection plus
+prepared admission consume the same declaration. Previous Resize/Thumbnail
+receipts predate this change, so focused parity and architecture-fallback
+verification are pending under `pillow-rs#3ptb`.
+
+2026-11-15 P-mode ImageOps result: the original 237 P-mode not_run IDs and six
+new RGB/RGBA palette cases were selected together on CPU Default. The 243-case
+run passed all 237 original IDs and four palette guards. Two RGBA guards failed
+because alpha selection used palette values instead of entry positions. After
+correcting that and observing both image bytes and `getpalette("RGBA")`, all
+six guards passed 6/6 in `migration-parity-9f188c313fb74b1e8652a1b1fbd627c7`.
+Both runs had zero not_run and infrastructure errors. The new Invert P-mode
+requirement and six cases are in the generated input corpus; its snapshot lock
+was refreshed with recipe SHA-256
+`fa428ed73a3c5c93c2542ebbba1498607368851b07e4bb363031817a2aa7e4d0`.
+
+
 2026-11-13 GetData wrapper review: `Image.getdata()` and
 `get_flattened_data()` now use the Rust-backed image `bands` property,
 derived from its exact `raster::Mode`, for tuple shaping. The Pillow string
@@ -40,12 +123,32 @@ foreign P carrier without an attached table now passes its RGB output
 contract; other absent-table source modes, wrapper assertion/fault order,
 fallback receipts, and performance remain pending under `pillow-rs#3ptb`.
 
-Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy. Stage 5 source review is complete as of 2026-11-13. Stage 6 structural, static, exact size, and compilation gates passed on 2026-11-13; full CPU operation × Mode × Architecture parity receipts and the performance campaign remain open. Full CPU operation × Mode × Architecture parity receipts and the performance campaign remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; `0b34e9a9b` exposes same-mode Convert identity in all 25 source contracts, including palette-preserving P/PA and CoreOnly internal high-depth identities. `e75e87f43` routes named ImageOps/Paste color resolution through exact `Mode` and marks internal high-depth color results `NO_PILLOW_SUPPORT`. `7790ed967` classifies reviewed mode-preserving pipeline operations, records RemapPalette and Color3DLut output identities from typed operation contracts, and routes Tiny-RGB eager ExtractBand through prepared CPU architecture execution for CPU Default and compatibility SIMD. `054a98326` replaces clone-only same-carrier PutData prefix writes with the native writer in 16 mode owners, removes copy-only carrier conversion from four PutAlpha and 13 PutAlphaData Default paths, and makes callback-preserving PutData writes validate and mutate the exact materialized DynamicImage byte carrier. `aa6de79ae` carries exact `raster::Mode` through PutData value-kind selection, normalization, immediate-write width selection, and the deferred `PipelineOp::PutData` payload. `3f110aa47` adds callback-driven PutData's exact-mode support contract and cached CPU Default context; this worktree now routes synchronous PutData and PutPixel selections through image-pinned/active CPU Architecture policy, with native Default fallback where no specialization exists. `65fb1c21c` adds mode-owned synchronous PutPixelValueAt for numeric I/F and I;16. `e060b60c1` adds the CPU Default strategy for Pillow's raw-byte I;16 PutData path. `751fe8249` routes allocated GetData band reads through the caller-owned output path. Commit `3254bd6ad` moves GetData byte, band, I;16 scalar, and I/F scalar algorithms into exact-mode Default owners for all 25 identities. Commit `572b7fd6c` carries exact `raster::Mode` through PutAlpha and PutAlphaData descriptors, while GPU packing preserves the existing shader layout codes. Commit 11665ed82 passes typed Mode through prepared execution and array import. Current lazy-mode-cache and cross-mode lazy P/PA terminal palette routes are source-reviewed but still need runtime evidence; palette and wrapper metadata are included in the frozen CPU parity campaign. The active implementation remains incomplete until its static, parity, and performance gates pass.
+Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy. Stage 5 source review remains incomplete as of 2026-11-21; the Resize conditional reducing-gap Reduce child and I;16 CoreOnly child scope are declared. The full exact-mode operation, architecture, and caller crosswalk remains open. Paste's mode routing, 25 Default owners, 20 Pillow-mode SSE2/NEON/Wasm SIMD128 paths, four endian-specific I;16 strategies, seven NEON L-mask specializations, and five CoreOnly typed owners now have a current source crosswalk. Paste kernel and hidden physical-lane producer source reviews are closed (see the dated pass 3 note in CPU_REFACTOR_INVENTORY.md); runtime parity/fault/fallback/performance evidence remains open. Host Expand/Pad fallback callbacks now preserve a source-pinned backend when public Paste queues their output pipeline. Cross-family architecture-module target reachability and direct/eager caller review remain open. Runtime evidence and performance measurement remain pending after source review; Parallel CPU follows verified CPU completion. Stage 6 structural, static, exact-size, and compilation gates are historical 2026-11-13 checkpoint evidence and must be rerun after later source changes. The 2026-11-14 CPU/default corpus recorded 173,118 passes, 4,526 failures, and 237 not_run across 177,881 selections. On 2026-11-15 the exact 4,526 original failed IDs were rerun on Pillow 13.0.0 with CPU/default: 4,425 passed and 101 failed, with zero not_run or infrastructure errors. A second run of only those 101 failures reproduced all 101. Before the I32 correction, the residuals comprised 74 Resize cases (34 I32 and 40 I;16), 8 Draw, 4 PutData, 4 invalid-size filters, 2 PutPalette, 2 fromarray, and 7 other API cases. The I32 correction now passes all 34 I32 cases; 60 of the 101 failed IDs now pass focused retries; the current 41-ID residual is classified in the latest status above. At the initial-corpus checkpoint, 237 P-mode NotImplemented outcomes were not_run; the focused retry later passed all 237 ImageOps cases, as recorded above. Receipts, diagnostics, and the exact residual-ID list are under `build/migration-parity/cpu-failed-case-rerun-20261114/`; the original full-failure rerun is `failed-4526-cpu-default-20261115.parity.json.gz`, and the repeat of only the 101 residuals is `failed-101-retry-cpu-default-20261115.parity.json.gz`. Full CPU operation × Mode × Architecture parity receipts and the performance campaign remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; `0b34e9a9b` exposes same-mode Convert identity in all 25 source contracts, including palette-preserving P/PA and CoreOnly internal high-depth identities. `e75e87f43` routes named ImageOps/Paste color resolution through exact `Mode` and marks internal high-depth color results `NO_PILLOW_SUPPORT`. `7790ed967` classifies reviewed mode-preserving pipeline operations, records RemapPalette and Color3DLut output identities from typed operation contracts, and routes Tiny-RGB eager ExtractBand through prepared CPU architecture execution for CPU Default and compatibility SIMD. `054a98326` replaces clone-only same-carrier PutData prefix writes with the native writer in 16 mode owners, removes copy-only carrier conversion from four PutAlpha and 13 PutAlphaData Default paths, and makes callback-preserving PutData writes validate and mutate the exact materialized DynamicImage byte carrier. `aa6de79ae` carries exact `raster::Mode` through PutData value-kind selection, normalization, immediate-write width selection, and the deferred `PipelineOp::PutData` payload. `3f110aa47` adds callback-driven PutData's exact-mode support contract and cached CPU Default context; this worktree now routes synchronous PutData and PutPixel selections through image-pinned/active CPU Architecture policy, with native Default fallback where no specialization exists. `65fb1c21c` adds mode-owned synchronous PutPixelValueAt for numeric I/F and I;16. `e060b60c1` adds the CPU Default strategy for Pillow's raw-byte I;16 PutData path. `751fe8249` routes allocated GetData band reads through the caller-owned output path. Commit `3254bd6ad` moves GetData byte, band, I;16 scalar, and I/F scalar algorithms into exact-mode Default owners for all 25 identities. Commit `572b7fd6c` carries exact `raster::Mode` through PutAlpha and PutAlphaData descriptors, while GPU packing preserves the existing shader layout codes. Commit 11665ed82 passes typed Mode through prepared execution and array import. Current lazy-mode-cache and cross-mode lazy P/PA terminal palette routes are source-reviewed but still need runtime evidence; palette and wrapper metadata are included in the frozen CPU parity campaign. The active implementation remains incomplete until its static, parity, and performance gates pass.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop`. Static
 lazy output modes now come from operation support contracts without
 wrapper cache overrides; mode metadata remains source-reviewed and
 runtime-unvalidated.
+
+Current source corrections (2026-11-21): Pillow 13.0's
+`ImageText.Text.embed_color()` accepts only RGB/RGBA; this Rust implementation
+intentionally extends embedded-color Text to the other Pillow modes through
+their exact Convert and Paste strategies, tagged `NO_PILLOW_SUPPORT`. Ink
+opacity follows the effective Draw-context Mode, including RGBA drawing over
+RGB storage: LA/La/PA use byte 1, RGBA/RGBa use byte 3, and modes where the
+fourth byte is K, padding, or numeric sample data use opaque source alpha. The
+per-mode output, conversion-fault, architecture-selection/fallback, and
+latency matrix remains pending under `pillow-rs#3ptb`, including the explicit
+RGBA-context-over-RGB route. Per-mode route metadata now declares its
+conditional Paste child for nonempty, zero-stroke embedded-color Text alongside
+the masked Bitmap child, and eager Text selects it from that declaration.
+Direct Text dispatch likewise maps the 20 Pillow-facing modes to their exact
+Default owners and rejects the five CoreOnly modes; Coverage and RGBA masks
+are explicit input kinds. Direct glyph-mask composition selects Default,
+while architecture-specific Draw kernels apply to geometry batches.
+Pillow 13.0 `Image.transform` copies an attached
+palette for P and PA outputs; the lazy pipeline now retains that metadata while
+transforming native samples. The P/PA output and receipt matrix is also pending.
 
 Latest committed matrix checkpoint (`5e64d7a59`, 2026-11-12): 175,041 parity
 cases across 4,730 indexed parity documents, 103,945 benchmark workloads, and
@@ -117,11 +220,13 @@ target, tests, parity, benchmark, or coverage ran for these commits.
 Commit `9af54f318` subsequently removed the audited orphaned helpers and
 per-mode wrappers listed in the plan; that source-only cleanup has not been
 compiled. Commit `970bd036d` gates Composite architecture modules with the
-same target conditions as strategy dispatch. A static source scan found other
-architecture module declarations that still need family-by-family target
-reachability review; preserve them until their support declarations and
-dispatch conditions are checked. The cross-family review remains TODO in
-`pool_cpu/ops/mod.rs`.
+same target conditions as strategy dispatch. A later source scan confirmed that
+referenced sibling architecture modules exist, but did not establish matching
+target cfgs, support guards, or architecture-specific caller paths. Continue
+the cross-family support/guard/dispatch and caller review by family. The
+`pool_cpu/ops/mod.rs` file is only a family-module facade; its module/target/
+dead-code reachability confirmation remains for the quality gate after source
+review closes.
 Commit `8bad284fe` retains the exact `One` or `ImageLuma8` identity of a
 PutAlphaData mask through CPU preparation and updates the corresponding GPU
 auxiliary admission and native byte-mask routes. It is source-reviewed but
@@ -151,6 +256,62 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
 
 ## Current source-only continuation
 
+- Convert direct/eager source crosswalk (2026-11-20): the eager One, I;16,
+  palette, matrix, and I/F→RGBX routes resolve an image CPU/architecture
+  context, pass it through the eager helper, and use `registry::prepare_cpu`
+  for exact-mode strategy selection. Early RGB/alpha routes enqueue typed
+  `PipelineOp::Convert`; same-mode identity has no pixel kernel. Palette raster
+  output remains separate from wrapper palette/metadata. This closes these
+  helper call paths only. Full mode-pair outputs/errors, selector and fallback
+  receipts, palette behavior, GPU routes, and latency remain open under
+  `pillow-rs#3ptb`; no validation ran.
+- CPU router and GetChannel source crosswalk (2026-11-20): pipeline routing
+  stores one immutable `ExecutionContext` in `PreparedExecution`; the serial
+  executor passes it into every ordinary and fused prepared strategy. The
+  `Backend::Simd` compatibility request selects the CPU executor with the
+  requested architecture in context. Direct eager GetChannel uses that same
+  image route for tiny RGB ExtractBand; identity-copy routes intentionally have
+  no architecture kernel. GPU palette-Convert fallback injects CPU Default.
+  Together with the later 2026-11-20 entries below, this closes source tracing
+  for central routing, GetChannel, direct/eager Convert, GetData, PutData,
+  FloodFill, GetPixel/PutPixel, ImagingCore SetMode/band mutation, and the Draw
+  mode/context call paths. Any remaining caller routes still need source
+  review; outputs/faults, architecture and fallback receipts, and latency for
+  these reviewed paths remain open under `pillow-rs#3ptb`. No build or runtime
+  validation ran.
+- Architecture leaf visibility source scan (2026-11-20): active `core::arch`
+  imports and intrinsic references are confined to target-gated leaf modules or
+  function-level target attributes. Some architecture wrapper modules remain
+  portable and unconditionally available because selected-strategy dispatch
+  references them; their support declarations still prevent selecting an
+  unavailable hardware strategy. No direct intrinsic visibility gap was found.
+  This does not close declaration/dispatch consistency, wrapper use, dead-code,
+  or cross-target compile review; the root `pool_cpu/ops/mod.rs` TODO remains
+  for those quality/compile gates. No build or runtime validation ran.
+- Transform caller source review (2026-11-20): Python captures the typed raster
+  mode, allocates its output, and captures `ExecutionContext` before method-data
+  callbacks; PyO3 passes neutral Transform data into the prepared core route.
+  Direct Rust Transform methods enqueue `PipelineOp::Transform`, and
+  materialization reaches the same operation preparation and exact
+  `DynamicImage` mode router. Streamed MESH records reuse the prepared output
+  and context; the architecture guard only admits affine/projective vector
+  work, while MESH dispatch stays Default. This closes call-path source review
+  for Transform, not its implementation matrix: mode/method/filter results,
+  faults, architecture and fallback receipts, P/PA palette/callback behavior,
+  Wasm float edges, and latency remain TODO under `pillow-rs#3ptb`. No build or
+  runtime validation ran.
+- F32 Resize routing was source-traced through CPU/Default context policy and
+  prepared selection. Per the user's decision, portable Default's 16-product
+  sequence, AArch64 baseline's 4-product sequence, and AVX FMA stay distinct
+  strategies. AArch64 builds may select their declared baseline strategy under
+  CPU/Default while preserving the Default request policy; other builds use
+  portable Default. The archived 8-lane ordinary, nearest, and boxed F32
+  kernels are now owned by `resize/f32/helpers/vector.rs` and dispatched
+  through explicit SSE2, NEON, or Wasm SIMD128 entries with an exact ImageF32
+  geometry guard. The existing AVX/FMA scalar strategy remains separate.
+  Their outputs, receipts, and latency, as well as the preserved
+  Default/AArch64 sequences, remain pending under `pillow-rs#3ptb`; no
+  validation ran.
 - Rotate's direct typed Rust entry now resolves Pillow's no-center/no-translation
   identity, half-turn, and eligible quarter-turn shortcuts before fill/filter
   parsing, using the existing Transpose pipeline for discrete routes. General
@@ -332,9 +493,9 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   consume the appropriate state. This keeps `Image::mode_identity()` exact
   while preserving the old declared-mode behavior for execution. Source-only,
   uncompiled, and unvalidated.
-- Callback-preserving `Image::putdata_value_at_with_context` selects the declared `PutDataValueAt` support contract for the exact mode and writes through the native byte or I;16 carrier. The Pillow and JavaScript sequence adapters retain one routed CPU Architecture context for their callback-driven writes; the current contract has no non-Default specialization, so SIMD requests resolve to the native Default owner and report that fallback. The context caches the selected mode strategy and refreshes it if a re-entrant callback changes the image mode. The synchronous mutation remains visible before the next value is coerced, and telemetry records the selected implementation alongside any requested-backend handoff. The direct `Image::putdata_value_at` API creates the same context for one write, while callback-free I;16 value loops reuse one context. Source review against the prior implementation confirms typed normalization order, synchronous mutation, exact mode identity, `LoadedData` metadata retention, palette retention, and existing storage/offset errors on valid rasters. This immediate route has no cross-mode conversion; broader wrapper review remains open, and source is unvalidated.
+- Callback-preserving `Image::putdata_value_at_with_context` selects the declared `PutDataValueAt` support contract for the exact mode and writes through the native byte or I;16 carrier. The Pillow and JavaScript sequence adapters retain one routed CPU Architecture context for their callback-driven writes; the current contract has no non-Default specialization, so SIMD requests resolve to the native Default owner and report that fallback. The context caches the selected mode strategy and refreshes it if a re-entrant callback changes the image mode. The synchronous mutation remains visible before the next value is coerced, and telemetry records the selected implementation alongside any requested-backend handoff. The direct `Image::putdata_value_at` API creates the same context for one write, while callback-free I;16 value loops reuse one context. Source review against the prior implementation confirms typed normalization order, synchronous mutation, exact mode identity, `LoadedData` metadata retention, palette retention, and existing storage/offset errors on valid rasters. The 2026-11-21 facade/PyO3/core route is source-traced and uses no cross-mode conversion. The bytes-subclass source route now distinguishes Pillow image8 raw-byte modes from modes that use PySequence_Size/PySequence_Fast; focused __len__/__iter__ output and fault parity remains pending alongside callback-driven mode changes after the initial value-shape snapshot and generic-sequence iteration errors. Typed output/fault order, receipts, and runtime parity remain unverified.
 - Numeric I/F `Image::putpixel_mode_scalar` now selects the distinct `PutPixelValueAt` contract from the exact raster mode instead of reporting itself as PutData. It retains the existing numeric-to-four-byte normalization and in-place write through the mode-owned I/F Default implementations, and records the selected implementation from the routed CPU Architecture context, with native Default fallback until specialized owners exist.
-- Direct I;16 PutPixel now uses that same contract with four exact mode classifications and separate `i16`, `i16l`, `i16b`, and `i16n` Default owners. Each owner writes the typed u16 sample in place, preserving modulo-65536 normalization, byte-order identity, and the existing offset error. Both routes use the shared routed context. The broader wrapper/source review and all validation remain pending. These PutPixel updates are unverified.
+- Direct I;16 PutPixel now uses that same contract with four exact mode classifications and separate `i16`, `i16l`, `i16b`, and `i16n` Default owners. Each owner writes the typed u16 sample in place, preserving modulo-65536 normalization, byte-order identity, and the existing offset error. On 2026-11-21, source review traced the public Python putpixel callback order, PyO3 typed route, queued byte-backed writes, eager I/F/I;16 writes, and stored PixelAccess context. Palette/fault order, per-mode outputs, strategy/fallback receipts, and latency remain runtime-unverified.
 - Raw byte export now accepts the exact `Mode` in Rust. Python and JavaScript bindings obtain/pass that typed identity before calling the core; raw encoder names such as `BGR` and `BGRA` remain raw-layout strings at the host-facing boundary. Core conversion-metadata queries likewise accept `Mode`, with Python/JavaScript target strings translated in their bindings. The byte-export I;16 endian guards now match typed identities instead of parsing Pillow strings. Formatted I;16 pixel reads access the exact u16 carrier directly and avoid the full-buffer clone from `to_luma16()`. Existing call sites were updated without adding tests or running verification; source-only and unvalidated.
 - PutAlpha keeps One/P source luma borrowed until the required two-channel output is made, updates PA indices and alpha directly in its native two-channel buffer, and replaces La alpha in its native two-channel buffer. PutAlphaData reads One/P/PA/La directly, uses native three-channel interleaving for RGB-family inputs, and passes existing four-channel source buffers to the alpha-mask writer without cloning. The archived cross-mode audit confirms that CMYK-to-RGB promotion and mask luma semantics are preserved; exact-mode source changes preserve the legacy output carriers and arithmetic. Accepted One/L mask buffers now retain their identity and lend luma bytes to Default alpha paths without allocating a duplicate L frame. Required destination copies remain. This source review has not been validated.
 - PutData's 16 clone-only same-carrier routes now use `put/helpers/put_data.rs::native`. For complete payloads, the helper constructs the output directly from the supplied bytes; partial and empty payloads retain the source buffer and apply the same byte prefix. This is equivalent to the prior `image.clone()` plus `Prefix::apply` path because those closures performed no sample or mode conversion. The remaining `ConvertBuffer` branches were reviewed against the archived cross-layout behavior and are retained because payload width changes the output carrier before prefix replacement; no conversion remains only for kernel reuse. This source review has not been validated.
@@ -719,7 +880,7 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   commands were run; operation × exact Mode × Architecture parity remains
   pending.
 
-### Paste source audit (maintained strategies written; source review in progress, runtime validation pending)
+### Paste source audit (maintained strategies written; source review closed 2026-11-21, runtime validation pending)
 
 - Public admission lives in `pillow-rs/src/ops/paste/operations.rs`. It reads
   the destination's typed `Mode`, validates placement and source/mask region
@@ -778,6 +939,59 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   SIMD groups of eight and padded tails retain the archived vector-block and
   scalar-tail receipts. This is source review only; runtime parity remains
   pending.
+- Paste byte-execution and I;16 vector source review (2026-11-20): reviewed
+  the complete maintained `helpers/bytes.rs` and `helpers/i16_vector.rs` paths.
+  Byte execution uses its prepared source-layout map, returns an initialized
+  destination for an empty clipped region, copies native rows for unmasked
+  input, and applies the declared mask layout per pixel otherwise. The
+  4-byte-to-LA map selects physical lanes 0 and 3; 4-byte-to-RGB selects the
+  first three lanes; same-width and four-byte routes preserve their declared
+  lanes. The typed I;16 vector path translates between the source and
+  destination byte orders for whole-sample copies, while fractional masks
+  blend the Pillow-selected byte lane and preserve the other byte. This
+  closes source review for these helpers only. Exact output, clipping,
+  broadcast/mask coordinates, hidden-lane sidecars, and actual architecture
+  receipts remain TODO under `pillow-rs#3ptb`; no runtime checks ran.
+- Paste generic vector execution and declaration cross-check (2026-11-20):
+  the exact mode wrappers select only their declared Default/SSE2/NEON/Wasm
+  SIMD128 leaves; the shared 16-byte/8-byte kernel consumes the prepared
+  source/mask layout and never infers raster mode. Binary masks copy the
+  complete destination sample for any nonzero coverage, while fractional
+  masks use DIV255 or PREBLEND and padded final lanes are written only for the
+  active row bytes. The seven L-mask NEON declarations prioritize their exact
+  clipped-width specialization, then retain the generic NEON strategy; an
+  unmatched specialized guard can use that generic vector strategy, while a
+  request with no eligible declared architecture keeps the same-mode Default.
+  This closes the shared-vector and architecture-declaration cross-check only.
+  Per-mode NEON row arithmetic, outputs, telemetry, and selected/fallback
+  receipts remain under source review or parity TODOs.
+- Paste explicit NEON L-mask rows and cross-layout owners (2026-11-20):
+  reviewed the six specialized owners covering seven mode identities. The
+  exact selection and minimum widths are L/16, LA/8, PA/1, RGB/16, HSV/16,
+  RGBA/4, and CMYK/16 pixels. Each row blends the mode's full stored pixel
+  bytes with the same L coverage using Pillow's DIV255 rule; the three-band
+  owner shares RGB/HSV interleaved NEON loads, while LA, PA, RGBA, and CMYK
+  repeat each mask value over their physical pixel lanes. NEON prefixes,
+  wide-vector continuations, and active tails preserve row bounds; the
+  wrappers fall back to the generic vector strategy when a specialized guard
+  is not selected. Reviewed the unmasked same-pixel-size RGBA→RGB lane drop
+  and RGB→RGBA four-byte source copy helpers separately. This closes source
+  review of these row owners and route adapters only. Pixel parity, selected
+  NEON receipts, and public latency remain pending under `pillow-rs#3ptb`.
+  No runtime check ran. Source: [Pillow 13.0 `Paste.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L118-L255).
+- Paste preparation-plan source review (2026-11-20): reviewed the complete
+  `helpers/plan.rs` path. Byte preparation selects source mapping from the
+  exact source/destination `Mode`, uses retained physical lanes only for the
+  declared same-pixel-size layouts, checks native carrier lengths before
+  execution, derives mask interpretation from mask Mode plus the prepared
+  alpha policy, validates mask dimensions against the admitted region, and
+  allows broadcast only for a 1×1 source. Clipping occurs after these
+  admission facts are resolved. Separate typed plans preserve I;16 byte-order
+  identity and native u16/f32 samples for the CoreOnly strategies; their masks
+  are prepared by the same exact-mode rules. This closes source review of
+  Paste plan construction only. Input-callback order, exact outputs and
+  faults, clipped/broadcast receipts, and hidden-lane mutation remain parity
+  TODOs under `pillow-rs#3ptb`. No runtime check ran.
 - The archived SIMD adapter is `legacy/pool_simd/ops/adapters/paste/`. Its
   native-copy planner covers the 14 byte identities `1`, L, P, LA, PA, RGB,
   HSV, YCbCr, RGBA, CMYK, RGBa, RGBX, I, and F, plus all four I;16 identities.
@@ -822,7 +1036,8 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   review inputs for parity selection; the existing CPU and SIMD tests in
   `legacy/` remain inert.
 - Archived CPU/SIMD Paste behavior and public callers were inspected and are
-  recorded above; the full maintained-route review remains open. Maintained
+  recorded above; the full maintained-route review is now closed by the dated
+  source reviews below. Maintained
   support is mode-specific and drives prepared
   strategy selection. Shared `wide` kernels implement the selected vector
   routes; the exact L-mask, LA-with-L-mask, RGB-with-L-mask, RGBA-with-L-mask,
@@ -842,8 +1057,8 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   for CMYK. The generic architecture vector strategy remains selectable for
   other Paste inputs. The
   archived Rayon clipping case moves to `pool_parallel`. Top-level caller
-  wiring is reconciled; per-mode implementation and support review is still
-  open, so this is not full family verification. This source-only
+  wiring, per-mode implementation, and support review are closed at source
+  level. This source-only
   migration slice is unverified; no build,
   formatter, checkstyle, lint, test, parity, benchmark, or coverage command
   has run for Paste.
@@ -861,9 +1076,17 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   Normal base-image mode conversion still happens before this raw-layout
   strategy. The 1-byte, 4-byte, and typed I;16 raw paths are source-implemented
   but unvalidated. I;16 source review now covers all four identities,
-  byte-order translation, masks, clipping, and cross-endian vector blocks;
-  producer-specific lane retention across other mode-changing operations
-  remains part of the source audit.
+  byte-order translation, masks, clipping, and cross-endian vector blocks.
+  Producer-specific lane retention is source-reviewed across construction,
+  encoded and raw decode, Convert, transforms, native pixel writes, PutData,
+  PutAlpha, Draw, filters, effects, and other mode-changing producers. The
+  2026-11-20 hidden-lane producer passes trace those sidecars through Paste's
+  physical-byte reconstruction and mask composition; the focused 2026-11-21
+  review reconciles that flow with `ImageBuffer` mutation invalidation and
+  Paste plan execution. TODO(`pillow-rs#3ptb`): freeze and run output, fault,
+  and selected/fallback receipt cases for reachable cross-mode Paste sources,
+  masks, clipping, and CoreOnly typed modes. This is runtime evidence, not an
+  open source-review path.
   Sources: [`Image.paste`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1756-L1764),
   [`Storage.c` pixel layout](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Storage.c#L1848-L1910),
   [`Paste.c` pixel-size check and raw copy](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Paste.c#L270-L304),
@@ -893,18 +1116,15 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   [Pillow 12.2 `_paste`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c).
   Source-only; no checks ran.
 
-- Autocontrast callback source review (2026-11-06): the current core state
-  machine sequences preserve-tone conversion, public histogram, per-channel
-  slicing, ignore handling, cutoff truthiness/tuple normalization, LUT
-  construction, post-LUT mode admission, and public `point`. The host adapter
-  invokes Python cutoff arithmetic protocols; Rust owns channel iteration and
-  the LUT algorithm. For a rejected typed Rust mode,
-  `validate_autocontrast_mode_after_histogram` computes histogram/LUT before
-  returning the mode error. A remaining source TODO covers custom histogram
-  channel objects: the current adapter extracts `Vec<u32>`, which assumes
-  integer bins and does not preserve arbitrary sequence/arithmetic callbacks.
-  Callback/fault order and selected/fallback receipt parity remain pending.
-  Pillow 12.2 reference: [ImageOps.autocontrast](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageOps.py#L1809-L1934).
+- Autocontrast callback source review (2026-11-06; historical, superseded by
+  the 2026-11-21 correction): the core state machine sequences preserve-tone
+  conversion, public histogram, per-channel slicing, ignore handling, cutoff
+  truthiness/tuple normalization, LUT construction, post-LUT mode admission,
+  and public `point`. The adapter's former `Vec<u32>` histogram conversion was
+  later replaced with Python-valued callbacks. See the current correction in
+  the supplemental records below. Callback/fault order and selected/fallback
+  receipt parity remain pending. Pillow 13.0 reference:
+  [ImageOps.autocontrast](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L1918-L2087).
 
 This inventory records the source and evidence denominator before rebuilding pool_cpu. It is a migration ledger, not a claim that the listed mode literals prove support. Each function's exact mode support, output identity, rejection behavior, shared helpers, and architecture fallback must be confirmed from its implementation before it is copied into the maintained tree. The source path lists are taken from the baseline Git tree, so every archived file can be checked against 3f9dfd403.
 
@@ -1946,7 +2166,7 @@ CPU mode/kernel migration or the full source review complete.
 | `compute/execution/terminals.rs`, `image/projection/putpixel_pipeline.rs` | The fused RGB/CMYK projection terminal executes CPU mode/architecture strategies and reuses its prepared context. GPU terminal admission remains separate and has an actionable TODO at its owner. |
 | `compute/registry/registration/prelude.rs`, `compute/registry/registration/simd.rs` | Source-complete: the active SIMD adapter import and registration module are removed. Review each archived kernel against its CPU mode/architecture strategy before CPU source completion. |
 | `compute/eager.rs`, `image/projection.rs`, `ops/module_fns.rs` | Eager RGB/CMYK GetProjection, LinearGradient, RadialGradient, and EffectMandelbrot use operation-owned CPU strategies and prepared receipts. Tiny-RGB eager ExtractBand uses the prepared architecture executor for serial CPU and compatibility SIMD requests. Direct Blend and Merge wrappers apply their mode-pair/band-layout contracts from the same declarations used by prepared execution while preserving eager error order. Source review traced the remaining eager helper callers: image-backed grayscale, GetData/GetChannel, Convert, and filters pass their routed `ExecutionContext` to prepared selection; module-level generators route once from active backends before preparation. Native identity/copy helpers do not select an architecture by design. Output/fault order and selected/fallback receipt parity remain pending. |
-| `compute/thumbnail_fusion.rs`, `image/pipeline_admission.rs` | The generic fusion module was removed. RGB PutPixel/Thumbnail admission and execution now use the CPU family's prepared mode/architecture contract; the fused resize retains the selected RGB Resize or ResizeBoxed strategy and sparse active-row facts. |
+| `compute/pool_cpu/batch_execution.rs`, `compute/pool_cpu/ops/thumbnail/ops.rs`, `compute/pool_cpu/ops/thumbnail/rgb8/ops.rs` | The generic fusion module was removed. RGB PutPixel/Thumbnail admission and execution use the CPU family's prepared mode/architecture contract; the fused resize retains the selected RGB Resize or ResizeBoxed strategy and sparse active-row facts. Source review fixed reversed multi-op receipts and missing receipts on fusion-preparation errors while preserving pending-handoff attribution. Runtime output, fault, receipt, and latency checks remain pending. |
 | `compute/pool_gpu/fusion.rs` | Resolved: adjacent transpose composition uses the shared `pipeline::TransposeTransform` algebra. |
 | `image/channel_access.rs`, `image/data_access/get.rs` | Eager ExtractBand requests use prepared CPU mode/architecture strategies; Tiny-RGB getchannel now records the selected strategy for CPU Default and compatibility SIMD. GetData retains its direct caller-owned output slice. A string-based GPU admission table remains under an actionable TODO. |
 
@@ -2841,7 +3061,7 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
 | --- | --- |
 | `legacy/ops/put.rs::op_put_data` complete-payload native branches | Exact source mode `default/put_data_impl.rs` owners compose `put/helpers/put_data.rs::native`; nonempty replacement and fallback construction order retained. |
 | `Image::putdata_value_at` immediate host-callback mutation | `image/data_access/put.rs` retains normalization and callback ordering; after loading, the exact planned `Mode` is checked against `DynamicImage::mode()` and the raw byte carrier is mutated through the exact-mode `PutDataValueAt` contract. LA/La/PA and RGB/YCbCr/LAB/HSV restore their producer-specific omitted lanes from the original `getink` value, while preserving untouched payload entries. The operation currently has only a native Default owner and records that fallback without delaying the write. Source review confirms retained `LoadedData` and P palette metadata; broader caller review remains pending. |
-| `Image::putdata_l16_bytes` raw-byte fast path | `PutDataL16Bytes` selects the exact I;16 mode and updates only the supplied raw row-prefix bytes in place, preserving existing values outside that prefix. It consumes Python's reported entry count, clips scaled input bytes, and applies exact native/little/big-endian lane order without staging a replacement frame. Bytes-subclass overreads and scaled values whose C double-to-int conversion is undefined are marked `NO_PILLOW_SUPPORT`; deterministic Rust extension behavior is tracked separately from Pillow parity. Source: [Pillow 12.2.0 `_putdata`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L1531-L1551). Source review only; partial/full-row parity and receipts remain pending. |
+| `Image::putdata_l16_bytes` raw-byte fast path | `PutDataL16Bytes` selects the exact I;16 mode and updates only the supplied raw row-prefix bytes in place, preserving existing values outside that prefix. The Python image8 byte path uses the physical `PyBytes` length, clips scaled input bytes, and applies exact native/little/big-endian lane order without staging a replacement frame. Direct Rust calls may specify an entry count larger than the byte slice; that Rust-only extension zero-fills absent raw bytes. Only scaled values whose C double-to-int conversion is undefined are marked `NO_PILLOW_SUPPORT`. Source: [Pillow 13.0 `_putdata_impl`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1711-L1782). Source review only; partial/full-row parity and receipts remain pending. |
 | Numeric I;16 `Image::putdata_value_at` path | `put/helpers/put_data_value_at.rs::luma16_sample` now mirrors Pillow's `(int)value` followed by independently clipped low/high bytes, then writes the resulting logical sample to the native u16 carrier. This fixes the direct float-to-u16 cast for negative values, values above 65535, and failed numeric coercions. NaN, infinity, and values outside the C-int range are undefined in Pillow; the deterministic Rust cast is marked `NO_PILLOW_SUPPORT` and belongs to the target-only extension lane. Source: [Pillow 12.2.0 `_putdata`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L1572-L1584). Pillow parity and receipts remain pending; no checks ran. |
 | `Image::putpixel_mode_scalar` numeric I/F immediate write | `put/ops.rs::PUT_PIXEL_VALUE_AT_SUPPORT` classifies all 25 identities and links I/F to CPU Default mode owners. The wrapper normalizes the same four native bytes, selects from `DynamicImage::mode()`, mutates in place through the shared raw-byte helper, and records its selection. Source-only; unverified. |
 | `op_put_data` partial and cross-layout branches | Source review against the archived `img.to_luma8`/`to_luma_alpha8`/`to_rgb8`/`to_rgba8` branches confirms that cross-carrier `ConvertBuffer` initialization is operation semantics before prefix replacement. Same-carrier writes use `put/helpers/put_data.rs::native` and retain exact source mode identity. No DynamicImage reclassification occurs in the loop, and no conversion is used only for kernel reuse. |
@@ -2904,7 +3124,7 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
 - The byte-backed mode owners use checked native row/pixel copying and fall back to the same generic typed image transforms for malformed or nonstandard storage. High-depth owners preserve typed sample values. Palette indices, premultiplied samples, color-space bytes, numeric carriers, and byte-order mode identities are moved without conversion.
 - Transpose covers all seven methods with exact-mode Default owners and typed method preparation. Its native byte path retains checked dimensions, same-dimension row copying, serial/tiled axis swaps, the original 32-pixel tile threshold, and the RGBA 16-pixel tile size. Typed modes use the original mode-preserving pixel-coordinate transforms.
 - An AVX2 RGBA mode strategy consumes the injected architecture plus exact mode, logical-byte-prefix, dimension, and axis-swap guards. Its `rgba8/avx2` kernel ports the archived AVX2 tile transform and handles incomplete edges through byte copies. This path has not been compiled or parity-checked.
-- The archived wide-lane Mirror kernel is shared in `transpose/helpers/native_mirror.rs`; `One`, `ImageLuma8`, and `ImagePalette8`; `ImageLumaA8` and `ImagePaletteAlpha8`; `ImageRgb8`, `ImageHsv8`, and `ImageYCbCr8`; and `ImageRgba8`, `ImageCmyk8`, `ImageRgbPremultiplied8`, `ImageRgbx8`, `ImageI32`, and `ImageF32` bind it through exact-mode declarations for SSE2, NEON, and Wasm SIMD128. Each prepared strategy restores its own `DynamicImage` variant. RGBA uses the same helper in its custom AVX2-transpose strategy owner. Native row length and channel-group guards select these implementations, with the same-mode Default mirror as fallback. The `ImageI16`, `ImageI16L`, `ImageI16B`, and `ImageI16N` Flip/Mirror native-copy routes now use `transpose/helpers/native_luma16.rs`, preserving typed samples and exact output identities under SSE2, NEON, and Wasm SIMD128 strategies with same-mode Default fallback. The packed-word RGBA Rotate270 kernel runs in its Default owner behind the original x86_64, tile-threshold, and four-pixel divisibility guards; it uses ordinary native-endian words and no optional instruction set. The archived portable `wide` transpose tile, gathered-row, and scalar-edge paths are migrated to `transpose/helpers/native_transpose.rs` and selected by exact-mode SSE2, NEON, and Wasm SIMD128 strategies, with same-mode Default fallback. Its conditional Rayon row collection is excluded from CPU and remains for the later `pool_parallel` stage. The archived byte Flip adapter had no separate vector kernel, so no distinct architecture route is required. All direct, fused, nested-filter, registry, and palette-metadata caller edges listed above have been source-traced. No compiler, formatter, lint, test, parity, benchmark, or coverage command has run.
+- The archived wide-lane Mirror kernel is shared in `transpose/helpers/native_mirror.rs`; `One`, `ImageLuma8`, and `ImagePalette8`; `ImageLumaA8` and `ImagePaletteAlpha8`; `ImageRgb8`, `ImageHsv8`, and `ImageYCbCr8`; and `ImageRgba8`, `ImageCmyk8`, `ImageRgbPremultiplied8`, `ImageRgbx8`, `ImageI32`, and `ImageF32` bind it through exact-mode declarations for SSE2, NEON, and Wasm SIMD128. Each prepared strategy restores its own `DynamicImage` variant. RGBA uses the same helper in its custom AVX2-transpose strategy owner. Native row length and channel-group guards select these implementations, with the same-mode Default mirror as fallback. The `ImageI16`, `ImageI16L`, `ImageI16B`, and `ImageI16N` Flip/Mirror native-copy routes now use `transpose/helpers/native_luma16.rs`, preserving typed samples and exact output identities under SSE2, NEON, and Wasm SIMD128 strategies with same-mode Default fallback. The packed-word RGBA Rotate270 kernel now runs in a declared x86_64 baseline strategy behind the original tile-threshold and four-pixel divisibility guards; it uses ordinary native-endian words and no optional instruction set. Default RGBA transpose uses only the portable generic implementation, while the injected architecture selects the x86_64 baseline when allowed by the build target. The archived portable `wide` transpose tile, gathered-row, and scalar-edge paths are migrated to `transpose/helpers/native_transpose.rs` and selected by exact-mode SSE2, NEON, and Wasm SIMD128 strategies, with same-mode Default fallback. Its conditional Rayon row collection is excluded from CPU and remains for the later `pool_parallel` stage. The archived byte Flip adapter had no separate vector kernel, so no distinct architecture route is required. All direct, fused, nested-filter, registry, and palette-metadata caller edges listed above have been source-traced. The new x86_64 baseline selection still needs its parity and latency receipts. No compiler, formatter, lint, test, parity, benchmark, or coverage command has run.
 
 | Preserved source/function | Maintained destination and disposition |
 | --- | --- |
@@ -2912,7 +3132,7 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
 | `legacy/ops/imageops/pixel.rs::{mirror_byte_row,mirror_byte_rows,op_mirror}` | Exact-mode Default implementations under `transpose/<mode>/default/mirror_impl.rs`, sharing checked native byte reversal; typed fallback matches the original generic horizontal transform. |
 | `legacy/ops/transpose.rs::{execute_transpose,transpose_bytes_serial,transpose_bytes_tiled,transpose_bytes_rows}` | `transpose/helpers/pixel.rs` plus each mode's `default/transpose_impl.rs`; serial byte layout and tiling behavior are retained without Rayon. |
 | `PipelineOp::{Transpose,Flip,Mirror}` registry callbacks | `transpose/ops.rs` prepares the exact mode strategy with injected `ExecutionContext`; registration no longer supplies a string mode. |
-| `legacy/ops/transpose/kernels/transpose_rgba/x86_64.rs` | Migrated to `transpose/rgba8/default/rotate270_tiled.rs`; it runs only under the original x86_64, tile-size, and divisibility guards and remains part of the Default strategy because it has no ISA requirement. |
+| `legacy/ops/transpose/kernels/transpose_rgba/x86_64.rs` | Migrated to `transpose/rgba8/x86_64/rotate270_tiled.rs`; it runs only under the original x86_64, tile-size, and divisibility guards in the declared target-baseline strategy. |
 | `legacy/pool_simd/ops/adapters/transpose/kernels/rgba_avx2.rs` | Ported to `transpose/rgba8/avx2/transpose_impl.rs`; declared through the `TransposeRgbaAvx2` guard. Source is unvalidated. |
 | `legacy/pool_simd/ops/adapters/flip.rs::simd_flip` byte route | It delegates to `img.flipv()` and has no distinct vector kernel; the exact-mode Default owner retains native row copying. Do not add a separate architecture strategy for this adapter. Its I;16 native row-copy route is in `transpose/helpers/native_luma16.rs`. |
 | `legacy/pool_simd/ops/adapters/flip.rs::{simd_flip,simd_mirror}` I;16 native-copy paths | `transpose/helpers/native_luma16.rs`, selected by the exact `ImageI16`, `ImageI16L`, `ImageI16B`, and `ImageI16N` Flip/Mirror strategy declarations. Native byte length must be exact and nonempty; each mode's same-mode Default implementation remains the fallback. |
@@ -2924,7 +3144,7 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
 
 - `transform/ops.rs` declares all 25 exact input identities at the family entry point. Twenty Pillow modes have native Default strategies; the five internal high-depth identities retain explicit `NotImplementedError` rejection. Every maintained byte result preserves its exact input variant. Default affine-nearest owners retain the archived specialized L, LA, and three-byte RGB-layout kernels; RGB, HSV, and YCbCr share only the same-layout `Rgb` sampler while preserving their exact wrappers. The I32/F32 owners retain their raw four-byte carriers and their typed scalar filtered paths. Four I;16 identities have distinct mode owners using typed u16 buffers and explicit native/little/big byte order; filtered I;16 behavior preserves Pillow's byte-plane filter semantics without creating or routing through another image mode.
 - Public Transform entry points in `ops/transform.rs` create `PipelineOp::Transform`, and `registry/registration/transform.rs` prepares the mode-aware CPU owner. `transform_public` obtains the cached exact `Mode` through `mode_identity()` and passes it into fill normalization and palette/One filter selection; fill arity, scalar, carrier, and named-color resolution match enum variants. Pillow's public `fill` parameter is documented as unused for built-in method IDs; `fillcolor` initializes outside pixels and its omitted/present state flows to the selected strategy. Python and JavaScript adapters use the exact `mode_identity()` for P-specific fill parsing instead of branching on `Image.mode()` text. The typed `color::getcolor_for_mode` preserves the existing Pillow string resolver's result for all 20 externally named identities without spelling round-trips and preserves carrier-equivalent named-color results for the five internal identities; operation support still rejects those five modes. Sampling, F sample-word and omitted-fill, P forced-nearest, PA bicubic-filter, LA/RGBA/RGBX identity, I;16 byte-order, and typed color resolver behavior belong in the mode-by-architecture parity matrix. `ops/transform/fill.rs` handles P fill identity/color normalization and its type/value errors. Architecture evidence must cover declared SSE2/NEON selection where compiled, unavailable-architecture fallback, and Default when a mode has no specialization. The remaining legacy suite stays as reference; no supported active caller needs its `explicit_mode` override.
-- The Python facade exposes Pillow-compatible `Transform`, `ImageTransformHandler`, and `SupportsGetData` names. Handler objects are dispatched in the host layer; the LA/RGBA premultiplied-image step applies to this custom-handler route, while built-in numeric methods stay on the core's fused native alpha strategy. Objects exposing `getdata()` are resolved before the numeric method/data pair reaches PyO3. Keep handler error ordering, `getdata()` result forwarding, LA/RGBA custom-handler mode, and direct numeric-mode behavior in frozen CPU parity; implementation is source-reviewed but runtime-unvalidated.
+- The Python facade exposes Pillow-compatible `Transform`, `ImageTransformHandler`, and `SupportsGetData` names. For every LA/RGBA call with a non-nearest filter, it converts to La/RGBa and recurses before dispatching built-in methods or handlers; `getdata()` is also resolved after this conversion. Direct typed Rust Transform calls instead select LA/RGBA owners whose kernels premultiply, resample, and unpremultiply in the native mode. Compare outputs, error/callback order, and strategy receipts for these distinct routes in frozen CPU parity; implementation is source-reviewed but runtime-unvalidated.
 - Empty-mesh P scalar-fill returns the Pillow-required source palette and image metadata with its new index raster; this immediate path does not materialize or enter a CPU kernel. Add a frozen parity case with a non-default source palette to verify this output metadata.
 - Mode owners inject `ExecutionContext` into their prepared strategy. Architecture selection occurs from each mode's declaration. All 14 native-byte modes admitted by the archive (`1`, L, P, LA, PA, RGB, RGBA, RGBa, RGBX, CMYK, YCbCr, HSV, I, and F) declare AVX, AVX2, SSE2, NEON, and Wasm SIMD128 routes for affine and perspective/quad nearest through `TransformByteKernels`. L, LA, RGB, HSV, YCbCr, RGBA, and CMYK also declare affine bilinear through the same exact-mode support contract. Their wrappers use the shared interpolation helper; only LA and RGBA select alpha-aware premultiply/unpremultiply behavior. Each mode uses its exact typed wrapper and retains its output identity. LAB and La retain their same-mode Default strategy because neither is admitted by the archived native-byte layout contract.
 - The four I;16 identities declare AVX, AVX2, SSE2, NEON, and Wasm SIMD128 affine nearest/bilinear routes with a typed u16 output wrapper and an exact native two-byte guard. Nearest sampling stays in u16. Pillow's archived filtered I;16 contract processes the first `width` bytes of each native row and restores the second fill byte; the typed mode owners preserve that byte-plane arithmetic in a scratch buffer while input and output remain exact I;16 variants, with no `DynamicImage` mode conversion.
@@ -3034,8 +3254,10 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
   kernels retain their archived geometry and tail behavior. The rectangle
   fill/outline loops were extracted unchanged; architecture wrappers now carry
   an exact `DrawLayout` and reconstruct the output with its exact `Mode` rather
-  than infer a variant from channel count. Direct Bitmap/Text mode contracts,
-  wrapper error ordering, and P/PA palette transitions remain open.
+  than infer a variant from channel count. Direct Rust explicit-mode mismatch now follows `validate_mode` on the first
+  mode-sensitive operation, retaining Pillow's RGBA-context-over-RGB exception;
+  other direct Bitmap/Text mode contracts, wrapper error ordering, and P/PA
+  palette transitions remain open.
   Remaining source review compares every direct Bitmap/Text mode's ink and
   mask rules, P/PA metadata, I/F raw carrier behavior, and error ordering
   against the archived/wrapper contracts, then verifies each vector kernel
@@ -3054,7 +3276,7 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
   output/fault parity remain pending. Sources: [ImageDraw.text](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L3150-L3164)
   and [ImageText.Text](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageText.py#L1332-L1408).
 
-### ImageOps source progress: incomplete and unvalidated
+### ImageOps source progress: public routes reviewed; mode leaves and parity incomplete
 
 - Public ImageOps mode admission in `ops/imageops/point.rs` now matches typed `Mode` identities rather than Pillow strings. Exact mode lookup uses the wrapper's cached identity. `Image::mode_identity()` reads encoded header modes and follows operation-declared output transitions without decoding or materializing pixels when those facts suffice. The remaining materialization fallback is limited to palette-dependent P/PA expansion without palette facts, rejected raw descriptors without a declared output identity, and operations with no raster result; it preserves the existing expansion and execution-error timing and is tracked for CPU parity rather than as blanket mode inference.
 - `imageops/ops.rs` owns an exhaustive classifier for all 25 exact modes. The byte modes have per-mode strategy owners and preserve their exact mode identity. Numeric I/F and internal high-depth carriers retain their existing shape-error behavior for bytewise Invert, Posterize, and Solarize. Invert's P, LA, PA, RGBA, and CMYK routes are explicitly CoreOnly because the Pillow wrapper rejects those identities; each owner has a nearby `NO_PILLOW_SUPPORT` comment. The P/PA routes invert native samples and keep attached palette metadata, so indexed materialization must not expand them before prepared dispatch.
@@ -3075,6 +3297,7 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
 - The archived 128-bit fill/copy implementation now lives in `imageops/helpers/expand_vector.rs` and is shared by exact-mode byte strategies. The same declaration selects SSE2, NEON, or Wasm SIMD128 when built and available. Its `ExpandVector` guard enables full border fills for one- and two-byte layouts; three- and four-byte layouts use it for border-zero identity copies, matching the archived vector work. Other requests select the same-mode Default implementation. The vector kernel constructs the original exact variant rather than inferring output mode from channel count.
 - The archived CPU Expand cases and SIMD byte-fill/copy regressions remain in `pool_cpu/legacy` as read-only references; they were not migrated into active Rust unit tests, per the unit-test cleanup request. Carry their fill bytes, dimensions, output comparisons, and architecture requests into frozen parity IDs before the CPU parity gate. Output and selection receipts remain pending.
 - Expand source review is complete against the archived CPU and SIMD routes. The public wrapper queues into the exact-mode registry; the architecture guard selects vector fill for one-/two-byte layouts and border-zero copies for three-/four-byte layouts, matching the kernel's actual branches. Exact-mode output identity and all declared modes are retained. Operation × exact Mode × Architecture parity remains pending; no active adapter registration remains.
+- Public route crosswalk (2026-11-15): Python Autocontrast/Equalize use wrapper callbacks around Histogram, optional Convert, LUT construction, and public `Image.point`; they do not enqueue the separate typed Rust Autocontrast/Equalize pipeline ops. Invert/Posterize/Solarize call public `point` for accepted non-P inputs, while P changes palette entries on a copied image and retains pixel indexes. Colorize resolves its LUT, converts L to RGB, then uses `_lut`/`point`. Python Expand creates a mode-specific canvas and delegates source copy to public Paste; direct Rust Expand is a separate typed pipeline. Grayscale delegates to Convert; Flip/Mirror to Transpose; Crop resolves a box then calls Crop; Scale/Contain/Cover/Fit/Pad routes are detailed above. Quantize is an eager `Image` method, not an ImageOps entry. This records the caller-to-kernel distinction only; per-mode leaves, callbacks, output/fault contracts, architecture receipts, and latency remain open.
 - The ImageOps implementation and support matrix have not been compiled, parity-checked, or benchmarked. No source-completion claim is made.
 
 | Preserved source/function | Maintained destination and disposition |
@@ -3261,7 +3484,7 @@ Convert architecture.
 
 ### Resize source progress: prepared pipeline and mode strategies present; source review remains incomplete
 
-- `resize/ops.rs` declares exhaustive ordinary and boxed support contracts over all 25 exact `Mode` identities, selects from the injected CPU `ExecutionContext`, and retains the selection receipt. The prepared dispatcher routes byte-backed modes to exact typed mode owners, I32/F32 to native scalar owners, four I;16 modes to endian-specialized u16 owners, and five internal high-depth modes to native u16/f32 owners. The 14 byte modes use mode-local Default routes: direct sample paths share the fixed-width `byte_samples` helper where their filtering semantics match, LA/RGBA use the straight-alpha helper, CMYK owns its narrow fixed-point loop, and HSV owns its Bicubic narrow fixed-point loop. All 14 byte modes declare exact-mode SSE2, NEON, and Wasm SIMD128 strategies for ordinary nearest requests; eleven byte modes plus Luma8 also declare guarded filtered strategies. Boxed byte nearest and convolution use exact-mode architecture strategies with checked bounds and coefficient admission; One and P retain nearest-only boxed vector routes. Each mode reconstructs its own typed output, and `One` preserves its threshold step. I32/F32 retain their prepared AVX/FMA selections and Default fallbacks. I32 also declares NEON for eligible unboxed nearest and filtered requests; nearest preserves the raw signed-word carrier, while filtering uses checked NEON blocks around the two-pass i32 intermediate and a wide-lane fallback. The four I;16 modes have unboxed wide-vector strategies for SSE2, NEON, and Wasm SIMD128, with byte order selected by the exact mode owner and Default fallbacks retained. Public Resize queues typed `Resize`/`ResizeBoxed` operations; geometry families and Thumbnail prepare nested Resize with the same injected context. Source review confirms that native I;16 Default routes return correctly shaped exact-mode buffers for empty input extents, while the unboxed vector guard routes those extents through its explicit zero-output path. Boxed bounds are narrowed to float32 and validated before support assessment. Exact integer crop and full-source identity shortcuts use those narrowed bounds; filtered straight-alpha crops retain premultiply/filter/unpremultiply work. Tall boxed Resize composes vertical then horizontal child plans under the supplied context, preserving LA/RGBA as premultiplied mode identities between passes; F32 and I32 use their typed owners. Architecture guards decline the vector route when tall ordering, bounds, coefficient range, or shape is outside the declared specialization, leaving the exact-mode Default path. The public and direct prepared call paths, float32 box boundary, crop/pass-elision decisions, and selection order have now been source-reviewed. The separate GPU Pillow-string compatibility helper remains for the GPU stage. No build or validation has run.
+- `resize/ops.rs` declares exhaustive ordinary and boxed support contracts over all 25 exact `Mode` identities, selects from the injected CPU `ExecutionContext`, and retains the selection receipt. The prepared dispatcher routes byte-backed modes to exact typed mode owners, I32/F32 to native scalar owners, four I;16 modes to endian-specialized u16 owners, and five internal high-depth modes to native u16/f32 owners. The 14 byte modes use mode-local Default routes: direct sample paths share the fixed-width `byte_samples` helper where their filtering semantics match, LA/RGBA use the straight-alpha helper, CMYK owns its narrow fixed-point loop, and HSV owns its Bicubic narrow fixed-point loop. All 14 byte modes declare exact-mode SSE2, NEON, and Wasm SIMD128 strategies for ordinary nearest requests; eleven byte modes plus Luma8 also declare guarded filtered strategies. Boxed byte nearest and convolution use exact-mode architecture strategies with checked bounds and coefficient admission; One and P retain nearest-only boxed vector routes. Each mode reconstructs its own typed output, and `One` preserves its threshold step. I32 retains its prepared AVX/FMA selection and Default fallback; F32 keeps portable Default width 16, the AArch64 baseline width 4, the guarded AVX/FMA scalar strategy, and guarded SSE2/NEON/Wasm SIMD128 vector strategies. I32 also declares NEON for eligible unboxed nearest requests and filtered requests whose required pass order is horizontal-first; nearest preserves the raw signed-word carrier, while filtering uses checked NEON blocks around the two-pass i32 intermediate and a wide-lane fallback. Filtered tall reductions that require vertical-first are routed to the same-mode Default strategy. The four I;16 modes have unboxed wide-vector strategies for SSE2, NEON, and Wasm SIMD128, with byte order selected by the exact mode owner and Default fallbacks retained. Public Resize queues typed `Resize`/`ResizeBoxed` operations; geometry families and Thumbnail prepare nested Resize with the same injected context. Source review confirms that native I;16 Default routes return correctly shaped exact-mode buffers for empty input extents, while the unboxed vector guard routes those extents through its explicit zero-output path. Boxed bounds are narrowed to float32 and validated before support assessment. Exact integer crop and full-source identity shortcuts use those narrowed bounds; filtered straight-alpha crops retain premultiply/filter/unpremultiply work. Tall boxed Resize composes vertical then horizontal child plans under the supplied context, preserving LA/RGBA as premultiplied mode identities between passes; F32 and I32 use their typed owners. Architecture guards decline the vector route when tall ordering, bounds, coefficient range, or shape is outside the declared specialization, leaving the exact-mode Default path. The public and direct prepared call paths, float32 box boundary, crop/pass-elision decisions, and selection order have now been source-reviewed. The separate GPU Pillow-string compatibility helper remains for the GPU stage. No build or validation has run.
 
 #### Ordinary native-byte vector Resize source map
 
@@ -3314,7 +3537,7 @@ the required destination; they do not claim the new strategies are complete.
 | `ImageLab8` | Native three-byte LAB; resample stored channels without a color-space conversion. |
 | `ImageHsv8` | Native three-byte HSV; retain the serial bicubic integer-coefficient specialization and scalar fallback. |
 | `ImageI32` | Pillow `I` in its four-byte carrier; ordinary and boxed non-nearest Default Resize decode signed-i32 samples, round each pass with `ROUND_UP`, and construct the exact I variant. Ordinary nearest retains the archived half-pixel formula; boxed nearest copies source words using the narrowed source box and cumulative affine stepping in its I32-owned strategy. Filtered Default and AVX/FMA requests use the bounded serial streaming ring and fixed eight-tap horizontal path. Eligible unboxed nearest and filtered requests can select the I32 NEON owner. Nearest gathers signed words into wide lanes and writes the original little-endian carrier; filtered Resize preserves the two-pass i32 intermediate and rounding, using checked NEON blocks where eligible and wide-lane blocks for other spans. Its horizontal interleaved-load kernel requires eight stride-two samples with identical weights, while its vertical kernel requires eight contiguous lanes and at most sixteen taps. NEON admission checks the exact four-byte layout and checked dimensions; boxed, empty, and identity requests retain the existing selected route. Complete parity review remains TODO. |
-| `ImageF32` | Pillow `F` in its four-byte carrier; native scalar-word nearest copies and ordered f64 filtering retain f32 pass boundaries, non-finite values, eight-tap kernels, tall-image pass order, and exact `ImageF32` identity. The prepared strategy selects the existing scalar FMA implementation from injected AVX/FMA architecture capability; portable Default remains the ordered fallback. |
+| `ImageF32` | Pillow `F` in its four-byte carrier; native scalar-word nearest copies and ordered f64 filtering retain f32 pass boundaries, non-finite values, eight-tap kernels, tall-image pass order, and exact `ImageF32` identity. Portable Default keeps its width-16 product grouping and the AArch64 baseline keeps its distinct width-4 grouping. Guarded SSE2, NEON, and Wasm SIMD128 strategies use the migrated eight-lane ordinary, nearest, and boxed kernels; eligible filtered AVX/FMA work retains its separate scalar FMA implementation. Output and strategy receipts remain pending. |
 | `ImageI16` | Pillow `I;16`; its exact Default strategy resamples native u16 samples with the little-endian byte rule. Unboxed Resize also selects the shared wide-vector data plane through exact SSE2, NEON, or Wasm SIMD128 mode/architecture owners; boxed requests stay on Default. |
 | `ImageI16L` | Pillow `I;16L`; its exact Default strategy resamples native u16 samples with the little-endian byte rule. Unboxed Resize also selects the shared wide-vector data plane through exact SSE2, NEON, or Wasm SIMD128 mode/architecture owners; boxed requests stay on Default. |
 | `ImageI16B` | Pillow `I;16B`; its exact Default strategy resamples native u16 samples with the big-endian byte rule. Unboxed Resize also selects the shared wide-vector data plane through exact SSE2, NEON, or Wasm SIMD128 mode/architecture owners; boxed requests stay on Default. |
@@ -3327,6 +3550,8 @@ the required destination; they do not claim the new strategies are complete.
 
 No mode rejection was found in the legacy generic Resize entry point. Both operations classify every identity and derive prepared selection from the operation declaration. The prepared dispatcher matches the exact `Mode` tag and sends the 14 byte-backed identities to their corresponding typed `DynamicImage` owners; the remaining eleven identities go to the scalar or high-depth owners. Every prepared route now forwards the captured context and concrete selected architecture to its mode owner. The I;16 vector route and I32/F32 FMA routes are connected to their current declarations; filtered unboxed I32 now also has an exact NEON declaration and implementation. Ordinary nearest, ordinary filtered convolution, boxed nearest, and boxed filtered convolution now have corresponding exact byte-mode architecture owners; prepared caller and validation review remains open.
 Mode folders belong only to modes with executable Default strategies; architecture folders belong only to retained kernels. Resize and ResizeBoxed are owned by `resize`; Thumbnail is a separate family and must inject the same execution context into its nested Reduce/Resize work. The five core-only high-depth routes above must not use byte-materializing adapters. Rayon scheduling remains for pool_parallel. The generic Resize compatibility wrappers are test-only; their runtime FMA detector is also test-only. Production F32/I32 AVX/FMA owners obtain X86FmaToken only from the injected execution context, so architecture selection remains context-driven.
+
+- Public Resize route crosswalk (2026-11-15; updated 2026-11-21): Python `Image.resize` loads encoded inputs at the public boundary and retains custom `convert`, `resize`, `reduce`, box, and numeric protocols. The ordinary built-in route delegates to `_resize_dispatch`; an admitted reducing-gap callback plan calls the current `self.reduce` before constructing the final wrapper. Rust preparation stores the exact raster, request, selected strategy, and injected context, then dispatches each exact `DynamicImage` variant to its own mode owner. Non-alpha reducing-gap work composes a declared Reduce child; straight-alpha LA/RGBA uses the fused Default route. The 2026-11-20 support-declaration follow-up adds the LA/RGBA fused `ResizeBoxed` child and its serial support to the operation-level route contract. Source review traced the wrapper choice, route guard, prepared admission, and declared serial fallback. Per-mode kernel coverage and runtime output, fault, receipt, and performance evidence remain pending; no runtime check ran.
 
 `resize/ops.rs` aggregates the exhaustive `Resize` and `ResizeBoxed` operation contracts; each exact-mode `ops.rs` declares its own two `ModeSupport` values beside its concrete architecture dispatch. Shared architecture guard construction is in `resize/helpers/support.rs`, while prepared selection and nested dispatch remain in `resize/helpers/prepared.rs`. CMYK and HSV now have mode-local narrow fixed-point kernels; HSV uses the retained specialization for Bicubic and native three-channel filtering otherwise. One keeps threshold behavior, straight-alpha modes preserve their alpha contract, palette modes preserve indices, and color/padding modes preserve stored channels. Typed I32/F32 and high-depth implementations remain native. The four I;16 modes now have const-specialized endian rules in both Default and wide-vector unboxed paths; empty sources use the zero-output vector path when its guard is satisfied. I32 filtered unboxed NEON has an exact mode/architecture owner and guarded support declaration. All 14 byte modes now have exact SSE2, NEON, and Wasm SIMD128 declarations for guarded ordinary nearest sampling; the shared kernel retains 16-byte shuffle windows, scalar gathers, bounded output stores, and scalar tails. Eleven byte modes plus Luma8 have guarded ordinary filtered vector strategies, and all byte modes have boxed nearest strategies; filtered boxed convolution is declared for all but the One/P nearest-only routes. Public `Image.resize` order was compared with the pinned Pillow source: filter and reducing-gap validation precede the no-op check, One/P normalize to Nearest, LA/RGBA filtered work uses premultiplied identities, and tall reductions compose vertical then horizontal passes. The maintained wrapper and prepared direct/nested routes retain those mode and geometry decisions while passing the selected CPU context through execution. Boxed bounds, crop/pass elision, and architecture ineligibility are reviewed above. Generic full-operation wrappers in `ops/pil_resize` have no production callers and are test-only. Runtime output, fault, receipt, and performance evidence remains pending; no build or validation has run.
 
@@ -3509,15 +3734,15 @@ an implementation.
 | `image/channel_access.rs`, `compute/pool_cpu/ops/put/ops.rs`, `compute/pool_cpu/ops/analysis/ops.rs` | GetChannel's operation-level declaration covers exact mode band counts, P's palette-preserving identity, I/F rejection before materialization/index validation, CoreOnly classification for five internal high-depth identities, and its composed ExtractBand child. The wrapper reads selector bounds from the declaration, then retains its L identity shortcut, tiny-RGB eager route, backend-pinned lazy route, and P copy. CoreOnly u16 sources now produce `ImageI16` bands; f32 sources produce `ImageF32` bands with little-endian scalar bytes. Carry these routes and the child's selected/fallback receipts into the frozen CPU parity set. |
 | `ops/analysis.rs`, `compute/pool_cpu/ops/analysis/ops.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema.rs`, `compute/pool_cpu/ops/analysis/helpers/bbox_execution.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema_execution.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema_bytes.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema_bytes_execution.rs`, exact-mode `default/extrema_bytes_impl.rs` owners, `compute/pool_cpu/ops/analysis/helpers/get_data.rs`, `compute/pool_cpu/ops/analysis/helpers/getcolors.rs`, `compute/pool_cpu/ops/analysis/helpers/getcolors_execution.rs`, exact-mode `default/getcolors_impl.rs` owners, `compute/pool_cpu/ops/analysis/helpers/stat.rs`, `compute/pool_cpu/ops/analysis/helpers/stat_execution.rs`, exact-mode `default/stat_impl.rs` owners, `ops/analysis/histogram.rs`, `image/entropy.rs`, `image/statistics.rs` | Pillow-facing formatted GetExtrema now has `OperationId::GetExtrema`, an exhaustive mode support contract, injected CPU context, Default architecture fallback, and native byte/u16/f32 sample reductions through exact-mode owners. Internal LA16/RGB16/RGBA16/RGB32F/RGBA32F results are CoreOnly typed multiband extrema. `FormattedExtrema` and Python/JS formatters carry these typed results. The separate Rust/JS byte-valued `Image::getextrema()` now has `OperationId::GetExtremaBytes`, exhaustive exact-mode support, injected CPU context, one Default owner per exact mode, and native-carrier scans that implement the per-mode byte-lane contract without materializing an RGBA raster. Its byte projections include typed-sample conversion only at the result boundary, raw I/F carrier lanes, and RGB32F's opaque fourth lane. Add operation × mode × architecture parity and the lazy terminal receipt TODO. GetData's prepared dispatch/direct reads, GetBBox dispatch, and formatted GetExtrema dispatch now live in focused helpers so family `ops.rs` stays below the 1,000-line limit. Histogram now has an exhaustive 25-mode support contract, 1/L mask declaration, prepared CPU selection, and materialized-call receipt; exact-mode Default owners scan all byte, I/F, I;16, and CoreOnly native u16/f32 inputs directly into the existing bins. Entropy has its own exhaustive support contract and composes the prepared Histogram child under the same injected CPU context, with a materialized-call receipt. These changes are source-only and unvalidated. Mode-owned band counts also drive histogram allocation, Entropy, GetColors, and multiband Split. Entropy now shares the exact Histogram rules for I/F, I;16, byte bands, and CoreOnly native bins. Stat now has a 25-mode contract, per-mode owners, injected CPU context, specialized I/F paths, and native CoreOnly Histogram composition. Its masked wrapper executes the prepared Histogram child through the selected exact-mode Stat owner using native u32 bins without a widened histogram allocation; lazy receipts remain a source TODO. GetColors has native per-mode counting and typed CoreOnly tuples; expanded 25-mode × Architecture parity and lazy terminal receipts remain source TODOs. Include Pillow mode/value cases and declared CPU route receipts in parity. |
 | `image/statistics.rs`, `compute/pool_cpu/ops/analysis/helpers/getcolors_execution.rs`, `compute/pool_cpu/ops/analysis/helpers/stat_execution.rs`, `image/entropy.rs`, `ops/analysis/histogram.rs`, `ops/split.rs`, `ops/quantize/operations.rs` | Split now has a composed operation contract; Quantize now has a `pool_cpu` operation owner and prepared context; mode × Architecture parity and lazy receipts remain pending. GetColors and unmasked Stat now have exhaustive support contracts, exact-mode Default owners, routed CPU context, and native CoreOnly paths; their expanded parity and lazy terminal receipt evidence remain pending. Stat's lazy receipt remains pending; Split child-selection/fallback receipts remain pending; Quantize has an ImageOps contract and context-driven CPU dispatch, with exact L/P/RGB/RGBA routes and native Default owners for all 21 CoreOnly modes. Materialized calls now record requested Backend and exact-mode selection; lazy receipt composition remains pending. Entropy uses its prepared support contract and composed Histogram child. Preserve Stat mask/error ordering, verify Split child routing and output identity, and verify Quantize CoreOnly mode-owner dispatch plus materialized and lazy receipt behavior. Source TODOs and the plan matrix track these gaps; work remains unvalidated. |
-| `ops/split.rs`, `compute/pool_cpu/ops/put/helpers/extract_band.rs`, `ops/analysis/bbox.rs` | Split and GetChannel use exact band counts and preserve CoreOnly u16/f32 samples through `ExtractBand`. GetBBox is now a direct CPU analysis operation with a public support descriptor, an exhaustive 25-mode classifier, alpha-band input contract, prepared selection, and one Default owner under each exact mode folder. Pillow `I` and `F` retain their raw-word predicates; each `I;16*` owner scans native u16 samples. Pillow's `GetBBox.c` source comparison confirms that three-band modes ignore padded storage, alpha-only selects only Pillow's five alpha-bearing modes, and internal high-depth modes use their native channel selection. This corrects the archived Rust I;16 byte-prefix scan, which missed samples with only a nonzero high byte. Direct host receipts now carry the selected architecture and fallback reason; lazy-pipeline terminal receipts that combine materialization with the CPU scan remain a TODO. The previous `to_rgba8` fallback and the local row unit test were removed. Pending: CPU parity for all 25 modes under Default and all nine non-Default Architecture requests, verifying same-mode Default fallback, I;16 high-byte cases, and alpha-only selection. This is source-only and unvalidated. |
+| `ops/split.rs`, `compute/pool_cpu/ops/put/helpers/extract_band.rs`, `ops/analysis/bbox.rs` | Split and GetChannel use exact band counts and preserve CoreOnly u16/f32 samples through `ExtractBand`. GetBBox is now a direct CPU analysis operation with a public support descriptor, an exhaustive 25-mode classifier, alpha-band input contract, prepared selection, and one Default owner under each exact mode folder. Pillow `I` and `F` retain their raw-word predicates; each `I;16*` owner scans native u16 samples. Pillow's `GetBBox.c` source comparison confirms that three-band modes ignore padded storage, alpha-only selects only Pillow's five alpha-bearing modes, and internal high-depth modes use their native channel selection. This corrects the archived Rust I;16 byte-prefix scan, which missed samples with only a nonzero high byte. Direct host receipts now carry the selected architecture and fallback reason; lazy-pipeline terminal receipts that combine materialization with the CPU scan remain a TODO. The previous `to_rgba8` fallback and the local row unit test were removed. Pending: CPU parity for all 25 modes under Default and all configured non-Default Architecture requests, including the AArch64 baseline selector, verifying same-mode Default fallback, I;16 high-byte cases, and alpha-only selection. This is source-only and unvalidated. |
 | `ops/convert/operation.rs` | Separately route matrix Convert through a GPU-owned matrix strategy when GPU declares it; the current typed eager wrapper deliberately executes this CPU-owned operation on CPU while GPU support remains outside the CPU migration. |
-| `compute/pool_cpu/ops/composite/ops.rs`, `compute/pool_cpu/ops/draw/ops.rs`, `compute/pool_cpu/ops/paste/ops.rs`, `compute/pool_cpu/ops/transform/ops.rs` | Keep each family source/caller review beside its operation owner: carry Composite's source-reviewed modes, mask pairs, and architecture routes into frozen CPU parity; finish Transform source review; all supported Draw geometry, Text, Bitmap, and native RGB/CMYK fast routes now pass the exact `StrategySelection` into their mode owners; finish Draw mode/error review and frozen parity; carry Paste's source-reviewed SIMD and owner routes into frozen CPU parity. `compute/pool_cpu/ops/mod.rs` only exports operation families. |
+| `compute/pool_cpu/ops/composite/ops.rs`, `compute/pool_cpu/ops/draw/ops.rs`, `compute/pool_cpu/ops/paste/ops.rs`, `compute/pool_cpu/ops/transform/ops.rs` | Keep each family source/caller review beside its operation owner: carry Composite's source-reviewed modes, mask pairs, and architecture routes into frozen CPU parity; Transform source/caller review is complete; keep output and fault parity, P/PA palette metadata and callback mutation, architecture/fallback receipts, Wasm floating-point edge cases, and latency as runtime TODOs. Draw's direct Rust `Draw::new` override is checked at each mode-sensitive operation while Python/JavaScript validate at construction; queued shape operations validate the explicit mode before queueing and partial rounded-rectangle helpers carry one resolved alpha-context decision. Bitmap masks and mode owners have a source crosswalk; direct Rust multiline Text captures one backend/architecture context and passes it to each line's strategy. Direct API error timing, Draw mode/error and output review remain open. Text's embedded-color Paste still selects at its queued materialization boundary, and multiline custom stroke/fill callbacks do not yet receive the parent's context. Carry Paste's source-reviewed SIMD and owner routes into frozen CPU parity. `compute/pool_cpu/ops/mod.rs` only exports operation families. |
 | `compute/pool_cpu/ops/geometry/pad/ops.rs` | Archived full-width non-nearest Pad convolution was limited to L and RGBX. Both paths now compose the prepared Resize child and write into the final canvas through exact-mode L/RGBX adapters; `Resize::PreparedResize` retains and dispatches the selected Default/SSE2/NEON/Wasm SIMD128 strategy. No implementation gap remains for this archived branch. Finish checking every padded mode against its same-mode Default fallback and prepared context; verify Pad output/error, fill, palette, and child-selection behavior in CPU parity. |
 | `compute/pool_cpu/ops/enhance/ops.rs` | Contrast source review is complete: nine remaining identities reach Blend's preserved wrong-mode rejection, five internal high-depth identities reject while converting the constant base, and La/RGBa retain their exact conversion errors. Sharpness source review traces wrapper→registry→injected context→exact mode→architecture, confirms exact output identity for all 22 accepted modes and archived native behavior for the six Pillow-supported byte modes, and records explicit `NO_PILLOW_SUPPORT` markers on the other 16 native extensions. The six byte-mode architecture lists and dispatches cover all seven declared entries. Keep Sharpness in the frozen CPU parity matrix after source migration is complete. Expand parity across every operation × exact Mode × Architecture. |
 | `compute/pool_cpu/ops/filter/ops.rs` | Filter3x3 native-byte Default and architecture kernels are source-compared: coefficient order, arithmetic, border retention, RGB byte-stream, LA binomial path, and exact-mode reconstruction match the archive. Filter5x5 Default paths are source-compared: I32 keeps its typed path; L/LA/RGB/RGBA retain their archived special kernels and bounded fast paths; other admitted byte modes use native-byte rows; each leaf restores its exact variant. I32 also declares the archived AVX/FMA ring for the exact normalized binomial request and retains AVX2/FMA for its vector route. Include guarded exact-kernel selections and ineligible-request Default fallbacks in the frozen CPU parity matrix. P, F32, and internal high-depth rejections remain declared. Direct ModeFilter has an exact byte-mode support contract, normalized window facts, serial CPU context, palette-preserving wrapper, and native exact-variant output; its direct caller was moved out of `ops/param_filters.rs`. Its neighborhood, tie, threshold, P-index, and palette behavior were compared with `3f9dfd403`; the refactored caller records its prepared CPU architecture selection. The support declaration and closed strategy selector now route each accepted byte identity to its exact-mode Default leaf; those leaves call the shared native-byte helper without mode conversion. A P-mode nonzero-index case with a full palette is now in the parity input generator but has not been run; backend-fallback receipts remain pending. General Gaussian/BoxBlur source comparison covers the serial and native-byte architecture paths; the RGBA radius-seven implementation and its uniform proof are compared with the archive. L rank-window Default and vector paths are source-compared, including the preserved Apple ARM64 9x9 rank-40 performance regression. The remaining exact-mode blur, extrema, rank, callback, and direct/eager caller paths are source-reviewed; the detailed crosswalks below record their Default/vector ownership and mode contracts. Output, fault, selection/fallback, and benchmark evidence remain pending. Native-byte extrema/rank strategies and L/F32 rank vector strategies are represented in their exact mode owners. PA BoxBlur/BoxBlurXY and rank requests retain native index/alpha samples so prepared execution reaches the declared PA kernels; GaussianBlur remains rejected for PA. |
-| `compute/pool_cpu/ops/resize/**`, `compute/registry/registration/geometry.rs`, `ops/resize.rs`, `ops/resize/reducing_gap.rs`, `ops/pil_resize/**` | The prepared path now preserves float32-bound identity/crop shortcuts and unchanged-axis float pass elision; native I;16 Default and vector paths preserve exact output identity for empty source extents. The maintained mode/architecture strategy subtree has source review; the obsolete whole-image and boxed dispatcher files are absent, and source search found no active calls to those names outside `legacy`. Production CPU execution uses prepared mode owners and shares only low-level coefficient, sample, and pass helpers. Keep any retained integer-mode reducers test-only. Remaining boxed validation/error ordering must be reviewed across wrapper input extraction, decode/mode lookup, identity shortcuts, reducing-gap adjustment, prepared admission, and execution; move any retained Rayon scheduling to `pool_parallel`; keep the GPU Pillow-string helper as separate migration debt. Public direct and nested geometry callers already enter prepared plans with injected context. All 14 byte modes declare ordinary nearest vector strategies. ImageLuma8 and eleven other byte modes declare unboxed filtered SSE2, NEON, and Wasm SIMD128 strategies when both coefficient axes satisfy the checked i32 bound; One and P remain nearest-only. Pad composes the exact ImageLuma8 strategies into its output window. All byte modes declare boxed nearest strategies, with filtered boxed convolution for all except One/P. I32/F32 filtered Resize and all four unboxed I;16 vector routes are declared with their Default fallbacks; I32 also declares NEON for unboxed nearest. Boxed I;16 remains Default. Thumbnail prepares nested Reduce/Resize work with the same context; its streamed I32 mode owner and AVX FMA adapter now consume the prepared `StrategySelection`. |
+| `compute/pool_cpu/ops/resize/**`, `compute/registry/registration/geometry.rs`, `ops/resize.rs`, `ops/resize/reducing_gap.rs`, `ops/pil_resize/**` | The prepared path now preserves float32-bound identity/crop shortcuts and unchanged-axis float pass elision; native I;16 Default and vector paths preserve exact output identity for empty source extents. The maintained mode/architecture strategy subtree has source review; the obsolete whole-image and boxed dispatcher files are absent, and source search found no active calls to those names outside `legacy`. Production CPU execution uses prepared mode owners and shares only low-level coefficient, sample, and pass helpers. Keep any retained integer-mode reducers test-only. Public wrapper, lazy decode/mode lookup, identity shortcuts, reducing-gap adjustment, prepared admission, and nested Resize execution are source-traced in the caller crosswalk. Runtime validation/fault-order and architecture fallback receipts remain pending the frozen CPU parity matrix. Maintained `pool_cpu` has no active Rayon scheduling; archived parallel work remains a tracked TODO for `pool_parallel`. Keep the GPU Pillow-string helper as separate migration debt. Public direct and nested geometry callers already enter prepared plans with injected context. All 14 byte modes declare ordinary nearest vector strategies. ImageLuma8 and eleven other byte modes declare unboxed filtered SSE2, NEON, and Wasm SIMD128 strategies when both coefficient axes satisfy the checked i32 bound; One and P remain nearest-only. Pad composes the exact ImageLuma8 strategies into its output window. All byte modes declare boxed nearest strategies, with filtered boxed convolution for all except One/P. I32/F32 filtered Resize and all four unboxed I;16 vector routes are declared with their Default fallbacks; I32 also declares NEON for unboxed nearest and horizontal-first filtered requests. F32 filtered arithmetic now receives its product grouping from the selected strategy: portable Default and AVX FMA use width 16, while the declared AArch64 baseline strategy uses width 4. F32's archived 8-lane ordinary, nearest, and boxed vector route is now declared under SSE2, NEON, and Wasm SIMD128; AVX/FMA remains its separate scalar strategy. AArch64/x86 output and strategy-receipt parity plus per-path benchmarks remain TODO. Boxed I;16 remains Default. Thumbnail prepares nested Reduce/Resize work with the same context; its streamed I32 mode owner and AVX FMA adapter now consume the prepared `StrategySelection`. |
 | `compute/pool_cpu/ops/eval/ops.rs` | Compare the archived SIMD vector/admission paths against the prepared CPU strategies and migrate any missing mode/architecture case. Move archived Rayon scheduling to `pool_parallel`. Direct scalar point and float-LUT calls enter declared exact-mode CPU strategies and retain their `StrategySelection` in eager receipts. |
-| `compute/pool_cpu/mod.rs`, `compute/pool_cpu/batch_execution.rs`, `compute/execution/terminals.rs` | Serial prepared dispatch, routed-context plumbing, wrapper-resolved P/PA palette handoff, ordered PutPixel, transpose and point-LUT runs, Draw, AlphaComposite+Mirror, Multiply+Screen, RGB PutPixel+Thumbnail, and owned Invert/Chops Add/Sub routes are source-reviewed against their mode/architecture guards. Identity transpose and point-LUT runs report `native-identity` without claiming a selected kernel. CPU output/resource/error and selection/fallback parity remains pending, as do separate eager/lazy terminal and nested-context gaps. |
+| `compute/pool_cpu/mod.rs`, `compute/pool_cpu/batch_execution.rs`, `compute/execution/terminals.rs` | Serial prepared dispatch, routed-context plumbing, wrapper-resolved P/PA palette handoff, ordered PutPixel, transpose and point-LUT runs, Draw, AlphaComposite+Mirror, Multiply+Screen, RGB PutPixel+Thumbnail, and owned Invert/Chops Add/Sub routes are source-reviewed against their mode/architecture guards. Identity transpose and point-LUT runs report `native-identity` without claiming a selected kernel. CPU output/resource/error and selection/fallback parity remains pending, as do separate eager/lazy terminal and remaining nested-context gaps. Direct and callback Draw Text children now receive and execute under the caller-selected CPU route. |
 | `compute/mod.rs` | Source-complete: the independent SIMD pool and adapter re-exports are removed. Keep `Backend::Simd` only as a request alias for CPU plus detected Architecture. |
 | `compute/execution.rs` | Source-complete: pipeline selection and execution use the injected CPU architecture context; mixed SIMD segments, guessed mode transitions, and retry routing are removed. |
 | `compute/automatic_segments.rs` | Removed: CPU mode/architecture strategies now execute the complete prepared operation sequence without a separate segment planner. |
@@ -3535,7 +3760,7 @@ an implementation.
 | `compute/pool_cpu/ops/rotate/ops.rs` | The maintained owner declares all 25 exact modes with serial Default strategies, including typed native `u16`/`f32` paths for the five internal identities, each marked `NO_PILLOW_SUPPORT`. The serial three-byte contiguous-copy and RGBA unrolled nearest paths are restored. All byte-backed exact modes declare native-byte nearest strategies for AVX2, SSE2, NEON, and Wasm SIMD128, including raw-byte `I`/`F` carriers; byte modes declare their archived bilinear vector kernel where supported, including typed I/F arithmetic. Architecture-selected identity copies and exact right-angle transposes now use native vector-copy/transpose helpers and retain their receipts for eligible nonempty inputs. Empty-source Rotate requests now use the exact mode's serial Default strategy; byte-backed and native typed Default paths permit empty output only for archived 180° and expanded 90°/270° fast paths, while other empty geometry retains Default's checked behavior. The four I;16 identities remain typed-u16 Default-only. Source comparison confirms the archived raw-byte SIMD nearest route uses signed 16.16 coordinate stepping and byte-plane sampling, which differs from the maintained Pillow I;16 path's floating Geometry.c mapping over typed u16 samples; the mode owner records a TODO for a future exact-geometry typed strategy rather than declaring that incompatible route. Remaining work is per-mode direct/compatibility caller review plus CPU parity, including empty-output and fallback receipts; core-only extensions stay outside Pillow parity. |
 | `compute/registry/registration/imageops.rs` | Source-review direct and eager ImageOps callers against the prepared CPU registry; grayscale's bounded RGB eager path already uses the prepared plan and injected routed context. |
 | `image/materialization.rs` | Keep typed prepared plans flowing through the serial pool and preserve resolved operation dependencies on wrapper-to-pool routes. Single-operation lazy P/PA Grayscale, Equalize, and Invert use their declared exact-mode CPU strategies before generic palette expansion. Other CPU indexed requests validate the first `PipelineOp::support()` mode declaration against the materialized P/PA source before expansion, so direct `Image::push_op` cannot dispatch a rejected request as RGB(A). Finish GPU palette-strategy separation in its later backend stage. |
-| `image/pipeline_ops.rs`, `pipeline/support.rs`, `compute/mod.rs`, `lib.rs` | `PipelineOp::operation_id()` and `PipelineOp::support()` now expose the same typed operation declarations used by preparation; Convert selects the matrix contract when its matrix is present, and draw/chops variants map to their owning operation identities. `OperationId`, support descriptor types, `ExecutionContext`, and `Architecture` are re-exported at the crate root for Rust callers. Autocontrast, Equalize, Posterize, and Solarize wrappers now validate modes through their operation declarations; Filter and GaussianBlur already use the declared support path. Native internal high-depth Posterize/Solarize rejection reasons now match their public mode labels. The Rust `blend` wrapper validates mode pairs and dimensions through `BlendModule`'s `InputContract`, checking mode pairs before dimensions to preserve error order; it retains an explicit backend from the first operand, or inherits the second operand's pin when the first is an eagerly materialized base. The materializer rejects direct P/PA BlendModule requests from that same declaration before palette expansion. Python Color's eager-base/public-Blend caller is source-traced; the new context handoff remains unverified. Verify Brightness float32 byte blending and architecture-fallback receipts in parity, and include Color's host path and metadata behavior in the frozen parity scope. Retain Contrast's documented conversion-first behavior and Sharpness's completed exact-mode route. Preserve exact rejection/error order, then remove the source-mode fallback only when every accepted P/PA transition has a declared result. |
+| `image/pipeline_ops.rs`, `pipeline/support.rs`, `compute/mod.rs`, `lib.rs` | `PipelineOp::operation_id()` and `PipelineOp::support()` now expose the same typed operation declarations used by preparation; Convert selects the matrix contract when its matrix is present, and draw/chops variants map to their owning operation identities. `OperationId`, support descriptor types, `ExecutionContext`, and `Architecture` are re-exported at the crate root for Rust callers. Autocontrast, Equalize, Posterize, and Solarize wrappers now validate modes through their operation declarations; Filter and GaussianBlur already use the declared support path. Native internal high-depth Posterize/Solarize rejection reasons now match their public mode labels. The Rust `blend` wrapper validates mode pairs and dimensions through `BlendModule`'s `InputContract`, checking mode pairs before dimensions to preserve error order; it retains an explicit backend from the first operand, or inherits the second operand's pin when the first is an eagerly materialized base. The materializer rejects direct P/PA BlendModule requests from that same declaration before palette expansion. Python Color's eager-base/public-Blend caller is source-traced; the context-taking one-shot fallback routes are source-reviewed; output and receipts remain unverified. Verify Brightness float32 byte blending and architecture-fallback receipts in parity, and include Color's host path and metadata behavior in the frozen parity scope. Retain Contrast's documented conversion-first behavior and Sharpness's completed exact-mode route. Preserve exact rejection/error order, then remove the source-mode fallback only when every accepted P/PA transition has a declared result. |
 | `compute/registry/support.rs`, `compute/registry/support/operation.rs`, `raster/mode.rs` | Keep `support.rs` as the shared contract facade and re-export `OperationId` from its size-bounded family mapping submodule. `Mode::uppercase_a_band_index()` exhaustively identifies the uppercase `A` band across all 25 mode identities; ColorSaturation and Contrast consume this typed mode fact. |
 | `image/construction.rs`, `image/mode_boundary.rs`, `image/pixel_access.rs` | Convert remaining core string-taking constructors, generated-image and pixel-mutation entry points to typed `Mode`; keep Pillow string parsing at host/API boundaries. |
 | `image.rs` | Remove the remaining fallback mode identity and reconcile exact materialized and cached pipeline mode ownership. |
@@ -3543,8 +3768,6 @@ an implementation.
 | `ops/filter.rs` | Filter validation obtains exact `Mode` through `Image::mode_identity()`. The direct ModeFilter preflight uses its operation support descriptor; UnsharpMask, palette, PA GaussianBlur, and F32 compatibility gates remain at this host-facing boundary. Reconcile their outcomes with prepared contracts while preserving lazy error timing, then finish Pillow filter-name/mode/error ordering and the private ImagingCore compatibility review. |
 | `compute/pool_cpu/ops/filter/ops.rs`, `compute/pool_cpu/ops/filter/luma8/ops.rs` | Source crosswalks now cover exact-mode Filter3x3/Filter5x5, native-byte blur/extrema/rank, F32 rank ordering, RGBA radius-seven GaussianBlur, and architecture admission/fallback ownership. The family entry composes typed support, request facts, injected context, and UnsharpMask's GaussianBlur child; mode and architecture owners hold the pixel loops. Public named-filter, generic Kernel, custom callback/split/merge, and direct/eager Rust callers trace into the exact-mode contracts. ModeFilter's 14 byte modes and explicit palette/high-depth rejections are declared. No separate SIMD registrations remain active; Rayon scheduling stays in the future `pool_parallel` backend. The remaining private ImagingCore compatibility question is tracked separately; output, fault order, callback, selection/fallback receipts, and performance remain pending the frozen CPU gates. |
 | `image/metadata.rs::Image::mode_identity`, `image/pipeline_ops/mode.rs`, `image/pipeline_ops.rs`, `pipeline/support.rs` | The source crosswalk now accounts for all 87 `PipelineOp` variants through the exhaustive `operation_id()` match and its 75 `OperationId` results; `PipelineOp::support()` delegates to that same family-owned declaration. The parameter groups are Convert/ConvertMatrix, Equalize/EqualizeMasked, the three Pad forms, the two Expand forms, and ten Draw forms. The normal `Image::push_op` path calls `pipeline_output_metadata` once; `append_pipeline_op` reuses a prefix only for a same-mode preserving chain, and `new_pipeline_node` seeds its cache from the support-derived output. `push_mode_changing_op` is the separate Color3DLut route and seeds from its typed target parameter. The other direct cache-seeding pipeline constructors are the prepared Convert-to-P wrapper, Quantize-to-P output wrapper, and palette-only metadata layer; these carry an exact P/current Mode with no queued operation. `Image::mode_identity` replans only when the cache is unresolved, and materialization compares the producer's exact `DynamicImage` mode against any declared identity. The ImageOps point and module point/eval wrappers now delegate to this resolver. `Image::palette_expansion_mode` resolves PA to RGBA without palette metadata and P with an attached palette to RGB/RGBA according to palette alpha. The branch-level `OutputModeRule` review found typed target extraction for Convert/ConvertMatrix, Merge, and Color3DLut; `ByPayload` is used only by PutData and its 16-entry table; and no raster-producing PipelineOp route declares `NoRasterResult`. Remaining intentional materialization boundaries are unresolved upstream pipelines, palette-dependent P routes without an attached palette, rejected descriptors without a declared rejected output, and PutData payloads absent from the output table. Defensive `None` paths for targetless `ByTargetMode`, non-PutData `ByPayload`, or `NoRasterResult` on a raster PipelineOp would indicate a support/declaration mismatch; no active mapping to those branches was found. The GPU graph planner is another caller of `known_pipeline_op_mode`; its string-to-Mode conversion and no-palette-expansion assumptions remain for the later GPU stage. CPU source crosswalk is complete; exact mode, error-order, and fallback-receipt parity remains pending the Stage 5/7 gates. |
-| `ops/param_filters.rs` | Keep parameter-filter wrappers as argument normalization and result/metadata orchestration; direct ModeFilter must enter its typed support contract and injected CPU context in `pool_cpu/ops/filter`. |
-| `pipeline/support.rs` | Replace remaining mode string metadata and compatibility parsing with typed `Mode` at host boundaries. |
 | `pipeline.rs` | Merge now stores exact typed `Mode`; remove the GPU source-mode snapshot after GPU parameter encoding uses the prepared mode transition. |
 | `compute/pool_cpu/ops/color3dlut/ops.rs`, `compute/pool_cpu/ops/imageops/ops.rs` | Color3DLut active scalar/vector mode strategies, architecture leaves, support declarations, guards, and archived source comparison are source-reviewed; expand its operation × source Mode × target Mode × Architecture parity. ImageOps direct wrappers, fusion callers, histogram, Expand, and owned-buffer Invert routes are source-reviewed; operation × exact Mode × Architecture parity remains pending. No separate SIMD compatibility route remains active. |
 | `compute/pool_cpu/ops/eval/ops.rs` | Source comparison is complete; expand parity across exact Mode × Architecture and LUT/tail cases. Move the archived Rayon row scheduler to `pool_parallel` in its later backend pass. |
@@ -3713,14 +3936,30 @@ and performance evidence remains pending.
 
 ImageF32 Resize declaration disposition (2026-11-08): the 11 baseline public
 functions in `ops/resize/float.rs` are now owned by the exact `f32` mode
-strategy. `f32/default/filtered.rs` retains ordered f64 accumulation with an
+strategy. `f32/helpers/filtered.rs` retains ordered f64 accumulation with an
 f32 store after each separable pass, finite/non-finite FMA selection, the
-eight-tap fast path, the 16-tap non-FMA horizontal block rule, and tall-image
-vertical-first ordering. `f32/avx` supplies the selected x86 FMA implementation;
+eight-tap fast path, strategy-supplied product grouping, and tall-image
+vertical-first ordering. `f32/default`, `f32/avx`, and `f32/aarch64` supply
+their selected width/arithmetic policies;
 native multichannel f32 modes use `helpers/typed_f32.rs` without converting to
 ImageF32. These paths keep exact output identities and use the injected
 Architecture selection. Runtime output, fault, receipt, and performance
 evidence remains pending.
+
+2026-11-20 F32 Resize policy: portable Default and AArch64 target-baseline
+outputs remain separate declared strategies, including when requested through
+Backend::Cpu with Architecture::Default. Portable Default and AVX FMA use
+product width 16; AArch64 uses width 4 to preserve its existing output. The
+injected Architecture selection, rather than a target check inside the shared
+filtered loop, selects the target-baseline strategy. Focused output and
+selection receipts remain pending.
+
+Source provenance note (2026-11-21): the `3f9dfd403` archive's
+`legacy/ops/resize/float.rs` uses product width 16 for all targets. The
+pre-refactor `develop` F32 strategy used width 4 on AArch64 and 16 elsewhere.
+The new explicit strategy split preserves that current `develop` behavior, as
+requested; archive-versus-current F32 output still needs its frozen parity
+cases and is not marked verified.
 
 Effects declaration disposition (2026-11-08): all nine baseline declarations
 in `legacy/ops/effects.rs` have an owner or retirement. `op_effect_spread` and
@@ -4545,7 +4784,7 @@ The baseline has 262 Rust files with 2100 explicit references to one of the ten 
 
 - Public resize now resolves the exact `Mode` through `Image::mode_identity()` before selecting nearest behavior for `1`/`P`, the `LA`/`RGBA` reducing-gap exception, and the `F` nearest identity shortcut. This uses a planned pipeline identity when available and materializes only when the graph cannot provide one. The chosen identity is passed into resize policy rather than inferred again.
 - `apply_reducing_gap` now receives typed `Mode` and checks the four `I;16*` identities explicitly instead of using a Pillow-string prefix. Thumbnail passes its exact mode to its nearest-filter decision, including PA.
-- Prepared Resize/ResizeBoxed now dispatch all 25 mode identities to exact typed owners. Public direct Resize queues typed operations, and nested geometry/Thumbnail callers bind prepared children with the same context. `ops/pil_resize` provides shared low-level helpers; generic full-operation wrappers are not active prepared CPU callsites. The prepared Default route performs Pillow's boxed identity/integer-crop shortcuts; architecture guards select that route for those cases, while filtered straight `LA`/`RGBA` crops retain alpha resampling. Float32 bounds are narrowed at validation, guard, and coefficient boundaries; unchanged-axis pass requirements are shared with the native typed-float strategy. Public and direct prepared boxed Resize admission now use the same float32 validator and preserve its baseline validation/error order. Source review confirms the native I;16 owner returns correctly shaped typed buffers across empty dimensions. The extreme-tall rule is restored as vertical-then-horizontal prepared child execution for Pillow modes; `F` retains its specialized mode owner, while CoreOnly typed modes retain their existing behavior. Straight LA/RGBA use explicit premultiplied Mode variants across both passes, with conversion only at the required mode boundary. TODO: finish caller/architecture review for Crop, Reduce, Thumbnail, Pad, and direct Geometry; verify Resize behavior in the frozen CPU parity matrix. Source-only; no build, formatter, checkstyle, lint, unit test, parity, benchmark, or coverage command has run.
+- Prepared Resize/ResizeBoxed now dispatch all 25 mode identities to exact typed owners. Public direct Resize queues typed operations, and nested geometry/Thumbnail callers bind prepared children with the same context. `ops/pil_resize` provides shared low-level helpers; generic full-operation wrappers are not active prepared CPU callsites. The prepared Default route performs Pillow's boxed identity/integer-crop shortcuts; architecture guards select that route for those cases, while filtered straight `LA`/`RGBA` crops retain alpha resampling. Float32 bounds are narrowed at validation, guard, and coefficient boundaries; unchanged-axis pass requirements are shared with the native typed-float strategy. Public and direct prepared boxed Resize admission now use the same float32 validator and preserve its baseline validation/error order. Source review confirms the native I;16 owner returns correctly shaped typed buffers across empty dimensions. The extreme-tall rule is restored as vertical-then-horizontal prepared child execution for Pillow modes; `F` retains its specialized mode owner, while CoreOnly typed modes retain their existing behavior. Straight LA/RGBA use explicit premultiplied Mode variants across both passes, with conversion only at the required mode boundary. Source caller review now traces public Resize selection; reducing-gap dispatch to its declared Reduce child or serial LA/RGBA fused ResizeBoxed child; Thumbnail's Reduce/Resize composition; Geometry and Pad context propagation; and both context-bound stages of tall boxed Resize. Crop has no nested Resize child. Per-mode architecture guard/kernel source comparison remains incomplete. Exact outputs, validation/fault order, empty/zero-axis behavior, and requested-architecture fallback receipts remain for frozen CPU parity. Source-only; no build, formatter, checkstyle, lint, unit test, parity, benchmark, or coverage command has run.
 - Luma byte convolution has exact SSE2, NEON, and Wasm SIMD128 entry points under `resize/luma8/<arch>/resize_impl.rs`; its checked coefficient guard selects those only for nonempty, unboxed, filtered Luma8 work with native storage and i32-safe taps. The same two-pass fixed-point rounding and scalar tails are retained. Pad's full-width window can execute the selected Luma8 architecture strategy directly. Native-byte vector convolution, bounded i32 fast paths, and coefficient lane plan are under `resize/helpers/native_byte_vector/`; eleven exact byte-mode owners provide SSE2, NEON, and Wasm SIMD128 filtered entry points, with channel and alpha policy selected as compile-time mode parameters. Premultiplied alpha, PA, and raw color-space samples remain native. The declarations use the same checked nonempty, unboxed, i32-safe coefficient guard and retain the same-mode Default fallback. Boxed byte convolution and nearest-vector paths have exact byte mode/architecture owners with float32 bounds and coefficient admission. Exact integer crops and identity boxes use the Default shortcut; filtered straight-alpha crops continue through their selected resampler. One and P remain nearest-only vector strategies. The migrated code contains no Rayon scheduling. This is source-only and unverified.
 
 - Resize/ResizeBoxed and Reduce omitted physical lanes now follow Pillow's
@@ -6527,7 +6766,7 @@ I;16 PutAlpha), and one Pillow-only I-to-PNG save (`image-slash-star#9h5w`,
 the extension lane, not as Pillow output mismatches. All 16 I;16 cases passed
 in the later focused 1,523-case run on dirty revision `2357323`; commit
 `0228432` changed Convert owners after that report, so current status remains
-unverified. Full report: `build/migration-parity/cpu-wip-postfix-20261107.json`.
+unverified. Full report: `build/migration-parity/cpu-wip-postfix-20261107.json.gz`.
 
 Thumbnail fixes verified in the same run: zero-size validation order and P
 affine fill-list conversion now match Pillow. A new filtered PA Thumbnail case
@@ -7410,14 +7649,13 @@ CPU parity TODO under `pillow-rs#3ptb`. Source only; no build, formatter,
 checkstyle, lint, test, parity, benchmark, or coverage ran. Source:
 [Pillow 12.2 `Convert.c::bit2l`](https://raw.githubusercontent.com/python-pillow/Pillow/12.2.0/src/libImaging/Convert.c#L47-L51).
 
-Equalize native-histogram fast-path source correction (2026-11-07): the
-shortcut previously trusted the import-time tuple of `len`, `range`, `sum`,
-and `list` without checking whether builtins had already been replaced before
-`pillow_rs.imageops` imported. The PyO3 guard now requires the captured value
-to have the expected built-in type and the `builtins` module/name as well as
-matching the tuple. Ordinary pre-import replacements now use the host callback
-path. Add a frozen parity case for those replacements; no build, formatter,
-checkstyle, lint, test, parity, benchmark, or coverage ran.
+Equalize native-histogram fast-path guard investigation (2026-11-07,
+superseded): an earlier version checked an import-time tuple of `len`, `range`,
+`sum`, and `list`, routing replacements to host callbacks. Builtin mutation
+is outside the supported compatibility contract; this identity guard and its
+replacement-specific fallback were removed. No replacement behavior is a
+parity requirement. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage ran.
 
 Reduce straight-alpha block source audit (2026-11-07): Pillow 12.2's Python
 wrapper converts LA/RGBA to La/RGBa before Reduce and converts the result back.
@@ -7429,13 +7667,12 @@ rounding and architecture receipts remain CPU parity TODOs. Source review only;
 no build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
 ran. Source: [Pillow 12.2 `Image.reduce`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L2262-L2269).
 
-Equalize fast-path guard follow-up (2026-11-07): ordinary Python classes can
-spoof `__module__ == "builtins"` and an expected `__name__`; checking their
-metaclass name alone therefore cannot establish that pre-import `range` or
-`list` remained the built-in type. The PyO3 guard now rejects heap types before
-checking metadata. Parity for pre-import replacements and identity proof for
-lookalike C callables remain TODOs. No build or parity ran. CPython defines
-`Py_TPFLAGS_HEAPTYPE` as bit 9 in [`Include/object.h`](https://github.com/python/cpython/blob/3.12/Include/object.h).
+Equalize heap-type guard investigation (2026-11-07, superseded): an intermediate
+version of the obsolete identity guard also rejected heap-type impostors for
+pre-import `range` and `list`. The complete builtin-mutation guard was removed
+under the supported-contract decision; no replacement-specific behavior is
+required. No validation ran. The investigation referenced CPython's
+`Py_TPFLAGS_HEAPTYPE` in [`Include/object.h`](https://github.com/python/cpython/blob/3.12/Include/object.h).
 
 
 - Resize support ownership correction (2026-11-08): relocated ordinary and
@@ -7998,6 +8235,7 @@ path. This closes only these source comparisons and their declaration-to-leaf
 mapping. Remaining modes, callback/fault
 order, selection/fallback receipts, output parity, and latency remain open.
 No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
 Sources: [Pillow 12.2 `Image.reduce`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L2238-L2269)
 and [`Reduce.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Reduce.c#L48-L84).
 
@@ -10196,6 +10434,8 @@ only; the report does not prove module reachability, runtime dispatch, or
 execution. Preserve the archive unchanged. No build, formatter, checkstyle,
 lint, test, parity, benchmark, or coverage command ran.
 
+
+
 2026-11-12 Image.new P-palette strategy: moved the list/tuple integer-shape
 decision into the typed core `Image::new_palette_lookup_required` selector.
 The PyO3 adapter compares the wrapper mode, lazily checks list/tuple items, and
@@ -10426,13 +10666,20 @@ above. VERIFY markers record source review only. Stage 5 remains open for other
 families and whole-CPU source closure, and full mode × architecture parity and
 performance remain pending.
 
-2026-11-13 Reduce large-factor contract note: Pillow 13.0's fixed-point byte
-average computes a zero reciprocal when a block area exceeds 2^24. Therefore a
-block filled with 1 reduces to 0, although a rounded arithmetic mean would be
-1. Keep the Pillow-compatible output and mark this deviation explicitly beside
-the reducer. The 4,097 × 4,096 L case is source-derived and remains pending in
-the frozen CPU parity and benchmark gates; no runtime case was executed for this
-source note.
+2026-11-15 Reduce large-factor contract correction: the legacy fixed-point byte
+formula predicts 0 when the reciprocal floors to zero for a 4,097 × 4,096 L
+block filled with 1. Pillow 13.0's observed output is 1, and the Rust rounded-
+division fallback now matches it (`migration-parity-bc19c1a1dc0a41699cfa533caa0bef8f`).
+NOTE: the formula's intermediate prediction differs from the required public
+result; keep the output pinned to Pillow's observed 1. Benchmark evidence for
+this large-block case remains pending.
+
+2026-11-20 Reduce contract recheck: reran only
+`PIL.Image.Image.reduce.nuanced.l-fixed-point-reciprocal-zero-4097x4096`
+against the pinned Pillow 13.0.0 oracle and the current CPU/Default build.
+Both returned the one-pixel byte `1`; receipt
+`migration-parity-4dd19d5ceb5944eeafa8a7131bb1b41e` passed with no
+infrastructure errors. The focused large-block benchmark remains pending.
 
 2026-11-13 Grayscale source review and direct-sample follow-up: reviewed the
 family facade, all 25 `Mode` declarations, all 24 accepted mode owners, their
@@ -10884,11 +11131,14 @@ whole-image and boxed dispatcher files named in the inventory are absent, and
 source search found no active calls to those names outside `legacy`. Boxed
 validation/error ordering remains open at the public Resize boundary; the
 operation TODO now names it. Output/error parity, zero/empty fallback receipts,
-architecture receipts, and per-operation latency remain pending. TODOs remain for empty/zero-axis
-I;16 fallback receipts and F32 x86/Wasm product block width. Keep the parity
-input-base work as a prototype; the shared parity and fault-contract standard
-will be designed later. No build, formatter, checkstyle, lint, test, parity,
-benchmark, or coverage command ran.
+architecture receipts, and per-operation latency remain pending. TODOs remain
+for empty/zero-axis I;16 fallback receipts. F32 portable Default (width 16)
+and the AArch64 baseline sequence (width 4) are separate declared strategies;
+x86/Wasm product grouping uses the portable Default unless a declared vector
+leaf is selected. Output and selection receipts remain parity TODOs. Keep the
+parity input-base work as a prototype; the shared parity and fault-contract
+standard will be designed later. No build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage command ran.
 
 2026-11-13 Resize public-boundary source review correction: the Python
 `Image.resize` facade calls `_resize_filter_code` and compares `reducing_gap`
@@ -11266,6 +11516,8 @@ standard remain deferred until after CPU source closure, as requested. No
 build, formatter, checkstyle, lint, test, parity, benchmark, or coverage command
 ran.
 
+2026-11-15 Resize support exposure: the top-level Resize descriptor links its Reduce and ResizeBoxed child support and now declares the request-conditional Reduce child selected by an actual reducing-gap pre-reduction plan. I;16-family child scope comes from the linked Reduce strategy and remains `CoreOnly`; the runtime descriptor query validates that it selects the declared Reduce child before reduction. The 40 I;16 filtered calls with `reducing_gap` fail in Pillow 13.0 with `ValueError("image has wrong mode")`, while Rust succeeds through its native-u16 Reduce extension. They are Rust-only target outputs, not Pillow parity mismatches. Added a Resize target-output requirement and per-case frozen expectations; case IDs and input bytes remain unchanged. Fixture regeneration and focused target-only execution remain pending. No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
 2026-11-13 reducing-gap factor review: Pillow 13.0 preserves signed results
 from `int(extent / output / gap)` until its reducer parses the C-int factors;
 the reducer rejects nonpositive scales before validating box bounds. The Rust
@@ -11410,3 +11662,5156 @@ bytes and its zlib payloads total 5,114,096,433 bytes (about 2.54× before
 SQLite overhead). This cache is not connected to the parity runner and was not
 used in a parity execution. It is a campaign-local storage prototype only;
 case and fault contracts remain unchanged pending later standardization.
+
+CPU failed-only recovery update (2026-11-15): the frozen 201-case Resize
+retry passed 167 and failed 34 (all 36 One cases passed; 131 I32 passed; 34
+I32 filtered Resize cases remain). The frozen 26-case non-Resize retry failed
+all 26, with no infrastructure errors. The 34 I32 Resize cases then passed
+axis-specific current-build retries. Focused retries for 21 other failed IDs
+now pass: GetXMP plus four filter constructors, two incompatible fromarray
+modes, two zero-width Draw.line cases, four PutData cases, two Windows
+display cases, five Draw text cases, and one mode-F polygon case. This leaves
+46 recorded failure statuses (40 I;16 Resize extension cases, five other
+contracts, and one LAB Rotate expected-output mismatch); the 41 unchanged-path failures retain their
+101-case confirmation evidence. The focused Reduce retry now matches the user-selected Pillow 13.0.0
+output 1 (`migration-parity-bc19c1a1dc0a41699cfa533caa0bef8f`). The 237
+original P-mode NotImplemented cases remain not_run. See
+`build/migration-parity/cpu-failed-case-rerun-20261114/failed-only-rerun-status-20261115.json`.
+
+
+2026-11-15 focused failed-case retries: the Python MaxFilter, MinFilter,
+MedianFilter, and RankFilter constructors now validate even size, workspace
+bound, and rank before an Image.filter call; all four original invalid-size
+IDs pass (`migration-parity-7c21795fe4c64b9fb62b5c0f747ef248`). GetXMP accepts
+Pillow's keyword-only `strip_namespaces` parameter, and its failed ID passes in
+the same run. `resolve_array_layout` now rejects incompatible explicit modes
+before dimension validation; both fromarray IDs pass. The CPU Draw.line kernel
+now treats explicit width zero as a no-op; both L and YCbCr IDs pass
+(`migration-parity-91ca2fee143d41f9bb05c30d69df2a3a`). The bytes-subclass
+storage and generic-sequence error cases pass in
+`migration-parity-62f68767a49c41ed9f9a7179cf26883d`; the Windows display cases
+pass in `migration-parity-aeeaee64d50d49249cb725e647852ce8`; the five text cases pass in
+`migration-parity-e26f1119fdbd4e96bfec5a3029c153e7`; the mode-F polygon case
+passes in `migration-parity-cac93e3b6e6043c1a7729c799ba73bf4`. Focused receipts are in
+`build/migration-parity/cpu-failed-case-rerun-20261114/`. No broader parity,
+benchmark, checkstyle, lint, or coverage campaign ran.
+
+2026-11-15 ImageOps P palette route and parity: Pillow 13's shared
+`_lut(..., palette=True)` transforms palette entries on an image copy, leaves P
+pixel indexes unchanged, and preserves alpha entries by channel position.
+Invert, Posterize, and Solarize now use this wrapper strategy; the Python
+adapter supplies public palette operations while `pillow-rs` owns the LUT loop.
+Six generated RGB/RGBA workflows observe returned image bytes and palette bytes.
+The initial 243-case CPU Default run passed all 237 original not_run IDs and
+four palette guards; two RGBA cases exposed the alpha-position bug. After the
+correction, all six guards pass (`migration-parity-9f188c313fb74b1e8652a1b1fbd627c7`),
+with zero not_run or infrastructure errors. Low-level Rust P
+Invert/Posterize/Solarize remain distinct index-byte strategies marked
+`NO_PILLOW_SUPPORT`. The input snapshot lock was refreshed (recipe SHA-256
+`fa428ed73a3c5c93c2542ebbba1498607368851b07e4bb363031817a2aa7e4d0`).
+TODO(pillow-rs#3ptb): verify custom palette callback fault order and palette
+mutation receipts. Source:
+[Pillow 13.0 ImageOps.py](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py).
+
+2026-11-20 I32 NEON Resize pass-order dispatch: the NEON filtered executor
+always rounds horizontal before vertical, while Pillow-compatible pass
+selection requires vertical-first for some tall reductions. The I32 NEON
+request guard now declines those filtered shapes so the injected architecture
+selection falls back to the exact-mode Default strategy; nearest NEON remains
+eligible and reuses the shared nearest-coordinate helper. This is
+source-reviewed only. TODO(`pillow-rs#3ptb`): verify I32 NEON output and
+Default-fallback parity on AArch64, then benchmark the affected eligible NEON
+route. No build, formatter, checkstyle, lint, test, parity, benchmark, or
+coverage command ran.
+
+2026-11-20 Paste layout and region review: checked the `SourceLayout` mapping,
+physical four-byte reconstruction, exact-mode hidden-lane sidecars, mask
+layouts and support declarations, clipping, and checked row-range arithmetic.
+Same-mode data remains native; cross-mode physical four-byte mappings are
+explicit. This closes those shared helper files' source review only. The mode/kernel crosswalk is now source-reviewed; hidden-lane outputs,
+clipping/fault matrix, and architecture receipts remain open under
+`pillow-rs#3ptb`. No algorithm or runtime verification changed.
+
+2026-11-20 ImageF32 Paste source cross-check: confirmed the typed F32 identity
+stays in a four-byte physical carrier through its Default and vector owners;
+masked processing preserves Pillow's per-byte blend outputs without mode
+conversion or numeric float blending. Refreshed reviewed-source markers and
+recorded the compatibility behavior next to the mode owner. Focused masks,
+architecture receipts, and parity remain pending.
+
+2026-11-20 Paste direct-caller review: public Rust Paste queues mode-aware
+`PipelineOp::Paste` through `Image::push_op`, which inherits the destination
+backend. Negative/out-of-canvas Crop creates a new canvas, queues Paste, then
+recursively reapplies the source's pinned backend. The Expand and custom Pad
+host fallbacks create new `Image.new` canvases before invoking public Paste;
+the Rust binding callback now captures a pinned source backend before Paste
+loads the source and applies that pin to the newly queued output pipeline.
+Runtime results and selection/fallback receipts remain pending.
+
+2026-11-20 Paste I;16 source review: `I;16`, `I;16L`, `I;16B`, and `I;16N`
+share typed-u16 execution and SSE2/NEON/Wasm SIMD128 wrappers while preserving
+their exact destination identity and endian order. Unmasked/binary routes copy
+whole samples; fractional-mask routes blend the byte lane selected by the raw
+mode layout and retain the neighboring byte. Source markers are refreshed.
+Exact outputs, path receipts, faults, and latency remain pending.
+
+2026-11-20 Paste CoreOnly high-depth review: `LumaA16`, `RGB16`, `RGBA16`,
+`RGB32F`, and `RGBA32F` use native typed u16/f32 storage and exact-mode Default
+owners, all marked `NO_PILLOW_SUPPORT`. No mode projection or sample cast is
+used. Source markers are refreshed; recorded-output contracts, mask/fault
+cases, and latency remain pending.
+
+
+2026-11-20 Paste host-fallback backend handoff: core Expand and Pad operations
+that compose directly from the source inherit its pinned backend through
+`Image::push_op`. Their host callback fallbacks instead construct a fresh canvas
+and queue public Paste from that destination. The Rust binding callbacks now
+capture the source or contained image's pin immediately before invoking public
+Paste, then apply it to the destination pipeline after Paste succeeds; capture
+occurs before Pillow's source load converts the lazy pipeline to loaded pixels.
+Unpinned calls keep automatic routing. `Image` stores a pipeline Backend pin;
+Architecture is resolved at the operation boundary from active routing policy
+and is not stored as a separate per-image pin. Applying the captured Backend
+therefore preserves the image-owned route, after which normal context
+construction chooses Architecture for Paste. Source markers were refreshed
+for the helper and callback owners. This is source-reviewed only;
+context-selection, output, fault, and fallback receipts remain pending under
+`pillow-rs#3ptb`. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage ran.
+
+2026-11-20 GetData CPU source crosswalk: the Python adapter delegates byte and
+typed sample work to core. Core routes through 25 exact-mode owners (20 Pillow
+modes and five CoreOnly modes); full reads and allocated band reads use Default
+owners, while caller-owned band reads can dispatch architecture-specific work
+through the ExtractBand child using the injected context. P index data and P/1/L
+views preserve raw storage. CoreOnly high-depth byte reads currently narrow
+u16/f32 samples through `FromPrimitive`, and need recorded expected outputs.
+The GPU terminal eligibility helper remains hard-coded pending GPU support
+composition. This is source review only; output parity, band fault order and
+buffer mutation, CPU fallback/architecture receipts, and latency remain open.
+
+2026-11-20 PutData source crosswalk: Python handles sequence protocols and
+callback order, core owns exact-mode normalization and storage, and every
+synchronous pixel write receives one routed execution context. Python caches
+the initial value shape while core selects against the live mode after each
+callback; reentrant mode changes are an unresolved contract. The WIP also
+changes bytes-subclass handling and generic iterator exception propagation,
+so the previous passing receipt is stale. Bulk CoreOnly output, partial writes
+and error ordering, bytes/iterator edge cases, architecture/fallback receipts,
+and latency remain open; no validation ran.
+
+2026-11-20 FloodFill strategy source follow-up: the public wrapper now supplies
+the originating Rust Image as a strategy carrier for both built-in and custom
+PixelAccess objects. Exact mode and CPU context are selected from the stored
+DynamicImage; pixel reads, writes, arithmetic, equality, and swallowed faults
+remain callback-defined. PreparedFloodFill retains the requested backend and
+execution records the selected strategy while preserving nested callback
+receipts. The 25-mode support classifier and shared traversal are
+source-reviewed; outputs, callback faults, receipt correctness, and latency
+remain open. No validation ran.
+
+2026-11-20 GetPixel/PutPixel source crosswalk: formatted reads and the RGB
+loaded-image fast path select from the exact raster Mode and routed execution
+context. Stored PixelAccess uses host coordinate/value parsing and core's
+native mode strategy; public Image.putpixel retains Python palette callbacks,
+then queues byte writes or selects immediate typed I;16/I/F writes. Pixel
+deletion only validates coordinates. Coordinate boundaries, mode samples,
+palette mutation/fault order, architecture/fallback receipts, and latency
+remain open; no validation ran.
+
+2026-11-20 ImagingCore SetMode/PutBand/FillBand crosswalk: Python mode strings
+become typed `Mode` at the binding boundary, and core strategy selection uses
+the stored source/destination `DynamicImage` identities plus injected CPU
+context. SetMode declares identity, `1`/`L`, and RGB/RGBA/RGBX transitions;
+PutBand declares exact-mode one-band input or one-byte multiband input;
+FillBand declares byte modes only. All three use serial Default execution and
+declare no architecture leaf. Loaded mutations invalidate zero-fill
+knowledge; paletted mutations update indices and clear the materialization
+cache; band writes preserve hidden physical lanes. The RGB-to-RGBX path's
+zero-filled missing padding lane remains unresolved. Mode outputs, error and
+callback order, hidden-lane cases, architecture fallback receipts, and
+latency remain open under `pillow-rs#3ptb`; this source review ran no
+validation commands.
+
+2026-11-21 ImageDraw mode/context crosswalk: Python and JavaScript translate
+optional Pillow mode strings to typed `Mode` and validate the context, with the
+RGBA-over-RGB exception. Queued geometry carries semantic alpha-blend data and
+inherits backend routing from the image graph; prepared CPU dispatch selects
+from exact `DynamicImage` mode and injected context. Eager Bitmap/Text resolve
+the CPU architecture at the call boundary; declared accelerated Bitmap and
+embedded-color Text routes compose through Paste. One selected route now flows
+through direct multiline Text, embedded-color Paste, custom-font stroke/fill
+callbacks, and callback-reentrant Bitmap writes. The injected Paste path builds
+the same validated operation and executes that child with the parent context;
+reentrant Bitmap retains the public Python callback and scopes the context override
+to that callback. This is source review only. Outputs/faults, mode override,
+direct/queued receipts, child/fallback receipts, palette callback behavior,
+callback error ordering, and latency remain open. The direct Rust `Draw::new`
+mismatch contract also needs parity evidence; no runtime or quality validation
+ran.
+
+2026-11-20 analysis API crosswalk: Python/PyO3 preserve load and mask/range
+ordering, then Rust Histogram, Entropy, Stat, GetColors, GetExtrema, and
+GetProjection route from exact `DynamicImage` identities with prepared CPU
+context; all 25 modes have analysis support declarations and CoreOnly
+high-depth scans remain native. GetProjection's PutPixel terminal fusion keeps
+the prepared mode/context; its GPU terminal remains later-stage work. The
+Python `getcolors` wrapper still passes a boolean selected from public
+`self.mode`, so mode-property override behavior must be pinned before changing
+that host routing contract. Output/fault parity, architecture/fallback
+receipts, CoreOnly expected outputs, GetBBox output/error parity, and latency
+remain open under `pillow-rs#3ptb`; no runtime or quality validation ran.
+
+2026-11-20 GetBBox mode/context crosswalk: Python loads before PyO3 bool
+extraction; Rust retains lazy graph receipts, materializes, and prepares from
+the injected CPU context. All 25 exact modes have owners and CPU Default
+strategies; non-Default architecture requests fall back to Default. Alpha-only
+semantics apply to declared alpha modes, RGBX padding is data, and CoreOnly
+high-depth modes scan native samples. Output/error parity, empty and zero-axis
+cases, CoreOnly expected outputs, fallback receipts, and latency remain open;
+no runtime or quality validation ran.
+
+2026-11-20 GetProjection mode/context crosswalk: the Python facade loads before
+the PyO3 call. Rust checks terminal PutPixel fusion, then selects from exact
+`DynamicImage` mode and injected CPU context. All 25 modes have support owners;
+RGB8 and CMYK8 add SSE2, NEON, and Wasm SIMD128 strategies, with all other
+modes using native Default scans. RGB8/CMYK8 vector leaves share the 128-bit
+scanner and preserve block/tail receipts. Output/error parity, empty inputs,
+all selected/fallback receipts, direct/fused routes, and CPU latency remain
+open under `pillow-rs#3ptb`; GPU terminal routing stays in the later backend
+stage. No runtime or quality validation ran.
+
+2026-11-21 Crop mode/context crosswalk: the earlier binding's eager `f64`
+extraction was removed. The Python facade now follows Pillow 13.0's host
+sequence: `None` or an exact full-image box delegates through `copy()`; other
+boxes compare original coordinates before load, then `load()` runs before
+`round()`/`int()` and the four resulting coordinates cross the binding as
+integers. This preserves Python numeric protocols, ordering, and arbitrary
+integer precision up to the PyO3 `i32` extraction boundary. TODO
+(`pillow-rs#3ptb`): compare out-of-range C-int failures and decompression-limit
+faults. Source order is extent/bomb checking before PyO3's `i32` extraction.
+Other crops materialize before the Pillow-sized extent check, including
+zero-area and out-of-bounds boxes. P preserves its palette through the palette
+constructor, PA copies palette/alpha metadata onto padded output, and other
+modes carry image info and EXIF. The exhaustive strategy owner maps all 25
+exact DynamicImage variants; byte strategies copy native row spans and
+preserve hidden lanes, five CoreOnly strategies copy native samples, and the
+four I;16 identities declare SSE2/NEON/Wasm SIMD128 copy leaves. The exact
+Crop and padded Crop/Paste routes now restore a pinned source backend after
+materializing a branch; selection and fallback receipts remain pending. TODO
+(`pillow-rs#3ptb`): verify pixel and metadata outputs, lazy decode/error order,
+empty/full/out-of-bounds inputs, extreme float boxes, selected/fallback
+receipts, and public latency. Source: [Pillow 13.0 Image.crop and Image._crop](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1259-L1301). No runtime or quality validation ran.
+
+2026-11-20 ImageOps CropBorder caller crosswalk: Pillow 13.0 `_border`
+accepts scalar, two-tuple, and four-tuple inputs and raises the specified
+ValueError for other tuple lengths before reading image dimensions. The shared
+Rust border normalizer now returns that matching error for both ImageOps crop
+and expand. The Python ImageOps crop wrapper preserves custom arithmetic and
+public `image.crop` dispatch; only an exact base image with base size/crop
+methods and an exact nonnegative u32 border uses Rust geometry preflight. The
+prepared CropBorder support declaration is exhaustive across 25 exact modes,
+with five internal high-depth identities CoreOnly, four I;16 vector-copy
+strategies, and exact Crop composition for nonempty outputs. Output/error
+parity, callback order, custom overrides, mode metadata, empty/error guards,
+selected/fallback receipts, and latency remain TODO under `pillow-rs#3ptb`.
+Source: [Pillow 13.0 ImageOps._border and crop](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L34-L45) and [ImageOps.crop](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L398-L412). No runtime or quality validation ran.
+
+2026-11-20 ImageOps Fit caller crosswalk: Pillow 13.0 first evaluates
+`min(size) == 0` and returns `Image.new(image.mode, size)` before unpacking
+centering or converting the resize method. Otherwise it unpacks/normalizes
+centering, normalizes bleed, reads the live image size, and returns the same
+new-image result when live height is zero, before either aspect-ratio division
+or resize-filter parsing. The Rust callback route now reports these two early
+exits as `None`; the thin Python facade creates the public image in the same
+branch and does not parse the method. Custom numeric and property protocols,
+including arbitrary-size Python integers, remain callback-driven; exact-float
+inputs use the prepared core geometry so conversion cannot precede Pillow's
+bleed normalization. The direct Rust Fit APIs also return an empty image with
+the source's exact mode and no source dependency for these early outputs.
+TODO (`pillow-rs#3ptb`): verify zero-axis pixels/mode/palette/metadata and
+method non-coercion; centering, bleed (including huge integers), size and
+overridden-property fault order; all exact-mode CPU architecture and fallback
+receipts; and full-call latency. Source: [Pillow 13.0 ImageOps.fit](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L2717-L2863).
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-20 ImageOps Contain/Cover caller crosswalk: Pillow 13.0 reads
+`image.height` first and returns `Image.new(image.mode, (size[0], 0))` for an
+empty-height source; it next returns a zero-by-zero image when `size[1] == 0`.
+Contain also returns `Image.new` when its computed size has a zero axis; Cover
+then proceeds to `image.resize` without that final `min` check. The Rust route
+callbacks now carry these early-result states to the Python facade, which skips
+filter conversion and constructs the image in Pillow's evaluation order. On
+nonempty calls, the facade passes the original method object to the public
+`image.resize` method, preserving subclass overrides and leaving filter
+validation to the Image API. Direct Rust Cover uses the shared typed empty
+constructor. The top-level CPU support contracts enumerate all 25 modes and
+compose Contain/Cover with Resize; Fit composes with ResizeBoxed. TODO
+(`pillow-rs#3ptb`): verify empty pixels, mode,
+palette and metadata; early-return filter non-coercion; custom size/property
+callback and fault order; subclass resize dispatch and method identity;
+selected/fallback receipts for each mode and architecture; and
+public-call latency. Oversized computed Cover axes now fall back to host
+integer arithmetic before the public `Image.resize` boundary; direct Rust
+geometry returns `OverflowError` instead of saturating. Verify exact error
+mapping and order. Sources: [Pillow 13.0 ImageOps.contain](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L2271-L2331) and [ImageOps.cover](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L2333-L2389).
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-21 Draw no-ink shape mode correction: direct Rust `Draw::shape` asks
+for a default ink before it queues a polygon. Its CoreOnly high-depth modes
+previously fell through to `None` and returned success, while an explicit ink
+would reach the prepared Draw contract and be rejected as unsupported. The
+default-ink strategy now returns the same unsupported-mode error for those
+five modes. Python `ImageDraw.shape` skips the Rust call when both inks are
+omitted, so this source change affects the direct Rust API path. Direct-Rust
+error timing and the matching prepared rejection remain unverified; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 Draw wide F outline mode-guard correction: direct Rust polygon
+outline previously returned early for Pillow's nonpainting F wide-outline
+route before validating an explicit context. It now resolves the same
+alpha-context/mode guard before that route-specific no-op and reuses the
+resolved result when queueing. F pixel behavior is unchanged. Direct mismatch
+fault ordering and output receipts remain pending; no validation ran.
+
+2026-11-21 Draw typed Polygon minimum-vertex contract: `Draw::polygon(&[(i32,
+i32)], ..)` previously treated fewer than two vertices as a no-op, although the
+Pillow coordinate adapter and `_draw_polygon` source contract reject them with
+`TypeError("coordinate list must contain at least 2 coordinates")`. The typed
+slice entry now returns that same error before ink/mode resolution; valid
+polygon dispatch and raster algorithms are unchanged. Direct Rust fault-order
+and parity receipts remain pending; no validation ran.
+
+2026-11-21 Rotate interpolation target-lowering review: exact mode preparation
+selects the declared Default, AVX2, SSE2, NEON, or Wasm SIMD128 leaf from the
+injected `ExecutionContext`. Those architecture leaves share the vector
+interpolation helper. Its compile-target feature condition chooses vector
+`wide::f64x8::mul_add` lowering when FMA/NEON is available and per-lane
+`f64::mul_add` otherwise; it does not add a separate image-mode algorithm.
+Recorded the helper's source-review marker. TODO (`pillow-rs#3ptb`): verify
+bilinear outputs and selected-architecture receipts for every declared
+Rotate mode/architecture pair in the frozen CPU matrix, then compare the
+affected public-call latency. No build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage ran.
+
+2026-11-21 CPU architecture module inventory: a read-only scan of 177 exact-mode
+`ops.rs` files with architecture dispatch arms confirmed that every referenced
+sibling architecture module is declared and resolves to a module file,
+including the path-attributed RGBA Transpose wrappers. This checks source
+module placement only; it does not prove target cfg reachability, support-guard
+eligibility, or that each selected strategy reaches the intended kernel. TODO
+(`pillow-rs#3ptb`): finish the cross-family support/guard/dispatch audit and
+architecture-specific caller review before closing Stage 5. No build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 Rust-native Posterize/Solarize strategy source review: the exact-mode
+classifier admits only L, RGB, and the Rust-only P extension. L and RGB Default
+leaves apply the archived byte mask/threshold rules directly to their native
+carriers; SSE2, NEON, and Wasm SIMD128 dispatch leaves call the shared portable
+16-byte-lane helper, whose final partial block is padded and whose output is
+trimmed to the active bytes. This review does not establish target-specific
+instruction generation. P transforms native palette indices and retains the
+P mode identity; each P leaf states `NO_PILLOW_SUPPORT`. These leaves serve
+the direct Rust operation; the public Python ImageOps wrapper has a separate
+LUT/palette strategy. The injected context selects the exact mode/architecture
+strategy, while empty or non-exact byte layouts fail the optimized guard and
+remain on Default. Refreshed `VERIFY`
+source-review tags on the operation, per-mode dispatch, helper, support, guard,
+request, and kernel functions. Output/error-order parity, P palette metadata,
+selected and fallback receipts for all exact mode/architecture pairs, emitted
+target instructions, and latency remain pending. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 ImageOps P palette LUT callback review: the Python wrapper handles P
+through a separate palette strategy. Its source copies the image, reads and
+asserts the palette once, reads `palette.mode` and `getpalette(None)`, maps
+non-alpha palette entries through the generated LUT, leaves alpha entries
+unchanged, then calls `putpalette`; it does not transform P index pixels. The
+Rust callback path follows this route. Posterize preserves Pillow's order of
+evaluating its numeric mask, obtaining the `range(256)` iterator, then creating
+the result list; Solarize creates the list before obtaining its range iterator.
+Source review found a duplicate read of `copied.palette` in the assertion
+guard and reduced it to the single access in Pillow's implementation. The
+public callback/fault-order matrix, including subclass property behavior,
+remains pending; no validation ran. Source:
+[Pillow 13.0 ImageOps._lut](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L1863-L1901).
+
+2026-11-21 ImageChops support and dispatch source review: the family support
+router and allocating dispatch both have explicit exhaustive arms for all 25
+Mode identities. Native byte binary support is grouped by 1/2/3/4-byte layout
+for the 14 Pillow byte modes; logical operations are limited to `One`. Constant,
+Offset, Duplicate, and Invert use their separate mode contracts, with explicit
+`NO_PILLOW_SUPPORT` classification for their Rust-only high-depth extensions.
+Architecture declarations build exact SSE2, NEON, and Wasm SIMD128 strategies
+from each mode's guard and leave Default as the portable mode owner. The owned
+in-place route is limited to selected non-Default Add/Subtract plans; fused
+Multiply/Screen admission is limited to L/LA/RGB/RGBA and declines unless both
+secondary images match the source layout, dimensions, byte length, and selected
+architecture. Allocation paths preserve omitted physical lanes after native
+execution. The top-level context/support/dispatch trace is source-reviewed;
+per-mode kernels and their architecture bodies are not covered by this note.
+TODO (`pillow-rs#3ptb`): complete those leaf comparisons and verify output,
+mode/metadata, fault/decode order, selected/fallback receipts, and latency over
+the frozen matrix. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran. Pillow wrapper source:
+[Pillow 13.0 ImageChops](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageChops.py#L760-L1088).
+
+2026-11-21 Chops native-byte arithmetic source comparison: the archived and
+active byte formulas match for scaled Add/Subtract (float32 ordering),
+unit-scale saturating Add/Subtract, integer-normalized Multiply/Screen,
+per-byte min/max/difference, wrapping modulo operations, logical truth, and the
+base-major 65,536-entry Overlay/HardLight/SoftLight LUTs. The active operation
+enum is matched before row traversal and binds a concrete closure or LUT, so
+there is no per-sample operation-enum branch in the default byte loop. Typed
+mode owners keep their output `DynamicImage` identity; binary allocation clips
+width and height to the same minima as the archive. Refreshed source-review
+markers for the shared arithmetic and L Default route. Other mode/architecture
+leaves, physical-lane outputs, exact faults, and performance receipts remain
+open. No validation command ran.
+
+2026-11-21 Chops owned Add/Sub source review: the secondary image's dimensions
+and byte length enter the prepared request facts, and the vector guard rejects
+unequal dimensions before an in-place-capable implementation can be selected.
+The in-place kernel repeats dimension and exact-buffer-length checks before
+mutating the primary buffer. SSE2, NEON, and Wasm SIMD128 mode modules currently
+re-export the shared portable 16-byte `wide` helpers; this is explicit strategy
+selection, not evidence of separate ISA instruction generation. The confirmed
+F32 Resize decision keeps portable Default width 16 and AArch64 baseline width
+4 as distinct implementations. Output, fault-order, receipt, emitted-code, and
+latency evidence remain open; no validation command ran.
+
+2026-11-21 Chops three-band guard correction: the prior guard comment claimed
+the serial LAB route maps biased chroma to signed samples, but the active
+Default helper and archived implementation both apply raw per-byte arithmetic.
+The RGB dispatcher accepts LAB secondary data through their shared `RgbImage`
+carrier. Removed the stale LAB-specific exclusion from dimension and Add/Sub
+vector guards; primary LAB stays Default-only because it declares no vector
+strategies. This is a selection-only change with parity and receipt effects
+pending; no validation ran.
+
+2026-11-21 Chops vector arithmetic source comparison: the active shared `wide`
+kernels match the archived SIMD formulas for float32 Add/Subtract ordering,
+saturating default Add/Subtract, integer divide-by-255 Multiply/Screen, exact
+divide-by-127 Overlay/HardLight, ordered integer SoftLight, min/max/difference,
+wrapping modulo, and canonical One truth operations. Operation selection occurs
+before the byte loops; partial blocks preserve only active bytes. SSE2, NEON,
+and Wasm SIMD128 entries share the same helper, so generated instructions and
+numerical output remain unverified on each target. No build or runtime
+validation ran.
+
+2026-11-21 Chops per-mode and Default-strategy source closure: reviewed support,
+dispatch, and Default owners for all 25 exact modes, plus every declared SSE2,
+NEON, and Wasm SIMD128 leaf. Pillow byte modes use their exact typed carriers;
+same-layout secondary groups preserve the primary output identity, and binary
+outputs clip to the archived minimum extent. `One` alone declares logical
+operations. Constant returns L, Duplicate keeps the exact image identity, and
+mode-owned Offset/Invert preserve their source mode. Byte Offset rotates full
+carrier pixels and remaps omitted physical lanes; I;16 endian modes rotate
+native `u16` samples. CoreOnly high-depth Offset/Invert remain native and
+`NO_PILLOW_SUPPORT`. Fused Multiply→Screen remains limited to L, LA, RGB, and
+RGBA. The architecture leaves re-export shared `wide` helpers, so the selected
+strategy is explicit but emitted ISA instructions are not established. Updated
+source-review tags on the reviewed owners and helpers. The LAB secondary guard
+correction matches the archived raw-byte semantics but has no runtime receipt.
+Output/mode/metadata parity, fault order, strategy/fallback receipts, and
+performance remain pending under `pillow-rs#3ptb`; no validation command ran.
+
+2026-11-21 Composite family source closure: reviewed exact mode routing for
+AlphaComposite, Composite, Blend, and Merge; all 25 Composite mode owners; the
+shared input contract and guards; and every declared architecture leaf. LA and
+RGBA AlphaComposite bind Default/SSE2/NEON/Wasm SIMD128 kernels. Merge declares
+vector strategies only for LA, RGB, RGBA, and CMYK; RGB has guarded SSSE3/NEON
+interleave kernels, while remaining architecture leaves use the shared wide
+shuffle. Composite byte modes pass the injected selection to their exact Paste
+mode kernel; typed u16 and internal f32 modes use native sample paths. Pillow
+13.0's masked 32-bit `I`/`F` behavior is bytewise, so those Pillow identities
+stay on the byte kernel while internal float modes remain typed. Source:
+[Pillow 13.0 Paste.c](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L118-L163).
+Pillow output/mode/metadata, exact errors, selected/fallback receipts, and
+per-mode latency remain pending under `pillow-rs#3ptb`. No validation ran.
+
+2026-11-21 F32 Resize vector source migration: moved the reviewed 8-lane
+ordinary, nearest, and boxed algorithms into the exact ImageF32 helper and
+declared AVX/FMA, SSE2, NEON, and Wasm SIMD128 architecture owners. Dispatch
+receives the selected strategy and keeps mode wrapping at the ImageF32 owner;
+the vector helper consumes only its four-byte sample carrier. Portable
+Default width 16 and AArch64 baseline width 4 remain separate and unchanged.
+TODO (`pillow-rs#3ptb`): run the frozen F32 Resize mode/architecture matrix,
+verify selection and fallback receipts, and benchmark each supported lane.
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-21 F32 Resize vector migration source closure: compared the maintained
+ordinary and boxed vector helpers with the inert SIMD archive. Nearest index
+recurrence, coefficient builders, eight-lane accumulation, tap ordering,
+float32 pass boundaries, tall-image vertical-first recursion, and boxed
+float32-bound narrowing are unchanged. The exact ImageF32 mode owner retains
+mode reconstruction; vector helpers receive only the four-byte carrier. The
+zero-extent vector shortcuts were removed because `resize_f32_vector_guard`
+declines empty source/output shapes and leaves them to Default. SSE2, NEON, and
+Wasm SIMD128 leaves validate the selected architecture; AVX/FMA remains its
+separate scalar FMA route, while AArch64 baseline keeps its width-4 sequence.
+This closes source review of the migrated F32 vector bodies only. Per-target
+instruction generation, outputs, selection/fallback receipts, and latency
+remain TODO under `pillow-rs#3ptb`. No build, formatter, checkstyle, lint,
+test, parity, benchmark, or coverage command ran.
+
+2026-11-21 ImageDraw existing-Text option correction: Pillow 13.0 applies
+`embed_color()` and `stroke()` only when `ImageDraw.text` creates a new
+`ImageText.Text`. Existing objects retain their stored text/font/mode/spacing,
+layout options, and stroke state; the call-level `direction`, `features`, and
+`language` still reach font masks, while call-level `embedded_color` selects
+the fill mask mode. The facade confines those state mutations to the
+new-Text branch. Freeze cases for stored/call option conflicts, object state,
+mask routes, and rendered output; parity remains pending under `pillow-rs#3ptb`.
+No validation ran.
+
+2026-11-21 FreeType advance precision correction: Pillow 13.0's C font
+`getlength` returns an integer 26.6 advance, and `ImageFont.py` divides by 64
+to produce the Python float. Retaining that native precision now flows through
+the Rust, Python, and JavaScript length APIs and multiline width/alignment
+calculations; the f32 width narrowing is removed. `text_load_flags` now applies
+mode-derived monochrome and RGBA color flags in the length path. Add focused
+long-advance/fractional-anchor and RGBA color-font parity contracts. Rust still
+uses saturating i32 accumulation where Pillow uses a C `int`; the overflow
+boundary remains TODO under `pillow-rs#3ptb`. No validation ran. Sources:
+[Pillow 13.0 ImageFont.py](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageFont.py#L302-L370)
+and [`_imagingft.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imagingft.c#L465-L510).
+
+2026-11-21 ImageText font-mode precedence source correction: mode `1`, `P`,
+`I`, and `F` takes precedence over `embedded_color` when Pillow derives
+`Text._get_fontmode`. The CPU helper now mirrors that order, including direct
+Text objects with manually conflicting state. Output, mutation, and error
+parity remain TODO under `pillow-rs#3ptb`; source only, no validation ran.
+Source: [Pillow 13.0 ImageText.py](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageText.py#L1469-L1481).
+
+2026-11-21 Crop extent source confirmation: Pillow 13.0's decompression-bomb
+guard computes `max(1, width) * max(1, height)` for `Image._crop`; the core
+`check_crop_extent` already uses the same rule, including zero-axis boxes.
+Added a source rationale beside that guard. Found a separate missing warning:
+Pillow warns above `MAX_IMAGE_PIXELS` and only raises above twice the value;
+the core currently implements just the hard-error threshold and the Python
+facade has no corresponding warning route. TODO (`pillow-rs#3ptb`): preserve
+the warning through Python's warning filters and honor the configured
+threshold. Output and error-order receipts remain pending. Source:
+[Pillow 13.0 Image.py](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L3278-L3297).
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-21 central CPU routing source crosscheck: re-read automatic/explicit
+backend routing, context creation and captured capabilities, architecture
+permission and specialization ordering, fallback-reason retention, pipeline
+execution, and the eager CPU context helper. The SIMD compatibility request
+uses `CpuPool` with a CPU context carrying the selected host/test architecture;
+ordinary CPU injects Default policy, and mode declarations may opt into a
+target-baseline implementation. Pipeline preparation passes one context
+through each prepared operation; eager execution rejects non-CPU contexts and
+passes the same context to its selection closure. This is central-path source
+review only. Remaining direct/eager callers, output/error behavior, selection
+and fallback receipts, and latency are still pending under `pillow-rs#3ptb`.
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-21 direct caller context crosswalk, pass 1: PointScalar, PointFloat,
+and PointModeOutput pass the image's routed context to the exact-mode
+strategies. GetChannel's tiny-RGB route and GetData's SIMD band sink reuse
+their routed context. CPU-only parameter filters use their shared route helper
+to retain GPU fallback reason while executing under CPU context. Draw's nested
+Paste child receives the parent context, and Transform captures one context
+before host callbacks and reuses it for prepared output and each MESH record.
+Refreshed reviewed markers for these paths. Remaining direct/eager callers,
+outputs and faults, selector/fallback receipts, and latency are pending under
+`pillow-rs#3ptb`; no build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 direct caller context crosswalk, pass 2: GetPixel's formatted,
+loaded-RGB, and write routes pass the image's routed context into their
+exact-mode operation. GetProjection's eager route does likewise; the RGB/CMYK
+PutPixel-fused terminal captures one prepared context and exact projection
+selection, then carries them through the selected Default or architecture
+kernel and its prepared CPU receipt. Entropy and Stat inject their route context
+into native mode-aware analysis preparation, retaining masks/extrema inputs.
+Source-reviewed markers were refreshed on these functions. Crop uses the
+chosen fixed four-coordinate built-in integer carrier: Python retains Pillow's
+host comparison, load, `round()`, and `int()` protocol order, then PyO3 extracts
+the C-int tuple. No generic Python-object carrier or Rust callback route is
+added; built-in int/float inputs still run through the host protocol before
+conversion. TODO (`pillow-rs#3ptb`): check C-int overflow and decompression
+warning/error ordering, public outputs and faults, every selected/fallback
+receipt, remaining direct/eager callers, and CPU latency. This is partial
+source review only; no build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 dispatch and Draw context crosswalk, pass 4: Routed execution calls
+the CPU pool's context-aware override; the raw CPU `execute_batch` boundary
+creates Default only when no context is supplied. Eager CPU helpers validate
+the injected backend and pass the same context through preparation/execution;
+terminal kernels consume their prepared selection. Draw Bitmap reuses an
+incoming context through fusion admission and Paste or direct CPU execution.
+Text reuses one context through multiline lines, stroke/fill passes, and Paste;
+FloodFill selects before its host callbacks and carries the exact selection to
+execution. Primitive shapes queue on the backing Image and inherit its backend
+request for later materialization. Source-reviewed tags were refreshed on
+these route functions. Output/fault and callback order, all selector/fallback
+receipts, and latency remain pending under `pillow-rs#3ptb`; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 CPU batch context crosswalk, pass 5: `CpuPool` passes one
+`ExecutionContext` into `batch_execution::execute_batch`, which forwards that
+same context through generic per-operation preparation and each fused-run
+preparer. This covers generic mode operations, Draw runs, Chops affine/invert,
+AlphaComposite/Mirror, Multiply/Screen, RGB PutPixel/Thumbnail, Transpose,
+composed Point, and PutPixel batches. Prepared owned paths retain the selected
+strategy through mutation/execution. Source TODO remains for failure receipts:
+unprepared failures may be labeled `cpu` without a selected strategy, and
+PutPixel+Thumbnail preparation errors precede per-operation telemetry. Output,
+fault, fallback, and telemetry contracts are still pending frozen CPU parity.
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 direct caller context crosswalk, pass 3: GetExtrema, GetBBox, and
+Histogram feed their requested backend/architecture context to the exact-mode
+analysis preparer. Quantize and palette Convert compose using the captured
+context. Eager Convert routes (binary, I;16, scalar-to-RGBX, matrix, palette)
+pass it into prepared execution; lazy branches retain the backend request and
+select their declared mode strategy at materialization. Split identity/copy
+paths have no pixel strategy; lazy ExtractBand children inherit the backend
+request and select when consumed. Generator APIs snapshot the active route once
+per generated image and pass its context into the mode-owned generator. PutData
+bulk paths defer through the Image backend; callback-visible Python/JavaScript
+sequences keep one `PutDataExecutionContext` for the entire write sequence.
+ImagingCore writes pass their routed context into declared serial strategies.
+Each materialized pipeline node has one `PreparedExecution` context shared by
+its operations and terminal. A cached prefix is already a separate completed
+node; its unmaterialized suffix prepares from the inherited backend request.
+Palette output retains the prepared context except for the explicit GPU to CPU
+Default wrapper-metadata route. Source markers were refreshed on reviewed
+entry points. Exact outputs/faults, sequence callback order, all receipts, and
+latency remain TODO under `pillow-rs#3ptb`; no build, formatter, checkstyle,
+lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 Python Draw adapter crosswalk, pass 6: Python `ImageDraw` creates a
+Rust `Draw` bound to the backing Image. The text binding snapshots the selected
+backend and architecture once before the Rust multiline path; direct text,
+stroke/fill, custom font masks, and nested text Paste share that context.
+Custom-font bitmap callbacks re-enter `ImageDraw.bitmap` with the parent
+context temporarily installed on `PyDraw` and restore the previous value after
+success or a returned Python error. Ordinary bitmap calls defer to the Image
+route. The wrapper does not select another architecture while forwarding these
+callbacks. Public output/fault, callback order, selected/fallback receipts,
+and latency remain pending for frozen CPU evidence. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 ImageOps callback context crosswalk, pass 7: Invert, Posterize,
+Solarize, Autocontrast, Equalize, and Colorize preserve Pillow's public
+`Image.point`; Autocontrast and Equalize also invoke public `histogram`, and
+Colorize/Equalize may invoke public `convert`. Their callback traits carry no
+parent Backend/Architecture context, so nested calls can route independently.
+Added TODOs beside the shared LUT, Autocontrast, Equalize, and Colorize owners.
+Preserve subclass dispatch while resolving the same-context handoff; callback
+ordering, output/fault parity, selection/fallback receipts, and latency remain
+pending. No build, formatter, checkstyle, lint, test, parity, benchmark, or
+coverage ran.
+
+2026-11-21 direct ModeFilter context crosswalk, pass 8: `ops/param_filters.rs`
+now invokes the registered CPU filter route. It captures CPU Backend and
+Architecture after materialization, passes that context into
+`prepare_mode_filter`, and records the retained mode-owned Default selection.
+The exhaustive route supports the fourteen declared byte modes and rejects
+eleven remaining identities; P output retains its wrapper palette metadata.
+The earlier TODO implying this route lacked support/context plumbing was stale
+and has been removed. Exact output, callback/error order, palette handling,
+fallback receipts, and latency remain parity/benchmark evidence, not source
+gaps. No build, formatter, checkstyle, lint, test, parity, benchmark, or
+coverage ran.
+
+2026-11-21 pipeline mode-identity crosswalk, pass 9: `pipeline/support.rs`
+does not retain the mode-string compatibility path listed in the pending-source
+ledger. Pipeline operation payloads use `raster::Mode`; `ColorMode` is a
+transparent type alias. `PipelineOp` maps into typed `OperationId` support
+declarations. The remaining string mode snapshots are confined to GPU graph
+and routing code for the later GPU phase. Removed the stale CPU source item;
+runtime output/fault evidence remains pending. No build, formatter, checkstyle,
+lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 Crop carrier boundary follow-up: retained the chosen built-in
+int/float host path and fixed four-integer PyO3 carrier. The C `i32` extraction
+precedes Rust's output-extent guard, so extreme-coordinate fault order is
+still open; added an actionable TODO beside extraction. No generic
+Python-object carrier is introduced. No build, formatter, checkstyle, lint,
+test, parity, benchmark, or coverage command ran.
+
+2026-11-21 Color enhancer context follow-up: direct Rust ColorSaturation uses
+its prepared strategy when available; the composed path still performs the
+eager degenerate-base Convert children and Blend without one shared injected
+Backend/Architecture context. Added actionable TODOs at both core entry points.
+Keep Python ImageEnhance.Color's eager construction and later public Blend as
+separate call boundaries, preserving subclass dispatch and wrapper metadata.
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 Crop extent-order implementation: the Python boundary now computes
+`abs(right-left)` and `abs(lower-upper)` as built-in integers and applies the
+mutable Pillow decompression-bomb warning/error policy after loading but
+before PyO3's C-int tuple extraction. `PIL.Image` exposes
+`MAX_IMAGE_PIXELS`, `DecompressionBombWarning`, and `DecompressionBombError`;
+the facade reads the mutable public limit on each open and Crop call. Opening
+checks header dimensions without materializing pixel data. Rust receives the
+checked limit through `Image::crop_with_max_pixels` and keeps ownership of
+crop pixels and allocation safety. `None`, oversized integer, and custom host
+limits are handled by Python's exact policy and skip the duplicate Rust bomb
+threshold. Output/fault parity, C-int overflow, warning filters, open/lazy
+ordering, route/fallback receipts, and latency remain TODO under
+`pillow-rs#3ptb`. Source-only; no build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage ran.
+
+2026-11-21 Alpha-composite crop policy: Pillow's in-place method crops the
+source overlay and destination background through public `Image.crop`; the
+current direct Rust facade bypasses the mutable host bomb warning/error policy
+for both regions. TODOs now mark the wrapper and fixed core guard. Inject that
+policy at both crop points and preserve source/destination geometry and fault
+order before closing this path under `pillow-rs#3ptb`. Source-only; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 Crop binding safety follow-up: direct `_core.Image.crop` calls
+retain the fixed Rust extent policy. The Pillow facade uses the separate
+internal `_crop_with_max_pixels` binding only after its mutable host preflight,
+so omitting the policy cannot disable the default core guard. Source-only; no
+build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 `pillow-rs#brg0` Draw source comparison: the six reported CPU
+ImageDraw output failures came from the 2026-10-24 parity run, one day after
+`cdd938c67` split Draw responsibilities. Current multiline text uses shared
+ImageText positioning; current CMYK text writes four native CMYK lanes, while
+the previous owner converted through `to_rgba8()` before restoring CMYK mode.
+This source difference is not a parity result. Exact parent/current retries
+remain TODO after CPU source closure; source TODOs mark the affected layout and
+CMYK owners. No validation ran.
+
+2026-11-21 CPU routing and source-closure review: active `pool_cpu` sources have
+no call sites for the feature-gated Rayon macros or direct Rayon iterators;
+the only maintained Rayon definitions are in `par.rs`, and the CPU family-root
+`ops.rs` files source-scanned here contain dispatch/support wiring rather than
+pixel loops. Maintained sources outside the archive also contain no imports or
+module paths into `pool_cpu/legacy`. This confirms the active CPU tree is serial
+and the archive is reference-only, based on source inspection rather than a
+build. Runtime x86 feature probes are centralized in the cached
+`CpuCapabilities::detect` execution-context boundary; AArch64 NEON and wasm
+SIMD capability declarations use the target's compile-time feature settings.
+Leaf implementations consume the injected architecture and do not probe the
+host. Before CPU source closure, the remaining implementation TODOs include
+passing one route context through the conversion-based Contrast fallback,
+Color enhancer Blend fallback, and temporary color-pixel conversion, plus
+nested ImageOps Convert/Histogram/Point and in-place AlphaComposite callbacks
+while retaining public subclass dispatch. The Python `Image.alpha_composite`
+wrapper preserves Pillow's source/destination list checks, Python coordinate
+arithmetic, and source-before-destination Crop callbacks; full-image regions
+skip Crop. Rust owns the composite pixels and public `paste` remains the final
+mutation callback. These crop callbacks now apply the mutable host bomb policy
+and subclass overrides. Output and fault-order evidence remains pending.
+Direct Rust and `alpha_composite_public` callers keep the fixed native crop
+guard.
+Parallel scheduling ownership remains deferred to the later `pool_parallel`
+phase. No build, formatter, checkstyle, lint, test, parity, benchmark, or
+coverage ran.
+
+2026-11-21 Color enhancer context audit correction: the `color_degenerate`
+source TODO from the earlier pass was stale. The YCbCr/LAB/HSV fallback queues
+its mode-changing Convert children into one flattened pipeline; Convert is
+excluded from prefix-cache eligibility, so one `evaluate_pipeline` call
+prepares the complete child sequence with one Backend/Architecture context.
+`Image::enhance_color` captures the context before constructing the degenerate
+base and attaches it recursively to the queued Blend graph before
+materialization. These routes have no remaining source-plumbing gap; output,
+fault-order, and selection receipts remain pending. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 Crop carrier audit correction: the earlier note that PyO3 extraction
+preceded Pillow's crop extent policy was superseded by the extent-order
+implementation below: Python now checks arbitrary-precision extents and runs
+the mutable Pillow warning/error policy before `_crop_with_max_pixels`
+extracts four C `i32` coordinates. No generic Python-object carrier is used.
+Exact overflow exception behavior after the preflight remains a frozen parity
+case; source ordering is implemented. No build, formatter, checkstyle, lint,
+test, parity, benchmark, or coverage ran.
+
+2026-11-21 AlphaComposite host-contract audit correction: the earlier core
+crop-plan description is stale. The Python facade now performs Pillow's
+list/tuple validation, length checks, `min(source)`, and destination arithmetic
+itself, then calls public source and destination `crop` in Pillow order for
+non-full regions. This keeps mutable host Crop policy and subclass callbacks
+visible. Rust owns composite pixels, and public `paste` remains the mutation
+callback. Only the cross-callback Backend/Architecture handoff and runtime
+receipts remain open. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage ran.
+
+2026-11-21 enhancer context source audit: `Image::new` returns a materialized
+Loaded/Paletted image, while `Image::use_backend` only annotates deferred
+pipelines and leaves direct images unchanged. Therefore backend inheritance
+cannot be repaired by calling `use_backend` on the temporary pixels or
+constant contrast base. `color_transparency` now attaches the parent's
+explicit backend to deferred byte PutPixel work, and the following mode
+conversion remains in that flattened pipeline. Synchronous typed PutPixel and
+eager Convert routes still need the captured parent context. `contrast_degenerate`
+also needs context passed into eager grayscale conversion, source channel
+read, and any eager child execution while retaining Pillow's construction-time
+snapshot and error order. This confirms an implementation gap, not just a
+missing parity receipt. Source-only; no build, formatter, checkstyle, lint,
+test, parity, benchmark, or coverage ran.
+
+2026-11-21 enhancer route correction: `color_transparency` now captures the
+parent requested Backend and CPU `ExecutionContext` once and passes both to
+synchronous typed PutPixel. Its dispatcher now lives in
+`image/pixel_access/putpixel.rs` and uses scalar/component helpers. Byte
+PutPixel plus Convert remain a deferred graph, and the source-pinned backend is
+attached to that graph after conversion. Eager Convert execution and
+active-but-unpinned context propagation remain implementation TODOs; the
+previous audit's claim that typed PutPixel still lacked context is superseded.
+The split keeps `pixel_access.rs` under the 1,000-line limit. Source-only; no
+build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 enhancer context implementation correction: pending pipelines now
+retain an injected `ExecutionContext` in `PipelineOps`; evaluation, uncached
+verification, prefix/suffix execution, and the specialized PutPixel projection
+route pass it through preparation. Context assignment reaches nested source
+pipelines and operation image operands, and resets caches whose pixels could
+have been produced by another architecture. Explicit `use_backend` selection
+rebuilds the graph and drops a previous injected context. The Convert API now
+passes the injected context through eager matrix/palette/scalar/binary/I;16
+strategies and deferred children; GetChannel supports the same injection for
+its tiny-RGB and queued paths. `color_transparency`, conversion-based
+`contrast_degenerate`, and enhancer fallback Blend paths capture and propagate
+their context. This supersedes prior source-only notes that those paths still
+lacked context plumbing. Backend selection remains governed by the existing
+pipeline/backend routing boundary; injected `ExecutionContext` preserves the
+CPU architecture through composed child work, while GPU execution prepares its
+own GPU context. CPU parity, fault order, route receipts, and latency evidence
+remain pending. Nested ImageOps callback composition and AlphaComposite's
+cross-callback context was subsequently implemented; see the latest context
+follow-up below. No validation command ran.
+
+2026-11-21 composed ImageOps and AlphaComposite context follow-up: Python now
+holds a lazy `ContextVar` scope for callback-composed operations. Invert,
+Posterize, Solarize, Autocontrast, Equalize, Colorize, module Composite, and
+in-place AlphaComposite, Expand, Pad, and EXIF transpose pass one captured CPU
+`ExecutionContext` through their public Image callbacks and Rust transform
+plans. The Rust bridge accepts that context for Load, Histogram, Convert,
+Point's scalar/float/mode/replicated/validated routes, Crop, Paste, module
+AlphaComposite, and EXIF transpose. Crop keeps Pillow's host sequence in the
+facade and forwards its post-check C-int tuple; the typed Rust API no longer
+parses Crop coordinates through `f64`. When route capture is advisory and
+fails, the facade lets the operation resolve its route at the usual core
+boundary. This supersedes the earlier statement that nested ImageOps and
+AlphaComposite context composition remains unimplemented. Source review only:
+output and fault parity, callback ordering, selected/fallback receipts, and
+public latency remain TODO under `pillow-rs#3ptb`; no validation command ran.
+
+2026-11-21 Draw context follow-up: Python ImageDraw captures the CPU route and
+explicit source backend pin while loading the target, then supplies both to
+the retained Rust Draw context. Queued primitives and curves inject the
+captured architecture into their lazy pipelines and restore an explicit pin
+after materialization. Direct Bitmap and Text use that retained route. Static
+FloodFill now prepares its mode strategy from the PixelAccess-captured route
+instead of selecting again after load. Python-derived lazy results restore an
+explicit source pin before injecting the captured context. Direct Rust and
+JavaScript Draw constructors retain their prior inferred-route behavior.
+Source output, fault, fallback-receipt, and latency evidence remains pending;
+no build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 ImageFilter route follow-up: built-in UnsharpMask and ModeFilter
+now receive the route captured by the public Image.filter boundary because
+they execute eagerly inside the filter callback. Their PyO3 methods dispatch
+through route-aware Rust strategy entries; lazy built-in filter results still
+receive the route when the facade wraps them. Custom Filter subclasses retain
+their existing callback signature and receive a route-bound cloned PyImage;
+duck-typed callbacks receive the same route-bound handle. Output/fault parity,
+fallback receipts, and latency remain pending. Callback-visible PyImage
+identity and direct input-mutation semantics remain an explicit TODO; no
+validation command ran.
+
+2026-11-21 ImageEnhance route follow-up: Brightness and Sharpness return lazy
+pipeline images that the facade binds to the source route; Color and Contrast
+capture a route for their retained base construction. Color's eager transparency
+metadata conversion now reuses the captured requested backend and execution
+context through a route-aware native entry point. Output/fault parity,
+selected/fallback receipts, and latency remain pending; no validation command
+ran.
+
+2026-11-21 ImageOps.deform callback route follow-up: one lazy route scope now
+covers `deformer.getmesh(image)` through the later `Image.transform` call, so
+nested image operations in the callback can share the selected context. The
+existing callback and resample-validation order is unchanged. Reentrant
+output/fault behavior, strategy receipts, and latency remain pending; no
+validation command ran.
+
+2026-11-21 ImageDraw route follow-up: `ImageDraw.Draw` scopes the overridden
+`image.getdraw(mode)` callback and default constructor fallback. Public drawing
+entry points install the retained `PyExecutionContext` around host numeric,
+shape-close, color, and font callbacks so nested image work shares the Draw
+route. AttributeError handling and callback order are unchanged. Override
+errors, route receipts, and draw latency remain pending; no validation command
+ran.
+
+2026-11-21 Crop/Reduce callback route follow-up: both facades now create their
+lazy route scope before host coordinate comparisons, factor normalization, and
+identity delegation. This lets nested image calls from those host protocols and
+the Reduce-to-Crop child share a captured route while preserving the existing
+load, rounding, C-int conversion, and fault order. Callback/fault parity and
+route receipts remain pending; no validation command ran.
+
+2026-11-21 ImageOps Equalize route crosswalk review: the facade's existing
+lazy route scope covers the generic callback flow and its public Convert,
+Histogram, and Point calls, preserving user overrides. Only callback-order and
+selected/fallback receipt verification remains; no validation command ran.
+
+2026-11-21 terminal materialization route follow-up: Image.save scopes host
+format/path callbacks and its before-encode load. Image.tobytes and
+Image.tobitmap pass the active route through PyO3 for pending graphs while
+preserving cached materializations. Algorithms and byte packing are unchanged.
+Fault order, exact output, selected/fallback receipts, and latency remain
+pending; no validation command ran.
+
+2026-11-21 deferred operation callback scope follow-up: `Image.effect_spread`
+scopes host distance conversion and binds its lazy result to the captured CPU
+route. `ImageEnhance.Sharpness.enhance` now scopes host factor conversion and
+result binding, including reentrant numeric callbacks. These wrappers do not
+own pixel algorithms. Callback faults, selected/fallback receipts, and
+public-call latency remain pending; no validation command ran.
+
+2026-11-21 save terminal route correction: the Python wrapper passes a lazy
+route provider to PyO3. For a still-pending graph, the adapter obtains the
+context after Pillow's existing save callbacks and validation, then injects it
+before encoding. This preserves dispatch when an overridden `load` leaves the
+graph lazy; cached materializations skip route capture. A missing provider
+result keeps inferred routing. Output/fault parity, route receipts, and latency
+remain pending; no validation command ran.
+
+2026-11-22 Equalize builtin-mutation scope clarification: replacing Python
+builtins before or after import, including C-level replacements with forged
+metadata, is outside the supported contract. Do not add builtin identity
+guards, mutation-specific fallback logic, or parity cases. The generic
+histogram callback route remains for non-native histogram values. Earlier
+Equalize inventory notes requesting builtin-replacement parity or identity
+proofs are superseded; output, callback/fault order, and route receipts for
+the supported histogram inputs remain pending under `pillow-rs#3ptb`.
+Source-only; no build, formatter, checkstyle, lint, test, parity, benchmark,
+or coverage ran.
+
+2026-11-22 ImageFilter context clarification: the callback retains the live
+PyImage object, and only context-aware ImagingCore methods resolve the active
+wrapper route. The other direct ImagingCore methods remain in the pending
+callback-surface review.
+
+2026-11-22 ImageFilter palette accessor source completion: PyImage now exposes
+the direct ImagingCore `getpalette` method by asking the Rust image to pack its
+attached palette into the requested raw mode and returning those bytes. The
+adapter preserves the low-level no-palette ValueError and leaves palette
+packing in `pillow-rs`. `Image.filter` loads before invoking the callback, so
+the accessor needs no new architecture dispatch. Packed-byte output, rawmode
+faults, and callback behavior remain pending CPU parity. Source-only; no
+build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-22 GetColors visible-mode source recheck: Pillow loads the image, then
+tests the overridable `self.mode` against `("1", "L", "P")` to choose between
+its histogram wrapper and low-level `ImagingCore.getcolors`. The Python facade
+performs that branch and passes its boolean result; Rust chooses the pixel
+strategy using the actual `DynamicImage` identity. The bool is therefore the
+complete host carrier, with no second visible-mode enum or string needed in
+core. Histogram-route `maxcolors` remains a Python object until Pillow's
+post-count comparison. Output, override-fault, and route receipts remain
+pending; no validation command ran. Reference: [Pillow 13.0
+Image.getcolors](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1375-L1396).
+
+2026-11-22 ImageFilter callback identity correction: `Image.filter` now passes
+the live `PyImage` handle to `ImageFilter.Filter` subclasses and duck-typed
+filters. The previous route-bound clone could hide callback mutations from
+`Image.im`; context-aware ImagingCore methods resolve the captured route from
+the active wrapper scope, while built-in filters retain explicit context-taking
+overrides. Callback output/fault order and selected/fallback receipts remain
+TODO under `pillow-rs#3ptb`; no validation ran.
+
+2026-11-21 EffectNoise deferred-route correction: the Rust EffectNoise API
+captures a CPU/architecture context when queuing its lazy graph and attaches
+it to the operation, so later materialization keeps the route chosen at the
+public call boundary. The size-based entry delegates through the same routed
+operation. The Python API stays thin. Output/fault parity, selected/fallback
+receipts, and latency remain pending; no validation command ran.
+
+2026-11-21 PyO3 adapter size correction: moved the Image.point LUT carrier,
+Python callback conversion, and method binding into the existing `image/point.rs`
+module with `ImagePointTransform`. `image/operations.rs` is now 859 lines;
+point output/fault parity and selected/fallback receipts remain pending. No
+validation command ran.
+
+2026-11-21 GetProjection strategy audit: the aggregate declaration and
+prepared executor cover all 25 exact `Mode` identities and require the
+matching `DynamicImage` variant before execution. Only RGB8 and CMYK8 declare
+SSE2, NEON, and Wasm SIMD128 leaves; their support entries require the exact
+ISA and target, and the other 23 modes use their exact-mode Default owners.
+RGB vector scanning keeps its 48-byte/16-pixel blocks; CMYK retains its
+mode-specific 16/64-byte grouping. The output algorithm is unchanged. Corrected
+the vector receipt counters to include only scalar tail pixels actually
+visited when the all-columns-covered shortcut skips a tail. This closes
+GetProjection support/guard/dispatch source review only; all-mode output,
+fault, selected/fallback receipts, terminal fusion receipts, and latency remain
+TODO under `pillow-rs#3ptb`. The broader cross-family architecture/caller audit
+remains open. No validation command ran.
+
+2026-11-21 Transform PA palette metadata source reconciliation: prepared
+public Transform copies any attached PA palette and palette-alpha values to
+its destination; deferred PipelineOp Transform is palette safe for P/PA and
+retains attached palette metadata through materialization. Removed the stale
+source discrepancy claim. Exact PA output and selected/fallback receipt parity,
+including empty transforms, remains pending under `pillow-rs#3ptb`. No
+validation command ran.
+
+2026-11-21 RemapPalette support/guard/dispatch source review: only exact L and
+P source rasters are admitted, both return P samples, and both mode owners
+share the inverse-index kernel. L uses a grayscale output palette; P installs
+the reordered palette and alpha as wrapper metadata. The operation applies its
+exact one-byte native input contract before selection; Default is unconditional,
+while each SSE2/NEON/Wasm SIMD128 leaf has the empty-inclusive vector guard,
+target/ISA requirements, and context-based selection with Default fallback.
+The Python facade's `_execution_context_scope` spans mode/palette preparation
+and host sequence conversion; `_new` binds the captured context to its lazy
+result, then core `Image::push_op` retains it through exact L/P preparation.
+Direct unbound Rust calls keep ordinary context inference. Empty-vector receipt
+behavior is source-traced only. Exact output,
+palette, fault-order, selected/fallback receipt parity, and target builds remain
+pending under `pillow-rs#3ptb`. No validation command ran.
+
+2026-11-21 RGBA8 Transpose x86_64 baseline support/dispatch source review:
+the exact `ImageRgba8` entry is target-gated to x86_64, requires no optional
+ISA, and declares `TransposeRgbaX86_64Tiled`. Its guard requires a complete
+logical four-byte RGBA prefix while ignoring any backing suffix, Rotate270,
+dimensions of at least 32 by 32, at least 256K pixels, and dimensions divisible
+by four. The packed-word leaf repeats its method,
+threshold, and divisibility checks before creating the output. The context
+allows this target baseline for ordinary CPU Default on x86_64 and as a lower
+strategy for compatible x86 requests; exact requested architecture candidates
+are prioritized. Preparation binds the X86_64 variant only on x86_64, and
+execution dispatches it to the packed-word leaf. Method and geometry admission
+checks agree; typed RGBA input and checked preparation provide the storage
+precondition. Unsupported methods or shapes remain on portable Default.
+This closes source review only. Output parity, selected/fallback receipts,
+target builds, and public-call latency remain pending under
+`pillow-rs#3ptb`. No validation command ran.
+
+2026-11-21 Draw LAB Bitmap RGBa-mask source correction: Pillow 13.0 routes
+`ImageDraw.bitmap` through `ImagingDrawBitmap` to `ImagingFill2`; the RGBa mask
+leaf applies `PREBLEND` with the mask alpha to every physical destination byte,
+including the fourth backing lane. Removed the incorrect LAB-only full-coverage
+override from the shared three-band writer. LAB, HSV, and YCbCr now use the
+same exact mask coverage, with RGBa selecting `PREBLEND` and retaining
+zero-alpha source contributions. The focused LAB×RGBa output/hidden-lane
+parity TODO remains open under `pillow-rs#3ptb`. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command ran. Sources:
+[Pillow 13.0 `Draw.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Draw.c#L801-L805)
+and [`Paste.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L518-L633).
+
+2026-11-21 enhancer context source correction: child `PutPixel`, `Convert`,
+`GetChannel`, and queued `PutAlphaData` now have parent-context routes. Convert's
+same-mode fast path was the remaining hole: it copied a graph without binding
+the supplied context, so pending child work could select independently. The
+identity copy now preserves the supplied context recursively. Runtime output,
+selection/fallback receipts, and latency remain unverified under
+`pillow-rs#3ptb`; no validation command ran.
+
+## Supplemental records preserved from the duplicated plan snapshot (2026-11-21)
+
+Document reconciliation moved source/evidence paragraphs that appeared only in the duplicated plan snapshot here. The inventory entries above are retained as-is. Some records below revise or supersede earlier notes; follow the latest dated source correction and treat runtime evidence as historical unless its source/build/input/oracle/profile identities still match. These records do not replace the ordered work stages or acceptance gates in `CPU_REFACTOR_PLAN.md`.
+
+The last full CPU/Default corpus selected 177,881 cases (173,118 passed,
+4,526 failed, 237 not_run). Rerunning only its 4,526 failed IDs passed 4,425
+and failed 101; rerunning only those 101 reproduced all 101 failures. Focused
+retries have since passed 60 of those 101 cases, including all 34 I32 Resize
+cases, Type1 variation axes, Reduce reciprocal-zero, oversized-palette timing,
+and LAB target-only Rotate. The 237 original P-mode ImageOps not_run cases
+later passed 237/237 on CPU Default in
+`migration-parity-23cf405fde694c68990e28558951551e`.
+
+The 40 filtered I;16 Resize calls with `reducing_gap` are rejected by Pillow
+13.0 with `ValueError("image has wrong mode")`, so their Rust behavior is
+checked against recorded outputs. The 40 exact original inputs passed current
+target-only checks in
+`migration-parity-75cc2aeb1bde4900b01f7ce223621407` (zero failures,
+not_run, or infrastructure errors; CPU Default; dirty target revision
+`0d5c0e4`). Their inputs remain fixed at the original 33×29 size; additional
+size and pattern variants require their own expected outputs.
+
+The current-manifest retry of the 42 saved failed IDs ran CPU/Default with the
+`test-api` build and checked-in fixtures. It passed 41/42 with zero not_run or
+infrastructure errors: the 40 I;16 expected-output cases and target-only LAB
+Rotate passed. The sole remaining mismatch is
+`PIL.Image.Image.save.nuanced.i-png`: Pillow raises
+`OSError("cannot write mode I as PNG")`, while image-slash-star raises
+`OSError("unsupported Png: encode: PNG cannot encode this image mode")`.
+This encoding error-message contract is owned by image-slash-star and is
+tracked in `image-slash-star#9h5w`. The result and attestation are
+`build/migration-parity/cpu-failed-case-rerun-20261114/failed-42-current-manifest-fixtures-20261120.parity.json`
+and its matching `.attestation.json`. The earlier 42-ID retry used the
+historical manifest snapshot and is superseded. The current PostgreSQL snapshot
+import remains incomplete, so this focused retry used the checked-in fixture
+source. The frozen full CPU parity campaign remains pending.
+
+The earlier 41-ID list remains historical. The focused receipts and exact
+selected-ID lists are under
+`build/migration-parity/cpu-failed-case-rerun-20261114/`. These targeted runs
+do not replace the frozen full CPU parity campaign, which remains pending.
+
+Reduce reciprocal-zero follow-up (2026-11-15): Pillow 13.0 returns byte `1`
+for the 4097×4096 `L` case. The first focused retry exposed Rust's `0`; the
+native byte reducer now uses rounded integer division when its fixed-point
+reciprocal is zero. Its factor area exceeds the shared native-byte SIMD guard,
+so an explicit vector request selects the same Default route; output and
+fallback receipts remain pending for that mode × architecture matrix. The
+current `develop` checkout passed the case 1/1 with
+matching `AQ==` outputs in
+`migration-parity-4dd19d5ceb5944eeafa8a7131bb1b41e` (refreshed 2026-11-20;
+1 selected and passed, 0 failed/not_run/infrastructure errors).
+
+Draw Bitmap source review (2026-11-20) now covers the exact-mode Default
+owners, compact hidden-lane writes, raw I/F and I;16 carriers, and the
+mode-selection fallback. It removed an unverified LAB × RGBa full-coverage
+exception after comparing Pillow 13.0 `ImagingFill2`. Focused LAB×RGBa and the
+full Bitmap mask×destination output matrix remain pending; see the dated
+source review at the end of this plan. The five internal high-depth modes stay
+explicitly unsupported until their native ink semantics and target outputs are
+defined; those implementation rejections are not Pillow parity failures.
+
+Embedded-color Text source review (2026-11-21): Pillow 13.0's
+`ImageText.Text.embed_color()` accepts only RGB/RGBA
+([source](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageText.py#L142-L149)).
+The Rust core extends this to all other Pillow modes by building the same RGBA
+glyph source and L coverage mask, then composing through the exact destination
+mode's Convert and Paste strategies. Ink opacity is read from the effective
+Draw-context Mode (which can be RGBA over RGB storage): byte 1 for LA/La/PA,
+byte 3 for RGBA/RGBa, and opaque for modes where the fourth byte is K, padding,
+or numeric sample data. This extension is tagged
+`NO_PILLOW_SUPPORT`. Mode outputs, conversion faults, and architecture receipts
+remain TODO under `pillow-rs#3ptb`, including the explicit RGBA-context-over-RGB
+route. Draw's per-mode route metadata declares the conditional Paste child for
+nonempty, zero-stroke embedded-color Text alongside its existing masked Bitmap
+child. The eager Text path selects that child from the same declaration and
+executes Paste with the already selected parent context. Direct multiline Text,
+custom-font stroke/fill callbacks, and callback-reentrant Bitmap writes now
+receive one route for the complete text call. This is source review only;
+output, conversion-fault, selection/fallback, callback-order, and latency
+receipts remain pending.
+
+PA Transform metadata correction (2026-11-20): Pillow 13.0 copies the source
+palette into P and PA transform results
+([source](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L2749-L2752)).
+The lazy pipeline now preserves that palette while the CPU strategy transforms
+native samples. P/PA output and receipt parity remain TODO under
+`pillow-rs#3ptb`.
+
+2026-11-21 Draw route injection follow-up: Python ImageDraw now captures the
+CPU backend/architecture route while loading the target and passes it into the
+retained Rust Draw context. It retains an explicit source backend pin as well,
+so materialization before Draw construction does not discard that pin. Every
+queued primitive and curve operation binds the captured architecture and
+source pin to its resulting lazy pipeline. Python-derived lazy results also
+restore an explicit source pin before injecting the captured architecture.
+Direct Bitmap and Text already consume the Draw route; the static FloodFill
+facade now passes its PixelAccess-captured route into strategy preparation as
+well. Direct Rust and JavaScript Draw constructors keep their existing
+inferred-route behavior.
+Selected/fallback receipts, mode output, callback/fault order, and latency
+remain pending in the frozen CPU matrix. Source review only; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-20 Resize support declaration follow-up: the operation-level route now
+distinguishes native Reduce pre-reduction from the fused straight-alpha
+ResizeBoxed child, and carries exact serial `LA`/`RGBA` support for that child.
+The Image and Thumbnail wrappers plus prepared admission select from this
+declaration. Earlier Resize/Thumbnail parity receipts predate this source
+change. Source review traced the wrapper choice through the route guards,
+prepared child selection, serial fallback (`MissingSpecialization`), and the
+LA/RGBA native-byte fused path; Thumbnail keeps those modes' separate Reduce
+factors at identity, so the fused child reduces only once. No mode conversion
+is used in that path. Focused output and architecture-fallback checks remain
+pending. TODO
+(`pillow-rs#3ptb`): verify both alpha routes, ordinary Reduce routes, and
+requested-architecture fallback receipts before refreshing their markers.
+
+2026-11-15 P-mode ImageOps result: the original 237 P-mode not_run IDs and six
+new RGB/RGBA palette cases were selected together on CPU Default. The 243-case
+run passed all 237 original IDs and four palette guards. Two RGBA guards failed
+because alpha selection used palette values instead of entry positions. After
+correcting that and observing both image bytes and `getpalette("RGBA")`, all
+six guards passed 6/6 in `migration-parity-9f188c313fb74b1e8652a1b1fbd627c7`.
+Both runs had zero not_run and infrastructure errors. The new Invert P-mode requirement and six cases are in the generated input
+corpus; the refreshed snapshot lock covers 12,643 files and 17,557,537,702
+logical bytes (recipe SHA-256 `fa428ed73a3c5c93c2542ebbba1498607368851b07e4bb363031817a2aa7e4d0`).
+
+Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy. Stage 5 source review remains incomplete as of 2026-11-21. The Resize conditional reducing-gap Reduce child and I;16 CoreOnly child scope are declared. The operation/mode/architecture/caller crosswalk remains open. Paste now has a source crosswalk for 25 Default owners, 20 Pillow-mode SSE2/NEON/Wasm SIMD128 paths, four endian-specific I;16 strategies, seven NEON L-mask specializations, and five CoreOnly typed owners; its kernel and hidden physical-lane producer source reviews are closed. Runtime parity/fault/fallback/performance evidence remains open. Host Expand/Pad fallback callbacks now preserve a source-pinned backend when Paste creates their output pipeline. Cross-family architecture-module target reachability and direct/eager caller review remain open. Runtime evidence, later Parallel CPU work, and architecture opportunities to measure after CPU gates are separate TODOs. Stage 6 structural, static, exact-size, and compilation gates are historical 2026-11-13 checkpoint evidence and must be rerun after later source changes. The 2026-11-14 CPU/default corpus recorded 173,118 passes, 4,526 failures, and 237 not_run across 177,881 selections. On 2026-11-15 the exact 4,526 original failed IDs were rerun on Pillow 13.0.0 with CPU/default: 4,425 passed and 101 failed, with zero not_run or infrastructure errors. A second run of only those 101 failures reproduced all 101. Before the I32 correction, the residuals comprised 74 Resize cases (34 I32 and 40 I;16), 8 Draw, 4 PutData, 4 invalid-size filters, 2 PutPalette, 2 fromarray, and 7 other API cases. The I32 correction now passes all 34 I32 cases; 60 of the 101 failed IDs now pass focused retries; that historical 41-ID residual is classified in the latest status above. At the initial-corpus checkpoint, 237 P-mode NotImplemented outcomes were not_run; the focused retry later passed all 237 ImageOps cases, as recorded above. Receipts, diagnostics, and the exact residual-ID list are under `build/migration-parity/cpu-failed-case-rerun-20261114/`; the original full-failure rerun is `failed-4526-cpu-default-20261115.parity.json.gz`, and the repeat of only the 101 residuals is `failed-101-retry-cpu-default-20261115.parity.json.gz`. Full CPU operation × Mode × Architecture parity receipts and the performance campaign remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; `0b34e9a9b` exposes same-mode Convert identity in all 25 source contracts, including palette-preserving P/PA and CoreOnly internal high-depth identities. `e75e87f43` routes named ImageOps/Paste color resolution through exact `Mode` and marks internal high-depth color results `NO_PILLOW_SUPPORT`. `7790ed967` classifies reviewed mode-preserving pipeline operations, records RemapPalette and Color3DLut output identities from typed operation contracts, and routes Tiny-RGB eager ExtractBand through prepared CPU architecture execution for CPU Default and compatibility SIMD. `054a98326` replaces clone-only same-carrier PutData prefix writes with the native writer in 16 mode owners, removes copy-only carrier conversion from four PutAlpha and 13 PutAlphaData Default paths, and makes callback-preserving PutData writes validate and mutate the exact materialized DynamicImage byte carrier. `aa6de79ae` carries exact `raster::Mode` through PutData value-kind selection, normalization, immediate-write width selection, and the deferred `PipelineOp::PutData` payload. `3f110aa47` adds callback-driven PutData's exact-mode support contract and cached CPU Default context; this worktree now routes synchronous PutData and PutPixel selections through image-pinned/active CPU Architecture policy, with native Default fallback where no specialization exists. `65fb1c21c` adds mode-owned synchronous PutPixelValueAt for numeric I/F and I;16. `e060b60c1` adds the CPU Default strategy for Pillow's raw-byte I;16 PutData path. `751fe8249` routes allocated GetData band reads through the caller-owned output path. Commit `3254bd6ad` moves GetData byte, band, I;16 scalar, and I/F scalar algorithms into exact-mode Default owners for all 25 identities. Commit `572b7fd6c` carries exact `raster::Mode` through PutAlpha and PutAlphaData descriptors, while GPU packing preserves the existing shader layout codes. Commit 11665ed82 passes typed Mode through prepared execution and array import. Current lazy-mode-cache and cross-mode lazy P/PA terminal palette routes are source-reviewed but still need runtime evidence; palette and wrapper metadata are included in the frozen CPU parity campaign. The active implementation remains incomplete until its static, parity, and performance gates pass.
+Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
+Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop`. Static
+lazy output modes now come from operation support contracts without
+wrapper cache overrides; mode metadata remains source-reviewed and
+runtime-unvalidated.
+
+- Active CPU source scan (2026-11-21): no active module declaration, include,
+  or import path references `pool_cpu/legacy`; no Rayon iterator/scheduler
+  references appear under maintained `pool_cpu`; and no `todo!()` or
+  `unimplemented!()` remains in the reviewed CPU/core source. The remaining
+  `NotImplementedError` sites are explicit operation contracts, not missing
+  bodies. This was a source scan only; cfg reachability and compilation remain
+  for the post-review gates.
+- Rotate's direct typed Rust entry now resolves Pillow's no-center/no-translation
+  identity, half-turn, and eligible quarter-turn shortcuts before fill/filter
+  parsing, using the existing Transpose pipeline for discrete routes. General
+  requests validate the narrow Rotate filter set even when the angle is zero;
+  the Python facade still performs its corresponding host-level shortcut so
+  subclass `copy`/`transpose` overrides remain observable. Added a test-api-only
+  direct binding and recorded target-only outputs for all 25 exact modes plus
+  identity, half-turn, both square quarter-turns, and expanded rectangular
+  quarter-turns. The test-only observer returns native `DynamicImage` carrier
+  bytes through the existing unpacked-byte method. TODO in `ops/rotate.rs`:
+  generate/freeze the contract and run it across CPU Architecture selectors
+  after Stage 5 closes. The direct binding and target-output case helpers are
+  source-reviewed; manifest and input-builder integration review plus parity
+  remain pending. No validation ran.
+- Draw Bitmap source review (2026-11-07): the nine direct mode/helper pixel
+  loops now add signed origins and unsigned mask offsets in `i64`, then clip
+  before narrowing to image coordinates. Coverage lookup and zero-coverage
+  skipping retain their prior order, and the typed per-mode blend formulas are
+  unchanged. No standalone unit tests were present outside the preserved
+  `pool_cpu/legacy` tree; the `scripts/test_*` cases are live Pillow parity
+  comparisons and remain. `test_api.rs` exposes parity controls/receipts and
+  remains. Extreme-origin Bitmap parity is TODO in Draw support; no validation
+  ran.
+- Pillow 13.0 `ImageOps._border` source review confirms that a tuple of length
+  two duplicates horizontal and vertical margins, length four unpacks directly,
+  and other tuple lengths raise the explicit border `ValueError`. Non-tuples
+  repeat as-is. `expand` performs host size arithmetic, then `_new_with_fill`.
+  `_new_with_fill` evaluates `image.mode` before `_color` checks the fill type,
+  copies palette data, calls palette `getcolor(color, image)`, creates the image,
+  attaches the copied palette, copies `info["transparency"]` when present, then
+  returns for public Paste. The core-owned Expand callback route follows that
+  sequence: it reads the mode before the fill type check, passes the source
+  image to palette allocation, resolves the output wrapper before evaluating
+  the target-mode argument, validates size before typed fill conversion,
+  allocates/materializes the filled canvas, applies palette and transparency
+  metadata, and calls public Paste. The source-order route is implemented;
+  callback/fault behavior, malformed palette behavior, output pixels, and
+  shared architecture receipts remain parity work under `pillow-rs#3ptb`.
+  Sources: [Pillow 13.0 `_border` and `expand`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L1826-L1848),
+  [`_new_with_fill`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L2391-L2422),
+  [`ImagePalette.getcolor`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImagePalette.py#L1058-L1134),
+  and [`expand`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L2676-L2715).
+  This pinned-version review supersedes the historical Expand source notes
+  dated 2026-11-02 and 2026-11-03 below. Source-only; no validation ran.
+- Pillow's encode adapter now preserves codec transfer identities for `1`, `I`,
+  and `F`, and explicitly serializes native u16 carriers as the pinned codec's
+  little-endian transfer bytes for I;16 and internal 16-bit modes. The adapter
+  still has a mode-specific encode TODO for PA's palette indices and
+  per-pixel alpha, premultiplied alpha, RGBX, YCbCr, LAB, and HSV. The generic
+  LA transfer cannot preserve PA identity or palette metadata. These
+  codec-owned cases are tracked in `image-slash-star#9h5w`; append additional
+  mode/format gaps to that Kata task as the adapter audit discovers them, and
+  keep Pillow changes at the codec boundary. The dependency remains pinned by
+  `pillow-rs/Cargo.toml`; no files
+  in that repository were changed. Source-only and unvalidated (2026-11-03).
+- Mode-boundary review confirms `Mode::ALL` and the `DynamicImage::mode()`
+  variant match cover the same flat 25 identities; `ColorMode` is an alias of
+  `Mode`, and codec `ImageMode`/`ColorType` translation stays in
+  `image/codec_adapter.rs`. Python and JavaScript binding entry points parse
+  Pillow strings before typed Rust construction and operation calls. A
+  production-source scan found no mode strings in maintained `pool_cpu`; its
+  remaining `ColorType` reads are storage channel/byte counts in Histogram and
+  Transpose, not mode selection. The indexed-filter audit found the PA
+  BoxBlur/BoxBlurXY and rank-filter declarations had native two-channel
+  strategies, but materialization expanded them to RGBA before dispatch. The
+  source-aware planner now keeps those exact PA operations in native PA; the
+  PA GaussianBlur rejection is unchanged. The P Equalize strategy also had a
+  fixed RGB output contract and palette input, but generic materialization
+  expanded P before it could select that strategy. CPU/CPU-architecture
+  materialization now dispatches the original P raster and palette through the
+  declared strategy, whose RGB conversion drops palette alpha; PA Equalize
+  remains rejected and is no longer planned as RGB. GPU Equalize retains its
+  existing generic route for the later backend review. Remaining
+  color-dependent indexed transitions still defer to materialization pending
+  operation-specific output contracts. GPU pending/result metadata also
+  retains a string route for the later backend stage. These boundaries remain
+  source-only and unvalidated.
+- Core raw-byte export and converted compatibility metadata now accept typed
+  `Mode`; Python and JavaScript parse Pillow's external mode strings at their
+  binding boundary. Histogram and Entropy masks are admitted only as exact
+  `One` or `ImageLuma8` identities and their byte planes are borrowed directly
+  during scans. ImageOps Autocontrast likewise reads those accepted native
+  mask bytes without the previous `to_luma8` clone, while retaining luma
+  normalization for any internal caller that supplies another mode. I;16
+  GetPixel now reads the native `u16` carrier instead of allocating a
+  converted Luma16 image. These source changes remain uncompiled and
+  unvalidated.
+- Empty-image source review found the archived SIMD Chops Invert and
+  RemapPalette routes accept zero-byte rasters and retain their native-copy or
+  scalar-control receipts. Their maintained kernels also handle exact empty
+  storage, but the shared `NativePointwiseBytes` guard rejected every zero
+  dimension before those strategies could run. Added the distinct
+  `NativePointwiseBytesIncludingEmpty` guard for ChopsInvert and RemapPalette;
+  the original nonempty guard remains in use for Eval and the shared ImageOps
+  point-strategy callers; their empty-image routes were not changed in this
+  source review. ChopsInvert remains an exact-mode architecture route with
+  same-mode Default fallback. This source correction is uncompiled and
+  unvalidated.
+- Chops caller tracing now covers the public typed mode-group validation,
+  lazy `PipelineOp` construction, `prepare_plan` secondary materialization and
+  support assessment, and exact-Mode prepared dispatch. Binary shape mismatch
+  stays on the serial Default strategy, which clips to the overlap; the
+  architecture guard admits owned Add/Sub execution only for equal native
+  layouts, and the in-place path is restricted to selected vector Add/Sub.
+  Multiply→Screen preparation remains limited to L/LA/RGB/RGBA, a shared
+  execution source, matching mode and dimensions, and matching selected
+  architectures. The `Backend::Simd` compatibility request is also source-
+  traced: the backend registry has `CpuPool` (and optional `GpuPool`), not a
+  SIMD pool; routing maps the alias to a CPU context with the detected
+  architecture, and the Python ImageChops bindings call the typed Rust
+  operations. For Pillow-defined modes, binary wrapper validation still
+  resolves both input identities before reporting source/secondary
+  incompatibility, matching the baseline; LAB remains explicitly CoreOnly.
+  Logical validation rejects the source mode before reading the secondary.
+  Replaced the custom wrapper mode lookup, which could materialize an
+  inferable pipeline, with `Image::mode_identity()` so cached and planned
+  typed modes remain lazy. Owned Add/Sub and Multiply→Screen batch fallback
+  and receipt paths, public direct callers, lazy output-mode planning, and
+  validation/error order are now source-reviewed against the baseline. No
+  validation has run.
+- Per-operation telemetry now includes stable typed strategy fallback names,
+  separate from pipeline backend fallback. Prepared/eager, reviewed fused, and
+  vector PutPixel batch receipts record the actual `StrategySelection`. CPU
+  terminal helpers also take and record the prepared selection; all four
+  GetProjection/PutPixel terminal routes pass it through. The earlier note
+  claiming terminal receipts carried only Architecture was stale. The
+  optional fallback list is absent when no selection was published and empty
+  when a recorded selection had no fallback. Receipt contents remain
+  unvalidated against the focused parity matrix.
+- `ModeSupport::assess` and `select` now examine permitted lower architectures
+  even if the requested architecture is unavailable on the captured host, and
+  reject any candidate whose own architecture or extra instruction
+  requirements are unavailable. A selected lower route retains the requested
+  strategy's hardware fallback reason. This dispatch correction is source-only
+  and unvalidated; exact/lower/hardware cases remain in the CPU parity matrix.
+- Direct `GetData`, allocated `GetDataBand`, and caller-owned `GetDataBandInto`
+  have independent exhaustive support descriptors under `analysis`; band-count
+  facts and the existing scalar-mode caller-buffer rejection come from those
+  declarations. Exact-mode Default owners now cover all 25 identities under
+  `analysis/<mode>/default/get_data_impl.rs`. `image/data_access/get.rs` retains
+  validation, materialization, backend routing, and result shaping; it no longer
+  owns byte narrowing, LAB mapping, interleaved band extraction, or I/F scalar
+  decoding. Shared native-sample helpers preserve the existing clipping,
+  wrapping, byte order, and channel-stride behavior without retagging or
+  converting modes. Zero-copy One/L/P views also use their mode owners.
+  Allocated non-scalar band reads preserve eager materialization and band
+  validation order. SIMD's direct sink path remains in use for the nine
+  eligible layouts. GPU terminal eligibility remains a TODO in
+  `analysis/ops.rs` pending a shared GPU support contract. This source is
+  uncompiled and unvalidated.
+- `PutAlpha` and `PutAlphaData` now carry exact source `Mode` values in
+  `PipelineOp`, and the duplicate `PixelMode` enum is removed. The image wrapper
+  retains its existing accepted/rejected modes; CPU preparation checks that the
+  captured source mode equals the materialized `DynamicImage` identity. GPU
+  admission, output handling, native routes, and shader packing use exact
+  identities while retaining existing numeric layout codes. This source-only
+  change remains uncompiled and unvalidated.
+- Pipeline output metadata uses the typed mode planner instead of retaining a
+  non-paletted source identity by default. Source tracing found Colorize nodes
+  cached L despite returning RGB, and EffectNoise nodes could retain an
+  arbitrary input mode despite returning L; either stale declaration could
+  force materialization to retag the result incorrectly. For indexed inputs,
+  palette-safe P/PA handling remains explicit. Known mode-changing routes use
+  their declared transition; mode-preserving routes that are not palette-safe
+  defer identity to materialization rather than claiming the source mode. A
+  source TODO tracks replacing those indexed fallbacks with exact transitions
+  or existing rejections. Merge and ExtractBand now seed the output cache from
+  their typed operation contracts, and Image::merge no longer reapplies a
+  partial target-mode list after queuing. This source-only correction is
+  unvalidated.
+- Prepared execution, its shared-result variants, and `BackendImpl` now carry
+  `Option<Mode>` instead of a Pillow spelling. Materialization resolves the
+  logical source identity with `Image::mode_identity()` and keeps palette mode
+  choices typed; CPU derives implementation selection from the exact
+  `DynamicImage` variant and ignores the separate logical compatibility value.
+  GPU admission, planning, and upload still use `Option<&str>` logical-mode
+  inputs. Replace those with exact `Mode` matches and remove the pool adapter;
+  this remaining GPU route is covered by a TODO. The CPU/backend interface
+  migration is source-only, uncompiled, and unvalidated.
+- `from_resolved_array_interface` now uses the already-resolved
+  `ArrayLayout.mode` as its output identity. `ArrayLayout.raw_mode` continues to
+  describe the source byte representation; core no longer parses that spelling
+  back into `Mode`. This source change is uncompiled and unvalidated.
+- `Image::Pipeline` now has one `PipelineModeCache` instead of separate
+  `explicit_mode` and mode-cache fields. The cache distinguishes an
+  graph-declared output identity from a mode inferred by metadata planning;
+  materialization, palette loading, pipeline admission, and GPU graph metadata
+  consume the appropriate state. This keeps `Image::mode_identity()` exact
+  while preserving the old declared-mode behavior for execution. Source-only,
+  uncompiled, and unvalidated.
+- Callback-preserving `Image::putdata_value_at_with_context` selects the declared `PutDataValueAt` support contract for the exact mode and writes through the native byte or I;16 carrier. The Pillow and JavaScript sequence adapters retain one routed CPU Architecture context for their callback-driven writes; the current contract has no non-Default specialization, so SIMD requests resolve to the native Default owner and report that fallback. The context caches the selected mode strategy and refreshes it if a re-entrant callback changes the image mode. The synchronous mutation remains visible before the next value is coerced, and telemetry records the selected implementation alongside any requested-backend handoff. The direct `Image::putdata_value_at` API creates the same context for one write, while callback-free I;16 value loops reuse one context. Source review against the prior implementation confirms typed normalization order, synchronous mutation, exact mode identity, `LoadedData` metadata retention, palette retention, and existing storage/offset errors on valid rasters. This immediate route has no cross-mode conversion; broader wrapper review remains open, and source is unvalidated.
+- Numeric I/F `Image::putpixel_mode_scalar` now selects the distinct `PutPixelValueAt` contract from the exact raster mode instead of reporting itself as PutData. It retains the existing numeric-to-four-byte normalization and in-place write through the mode-owned I/F Default implementations, and records the selected implementation from the routed CPU Architecture context, with native Default fallback until specialized owners exist.
+- Direct I;16 PutPixel now uses that same contract with four exact mode classifications and separate `i16`, `i16l`, `i16b`, and `i16n` Default owners. Each owner writes the typed u16 sample in place, preserving modulo-65536 normalization, byte-order identity, and the existing offset error. Both routes use the shared routed context. The broader wrapper/source review and all validation remain pending. These PutPixel updates are unverified.
+- Raw byte export now accepts the exact `Mode` in Rust. Python and JavaScript bindings obtain/pass that typed identity before calling the core; raw encoder names such as `BGR` and `BGRA` remain raw-layout strings at the host-facing boundary. Core conversion-metadata queries likewise accept `Mode`, with Python/JavaScript target strings translated in their bindings. The byte-export I;16 endian guards now match typed identities instead of parsing Pillow strings. Formatted I;16 pixel reads access the exact u16 carrier directly and avoid the full-buffer clone from `to_luma16()`. Existing call sites were updated without adding tests or running verification; source-only and unvalidated.
+- PutAlpha keeps One/P source luma borrowed until the required two-channel output is made, updates PA indices and alpha directly in its native two-channel buffer, and replaces La alpha in its native two-channel buffer. PutAlphaData reads One/P/PA/La directly, uses native three-channel interleaving for RGB-family inputs, and passes existing four-channel source buffers to the alpha-mask writer without cloning. The archived cross-mode audit confirms that CMYK-to-RGB promotion and mask luma semantics are preserved; exact-mode source changes preserve the legacy output carriers and arithmetic. Accepted One/L mask buffers now retain their identity and lend luma bytes to Default alpha paths without allocating a duplicate L frame. Required destination copies remain. This source review has not been validated.
+- PutData's 16 clone-only same-carrier routes now use `put/helpers/put_data.rs::native`. For complete payloads, the helper constructs the output directly from the supplied bytes; partial and empty payloads retain the source buffer and apply the same byte prefix. This is equivalent to the prior `image.clone()` plus `Prefix::apply` path because those closures performed no sample or mode conversion. The remaining `ConvertBuffer` branches were reviewed against the archived cross-layout behavior and are retained because payload width changes the output carrier before prefix replacement; no conversion remains only for kernel reuse. This source review has not been validated.
+- PutData input-shape selection, byte normalization, and callback-path storage width match exact `raster::Mode` identities. The byte layouts remain mode-specific: One/L/P are one byte, LA/La/PA two, RGB/YCbCr/LAB/HSV three, and RGBA/RGBa/RGBX/CMYK/I/F use their existing four-byte carriers. The deferred `PipelineOp::PutData` carries that exact identity as `payload_mode`; CPU contracts and GPU admission, packing, and shader-code selection consume it directly. Internal high-depth payload modes retain their explicit rejection; Pillow La and LAB use native two- and three-byte carrier strategies. This source review has not been validated.
+- The Convert byte-to-I;16 and native-I;16 vector slice is source-reviewed.
+  `One` expands each nonzero byte to 255, `L` widens each byte unchanged, and
+  all four I;16 output identities preserve those exact u16 samples. Native
+  I;16 inputs retain the archived eight-sample paths for L/LA/RGB/RGBA/CMYK/I/F;
+  current Default and vector paths now preserve full u16 values for I and F
+  across `I;16`, `I;16L`, `I;16B`, and `I;16N`. The source review found that
+  the maintained `I;16N` owner had incorrectly clipped I/F values to 255 even
+  though both archived CPU and SIMD paths preserved the full sample. The
+  redundant clip strategy is removed and the `I;16N` architecture wrappers now
+  use the same native vector helper. Empty One/L→I;16 remains a zero-block
+  vector result; empty I;16→byte/scalar targets now select their native route
+  and record the archived scalar-control receipt. No validation has run.
+- The archived SIMD Convert alpha slice has now been compared against mode
+  contracts, architecture guards, dispatch, and kernel bodies. `LA→La` and
+  `LA→RGBX` map to `luma_a8`; `La→LA` maps to `la_premultiplied8`; `RGBA→RGBa`
+  and `RGBA→RGBX` map to `rgba8`; `RGBa→RGBA/RGB/La/RGBX` map to
+  `rgb_premultiplied8`. Premultiply uses the same `(sample * alpha + 127) / 255`
+  rounding; unpremultiply retains the same exact reciprocal correction, clamps,
+  zero-alpha behavior, and alpha bytes. `RGBa→La` still emits opaque alpha, and
+  `LA→RGBX` preserves the source alpha in its fourth byte. Output variants are
+  exact. The archived alpha adapter errors when an alpha-transform route emits
+  zero vector blocks, except `LA→RGBX`, which returns an empty output. The
+  folded CPU contract uses each mode's Default strategy for zero-work alpha
+  transforms through nonempty guards; `LA→La` now follows that same fallback.
+  `LA→RGBX` keeps its explicit empty result because the archived path supports
+  it. Its fourth byte preserves source alpha, and the archived and maintained
+  special paths both report the vector route with zero blocks for empty input.
+  RGBA/RGBa→LA takes the generic native layout route: both mode-owned wrappers
+  now call the exact archived 16-pixel input kernel in
+  `convert/helpers/four_byte_to_luma_alpha.rs`, preserving source alpha and
+  RGBa's stored premultiplied RGB samples. The helper's eight-pixel output
+  block count matches the archived receipt; mode-specific validation errors
+  and exact `ImageLumaA8` construction stay in their respective wrappers. This
+  maps adapter-level SIMD unsupported errors to the required same-mode CPU
+  fallback for zero-work alpha transforms; output and error parity still need
+  the planned CPU parity run. This source-only comparison has not been
+  validated.
+- Source-only review of archived CMYK→RGB is complete. The former tagged
+  `ImageRgba8` plus `CMYK` string guard is now the exact `ImageCmyk8` source and
+  `ImageRgb8` target contract; matrix requests remain on the separate
+  Default-only `ConvertMatrix` route. The maintained SSE2 path retains padded
+  16-pixel wide blocks, SSSE3 retains its full-block channel gather with wide
+  handling for the final partial block, and NEON retains 16-pixel vector
+  groups plus the archived scalar tail. All preserve
+  `ink = 255 - K` and the `+128` `muldiv255` rounding before RGB packing. Empty
+  inputs produce the archived scalar-control result, and the output variant is
+  exactly `ImageRgb8`. No source difference was found in this slice; it remains
+  uncompiled and unvalidated.
+- Pillow 12.2 Convert reachability review confirms every maintained CMYK
+  target is Pillow-supported. `ImageMode.getmode("CMYK").basemode` is RGB;
+  when a direct conversion fails, `Image.convert` retries through that base
+  mode. The fallback reaches Pillow's scalar, I;16, bilevel, premultiplied,
+  YCbCr, and palette conversion paths; palette conversion accepts normalized
+  RGB. LAB uses the separate wrapper route through RGBA and ImageCms. CMYK no
+  longer marks these targets CoreOnly. The mode-owned direct kernels still
+  require exact output, palette metadata, dithering, fault, and fallback
+  parity against these Pillow routes. Sources: [ImageMode.py](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L45-L52),
+  [Image.convert](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1118-L1151),
+  [Convert.c RGB conversion table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1402-L1487),
+  [Convert.c palette conversion](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1093-L1106).
+- HSV and YCbCr also declare RGB as their Pillow base mode. Pillow's wrapper
+  fallback reaches every currently declared target for both modes, including
+  palette and premultiplied destinations, so their CoreOnly target sets were
+  cleared and their palette comments now describe the base-mode path. The
+  direct target kernels now include exact RGBX outputs with X=255. The
+  mode-owned direct kernels still need per-target output, alpha-lane, palette,
+  dither, fault, and architecture parity.
+  Sources: [ImageMode.py](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L48-L52),
+  [Image.convert](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1118-L1151),
+  [Convert.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1402-L1487).
+- Source-only review of archived L→RGB/RGBA expansion is complete. The exact
+  16-pixel shuffle tables, partial-block padding, three-byte RGB packing, and
+  RGBA alpha fill of 255 are retained in the `luma8` helper reached through the
+  SSE2 and NEON mode owners. The old SIMD adapter returned a scalar-control
+  empty image before invoking these kernels; the exact-target guards now select
+  the architecture owner, and its zero-block path records scalar-control.
+  Output shape and bytes remain the same. This route has not been validated.
+- The L→LA layout route is also reconciled: both the archived generic block
+  helper and maintained `luma8` kernel process eight L samples per output
+  vector and emit `[L, 255]` per pixel using the opaque sentinel lane. Empty
+  input uses the archived scalar-control output and the maintained zero-block
+  helper now records scalar-control under the exact-target guard, with the same
+  exact LA result. This route has not been validated.
+- The generic zero-pixel Convert interception is reconciled for the reviewed
+  RGB8, L, LA, RGBA, RGBX, RGBa generic color/typed targets, and native I;16
+  source routes. The archived adapter
+  ran alpha-specific conversions first, then recorded scalar-control for an
+  accepted empty native-layout conversion. Exact-target guards now admit the
+  reviewed architecture owners; their zero-pixel helpers record scalar-control
+  without vector-block or scalar-tail counts. RGBA→RGBa/RGBX and other
+  alpha transforms that require vector groups retain nonempty guards and
+  select Default for zero-work input; `LA→RGBX` keeps its explicit empty route
+  because the archived alpha adapter returns that output. Source is unvalidated.
+- RGB→RGBA sample conversion is source-reviewed. The archived layout kernel
+  and maintained `rgb8` architecture owners both emit each native RGB triplet
+  followed by opaque alpha and return exact `ImageRgba8` output. The portable
+  four-pixel shuffle and NEON sixteen-pixel structure load/store retain their
+  vector widths and scalar tails; nonempty images smaller than a full block
+  are entirely scalar tails. Empty images were intercepted by the archived
+  scalar-control route; the maintained exact-target guard now selects the
+  architecture owner, whose zero-pixel branch records the same scalar-control
+  receipt. The shared portable helper and NEON route now use a
+  fallible exact reservation and map invalid extents, storage shape, or reserve
+  failure to the archived `SIMD Convert is unsupported for the validated
+  image layout/parameters` `NotImplementedError`. The archived batch executor
+  propagated adapter errors and did not retry on CPU; the prepared architecture
+  owner likewise returns its leaf error directly. No validation has run.
+- RGB→I;16/I;16L/I;16B/I;16N is Pillow-supported, not a core-only extension.
+  The baseline `try_convert_to_luma16` accepts all four target spellings and
+  routes RGB through the `L` conversion before widening each byte to native
+  `u16`. The maintained RGB8 Default owner computes the same rounded BT.601
+  fixed-point projection (`19595/38470/7471`, bias `32768`) into a temporary L
+  byte buffer, then widens those samples into the exact requested I;16
+  `DynamicImage` variant. This preserves the archived two-buffer allocation
+  boundary without constructing or retagging a `DynamicImage` intermediate.
+  No RGB8 architecture strategy is declared for these targets, so they remain
+  Default-only. The typed L scratch route and output are source-reviewed; no
+  validation has run.
+- RGB→I/F is source-reviewed against both archived executors. The archived CPU
+  and maintained Default owners use the same fixed-point rounded luma formula
+  for I, then write the signed value as little-endian i32 into the four-byte
+  native carrier. Both use the same integer-weighted `(299R + 587G + 114B) /
+  1000.0f32` formula for F and emit little-endian f32 bytes. The archived wide
+  Convert kernel and maintained `native_rgb` kernel gather eight RGB pixels,
+  run the same lane equations, zero-fill inactive tail lanes, and emit only
+  active results. Both return the exact I/F identity. The archived adapter
+  accepted exact native RGB bytes and handled empty images as `scalar-control`;
+  the maintained support declaration admits the exact I/F targets for the
+  RGB8 owner, and its zero-block path records the same empty control receipt.
+  SSE2/NEON/Wasm selections use these eight-lane kernels, with the Default strategy
+  retained for fallback. No arithmetic or tail difference was found in this
+  slice; parity and benchmark validation remain pending.
+- RGB→LA is source-reviewed across the archived CPU, archived SIMD, and
+  maintained mode owners. The archived CPU path used Pillow's rounded L
+  grayscale conversion and filled the LA alpha byte with 255. Its SIMD path
+  used eight-pixel fixed-point luma blocks, zero-filled inactive lanes, and
+  interleaved opaque alpha. The maintained Default owner computes the same
+  rounded luma into an L byte scratch buffer and then emits `[L, 255]`,
+  preserving the archived L-buffer allocation followed by the LA output
+  allocation without constructing a `DynamicImage` intermediate. The selected
+  architecture owner calls the eight-lane `native_rgb::to_luma_alpha_opaque`
+  kernel with the same active-lane output. Both return exact `ImageLumaA8`.
+  Empty images remain accepted: the archived path records scalar-control and
+  the maintained zero-block vector helper records scalar-control, although the
+  new support guard can retain the requested architecture selection.
+  Pillow's Convert table also explicitly provides RGB→La; the maintained route
+  uses the same rounded luma and opaque alpha with the exact
+  `ImageLaPremultiplied8` identity. Both alpha targets are Pillow routes, not
+  core-only extensions. No validation has run.
+- RGB→L is source-reviewed against the actual archived Convert route. Its
+  `try_layout_special_conversion` delegated exact RGB8 input to the archived
+  Grayscale kernel selector, so the generic eight-lane Convert luma helper was
+  not the executed path. The maintained RGB8 Convert owner delegates to the
+  same Grayscale architecture kernels: AVX2 and NEON retain their specialized
+  16-pixel loops, while SSE2/SSSE3/Wasm use the archived 16-pixel interleaved
+  `wide` loop; all use the same rounded Pillow luma result and padded active
+  tail. The Default route reuses the same serial grayscale kernel as the
+  archived CPU route. Both SIMD routes preserve exact `ImageLuma8`; zero-block
+  execution records scalar-control in the archived adapter and maintained
+  `vector_output`. The typed declaration selects each concrete architecture
+  from the injected context and retains Default fallback. No source difference
+  was found for this route; parity and performance validation remain pending.
+- RGB→CMYK/YCbCr/HSV is source-reviewed across the archived CPU, archived
+  Convert SIMD, and maintained mode owners. CMYK keeps the direct inverse
+  channels `[255-R, 255-G, 255-B, 0]`; its archived and maintained vector
+  kernels process four pixels per block. YCbCr keeps the same eight lookup
+  tables, fixed-point shift, neutral offset, and clamp in eight-pixel blocks.
+  HSV keeps the same eight-pixel wide-float route, red-then-green-then-blue
+  maximum tie order, and intermediate f32 hue narrowing before wrap and byte
+  truncation. The maintained Default owners call the existing native RGB
+  conversions; SSE2/NEON owners call the corresponding native vector helpers.
+  All preserve padded inactive lanes, active-only stores, scalar-control for
+  empty input, and exact `ImageCmyk8`, `ImageYCbCr8`, or `ImageHsv8` identity.
+  No source arithmetic or tail difference was found. The archived portable
+  SIMD executor dispatched these `wide` kernels without target-architecture
+  gates; `wide` 1.6.1 maps the required `u8x16`, `i32x8`, `f32x8`, and `f64x8`
+  operations onto Wasm SIMD128 when `simd128` is enabled. The maintained RGB8
+  owner had omitted those Wasm strategies. It now declares and routes them for
+  these targets, along with LA, Pillow-defined La, I/F, RGB identity, and the
+  four-byte expansion targets. The shared portable RGB→RGBA kernel now lives
+  under the RGB8 mode helpers and is used by SSE2 and Wasm; NEON retains its
+  sixteen-pixel structure kernel. Other family/architecture rows still need
+  the same build-availability audit. No build or validation has run.
+- RGB→RGB identity is source-reviewed. The archived generic layout route and
+  maintained SSE2/NEON/Wasm mode owners both copy native triplets through five-pixel
+  `u8x16` blocks, including a padded final block, and preserve the exact
+  `ImageRgb8` identity. The archive returned an empty image through its
+  scalar-control path; the maintained exact-target architecture guard now
+  selects the identity kernel, whose zero-block receipt is also scalar-control.
+  Nonempty output and vector-block accounting agree. Other empty-route receipts
+  remain part of the broader fallback reconciliation; no validation has run.
+- RGB→La, RGBa, and RGBX are Pillow-supported pairs in Pillow's
+  [Convert table](https://github.com/python-pillow/Pillow/blob/main/src/libImaging/Convert.c#L1412-L1428).
+  Default, SSE2, NEON, and Wasm produce the exact requested `DynamicImage`
+  variant from native RGB samples and insert an opaque fourth byte; that byte
+  is alpha for RGBa and padding for RGBX. The architecture owners reuse the
+  reviewed RGBA expansion kernel. Pillow's `topalette` route accepts RGB for
+  either P or PA and supplies opaque alpha for PA. Its maintained Default
+  owner uses native RGB samples for those palette outputs; parity remains
+  pending.
+
+- Public admission lives in `pillow-rs/src/ops/paste/operations.rs`. It reads
+  the destination's typed `Mode`, validates placement and source/mask region
+  dimensions, derives `mask_alpha` from the exact mask mode, then queues
+  `PipelineOp::Paste`; output preserves destination identity and metadata.
+  `1`/`L` masks use their luma sample; `LA`/`RGBA`/`RGBa` masks use the alpha
+  sample, with `RGBa` retaining its premultiplied PREBLEND rule. Other masks
+  return `ValueError("bad transparency mask")`. `resolve_image_source`
+  preserves same-mode inputs, preserves `LA`/`RGBA`/`RGBa` carriers for an RGB
+  destination, and promotes P indices to opaque PA. Other conversions are
+  explicit at this wrapper
+  boundary. Solid sources are built in the exact destination mode, including
+  raw I/F bytes and typed I;16 values.
+- Named Paste colors now pass their exact destination `Mode` to
+  `color::getcolor_for_mode` after parsing color text; the core no longer
+  converts the mode to a Pillow spelling for this route. Internal high-depth
+  results are marked `NO_PILLOW_SUPPORT` in the shared typed resolver.
+- Hidden-lane writer trace (2026-11-15): exact-mode PutPixel Default writers
+  attach omitted physical bytes for compact two- and three-band carriers;
+  architecture writers restore the source sidecar after rebuilding logical
+  storage and update the written pixel's lanes. `DynamicImage::put_pixel`
+  preserves existing sidecars for compact modes. Native Draw takes the
+  sidecar from its output clone, updates it alongside logical writes, then
+  reattaches it; SIMD Draw copies and updates the sidecar with its byte output.
+  Mode-free mutable `ImageBuffer` accessors invalidate sidecars because they
+  cannot infer the Pillow mode or physical-lane meaning. Downstream Paste and
+  Histogram outcomes after those mutations, and sidecar provenance from all
+  operation outputs, remain open parity work under `pillow-rs#3ptb`. This is
+  source review only; no parity or benchmark ran.
+- Compact-source admission trace (2026-11-15): `PasteInputRules` admits a
+  dimension-mismatched source only for a one-pixel source with a matching,
+  non-alpha mask and an exact mode-declared compact-source/mask pair. The
+  public bitmap-solid helper is the only caller that queues this compact
+  source form, and it always supplies a mask; ordinary solid fills and
+  unmasked image sources use region-sized rasters. Thus the Default unmasked
+  row-copy path's equal-size assumption holds for admitted calls, while the
+  masked loop handles the one-pixel broadcast. This closes the source-level
+  broadcast concern; no code or parity behavior changed.
+- Paste routing map review (2026-11-15): the operation entry point exhaustively
+  maps all 25 `Mode` variants through support classification, mode preparation,
+  and execution. `ModeSupport::cpu` supplies the serial Default strategy; the
+  20 Pillow modes declare their available architecture strategies, while the
+  five internal high-depth modes are explicitly Default-only CoreOnly routes.
+  The mode architecture modules align with their execution matches. The
+  L-mask NEON guard is declared separately from each mode's generic vector
+  fallback. This closes the routing-map review, not the per-mode kernel review;
+  kernel outputs, architecture receipts, and runtime parity remain open.
+- The baseline CPU implementation is `pool_cpu/legacy/ops/paste.rs`, with row
+  kernels in `paste/kernels.rs` and typed/mask layout helpers in
+  `paste/layout.rs`. `paste_native_rows` copies the clipped intersection of
+  exact same-mode byte samples; its byte layouts are 1/L/P (1 byte),
+  LA/La/PA (2), RGB/HSV/YCbCr/LAB (3), and RGBA/RGBa/RGBX/CMYK/I/F (4).
+  P/PA sources materialize their index plane. The unmasked RGB-to-RGBA kernel
+  copies RGB and writes alpha 255. Empty overlap returns the original
+  destination. The archived CPU `paste_native_masked` fast path owns
+  1/L/P/LA/PA/RGB/HSV/RGBA/CMYK; its non-binary 1/P requests and the remaining
+  byte modes flow through `paste_rgba_fallback`. The maintained implementation
+  must preserve those raw-sample results with exact-mode loops, not widen a
+  raster to RGBA for kernel reuse.
+- For same-mode byte storage, L masks apply
+  `(source*mask + destination*(255-mask) + 127)/255` independently to every
+  stored byte, including RGBA alpha, CMYK K, and both LA/PA samples. `1`
+  masks copy the entire sample when nonzero. LA/RGBA masks select their alpha
+  byte; RGBa masks select premultiplied alpha and use Pillow PREBLEND
+  `((((destination*(255-mask)+128)>>8) + destination*(255-mask)+128)>>8) +
+  source`, including at a zero mask. For the RGB destination's retained
+  LA/RGBA/RGBa source routes, the archived fallback expands LA luma into the
+  three RGB channels or drops the source's fourth byte, then blends only the
+  destination RGB bytes; source alpha is not copied into the RGB result.
+- All four I;16 identities use the typed u16 carrier. Unmasked and binary-mask
+  routes copy complete samples. A fractional byte mask advances the image8
+  pointer by one byte per pixel and blends only that byte, preserving the
+  other byte. I;16L, I;16B, native I;16, and I;16N each select byte order
+  explicitly; RGBa masks keep PREBLEND at zero. Do not normalize this to a
+  u16 blend. I/F preserve their raw four-byte carrier and blend those bytes.
+  No archived exact-mode Paste strategy exists for the five internal
+  high-depth identities. The maintained implementation adds native typed
+  strategies for them and marks each core-only route with a nearby
+  `NO_PILLOW_SUPPORT` comment.
+- I;16 source review (2026-11-01): the maintained Default and SIMD helpers
+  match the archived CPU and eight-lane routes for unmasked full-sample copy,
+  binary whole-sample copy, and fractional one-byte-per-pixel blending. The
+  selected stored byte alternates by offset and follows I;16/I;16L/I;16B/I;16N
+  byte order; the other byte is preserved. Fractional L/alpha masks use the
+  archived DIV255 or RGBa PREBLEND formula, including PREBLEND at mask zero.
+  SIMD groups of eight and padded tails retain the archived vector-block and
+  scalar-tail receipts. This is source review only; runtime parity remains
+  pending.
+- The archived SIMD adapter is `legacy/pool_simd/ops/adapters/paste/`. Its
+  native-copy planner covers the 14 byte identities `1`, L, P, LA, PA, RGB,
+  HSV, YCbCr, RGBA, CMYK, RGBa, RGBX, I, and F, plus all four I;16 identities.
+  (La and LAB have CPU Default behavior but no SIMD Paste plan.) Its planner
+  admits binary-mask copy for every listed layout and fractional masks for
+  L/LA/PA/RGB/HSV/RGBA/CMYK/I;16. It includes a `Broadcast` source layout for
+  the 1x1 masked bitmap source and direct unmasked RGBA-to-RGB and RGB-to-RGBA
+  routes. Its byte kernels use 8/16-lane `wide` blocks. Unmasked copies keep
+  scalar tails; masked public Paste and Composite routes pass the short-tail
+  flag and use padded vector blocks. Explicit AArch64 NEON blocks exist for
+  L/LA/RGBA/RGB/CMYK L-mask blends. I;16 uses
+  eight u16 lanes and preserves the selected stored byte. Its adapter also
+  contains `simd_composite_module`, which reuses these native mask/copy kernels;
+  the maintained CompositeModule owner now reuses the matching exact-mode Paste
+  architecture strategy through a borrowed native-byte plan.
+  Rayon row scheduling in either archive does not belong to CPU and remains a
+  later `pool_parallel` concern.
+- Maintained placement and caller rewiring: `pool_cpu/ops/paste/` now has
+  family orchestration, all 25 exact mode owners, shared input/byte-layout
+  helpers, per-mode Default implementations, and architecture-selected SSE2,
+  NEON, and Wasm SIMD128 routes for byte identities and the four I;16 modes.
+  `OperationId::Paste` has an exhaustive support contract, closed prepared
+  plan, and `prepare_pipeline`; the effects registry calls it directly and the
+  old `op_paste` import is removed. The shared `PipelineOp::Paste` GPU route
+  remains intact. Host-value normalization stays in
+  `pillow-rs/src/ops/paste`, preserving its calls from `Image::paste`,
+  `Image::paste_at`, `paste_bitmap_solid_masked_at`, `draw/bitmap.rs`, and
+  `ops/crop.rs`.
+- Archived function destinations: CPU `op_paste` becomes family orchestration;
+  `paste_region`, checked row geometry, and compact source expansion become
+  the Paste input/region plan; native row copy and RGB-to-RGBA copy become
+  exact mode Default implementations; masked L/LA/PA/RGB/HSV/RGBA/CMYK rows
+  become their exact mode Default kernels; I;16 fallback becomes four exact
+  typed mode implementations sharing only byte-order-aware sample helpers.
+  SIMD `plan.rs` becomes linked input/architecture guards; `apply.rs` and
+  `apply/generic.rs` become shared vector row helpers; `blend.rs` becomes
+  shared DIV255/PREBLEND vector arithmetic; `apply/{l,la,pa,rgb,rgba,cmyk_l}.rs`
+  maps to exact mode/architecture implementations; `luma.rs` and
+  `rgb_cmyk.rs` contain the explicit NEON kernels; `luma16.rs` maps to the four
+  I;16 architecture owners; and `rgb_to_rgba.rs` plus `mod.rs`'s RGBA-to-RGB
+  path map to exact cross-mode source strategies. Archived SIMD cases remain
+  review inputs for parity selection; the existing CPU and SIMD tests in
+  `legacy/` remain inert.
+- Archived CPU/SIMD Paste behavior and public callers were inspected and are
+  recorded above; the full maintained-route review is now closed by the dated
+  source reviews below. Maintained
+  support is mode-specific and drives prepared
+  strategy selection. Shared `wide` kernels implement the selected vector
+  routes; the exact L-mask, LA-with-L-mask, RGB-with-L-mask, RGBA-with-L-mask,
+  and CMYK-with-L-mask NEON blends are restored in their exact mode folders.
+  The unmasked RGB-to-RGBA and RGBA-to-RGB shuffles now use exact destination
+  mode helpers and shared native-byte channel kernels. Five internal
+  high-depth identities have typed
+  core-only implementations marked `NO_PILLOW_SUPPORT`. All inventoried
+  explicit NEON blends and cross-layout shuffle routes now have maintained
+  owners. No Paste unit tests are being added; parity must cover every mode and
+  available architecture, including mask arithmetic, clipping, typed I;16
+  byte-lane behavior, alpha selection, premultiplied PREBLEND, and telemetry.
+  The exact L-mask NEON subkernel admission is now in seven mode support
+  declarations: same-mode native source, nonbinary L mask, no compact
+  broadcast, nonempty clipped overlap, and clipped row-width minima of 16
+  pixels for L, 8 for LA, 1 for PA, 16 for RGB and HSV, 4 for RGBA, and 16
+  for CMYK. The generic architecture vector strategy remains selectable for
+  other Paste inputs. The
+  archived Rayon clipping case moves to `pool_parallel`. Top-level caller
+  wiring, per-mode implementation, and support review are closed at source
+  level. This source-only
+  migration slice is unverified; no build,
+  formatter, checkstyle, lint, test, parity, benchmark, or coverage command
+  has run for Paste.
+- Source review found that Paste's generic masked-vector receipt counted some
+  padded `wide` remainder blocks as scalar tails. The shared native-byte vector
+  copy helper did the same. Both now report the padded block as vector work and
+  leave scalar-tail count at zero. TODO(pillow-rs#3ptb): inspect generated code
+  and benchmark the unmasked compact-to-physical channel-mapping path; its
+  shared lane mapper has no explicit `wide` operations.
+- Pillow 12.2 Paste source follow-up: the Python wrapper skips conversion
+  for `LA`, `RGBA`, or `RGBa` sources pasted into `RGB`; the historical change
+  says this avoids unnecessary conversion work. Other differing modes are
+  converted first by the base wrapper, but an overridden `convert()` result is
+  trusted without checking its returned mode. `ImagingPaste` then checks only
+  dimensions and C `pixelsize`: 1 byte for `1`/L/P, 2 bytes for I;16 aliases,
+  and 4 bytes for LA/La/PA/I/F/RGB/RGBA/RGBa/RGBX/CMYK/YCbCr/LAB/HSV. An
+  unmasked paste copies all physical bytes; masked loops blend all physical
+  lanes according to the mask path. Rust's compact LA/La/PA and RGB/YCbCr/LAB/
+  HSV carriers omit some lanes, so the Pillow-owned raster now retains those
+  lanes and the resolved-source Paste plan admits equal-width byte layouts.
+  Normal base-image mode conversion still happens before this raw-layout
+  strategy. The 1-byte, 4-byte, and typed I;16 raw paths are source-implemented
+  but unvalidated. I;16 source review now covers all four identities,
+  byte-order translation, masks, clipping, and cross-endian vector blocks.
+  Producer-specific lane retention is source-reviewed across construction,
+  encoded and raw decode, Convert, transforms, native pixel writes, PutData,
+  PutAlpha, Draw, filters, effects, and other mode-changing producers. The
+  2026-11-20 hidden-lane producer passes trace those sidecars through Paste's
+  physical-byte reconstruction and mask composition; the focused 2026-11-21
+  review reconciles that flow with `ImageBuffer` mutation invalidation and
+  Paste plan execution. TODO(`pillow-rs#3ptb`): freeze and run output, fault,
+  and selected/fallback receipt cases for reachable cross-mode Paste sources,
+  masks, clipping, and CoreOnly typed modes. This is runtime evidence, not an
+  open source-review path.
+  Sources: [`Image.paste`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1756-L1764),
+  [`Storage.c` pixel layout](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Storage.c#L1848-L1910),
+  [`Paste.c` pixel-size check and raw copy](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Paste.c#L270-L304),
+  [Pillow 1.0b2 performance change](https://github.com/python-pillow/Pillow/blob/12.2.0/CHANGES.rst#L2845-L2849).
+- RGBa-to-RGB Paste source audit (2026-11-03): Pillow does not convert
+  `RGBa` to straight `RGB` in this route. The Python wrapper skips conversion,
+  and `Paste.c` copies the source's first three physical bytes into the RGB
+  destination's visible channels (or blends those bytes for a mask); the
+  samples remain premultiplied. The separate `Convert.c::rgba2rgb_` formula
+  applies only when `convert("RGB")` is actually called. The RGB source layout
+  therefore maps physical lanes directly and does not unpremultiply. Sources:
+  [`Image.paste`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1756-L1764),
+  [`Paste.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Paste.c#L301-L329),
+  [`Convert.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L2990-L3020).
+  Source-only; no build, formatter, checkstyle, lint, test, parity, or benchmark ran.
+- Paste parser/reentrancy source correction (2026-11-04): CPython's nested
+  `(iiii)` parser rejects bytes and non-sequences, checks sequence length, then
+  fetches and converts each item in order. Unicode and bytearray therefore take
+  the sequence path. The binding now follows those boundaries.
+  `_paste_apply_prepared` retains a Python object handle through box, numeric
+  source, and mask adaptation, then holds the mutable `PyImage` borrow through
+  the detached core mutation. User callbacks can re-enter before that borrow
+  starts, without risking a stale cloned destination overwrite.
+  Source/destination aliasing and callback-driven
+  mode/palette mutation still need frozen CPU parity. Sources:
+  [CPython 3.13 `converttuple`](https://github.com/python/cpython/blob/3.13/Python/getargs.c#L2922-L3048),
+  [Pillow 12.2 `_paste`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c).
+  Source-only; no checks ran.
+
+CPU source review closure (2026-11-21): confirmed the top-level owner classifies,
+prepares, and executes all 25 exact `Mode` identities through mode-owned
+strategies; each result retains its exact mode. Reviewed the native byte
+semantics for straight-alpha, premultiplied, palette-alpha, RGB, LAB, and raw
+color-space modes; native I/F scalar arithmetic; and typed u16/f32 core-only
+paths. Compared the preserved RGB row/sparse routes and SIMD factor guards with
+their maintained owners. Confirmed vector guards require valid factors, bounded
+lane sums, complete input storage, and nonempty output, leaving ineligible
+requests to that mode's Default. Checked hidden-lane completion, the public
+factor-one/crop path, prepared registry dispatch, and Thumbnail's nested Reduce
+reuse with the injected context. No archived imports or parallel scheduling
+remain in active `pool_cpu` Reduce. Parallel scheduling stays deferred to
+`pool_parallel`; output parity, fallback receipts, error/metadata contracts,
+and latency remain pending. This is a source-review entry only; no checks ran.
+
+| Owner | Status or remaining migration |
+| --- | --- |
+| `compute/mod.rs`, `compute/backend_state.rs`, `compute/registry.rs` | Source-complete: the active `SimdPool`, adapter registry, and pool exports are removed. The public compatibility alias routes through CPU plus Architecture; actual executor telemetry is CPU. |
+| `compute/automatic_segments.rs`, `compute/execution.rs` | Source-complete: mixed CPU/SIMD segmentation, SIMD mode-transition guesses, adapter support scans, and retry routing are removed. Pipeline preparation now selects CPU plus the injected architecture context. |
+| `compute/execution/terminals.rs`, `image/projection/putpixel_pipeline.rs` | The fused RGB/CMYK projection terminal executes CPU mode/architecture strategies and reuses its prepared context. GPU terminal admission remains separate and has an actionable TODO at its owner. |
+| `compute/registry/registration/prelude.rs`, `compute/registry/registration/simd.rs` | Source-complete: the active SIMD adapter import and registration module are removed. Review each archived kernel against its CPU mode/architecture strategy before CPU source completion. |
+| `compute/eager.rs`, `image/projection.rs`, `ops/module_fns.rs` | Eager RGB/CMYK GetProjection, LinearGradient, RadialGradient, and EffectMandelbrot use operation-owned CPU strategies and prepared receipts. Tiny-RGB eager ExtractBand uses the prepared architecture executor for serial CPU and compatibility SIMD requests. Direct Blend and Merge wrappers apply their mode-pair/band-layout contracts from the same declarations used by prepared execution while preserving eager error order. Source review traced the remaining eager helper callers: image-backed grayscale, GetData/GetChannel, Convert, and filters pass their routed `ExecutionContext` to prepared selection; module-level generators route once from active backends before preparation. Native identity/copy helpers do not select an architecture by design. Output/fault order and selected/fallback receipt parity remain pending. |
+| `compute/thumbnail_fusion.rs`, `image/pipeline_admission.rs` | The generic fusion module was removed. RGB PutPixel/Thumbnail admission and execution now use the CPU family's prepared mode/architecture contract; the fused resize retains the selected RGB Resize or ResizeBoxed strategy and sparse active-row facts. |
+| `compute/pool_gpu/fusion.rs` | Resolved: adjacent transpose composition uses the shared `pipeline::TransposeTransform` algebra. |
+| `image/channel_access.rs`, `image/data_access/get.rs` | Eager ExtractBand requests use prepared CPU mode/architecture strategies; Tiny-RGB getchannel now records the selected strategy for CPU Default and compatibility SIMD. GetData retains its direct caller-owned output slice. A string-based GPU admission table remains under an actionable TODO. |
+
+- `put/ops.rs` exposes `EXTRACT_BAND_SUPPORT` and concrete prepared strategies for all 25 raster identities. Each result is `ImageLuma8`. This describes the existing internal PipelineOp, whose defensive index behavior remains available to direct internal callers. The public `Image::getchannel` wrapper owns selector validation and rejects I/F before materialization or index validation. Pillow `Bands.c` returns a source-mode copy for any one-band UINT8 image; maintained routes preserve One and P identity (including P palette), while I;16 identity copies are explicitly CoreOnly. Other multiband byte modes produce L, and native high-depth multiband extensions retain their typed I;16/F output modes. Its remaining string-based metadata boundary is migration debt, not a new typed-boundary completion claim.
+- Mode declarations expose the original index rules: luma replicates into the first three bands and returns opaque alpha for higher indices; RGB selects its first three bands and returns opaque alpha for higher indices; LA/PA and four-byte carriers clamp to their final native band. The four I;16 identities now clip their native u16 samples directly to L bytes, preserving the original 0..255 clipping and opaque-alpha fallback without constructing an intermediate RGBA image. Internal LA16/RGB16/RGBA16/RGB32F/RGBA32F strategies read their native sample types directly and use the existing numeric-to-byte conversion; internal LA16 selects its actual luma or alpha band. The previous high-depth RGBA conversion path was removed from ExtractBand.
+- Serial defaults preserve logical-raster truncation for trailing storage, four-pixel LA/RGBA unrolling, scalar tails, empty-image handling, allocation order/counters, and existing shape errors. Typed forwarding is inlined; the actual loops remain in their implementation/shared helper owners.
+- Existing vector byte movement is composed for LA, PA, RGB, RGBA, RGBa, RGBX, CMYK, YCbCr, and HSV. x86_64 SSSE3 requires independently captured SSE2 and SSSE3 and uses the original bounded intrinsic gather. 32-bit x86 retains the original static SSSE3 or SSE2 wide gather. Wasm requires static SIMD128. NEON retains its original two-/three-channel gathers and four-channel structure load, with its token prepared once rather than probing in a leaf. Byte-only gathers do not gain an AVX2 label.
+- The declaration's `ExtractBandBytes` guard uses typed `RequestFacts::ExtractBand { index }` alongside dimensions/source length. Empty or overlong storage and out-of-native-range indices select the same mode's Default. Missing index/content facts remain deferred when needed; known-ineligible layouts can select Default without materialization. Mode-only metadata never invents a parameter value.
+- Shared gathers moved to CPU `helpers/channel`: grayscale and put reuse actual lane-selection/wide algorithms. The old private color gather adapters were removed after inspecting active callers. No ExtractBand unit-test code was moved into the maintained tree: parity is the verification route, and legacy remains untouched.
+- CPU eager ExtractBand now reaches the typed prepared registry callback. Tiny-RGB `Image::getchannel` and loaded-image `GetData` use that same prepared CPU architecture strategy for compatibility SIMD requests; the exact mode-bearing source chooses the kernel. GetData writes into its caller-owned final byte slice without allocating an intermediate L image, and its receipt records the selected CPU architecture. `PreparedExtractBand::execute_into` itself returns `None` when the selected exact mode has no caller-owned sink strategy and executes only for the nine native byte identities that write directly to the final slice; no parallel mode-support list remains beside it. The remaining pipeline SIMD/GPU string admission table has an actionable TODO at the wrapper boundary. The public wrapper's two Cargo-parallel-feature exclusions were removed so enabling that feature does not change serial CPU eager admission. The pool facade/batch executor, shared metadata transitions, registry-wide assessment APIs, and the other put operations remain incomplete. The selected public GetChannel CPU parity slice passes 148/148 cases; other ExtractBand callers, CoreOnly behavior, and terminal receipts remain open. This is not a completed put-family or CPU checkpoint.
+
+| Preserved source/function | Maintained destination and disposition |
+| --- | --- |
+| `legacy/ops/color.rs::op_extract_band` luma and RGB branches | Exact mode Default owners compose `put/helpers/extract_band.rs::{luma,rgb}` with original logical-raster collection and opaque-alpha behavior. |
+| Native LA/RGBA branches of `op_extract_band` | Mode Default owners call the original four-pixel algorithm through the compile-time-layout `grouped` helper; matching raw carriers retain their native bytes. |
+| High-depth branch of `op_extract_band` | Four I;16 Default owners use `clipped_luma16`; internal LA16/RGB16/RGBA16/RGB32F/RGBA32F owners use `native` to extract and convert only the selected native sample. No intermediate RGBA raster is created. |
+| SSSE3 functions formerly in `color/grayscale.rs` | Shared CPU `helpers/channel/ssse3.rs`; original allocation, masks, bounds, stores, initialization, and counters remain. Production callers receive eligibility from prepared strategies rather than probing hardware in an adapter. |
+| Archived `native_channel.rs` NEON into-buffer functions and structure load | Shared CPU `helpers/channel/neon.rs`, composed by the concrete put mode/NEON owners; unused allocating facades were not recreated. |
+| `legacy/pool_simd/ops/adapters/extract_band.rs` caller-owned GetData output | The nine byte-mode ExtractBand declarations select a prepared CPU Default or architecture strategy; `put/helpers/extract_band_vector.rs` writes vector results directly into the final slice and reports vector/tail counts without an intermediate L allocation. |
+| Existing direct SSSE3 and archived CPU ExtractBand tests | Not maintained as unit tests under the parity-only verification contract; legacy remains untouched. |
+
+The ExtractBand CPU source review closes the exact mode owners, native Default
+algorithms, byte architecture declarations and guards, caller-owned output
+routes, wrapper validation boundaries, and public/pipeline/GetData context flow.
+Active CPU selection is driven by `Mode` and the injected `ExecutionContext`;
+no legacy imports or Rayon scheduling remain in this route. Pipeline GPU
+admission and host receipt behavior, CoreOnly outputs, terminal receipts, and
+remaining GetChannel/GetData parity cases stay explicit TODOs. No checks ran.
+
+- `put/ops.rs` exposes separate `PUT_PIXEL_SUPPORT`, `PUT_PIXEL_BATCH_SUPPORT`, and `PUT_PIXEL_VALUE_AT_SUPPORT` descriptors. The first two classify all 25 identities: the 16 byte-backed modes retain native writes and exact output identity, while the nine high-depth identities retain `NotImplementedError("putpixel not supported for this image type")`. The scalar value-at contract classifies all 25 identities, accepts I/F and all four I;16 variants with exact output identity, and rejects other modes. The public I/F and I;16 wrappers select this CPU Default path and record its receipt.
+- Each supported mode has typed serial single-write and ordered batch implementations. The existing batch algorithm clones once, checks each operation and coordinate in source order, and preserves last-write-wins behavior. Default preparation does not scan the batch before that original loop.
+- The existing masked byte store is composed by 15 modes' SSE2, NEON, and wasm SIMD128 owners. Premultiplied La remains Default-only, matching the archived vector adapter's admission. LAB retains its PutPixel-specific vector admission rather than inheriting drawing support. No AVX/SSSE3-named store was invented for this SSE2-width bitwise implementation.
+- RGBA alone declares the existing vector batch strategy. Its original requirements remain explicit: at least two writes, one complete vector, exact raster length, only in-bounds PutPixel descriptors, and no palette-index tags. Preparation inspects these facts only when a declared architecture is available under the captured build/hardware/policy; metadata queries can defer unknown run facts. The plan borrows the inspected immutable operations and executes its retained concrete choice without a retry or reselection.
+- Source review against pinned `wide` 1.6.1 confirmed `u8x16` storage and bitwise operations use static SSE2, AArch64 NEON, or wasm SIMD128 branches. Other targets retain serial Default. The vector helper preserves global byte phase, padded short stores, the original checked offset errors, logical-raster truncation, and vector counters. Shared typed helpers contain no mode inference, hardware probes, or parallel scheduling.
+- The PutPixel registry callback constructs the family-owned prepared plan, and the serial pool routes consecutive PutPixel runs through its prepared batch strategy. The CPU batch executor now checks a contiguous RGB PutPixel prefix followed by Thumbnail before materializing the writes. The typed fusion is restricted to the CPU backend, reduces natively by 2x2, updates only affected blocks, and binds sparse active-row facts to the exact prepared RGB Resize or ResizeBoxed strategy. It accounts one output boundary and records each fused operation. This source integration is unverified; its parity/resource regression review and public wrapper transitions remain pending.
+- No maintained PutPixel unit-test files remain under `put`; parity is the verification route and the archived tree remains untouched. The former string override `Some("RGB")` in the archived vector case is represented by an exact RGB variant with the same bytes and dimensions in the source comparison, since a contradictory mode override no longer belongs in compute. The archived pool resource/telemetry regression has not run against the maintained executor. No test has run.
+
+Numeric input fault correction (2026-11-21): Pillow's numeric `_putdata`
+branch calls `PyFloat_AsDouble` on each item and propagates conversion errors.
+The binding no longer substitutes `-1.0` when extraction fails. Exact
+callback-free numeric sequences first use the integer extraction where it
+preserves the chosen mode path, then use a complete f64 extraction for the
+numeric conversion path; if that also fails, ordered per-item processing
+preserves successful prefix writes and the original failing conversion. The
+previous comment incorrectly described this as the packed multiband `getink`
+path. Focused big-integer, mixed-number, conversion-fault, and prefix-write
+parity remain pending. Source: [Pillow 13.0.0 `_putdata_impl`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1753-L1764). No checks ran.
+
+- Wrapper route/source review (2026-11-07): traced Python `Image.putalpha`
+  through the PyO3 adapter and core `Image` methods. The destination is loaded
+  before input handling; exact image destinations are checked before loading a
+  valid `1`/`L` mask; failed mask loading preserves Pillow's destination
+  promotion; exact self-aliasing promotes before the aliased mask is inspected;
+  custom numeric coercion preserves promotion and Python exception order; and
+  retained `info` state is synchronized on success and failure. `getchannel`
+  likewise loads before selector callbacks, resolves string selectors in the
+  Python wrapper, and delegates numeric extraction to the typed Rust route.
+  Source tracing found no additional code correction in these paths. TODO:
+  verify callback/mutation/error order, alias behavior, metadata, exact child
+  selection/fallback receipts, and operation × mode × architecture parity;
+  GPU terminal eligibility remains separate backend work. The focused CPU
+  default slice passes 40/40 active PutAlpha parity cases; callback, mutation,
+  metadata, and architecture-receipt coverage remains open.
+- The full source conversion review compared all 25 source identities' declared outcomes and every supported mode's Default owner against `legacy/ops/put.rs::{op_put_alpha,op_put_alpha_data}` and `legacy/ops/color.rs::op_extract_band`. The archived CMYK promotion, source-carrier changes, palette index/alpha handling, high-depth narrowing, and mask-to-L behavior are accounted for. Existing conversions remain only where the operation requires them; required output allocations/copies remain. This source review does not establish compiled behavior or parity.
+- `pipeline_output_mode` now uses the same `known_putalpha_mode` mapping as lazy mode planning. A queued L→LA, RGB→RGBA, P→PA, or CMYK→RGBA mutation therefore declares its actual output identity instead of caching the pre-operation source mode. Source-only; unvalidated.
+- Each operation has an exhaustive 25-mode entry-point declaration and explicit outcomes; supported modes have typed source buffers and concrete Default owners, while rejected modes have no executable owner. Constant alpha keeps native L/LA/P/PA layouts, promotes RGB/CMYK/other supported byte carriers as before, clips I;16 samples through the existing helper, and retains the CMYK MULDIV255 conversion path.
+- The original architecture loops are placed in mode-owned folders: constant alpha has vector owners for L, P, RGB, RGBA, RGBX, and CMYK; image-backed alpha has L/LA/P/PA/RGB/RGBX/CMYK owners. The same declaration binds build and architecture requirements, native-byte guards, minimum vector groups, and same-mode Default fallback. RGBA mask replacement remains in Default because its archived “SIMD” path only cloned and wrote alpha bytes; it does not claim a vector implementation.
+- PutAlphaData retains the accepted One/L mask identity in its borrowed strategy and support contract. Both native carriers supply the same one-byte luma samples used by the legacy normalization, while unsupported mask identities keep the existing `illegal image mode` rejection. Architecture guards accept either exact native mask mode and preserve the large RGB-source row path, complete vector groups, scalar tails, and original receipt counters.
+- CMYK alpha calls the shared serial RGB conversion helper, so CPU execution does not enter the optional Rayon route. The shared u16-to-byte vector packing primitive is now owned by the CPU channel helper and reused by grayscale and alpha kernels.
+- Registry callbacks now prepare opaque operation plans and no longer import the old alpha operation facades. No maintained PutAlpha/PutAlphaData unit-test files remain; parity is the verification route and the archived tree remains untouched. No unit tests were run.
+- The maintained serial CPU pool and prepared batch dispatcher receive routed context and execute registered operation plans in order. The Pillow wrapper passes resolved palette metadata through prepared CPU batches, including automatic SIMD-to-CPU recovery; each operation receives it only while its current raster identity is P or PA. Consecutive PutPixel runs use the prepared PutPixelBatch mode/architecture declaration, retain serial Default, account one output boundary, and report the fusion count. Consecutive transpose runs compose into one prepared mode/architecture strategy; cancellable runs preserve the packed-storage guard and defer the owned identity copy to the batch terminal, which records the allocation and boundary. Consecutive L/LA/RGB/RGBA point operations compose native byte LUTs and enter the prepared Eval strategy; identity LUT chains retain a single owned copy and report `native-identity` without claiming a kernel selection. Multiply+Screen uses its prepared native Chops fusion; AlphaComposite+Mirror, Draw runs, and RGB PutPixel+Thumbnail use their prepared CPU strategies and declared guards. Owned Invert and Chops Add/Sub use the selected in-place route only when its architecture guard admits it, otherwise the prepared allocating strategy. Owned Invert now restores zero omitted lanes for ImageOps point semantics and inverts retained lanes for Chops semantics after the selected in-place kernel. Batch source review is complete; parity for outputs, raw-byte follow-ons, resource boundaries, selection/fallback receipts, tails, and errors remains pending. Canonical pipeline/binding mode boundaries, metadata transitions, registry-wide assessment, and remaining operation families also remain open. No compiler, formatter, checkstyle, lint, test, parity, benchmark, or coverage has run; this source work is incomplete and unvalidated.
+
+- `transpose/ops.rs` declares exhaustive operation-level support for Flip, Mirror, and Transpose with typed mode dispatch, prepared plans, registry callbacks, and receipts. Every exact raster identity has a Default owner and preserves its mode tag. Pipeline registration no longer passes a Pillow mode string into these operations.
+- The byte-backed mode owners use checked native row/pixel copying and fall back to the same generic typed image transforms for malformed or nonstandard storage. High-depth owners preserve typed sample values. Palette indices, premultiplied samples, color-space bytes, numeric carriers, and byte-order mode identities are moved without conversion.
+- Transpose covers all seven methods with exact-mode Default owners and typed method preparation. Its native byte path retains checked dimensions, same-dimension row copying, serial/tiled axis swaps, the original 32-pixel tile threshold, and the RGBA 16-pixel tile size. Typed modes use the original mode-preserving pixel-coordinate transforms.
+- An AVX2 RGBA mode strategy consumes the injected architecture plus exact mode, logical-byte-prefix, dimension, and axis-swap guards. Its `rgba8/avx2` kernel ports the archived AVX2 tile transform and handles incomplete edges through byte copies. This path has not been compiled or parity-checked.
+- The archived wide-lane Mirror kernel is shared in `transpose/helpers/native_mirror.rs`; `One`, `ImageLuma8`, and `ImagePalette8`; `ImageLumaA8` and `ImagePaletteAlpha8`; `ImageRgb8`, `ImageHsv8`, and `ImageYCbCr8`; and `ImageRgba8`, `ImageCmyk8`, `ImageRgbPremultiplied8`, `ImageRgbx8`, `ImageI32`, and `ImageF32` bind it through exact-mode declarations for SSE2, NEON, and Wasm SIMD128. Each prepared strategy restores its own `DynamicImage` variant. RGBA uses the same helper in its custom AVX2-transpose strategy owner. Native row length and channel-group guards select these implementations, with the same-mode Default mirror as fallback. The `ImageI16`, `ImageI16L`, `ImageI16B`, and `ImageI16N` Flip/Mirror native-copy routes now use `transpose/helpers/native_luma16.rs`, preserving typed samples and exact output identities under SSE2, NEON, and Wasm SIMD128 strategies with same-mode Default fallback. The packed-word RGBA Rotate270 kernel now runs through a declared x86_64 baseline strategy behind the original tile-threshold and four-pixel divisibility guards; it uses ordinary native-endian words and no optional instruction set. Default RGBA transpose uses the portable generic implementation, while the injected architecture selects the x86_64 baseline when allowed by the build target. The archived portable `wide` transpose tile, gathered-row, and scalar-edge paths are migrated to `transpose/helpers/native_transpose.rs` and selected by exact-mode SSE2, NEON, and Wasm SIMD128 strategies, with same-mode Default fallback. Its conditional Rayon row collection is excluded from CPU and remains for the later `pool_parallel` stage. The archived byte Flip adapter had no separate vector kernel, so no distinct architecture route is required. All direct, fused, nested-filter, registry, and palette-metadata caller edges listed above have been source-traced. The new x86_64 baseline selection still needs its parity and latency receipts. No compiler, formatter, lint, test, parity, benchmark, or coverage has run.
+
+- `pool_cpu/ops/draw/ops.rs` classifies all 25 exact `raster::Mode` identities
+  at the operation entry point. The 20 Pillow modes have a same-mode Default
+  strategy; the five internal high-depth modes are rejected with the existing
+  `unsupported image mode` value error and carry `NO_PILLOW_SUPPORT` comments.
+  The family uses `Mode` from the input `DynamicImage`; it does not add a
+  wrapper mode or infer a Pillow spelling.
+- The archived scalar scan-conversion helpers now live under
+  `pool_cpu/ops/draw/helpers`. Exact mode owners write directly to their typed
+  byte or I;16 buffers; One retains its expanded-byte carrier and archived
+  direct ink-byte writes, and the four
+  I;16 owners retain the legacy packed-ink byte-order distinction. The shared
+  writer is compile-time specialized by channel count and does not convert the
+  source raster through RGBA.
+- All ten Draw pipeline variants use the prepared Draw callback. Contiguous
+  Draw operations select one mode strategy from the injected CPU context and
+  clone the source canvas once. The GPU draw-control preview calls the same
+  native Default owner using the exact source identity; GPU preflight now
+  supplies that explicit CPU Default context to the Draw operation instead of
+  having the pool_cpu family construct one internally. GPU exact-host execution
+  and automatic CPU preflight fallback also pass an explicit CPU Default context
+  through `execute_batch_with_context`, rather than entering the context-free
+  pool method.
+- The archived native-byte span kernels now live under `draw/helpers/simd` and
+  are reached through exact mode/architecture owners for the 16 byte-backed
+  Pillow identities. The operation declaration binds SSE2, NEON, and Wasm
+  SIMD128 availability to the `DrawNativeSpans` admission guard; unsupported
+  requests retain the same mode's Default owner. Four I;16 identities retain
+  their typed Default paths, and the five internal high-depth identities are
+  explicitly rejected with nearby `NO_PILLOW_SUPPORT` comments. Kernel output
+  reconstruction uses the exact source `Mode` and does not infer it from a
+  Pillow spelling or channel count.
+- Direct Draw Bitmap and text composition are eager operations outside the
+  pipeline `PreparedDraw` type. Bitmap's native loops live under each exact mode's
+  `draw/<mode>/default/bitmap_impl.rs`, with shared byte-layout, clipping,
+  mask, and I;16 helpers under `draw/helpers`. `Draw::bitmap` now selects the
+  exact raster-mode Draw strategy through an injected `ExecutionContext` and
+  records the selected architecture and strategy fallback reason. Direct
+  loops are ineligible for the geometry span kernels and therefore use
+  same-mode Default; compatible
+  non-CPU bitmap requests still delegate to Paste's prepared strategy. The
+  `DrawRequestKind` distinguishes geometry, Bitmap, and Text strategy requests.
+  The explicit RGBA-on-RGB context remains separate from the raster identity.
+  `SUPPORT` declares Bitmap's accepted mask identities and validates its context
+  relation against exact raster facts; `pool_cpu/ops/draw/ops.rs` now matches
+  the selected implementation's exact raster mode and calls its mode owner.
+  Eager Draw reads the current typed `Image::mode_identity()` so pending
+  pipeline outputs are respected; `orig_mode` remains for original-mode
+  restoration and the explicit RGBA-on-RGB context. The public wrapper only
+  materializes the input and restores P palette metadata on the direct Default
+  route. The RGB8 fast path and CMYK/L-mask row path remain specialized.
+  Direct Text resolves the same operation support declaration using exact
+  raster/context modes and embedded-color eligibility, then dispatches from the
+  selected raster mode. Eager Text telemetry records selected architecture and
+  fallback. The context selection and fallback behavior are source-only.
+  Bitmap and text now route all 20 Pillow modes through exact mode matches.
+  Bitmap preserves native One/L/LA/P buffers; directly handles La/PA, CMYK,
+  RGBa/RGBX, YCbCr/LAB/HSV, I/F, and each I;16 identity; and rejects the five
+  internal high-depth modes before destination materialization. Text's native
+  loops now live in exact mode Default owners for One/L/LA/La/PA, RGB/RGBA/
+  RGBa/RGBX, CMYK, YCbCr/LAB/HSV, I/F, and each I;16 identity. Shared text
+  geometry, gray-alpha composition, three-band arithmetic, numeric carriers,
+  and I;16 normalization live under `draw/helpers`; mode owners retain exact
+  variant matching and reconstruction. The explicit RGBA drawing context over
+  an RGB destination still selects the RGB owner when its native RGB carrier is
+  available and retains the existing fallback behavior. Text rejects the five
+  internal high-depth modes before destination materialization. Its support
+  facts now carry raster/context compatibility, P palette presence,
+  embedded-color eligibility, FreeType mask representation, text-ink
+  provenance, and packed foreground ink while retaining the exact raster
+  identity in `DynamicImage`. The support contract defers P Text/Bitmap
+  admission when palette metadata is unknown, and image palette presence is
+  queried without cloning its entries. Text execution now dispatches from the
+  prepared selection in `pool_cpu/ops/draw/ops.rs` into exact-mode owners; the
+  public Draw wrapper prepares the font mask and restores P palette metadata
+  around the returned raster. Direct Text selection is composed from `SUPPORT`;
+  prepared coverage/RGBA pixels travel with the selected input to avoid a
+  borrowed-mask/moved-input boundary. The palette-present P Text strategy
+  retains the archived source-mask dimension cap; negative-origin behavior is
+  recorded as a parity TODO rather than changed during this structural pass.
+  Draw's support facts include palette knowledge for both P and PA. Direct PA
+  Text/Bitmap keep the native index-alpha raster and restore the wrapper's
+  optional palette, palette-alpha, format, info, and EXIF metadata after the
+  operation. PA Text now has its own native index/alpha loop rather than using
+  LA's luma conversion: Pillow's packed integer ink reaches PA's P and A bytes,
+  and its L-mask route accounts for destination alpha. `resolve_integer_color`
+  now preserves the packed low four bytes for PA integers. The PA Bitmap writer
+  applies L-mask coverage to the index and hidden index lanes, promotes any
+  nonzero L coverage to full coverage when destination alpha is zero, and blends
+  alpha with the original coverage. RGBa Bitmap masks use their stored alpha as
+  coverage and route each stored destination byte through PREBLEND; zero-alpha
+  RGBa samples still execute because PREBLEND includes the source contribution.
+  Both behaviors are implemented in `BitmapMask` and exact-mode owners, matching
+  Pillow 12.2's `Paste.c` fill paths by source inspection. This closes those two
+  source-review items only; their frozen parity cases remain pending.
+  The 2026-11-20 I;16 source re-review covers the exact byte-order wrappers for
+  all four I;16 identities: L blends the two stored bytes at sample stride,
+  while 1/RGBA/RGBa process the one-byte-per-mask raw row prefix. The RGB
+  raster/RGBA draw-context combination is excluded from the accelerated Paste
+  child route because its RGB solid-color normalization loses the ink's hidden
+  fourth byte; it stays on the exact-mode RGB Draw owner, which preserves that
+  lane. Source review is complete for these branches; matrix outputs and
+  selected/fallback receipts remain pending.
+  PA Text was source-rechecked against `ImagingFill2`'s L-mask physical-byte
+  blend: index and omitted index lanes use coverage promoted to full only when
+  destination alpha is zero, while alpha uses the original coverage. Its mode
+  owner consumes the selected L/RGBA mask layout without LA conversion and the
+  wrapper restores PA metadata. PA Text output and metadata parity remain
+  pending.
+  Embedded-color Text now retains Pillow's RGBA glyph source, extracts its
+  alpha as L coverage, replaces the source alpha with the effective fill
+  alpha, and composes through the destination's prepared Paste child. Paste
+  applies the existing exact-mode Convert semantics where the RGBA glyph
+  source differs from the destination mode. The Rust core extends this path to
+  all 20 Pillow raster modes; the `ImageText.embed_color` extension is marked
+  `NO_PILLOW_SUPPORT`. The five internal high-depth modes remain outside this
+  Text strategy. One selected Draw context flows into the Paste child. This
+  supersedes the prior note that described the RGB/RGBA-only support gap.
+  Output conversion, P/PA palette behavior, fault order, and selected/fallback
+  receipts remain pending under `pillow-rs#3ptb`. Sources: [Pillow 13.0
+  `ImageDraw.text`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageDraw.py#L3180-L3285),
+  [`Image.paste`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1694-L1775),
+  and [`Image.convert` RGBA-to-P handling](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1019-L1026).
+  The built-in FreeType callback now consumes the already resolved packed fill
+  and stroke inks instead of converting the original Python values a second
+  time; it reconstructs mode-native channels in core. Custom-font callbacks
+  retain the original host values because they may re-enter `ImageDraw`.
+  Direct-route layout, optional-value errors, palette mutation, and output
+  receipts remain pending.
+  SIMD source comparison is complete: Draw's DIV255 and pack kernels retain
+  their archived arithmetic, and the span, line, shape, and rounded-rectangle
+  kernels retain their archived geometry and tail behavior. The rectangle
+  fill/outline loops were extracted unchanged; architecture wrappers now carry
+  an exact `DrawLayout` and reconstruct the output with its exact `Mode` rather
+  than infer a variant from channel count. Direct Rust explicit-mode mismatch now follows `validate_mode` on the first
+  mode-sensitive operation, retaining Pillow's RGBA-context-over-RGB exception;
+  other direct Bitmap/Text mode contracts, wrapper error ordering, and P/PA
+  palette transitions remain open.
+  Direct multiline Text now passes its selected route through direct lines,
+  custom-font masks, callback-reentrant Bitmap, and embedded-color Paste; the
+  ordinary Bitmap and text-mask entries preserve validation before route
+  capture. Remaining source review compares each direct Bitmap/Text mode's ink
+  and mask rules, P/PA metadata, I/F raw carrier behavior, and error ordering
+  against the archived/wrapper contracts, then verifies each vector kernel
+  and retained architecture admission route against the preserved SIMD sources.
+  No unit tests are planned for this migration; correctness evidence is parity
+  across operation × exact Mode × available Architecture, including selection,
+  fallback, and rejection receipts. No build, formatter, checkstyle, lint,
+  parity, benchmark, or coverage command has run for this family; source review
+  remains in progress.
+
+- Public ImageOps mode admission in `ops/imageops/point.rs` now matches typed `Mode` identities rather than Pillow strings. Exact mode lookup uses the wrapper's cached identity. `Image::mode_identity()` reads encoded header modes and follows operation-declared output transitions without decoding or materializing pixels when those facts suffice. The remaining materialization fallback is limited to palette-dependent P/PA expansion without palette facts, rejected raw descriptors without a declared output identity, and operations with no raster result; it preserves the existing expansion and execution-error timing and is tracked for CPU parity rather than as blanket mode inference.
+- `imageops/ops.rs` owns an exhaustive classifier for all 25 exact modes. The byte modes have per-mode strategy owners and preserve their exact mode identity. Numeric I/F and internal high-depth carriers retain their existing shape-error behavior for bytewise Invert, Posterize, and Solarize. Invert's P, LA, PA, RGBA, and CMYK routes are explicitly CoreOnly because the Pillow wrapper rejects those identities; each owner has a nearby `NO_PILLOW_SUPPORT` comment. The P/PA routes invert native samples and keep attached palette metadata, so indexed materialization must not expand them before prepared dispatch.
+- CropBorder declares CoreOnly support for the five internal high-depth identities with nearby `NO_PILLOW_SUPPORT` comments and preserves each exact raster mode. Colorize declares Pillow support only for exact `ImageLuma8`; its other 24 mode identities are explicitly rejected with Pillow's `ValueError` mode message. This removes the legacy non-L-to-L projection from the prepared path and keeps Colorize native to its actual Pillow input mode.
+- Each mode's `default/invert_impl.rs` performs the same `255 - byte` transform as `legacy/ops/imageops/pixel.rs::op_invert`; the scalar byte loop is shared in `imageops/helpers/pixel.rs`. Strategy preparation receives `ExecutionContext`, and registry preparation now returns the closed `PreparedOperation` plan.
+- Named Expand and Pad colors now stay on the typed `Mode` path through `color::getcolor_for_mode`; they no longer format a Pillow spelling only to resolve the same mode again. The shared resolver marks its internal high-depth color results `NO_PILLOW_SUPPORT`; operation support still decides whether a core-only route can execute.
+- Source review compared the archived native-byte adapter's exact One/L/P, LA/PA, RGB, and RGBA/CMYK admissions and its SSE2/NEON/Wasm SIMD128 wide-kernel path. Maintained mode owners retain native-byte inversion and same-mode output. The Pillow wrapper rejects P/LA/PA/RGBA/CMYK, so their explicit `NO_PILLOW_SUPPORT` routes are CoreOnly. P/PA now stay indexed, invert their native samples, and retain attached palette metadata. Maintained LA/PA/RGBA strategies invert every stored byte; the archived ImageOps SIMD adapter preserved alpha in those modes. CMYK inverts all four bytes in both paths. The separate SIMD registration is no longer active.
+- The public Invert wrapper and point-run fusion callers have been source-reviewed; fusion composes LUTs through prepared Eval under the same exact mode and injected context. The archived owned-buffer in-place Invert path is restored for Invert and InvertChops: exact-mode support and injected context select the architecture before the owned intermediate is mutated in place; caller-owned input remains untouched. Operation × exact Mode × Architecture parity remains pending, including CoreOnly routes through target-side parity cases.
+- Posterize and Solarize now declare all 25 modes at `imageops/ops.rs`, with prepared strategies for L, RGB, and core-only P. P applies each transform directly to index bytes, preserves its palette, and is marked `NO_PILLOW_SUPPORT` because Pillow's ImageOps `_lut` rejects that mode; other unsupported identities retain Pillow's mode-specific `OsError`. Default kernels are mode-owned; L, RGB, and P declare SSE2, NEON, and Wasm SIMD128 strategies using the exact-mode `NativePointwiseBytes` guard and shared vector transform. Prepared execution matches the selected architecture. Public wrappers queue typed operations; custom/high-threshold Solarize uses single-band Eval, whose palette-aware pipeline keeps P indexes and metadata attached. Point-run fusion composes through prepared Eval under the exact mode and injected context. Operation × exact Mode × Architecture parity remains pending, with P handled as a target-only core extension.
+- High-threshold and custom-comparison Solarize requests deliberately use `eval_replicated` and enqueue Eval rather than `PipelineOp::Solarize`; the CPU registry prepares them with the mode-aware Eval owner. The remaining SIMD compatibility route is tracked with Eval below.
+- `Autocontrast` and `Equalize`/`EqualizeMasked` now have operation-owned support declarations and prepared CPU callbacks. L and RGB use their exact Default kernels and guarded SSE2, NEON, or Wasm SIMD128 kernels. P Autocontrast is CoreOnly in Rust and transforms native indices while preserving P metadata; the Python facade retains its existing `NotImplementedError`; the P Equalize strategy consumes the injected palette, expands to RGB during preparation, and selects its declared RGB data kernel under the P strategy. CPU materialization now reaches this typed P route before generic palette expansion; its declared result is RGB, with palette alpha discarded by the RGB conversion. PA Equalize remains rejected. Source comparison against the archived CPU and SIMD routes covers histogram admission, cutoff/equalization arithmetic, LUT application, masks, empty images, and direct callers; masks accept exact `One`/L identities and preserve mode-before-size error ordering. CropBorder also routes through its prepared imageops callback; its archived ordinary-byte admission and empty/error ordering are represented. Operation × exact Mode × Architecture parity remains pending.
+- `Expand` now has an operation-owned support declaration for all 25 exact source identities. Each mode has a Default owner under its own folder, performs border fill and row copying in its native sample representation, and returns the same exact `DynamicImage` variant. P/PA preserve their index samples; typed I;16 and internal high-depth modes never route through an 8-bit mode. The five internal high-depth modes are core-only and carry nearby `NO_PILLOW_SUPPORT` comments; fill bytes become same-valued native numeric samples. `ExpandedDimensions` exposes source layout, border facts, and checked output allocation through the same contract used during preparation. Registry preparation now enters the closed CPU `PreparedExpand` plan instead of the archived direct callback.
+- The new `geometry/ops.rs` owner declares typed support for Contain, Cover, Fit, and Scale across all 25 exact identities. It preserves the archived aspect-ratio rounding, zero-size error order, Fit bleed/centering box, and P nearest-filter rule, then composes the request with a prepared exact-mode Resize plan using the same injected context. Its support descriptors name Resize or ResizeBoxed as child contracts, and the prepared operation exposes each child's selected architecture alongside the outer geometry selection. Pad now routes through its prepared exact-mode owner described below. The five internal modes carry nearby `NO_PILLOW_SUPPORT` declarations. Geometry parity and archived SIMD route comparisons are not complete.
+- Pad now has an operation-owned prepared entry at `pool_cpu/ops/geometry/pad/ops.rs`, with exhaustive support for all 25 `Mode` identities and a typed `PadParameters` request contract. Each mode has its own `ops.rs` plus serial `default/pad_impl.rs`; implementations preserve the exact output variant and use that carrier's native samples. P forces Nearest in its composed Resize child. The same support declaration composes Resize, and the prepared Pad receipt exposes the child's concrete selection. The five internal high-depth identities include `NO_PILLOW_SUPPORT` comments and use their native carriers. Thirteen exact byte modes declare SSE2, NEON, and Wasm SIMD128 strategies guarded by native byte layout; other modes use same-mode Default. Source review against `legacy/ops/imageops/pad.rs` and `pad/native.rs` accounts for identity-source append eligibility (L/RGB/HSV/RGBA), resized-source append eligibility (L/CMYK/RGBX), native row fill/copy, indexed P/PA samples, nearest P resize, and the legacy fallback paths. Review against `legacy/pool_simd/ops/adapters/pad.rs` and its shared Resize admission accounts for exact byte carriers, empty-source fill, vertical identity fill/copy (including RGBA vector fill), full-width filtered L/RGBX convolution, resized-source composition, and vector fallback. Maintained Pad keeps these paths in typed exact-mode strategies: the vector append route retains the archived mode/source split, and filtered full-width L/RGBX composes through the prepared Resize child only when both selections use the same architecture. Pad now retains known omitted lanes for same-size copied content and mode-derived border fills; when Pad resamples its content, omitted-lane propagation remains a Resize-dependent source TODO. The public Rust, Python, and JavaScript callers converge on the typed Rust ImageOps Pad entry; primitive wrapper validation order was source-reviewed, and no active legacy or `pool_simd` imports remain. Formatting an arbitrary invalid Python filter may run before Pillow ImageOps geometry validation; a source TODO tracks deferring it. The mode/kernel and architecture source comparison is complete; Python F scalar and one-element tuple fills now reach the existing F carrier as native float32 bytes, while tuple/list identity and remaining integer/component/error-order details stay under the PadFrame TODO. CPU parity, compilation, and performance evidence remain pending.
+- Pad dispatcher source correction (2026-11-01): exact-mode owners with architecture strategies return vector-work counters, while 12 Default-only owners return only the same-mode image and take no architecture argument. The central dispatcher now preserves each owner signature and supplies zero vector-work counts for those Default-only results. This fixes a source-level type mismatch found during manual review; no compilation or other validation ran.
+- Pad fill color source correction (2026-11-02): Pillow `Image.new` accepts two-component colors for `LA`, `La`, and `PA`, while `ImageColor.getcolor` premultiplies the color bands for lowercase-alpha `La` and `RGBa` string colors. The typed resolver now accepts raw `(luma, alpha)` tuples for `La`, rejects RGB-shaped `La` tuples, applies Pillow rounding to named/hex `La` and `RGBa` fills, and preserves the two-band scalar alpha behavior. Updated the existing `La` color-output expectation. Source comparison only; no formatting, build, tests, parity, or benchmark ran.
+- Pad fill representation finding (2026-11-02; resolved at source level by the typed Pad fill path below): the original `PadFrame.color` route narrowed every fill to four u8 components, losing upper sample bits for I;16 and high-depth modes. `PipelineOp::PadTyped` now preserves the original scalar/component values through mode-owned preparation. The existing Pad parity TODO still covers mode-specific wrap/default/alpha behavior and fallback. No runtime verification ran.
+- The archived 128-bit fill/copy implementation now lives in `imageops/helpers/expand_vector.rs` and is shared by exact-mode byte strategies. The same declaration selects SSE2, NEON, or Wasm SIMD128 when built and available. Its `ExpandVector` guard enables full border fills for one- and two-byte layouts; three- and four-byte layouts use it for border-zero identity copies, matching the archived vector work. Other requests select the same-mode Default implementation. The vector kernel constructs the original exact variant rather than inferring output mode from channel count.
+- The archived CPU Expand cases and SIMD byte-fill/copy regressions remain in `pool_cpu/legacy` as read-only references; they were not migrated into active Rust unit tests, per the unit-test cleanup request. Carry their fill bytes, dimensions, output comparisons, and architecture requests into frozen parity IDs before the CPU parity gate. Output and selection receipts remain pending.
+- Expand source review is complete against the archived CPU and SIMD routes. The public wrapper queues into the exact-mode registry; the architecture guard selects vector fill for one-/two-byte layouts and border-zero copies for three-/four-byte layouts, matching the kernel's actual branches. Exact-mode output identity and all declared modes are retained. Operation × exact Mode × Architecture parity remains pending; no active adapter registration remains.
+- The ImageOps implementation and support matrix have not been compiled, parity-checked, or benchmarked. No source-completion claim is made.
+
+- Python and JavaScript `Image.point` keep their public mode-string parameters
+  at the binding boundary, parse the optional float-output mode to `Mode`, and
+  match the source image's exact `Mode` for float-LUT and scalar-callback
+  routing. Those decisions no longer materialize source mode strings in the
+  wrappers. Eager PointScalar and PointFloat retain their prepared selection in
+  telemetry and keep source-graph receipts; exact point/error-order and fallback
+  parity remain pending; source-only.
+- `eval/ops.rs` now exposes an exhaustive contract for the 25 exact identities. `One`, `L`, `LA`, `La`, `P`, `PA`, `RGB`, `RGBA`, `RGBa`, `RGBX`, `CMYK`, `YCbCr`, `LAB`, and `HSV` have native byte-LUT Default strategies with one table per native band. `I`, `F`, all four Pillow I;16 identities, and the five internal high-depth identities retain explicit rejection because `PipelineOp::Eval` accepts byte LUTs. Direct scalar point transforms have a separate `PointScalar` contract for I/F and all four Pillow I;16 identities, with per-mode Default implementations under `eval/<mode>/default`; I;16L/B/N are explicit Rust-only callable extensions. Public entry points inject a routed CPU context, and each route retains native sample arithmetic.
+- Each admitted mode's contract includes an exact `256 * native_channels` LUT length and exact native source-byte dimensions. Its Default implementation preserves the input variant and applies the archived affine-LUT or per-band lookup loop directly to that mode's bytes. P/PA index bytes remain native; the image wrapper continues to own palette metadata. The per-mode Default modules now follow the explicit `mode/default/eval_impl.rs` layout.
+- The nine identities admitted by the archived SIMD LUT adapter (`One`, `L`, `P`, `LA`, `RGB`, `HSV`, `YCbCr`, `RGBA`, and `CMYK`) declare SSE2, NEON, and Wasm SIMD128 strategies beside their exact mode contracts. A shared family helper owns the reusable channel LUT kernel; RGB's little-endian AArch64 TBL4 and affine paths now live at `eval/rgb8/neon/eval_impl.rs` and are selected directly by the RGB mode owner. Other modes use the shared portable-wide implementation for their declared architecture, while identity LUTs retain the native-copy path. The kernel helpers contain no Rayon scheduling.
+- `PointFloat` now declares exact `One`, `L`, and `P` strategies with a typed 256-entry f64-table contract, exact native-byte shape, and fixed `ImageF32` output. Per-mode Default leaves live under `eval/<mode>/default/eval_float_impl.rs`; the shared native gray-byte to F32 kernel lives under `eval/helpers/point_float.rs`. The public wrapper injects a routed CPU context; each leaf reads its native byte samples directly without converting the source mode.
+- Source review compared the legacy operation, native-LUT adapter, batch routing, current public point wrappers, and registry preparation. The archived SIMD admission set is exactly `One`, `L`, `P`, `LA`, `RGB`, `HSV`, `YCbCr`, `RGBA`, and `CMYK`; its channel counts, channel-major LUT layout, exact byte lengths, 16-sample table lookup blocks, padded row tails, and RGB little-endian AArch64 TBL4/affine paths are represented by the corresponding prepared CPU mode/architecture owners. Empty images and unsupported architectures fall back to each exact mode's Default strategy. The old separate registration and mode-string inference are no longer active.
+- The source comparison found and corrected a request-facts crossover in the `One`, `L`, and `P` owners: byte Eval now supplies `EvalLut` facts, while PointFloat supplies `PointFloatLut` facts. Direct scalar point callsites, exact-mode validation order, mode-preserving byte outputs, and fixed `ImageF32` float-LUT outputs are accounted for. PointFloat carries the leaf selection through to its eager receipt; scalar point receipts likewise include their selected Default strategy and preserve the input materialization receipts. The archived Rayon row scheduler remains outside maintained CPU execution and is reserved for the later `pool_parallel` pass.
+- Expanded parity remains pending across operation × exact Mode × Architecture, including all supported byte modes, vector tail widths, empty inputs, identity LUTs, affine RGB NEON, scalar point modes, and rejected modes. No unit tests or validation commands have run for this source.
+- No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage command has run for this source.
+
+- `resize/ops.rs` declares exhaustive ordinary and boxed support contracts over all 25 exact `Mode` identities, selects from the injected CPU `ExecutionContext`, and retains the selection receipt. The prepared dispatcher routes byte-backed modes to exact typed mode owners, I32/F32 to native scalar owners, four I;16 modes to endian-specialized u16 owners, and five internal high-depth modes to native u16/f32 owners. The 14 byte modes use mode-local Default routes: direct sample paths share the fixed-width `byte_samples` helper where their filtering semantics match, LA/RGBA use the straight-alpha helper, CMYK owns its narrow fixed-point loop, and HSV owns its Bicubic narrow fixed-point loop. All 14 byte modes declare exact-mode SSE2, NEON, and Wasm SIMD128 strategies for ordinary nearest requests; eleven byte modes plus Luma8 also declare guarded filtered strategies. Boxed byte nearest and convolution use exact-mode architecture strategies with checked bounds and coefficient admission; One and P retain nearest-only boxed vector routes. Each mode reconstructs its own typed output, and `One` preserves its threshold step. I32 retains its prepared AVX/FMA selection and Default fallback; F32 keeps portable Default width 16, AArch64 baseline width 4, the guarded AVX/FMA scalar strategy, and guarded SSE2/NEON/Wasm SIMD128 vector strategies. I32 also declares NEON for eligible unboxed nearest requests and filtered requests whose required pass order is horizontal-first; nearest preserves the raw signed-word carrier, while filtering uses checked NEON blocks around the two-pass i32 intermediate and a wide-lane fallback. Filtered tall reductions that require vertical-first are routed to the same-mode Default strategy. The four I;16 modes have unboxed wide-vector strategies for SSE2, NEON, and Wasm SIMD128, with byte order selected by the exact mode owner and Default fallbacks retained. Public Resize queues typed `Resize`/`ResizeBoxed` operations; geometry families and Thumbnail prepare nested Resize with the same injected context. Source review confirms that native I;16 Default routes return correctly shaped exact-mode buffers for empty input extents, while the unboxed vector guard routes those extents through its explicit zero-output path. Boxed bounds are narrowed to float32 and validated before support assessment. Exact integer crop and full-source identity shortcuts use those narrowed bounds; filtered straight-alpha crops retain premultiply/filter/unpremultiply work. Tall boxed Resize composes vertical then horizontal child plans under the supplied context, preserving LA/RGBA as premultiplied mode identities between passes; F32 and I32 use their typed owners. Architecture guards decline the vector route when tall ordering, bounds, coefficient range, or shape is outside the declared specialization, leaving the exact-mode Default path. The public and direct prepared call paths, float32 box boundary, crop/pass-elision decisions, and selection order have now been source-reviewed. The separate GPU Pillow-string compatibility helper remains for the GPU stage. No build or validation has run.
+
+No mode rejection was found in the legacy generic Resize entry point. Both operations classify every identity and derive prepared selection from the operation declaration. The prepared dispatcher matches the exact `Mode` tag and sends the 14 byte-backed identities to their corresponding typed `DynamicImage` owners; the remaining eleven identities go to the scalar or high-depth owners. Every prepared route now forwards the captured context and concrete selected architecture to its mode owner. The I;16 vector route and I32/F32 FMA routes are connected to their current declarations; filtered unboxed I32 now also has an exact NEON declaration and implementation. Ordinary nearest, ordinary filtered convolution, boxed nearest, and boxed filtered convolution now have corresponding exact byte-mode architecture owners; Public, prepared, and nested caller review is complete; output, fault, selected/fallback receipt, and latency evidence remains open.
+Mode folders belong only to modes with executable Default strategies; architecture folders belong only to retained kernels. Resize and ResizeBoxed are owned by `resize`; Thumbnail is a separate family and must inject the same execution context into its nested Reduce/Resize work. The five core-only high-depth routes above must not use byte-materializing adapters. Rayon scheduling remains for pool_parallel. The generic Resize compatibility wrappers are test-only; their runtime FMA detector is also test-only. Production F32/I32 AVX/FMA owners obtain X86FmaToken only from the injected execution context, so architecture selection remains context-driven.
+
+Resize source review closure (2026-11-21): traced public `Image::resize` and
+`resize_with_options` through lazy `PipelineOp` construction, retained backend
+and injected `ExecutionContext`, registry preparation, and exact-mode execution.
+Reviewed nested geometry, Thumbnail Reduce/Resize, sparse RGB Thumbnail, and
+Pad-window callers; each binds its own Resize selection using the same parent
+context and preserves the prepared selection through execution. Confirmed
+reducing-gap child selection, tall boxed pass ordering, hidden-lane completion,
+and mode-specific filter normalization at the prepared boundary. Kept F32's
+portable Default width-16 and AArch64 baseline width-4 sequences as distinct
+strategies, per the selected contract. This closes Resize source review only;
+mode/architecture outputs, fault order, backend/architecture receipts, fallback
+guards, and latency remain pending. No checks ran.
+
+- `thumbnail/ops.rs` exposes the prepared CPU operation and exhaustively lists
+  all 25 `Mode` identities. It preserves source identity and passes the same
+  `ExecutionContext` into nested Reduce and Resize plans. Preparation selects
+  one exact-mode policy: `1` and `P` force nearest; `PA` preserves the
+  requested filter and reduces its stored index/alpha bytes; straight-alpha
+  `LA` and `RGBA` preserve the requested filter and route reducing-gap through
+  a fused premultiply/reduce/resize/unpremultiply strategy. Premultiplied `La`
+  reduces its stored samples like the archived implementation. The public
+  `Image.thumbnail` caller computes final
+  aspect-preserving dimensions, preserves its materialization/error order, and
+  normalizes `1`/`P` to nearest before queuing while retaining `PA`'s requested
+  filter. That policy is also declared by each exact-mode strategy, so direct
+  preparation cannot bypass it. F32 retains the eligible unboxed Resize route.
+  Preparation now stores the
+  effective filter, reducing-gap choice, factors, and unboxed/boxed resize
+  choice in the plan. The F32 rule uses the already selected exact mode and
+  dimensions; it does not re-match the materialized raster. These rules are in
+  their operation-owned mode folders instead of carrier or string-based
+  inference. The top-level exhaustive classifier now sources explicit
+  `ModeSupport` declarations from the corresponding `one`, `luma_a8`,
+  `la_premultiplied8`, `palette8`, `palette_alpha8`, `rgb8`, `rgba8`, `i32`,
+  and `f32` mode owners.
+- RGB PutPixel/Thumbnail fusion is routed before CPU batch materializes a
+  contiguous RGB write prefix. Its exact RGB implementation applies pending
+  writes during the native 2x2 reduction and carries sparse active-row facts to
+  the prepared Resize child. Default uses the boxed RGB sparse-row byte helper;
+  SSE2, NEON, and Wasm SIMD128 use the exact prepared native Resize strategy
+  when available, retaining the archived unboxed vector coefficients and
+  sparse horizontal/vertical row elision. If that strategy falls back to
+  Default, the prepared boxed ResizeBoxed selection remains the fallback. Dense
+  reductions retain the normal selected child path. Source comparison preserves
+  reduction, write order, filter, bounds, and zero-row guards; the path is still
+  uncompiled and parity- and telemetry-unverified.
+- The archived streamed ImageI32 2x2 reduction/resampling path now lives in
+  `thumbnail/i32/helpers/streaming.rs`, with PortableFma in the exact Default
+  owner and injected AVX/FMA execution in the architecture owner. A typed
+  request guard admits the AVX/FMA specialization only for non-nearest filters,
+  even source dimensions, an exact 2x2 reducing gap, and valid native I32
+  storage. Thumbnail preparation records this path and dispatches directly to
+  the mode owner; other requests retain the existing nested Reduce/Resize
+  composition. The stream shares the existing I32 Resize coefficient, row,
+  and rounding primitives. Manual comparison with the archived loop confirms
+  the same mode eligibility, 2x2 reducing-gap calculation, source sample
+  decoding, wrapping quartet order, per-pass rounding, coefficient mapping,
+  and FMA accumulation order. The result is now constructed directly as
+  `ImageI32`; the archived wrapper retagged its four-byte carrier afterward.
+  This comparison is source review only. The archived general ImageI32
+  Thumbnail reducer performs the same scalar wrapping pair/quartet accumulation
+  as ImageI32 Reduce, then passes eight completed values through
+  `i32x8::new(values).to_array()` without vector arithmetic. Keep the exact I32
+  Default reducer instead of adding a redundant architecture folder. F32's
+  ordered even 2x2 vector reduction now runs under the exact ImageF32 Reduce
+  strategy when each output row has eight samples; other F32 requests retain
+  its native Default path. Manual source review now covers the remaining
+  archived branches: `1` and `P` force nearest; the archive skipped the
+  separate reducing-gap pass for straight-alpha `LA`/`RGBA`, while the
+  maintained path now fuses the reduction in premultiplied byte space; `La`
+  and filtered `PA` requests reduce their stored samples. The public PA caller
+  retains the requested filter, and the maintained PA strategy owns that
+  policy for prepared callers too.
+  `F` and `I` use exact typed scalar-mode Reduce/Resize
+  owners; and all remaining identities retain native mode through the same
+  composed owners. There are no active callers of the archived Thumbnail
+  adapter.
+- Archived reducing-gap source correction (2026-11-01; caller reconciliation
+  completed 2026-11-02): legacy `prepare_thumbnail_work_image` excludes `La`
+  and `PA` from its alpha-mode classification, so a filtered request reaching
+  that adapter reduces their stored samples before Resize. `PA` retains the
+  requested filter; `La` reduces its premultiplied samples. The archived
+  adapter skipped reducing-gap for straight `LA`/`RGBA` to avoid its alpha
+  handling gap. The maintained strategy closes that gap with fused
+  premultiply/reduce/resize/unpremultiply processing. Source review is complete
+  for this route; CPU parity and architecture-fallback receipts remain pending.
+- Thumbnail's operation-level declaration links Reduce, Resize, and
+  ResizeBoxed support. The prepared operation retains concrete child
+  selections for composition paths; the direct I32 stream retains its exact
+  selected owner. These receipts are available for the architecture matrix.
+- The all-mode × declared-architecture Thumbnail parity matrix and telemetry
+  review remain pending. No build, formatter, checkstyle, lint, parity,
+  benchmark, or coverage has run for this source progress.
+
+| Maintained TODO location | Pending route |
+| --- | --- |
+| `compute/pool_cpu/ops/color/ops.rs`, exact `color/<mode>/` owners, and `color/helpers/convert/` | All 25 source-mode target contracts, Default owners, declared architecture folders/dispatch arms, and prepared identity decisions have been reviewed. Do not repeat the mode-row audit. Remaining source work: close any route-specific kernel/archive TODO beside its detailed note; finish prepared registry and direct/eager caller review; preserve target/error/allocation/metadata behavior; then verify exact output, fault, selection/fallback, and empty-input receipts across the frozen mode × target × Architecture matrix. |
+| `image/channel_access.rs`, `compute/pool_cpu/ops/put/ops.rs`, `compute/pool_cpu/ops/analysis/ops.rs` | GetChannel's operation-level declaration covers exact mode band counts, P's palette-preserving identity, I/F rejection before materialization/index validation, CoreOnly classification for five internal high-depth identities, and its composed ExtractBand child. The wrapper reads selector bounds from the declaration, then retains its L identity shortcut, tiny-RGB eager route, backend-pinned lazy route, and P copy. CoreOnly u16 sources now produce `ImageI16` bands; f32 sources produce `ImageF32` bands with little-endian scalar bytes. Carry these routes and the child's selected/fallback receipts into the frozen CPU parity set. |
+| `ops/analysis.rs`, `compute/pool_cpu/ops/analysis/ops.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema.rs`, `compute/pool_cpu/ops/analysis/helpers/bbox_execution.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema_execution.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema_bytes.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema_bytes_execution.rs`, exact-mode `default/extrema_bytes_impl.rs` owners, `compute/pool_cpu/ops/analysis/helpers/get_data.rs`, `compute/pool_cpu/ops/analysis/helpers/getcolors.rs`, `compute/pool_cpu/ops/analysis/helpers/getcolors_execution.rs`, exact-mode `default/getcolors_impl.rs` owners, `compute/pool_cpu/ops/analysis/helpers/stat.rs`, `compute/pool_cpu/ops/analysis/helpers/stat_execution.rs`, exact-mode `default/stat_impl.rs` owners, `ops/analysis/histogram.rs`, `image/entropy.rs`, `image/statistics.rs` | Pillow-facing formatted GetExtrema now has `OperationId::GetExtrema`, an exhaustive mode support contract, injected CPU context, Default architecture fallback, and native byte/u16/f32 sample reductions through exact-mode owners. Internal LA16/RGB16/RGBA16/RGB32F/RGBA32F results are CoreOnly typed multiband extrema. `FormattedExtrema` and Python/JS formatters carry these typed results. The separate Rust/JS byte-valued `Image::getextrema()` now has `OperationId::GetExtremaBytes`, exhaustive exact-mode support, injected CPU context, one Default owner per exact mode, and native-carrier scans that implement the per-mode byte-lane contract without materializing an RGBA raster. Its byte projections include typed-sample conversion only at the result boundary, raw I/F carrier lanes, and RGB32F's opaque fourth lane. Add operation × mode × architecture parity and the lazy terminal receipt TODO. GetData's prepared dispatch/direct reads, GetBBox dispatch, and formatted GetExtrema dispatch now live in focused helpers so family `ops.rs` stays below the 1,000-line limit. Histogram now has an exhaustive 25-mode support contract, 1/L mask declaration, prepared CPU selection, and materialized-call receipt; exact-mode Default owners scan all byte, I/F, I;16, and CoreOnly native u16/f32 inputs directly into the existing bins. Entropy has its own exhaustive support contract and composes the prepared Histogram child under the same injected CPU context, with a materialized-call receipt. These changes are source-only and unvalidated. Mode-owned band counts also drive histogram allocation, Entropy, GetColors, and multiband Split. Entropy now shares the exact Histogram rules for I/F, I;16, byte bands, and CoreOnly native bins. Stat now has a 25-mode contract, per-mode owners, injected CPU context, specialized I/F paths, and native CoreOnly Histogram composition. Its masked wrapper executes the prepared Histogram child through the selected exact-mode Stat owner using native u32 bins without a widened histogram allocation; lazy receipts remain a source TODO. GetColors has native per-mode counting and typed CoreOnly tuples; expanded 25-mode × Architecture parity and lazy terminal receipts remain source TODOs. Include Pillow mode/value cases and declared CPU route receipts in parity. |
+| `image/statistics.rs`, `compute/pool_cpu/ops/analysis/helpers/getcolors_execution.rs`, `compute/pool_cpu/ops/analysis/helpers/stat_execution.rs`, `image/entropy.rs`, `ops/analysis/histogram.rs`, `ops/split.rs`, `ops/quantize/operations.rs` | Split now has a composed operation contract; Quantize now has a `pool_cpu` operation owner and prepared context; mode × Architecture parity and lazy receipts remain pending. GetColors and unmasked Stat now have exhaustive support contracts, exact-mode Default owners, routed CPU context, and native CoreOnly paths; their expanded parity and lazy terminal receipt evidence remain pending. Stat's lazy receipt remains pending; Split child-selection/fallback receipts remain pending; Quantize has an ImageOps contract and context-driven CPU dispatch, with exact L/P/RGB/RGBA routes and native Default owners for all 21 CoreOnly modes. Materialized calls now record requested Backend and exact-mode selection; lazy receipt composition remains pending. Entropy uses its prepared support contract and composed Histogram child. Preserve Stat mask/error ordering, verify Split child routing and output identity, and verify Quantize CoreOnly mode-owner dispatch plus materialized and lazy receipt behavior. Source TODOs and the plan matrix track these gaps; work remains unvalidated. |
+| `ops/split.rs`, `compute/pool_cpu/ops/put/helpers/extract_band.rs`, `ops/analysis/bbox.rs` | Split and GetChannel use exact band counts and preserve CoreOnly u16/f32 samples through `ExtractBand`. GetBBox is now a direct CPU analysis operation with a public support descriptor, an exhaustive 25-mode classifier, alpha-band input contract, prepared selection, and one Default owner under each exact mode folder. Pillow `I` and `F` retain their raw-word predicates; each `I;16*` owner scans native u16 samples. Pillow's `GetBBox.c` source comparison confirms that three-band modes ignore padded storage, alpha-only selects only Pillow's five alpha-bearing modes, and internal high-depth modes use their native channel selection. This corrects the archived Rust I;16 byte-prefix scan, which missed samples with only a nonzero high byte. Direct host receipts now carry the selected architecture and fallback reason; lazy-pipeline terminal receipts that combine materialization with the CPU scan remain a TODO. The previous `to_rgba8` fallback and the local row unit test were removed. Pending: CPU parity for all 25 modes under Default and all configured non-Default Architecture requests, including the AArch64 baseline selector, verifying same-mode Default fallback, I;16 high-byte cases, and alpha-only selection. This is source-only and unvalidated. |
+| `ops/convert/operation.rs` | Separately route matrix Convert through a GPU-owned matrix strategy when GPU declares it; the current typed eager wrapper deliberately executes this CPU-owned operation on CPU while GPU support remains outside the CPU migration. |
+| `compute/pool_cpu/ops/composite/ops.rs`, `compute/pool_cpu/ops/draw/ops.rs`, `compute/pool_cpu/ops/paste/ops.rs`, `compute/pool_cpu/ops/transform/ops.rs` | Keep each family source/caller review beside its operation owner: carry Composite's source-reviewed modes, mask pairs, and architecture routes into frozen CPU parity; Transform source/caller review is complete; keep output and fault parity, P/PA palette metadata and callback mutation, architecture/fallback receipts, Wasm floating-point edge cases, and latency as runtime TODOs; all supported Draw geometry, Text, Bitmap, and native RGB/CMYK fast routes now pass the exact `StrategySelection` into their mode owners; finish Draw mode/error review and frozen parity; carry Paste's source-reviewed SIMD and owner routes into frozen CPU parity. `compute/pool_cpu/ops/mod.rs` only exports operation families. |
+| `compute/pool_cpu/ops/geometry/pad/ops.rs` | Archived full-width non-nearest Pad convolution was limited to L and RGBX. Both paths now compose the prepared Resize child and write into the final canvas through exact-mode L/RGBX adapters; `Resize::PreparedResize` retains and dispatches the selected Default/SSE2/NEON/Wasm SIMD128 strategy. No implementation gap remains for this archived branch. Finish checking every padded mode against its same-mode Default fallback and prepared context; verify Pad output/error, fill, palette, and child-selection behavior in CPU parity. |
+| `compute/pool_cpu/ops/enhance/ops.rs` | Contrast source review is complete: nine remaining identities reach Blend's preserved wrong-mode rejection, five internal high-depth identities reject while converting the constant base, and La/RGBa retain their exact conversion errors. Sharpness source review traces wrapper→registry→injected context→exact mode→architecture, confirms exact output identity for all 22 accepted modes and archived native behavior for the six Pillow-supported byte modes, and records explicit `NO_PILLOW_SUPPORT` markers on the other 16 native extensions. The six byte-mode architecture lists and dispatches cover all seven declared entries. Keep Sharpness in the frozen CPU parity matrix after source migration is complete. Expand parity across every operation × exact Mode × Architecture. |
+| `compute/pool_cpu/ops/filter/ops.rs` | Filter3x3 native-byte Default and architecture kernels are source-compared: coefficient order, arithmetic, border retention, RGB byte-stream, LA binomial path, and exact-mode reconstruction match the archive. Filter5x5 Default paths are source-compared: I32 keeps its typed path; L/LA/RGB/RGBA retain their archived special kernels and bounded fast paths; other admitted byte modes use native-byte rows; each leaf restores its exact variant. I32 also declares the archived AVX/FMA ring for the exact normalized binomial request and retains AVX2/FMA for its vector route. Include guarded exact-kernel selections and ineligible-request Default fallbacks in the frozen CPU parity matrix. P, F32, and internal high-depth rejections remain declared. Direct ModeFilter has an exact byte-mode support contract, normalized window facts, serial CPU context, palette-preserving wrapper, and native exact-variant output; its direct caller was moved out of `ops/param_filters.rs`. Its neighborhood, tie, threshold, P-index, and palette behavior were compared with `3f9dfd403`; the refactored caller records its prepared CPU architecture selection. The support declaration and closed strategy selector now route each accepted byte identity to its exact-mode Default leaf; those leaves call the shared native-byte helper without mode conversion. A P-mode nonzero-index case with a full palette is now in the parity input generator but has not been run; backend-fallback receipts remain pending. General Gaussian/BoxBlur source comparison covers the serial and native-byte architecture paths; the RGBA radius-seven implementation and its uniform proof are compared with the archive. L rank-window Default and vector paths are source-compared, including the preserved Apple ARM64 9x9 rank-40 performance regression. The remaining exact-mode blur, extrema, rank, callback, and direct/eager caller paths are source-reviewed; the detailed crosswalks below record their Default/vector ownership and mode contracts. Output, fault, selection/fallback, and benchmark evidence remain pending. Native-byte extrema/rank strategies and L/F32 rank vector strategies are represented in their exact mode owners. PA BoxBlur/BoxBlurXY and rank requests retain native index/alpha samples so prepared execution reaches the declared PA kernels; GaussianBlur remains rejected for PA. |
+| `compute/pool_cpu/ops/resize/**`, `compute/registry/registration/geometry.rs`, `ops/resize.rs`, `ops/resize/reducing_gap.rs`, `ops/pil_resize/**` | The prepared path now preserves float32-bound identity/crop shortcuts and unchanged-axis float pass elision; native I;16 Default and vector paths preserve exact output identity for empty source extents. The maintained mode/architecture strategy subtree has source review; the obsolete whole-image and boxed dispatcher files are absent, and source search found no active calls to those names outside `legacy`. Production CPU execution uses prepared mode owners and shares only low-level coefficient, sample, and pass helpers. Keep any retained integer-mode reducers test-only. Public wrapper, lazy decode/mode lookup, identity shortcuts, reducing-gap adjustment, prepared admission, and nested Resize execution are source-traced in the caller crosswalk. Runtime validation/fault-order and architecture fallback receipts remain pending the frozen CPU parity matrix. Maintained `pool_cpu` has no active Rayon scheduling; archived parallel work remains a tracked TODO for `pool_parallel`. Keep the GPU Pillow-string helper as separate migration debt. Public direct and nested geometry callers already enter prepared plans with injected context. All 14 byte modes declare ordinary nearest vector strategies. ImageLuma8 and eleven other byte modes declare unboxed filtered SSE2, NEON, and Wasm SIMD128 strategies when both coefficient axes satisfy the checked i32 bound; One and P remain nearest-only. Pad composes the exact ImageLuma8 strategies into its output window. All byte modes declare boxed nearest strategies, with filtered boxed convolution for all except One/P. I32/F32 filtered Resize and all four unboxed I;16 vector routes are declared with their Default fallbacks; I32 also declares NEON for unboxed nearest and horizontal-first filtered requests. F32 filtered arithmetic now receives its product grouping from the selected strategy: portable Default and AVX FMA use width 16, while the declared AArch64 baseline strategy uses width 4. AArch64/x86 output and strategy-receipt parity plus per-path benchmarks remain TODO. Boxed I;16 remains Default. Thumbnail prepares nested Reduce/Resize work with the same context; its streamed I32 mode owner and AVX FMA adapter now consume the prepared `StrategySelection`. |
+| `compute/pool_cpu/ops/eval/ops.rs` | Compare the archived SIMD vector/admission paths against the prepared CPU strategies and migrate any missing mode/architecture case. Move archived Rayon scheduling to `pool_parallel`. Direct scalar point and float-LUT calls enter declared exact-mode CPU strategies and retain their `StrategySelection` in eager receipts. |
+| `compute/pool_cpu/mod.rs`, `compute/pool_cpu/batch_execution.rs`, `compute/execution/terminals.rs` | Serial prepared dispatch, routed-context plumbing, wrapper-resolved P/PA palette handoff, ordered PutPixel, transpose and point-LUT runs, Draw, AlphaComposite+Mirror, Multiply+Screen, RGB PutPixel+Thumbnail, and owned Invert/Chops Add/Sub routes are source-reviewed against their mode/architecture guards. Identity transpose and point-LUT runs report `native-identity` without claiming a selected kernel. CPU output/resource/error and selection/fallback parity remains pending, as do separate eager/lazy terminal gaps. Draw Text now passes one injected context through direct multiline execution, embedded-color Paste, custom-font callbacks, and callback-reentrant Bitmap writes; those output/fault/receipt routes remain pending parity. |
+| `compute/mod.rs` | Source-complete: the independent SIMD pool and adapter re-exports are removed. Keep `Backend::Simd` only as a request alias for CPU plus detected Architecture. |
+| `compute/execution.rs` | Source-complete: pipeline selection and execution use the injected CPU architecture context; mixed SIMD segments, guessed mode transitions, and retry routing are removed. |
+| `compute/automatic_segments.rs` | Removed: CPU mode/architecture strategies now execute the complete prepared operation sequence without a separate segment planner. |
+| `compute/eager.rs` | Tiny-RGB ExtractBand uses the prepared CPU architecture executor and records its selection; PointScalar/PointFloat honor the image-pinned or active backend when constructing their CPU context, preserve source-graph receipts, and report selected architecture or GPU-to-CPU fallback. Source review traced eager helper callers through routed CPU contexts and operation-owned prepared strategies; native identity/copy helpers intentionally skip architecture selection. Eager outputs, fault order, callback-visible state, and selected/fallback receipts remain parity work. |
+| `compute/pool_cpu/ops/put/ops.rs`, `image/data_access/put.rs`, `image/pixel_access.rs` | Prepared PutPixel/PutData/PutAlpha/PutAlphaData callbacks are consumed by the serial CPU batch path; the contiguous RGB PutPixel+Thumbnail fusion is wired. Immediate PutData callbacks select the exact-mode contract from a routed CPU Architecture context and record a receipt because each write must be visible before the next host value is coerced; current paths fall back to native Default. Numeric I/F, direct I;16 PutPixel, and raw-byte I;16 PutData use exact-mode writers with the shared routed CPU Architecture context and native Default fallback. Finish wrapper metadata and the remaining PutAlpha, PutAlphaData, and ExtractBand conversion reviews. |
+| `compute/registry/registration/imageops.rs` | Pad uses the prepared geometry owner. Contain, Cover, Fit, and Scale use the Geometry owner and nested prepared Resize plans; Expand uses its prepared CPU owner. All 25 Pad mode entries now receive the retained `StrategySelection`; specialized owners resolve the exact Pad mode and Default-only owners verify the selected CPU mode. Prepared Resize composition, vertical-append helpers, and direct Resize-to-canvas adapters receive the same selection. Archived full-width L/RGBX convolution and direct/eager caller comparisons are source-reviewed; no missing mode/architecture route was found. The Pad owner's TODO covers custom/nonnumeric/wide tuple values and integer/component/error ordering. Output/error behavior, P palette mutation, fill semantics, and composed child-selection receipts remain CPU parity work. No runtime validation is claimed. |
+| `compute/registry/registration/simd.rs` | Removed from the active tree. Compare all archived adapter groups with the assigned CPU mode/architecture owners and migrate any missing strategy or fallback. |
+| `compute/pool_cpu/ops/crop/ops.rs` | Expand parity across every exact Mode × available Architecture, including archived SIMD admissions, Default fallbacks, I;16 vector blocks/tails, and CropBorder empty/error contracts. The archived source comparison is complete; the ordinary byte row-copy algorithm is the mode-owned Default `ByteCrop`. |
+| `compute/pool_cpu/ops/color3dlut/ops.rs` | Expand parity across Pillow source modes, target modes, channel counts, and available architectures, including native-source core-only modes, the eight-pixel Default fallback, vector tails, and rejected LUT shapes. The archived CPU/SIMD comparison is complete; active Default strategies consume native sample carriers. |
+| `compute/pool_cpu/ops/imageops/ops.rs` | The family entrypoint owns Autocontrast, Equalize, Expand, and Quantize support descriptors and the Autocontrast, Equalize, and Expand pipeline front doors; mode classifiers and prepared native strategies remain in their operation modules. Quantize now passes its retained `StrategySelection` through all 25 exact-mode owners, including macro-generated CoreOnly routes and supplied-palette L/RGB/PA paths. Finish direct/fusion caller reconciliation for Invert, Posterize, Solarize, Equalize, Autocontrast, Colorize, CropBorder, and Expand; compare remaining Invert, histogram, and Expand routes. The public Autocontrast/Equalize/Posterize/Solarize mode checks now use their operation declarations, while P Posterize/Solarize remain CoreOnly native-index strategies. Colorize supports Pillow L only and does not project other modes through L. Invert's P/LA/PA/RGBA/CMYK routes are declared CoreOnly; source-aware materialization preserves native P/PA strategies and palette metadata. Target-only parity remains pending. |
+| `compute/pool_cpu/ops/imageops/ops.rs` (`prepare_crop_border`) | Expand parity for CropBorder's outer and composed Crop selections across exact modes and architectures, including I;16 guard fallbacks and empty outputs. Source review confirms width-before-height errors and the archived ordinary-byte admission. |
+| `ops/imageops/geometry.rs` | P-mode Expand tuple/name resolution consumes the exact-mode `OperationId::Expand` `PaletteIndexOrColor` declaration; palette allocation, error order, and output metadata parity remain pending. |
+| `compute/pool_cpu/ops/transpose/ops.rs` | Native-byte transpose, including tiled/gathered axis swaps and same-dimension methods, is declared for the archived native-byte and I;16 identities under SSE2, NEON, and Wasm SIMD128; RGBA AVX2 remains preferred for eligible axis swaps. Native-byte guards admit the archived logical source prefix and exact empty storage; I;16 guards keep empty storage on Default. Parity must verify those boundaries and architecture receipts. The archived byte Flip adapter had no distinct vector kernel, while I;16 Flip retains its vector owner. Keep archived parallel collection kernels for the later `pool_parallel` stage. |
+| `compute/pool_cpu/ops/thumbnail/ops.rs` | The Thumbnail operation contract now links conditional Reduce, Resize, and ResizeBoxed support, and the prepared receipt records the exact selected child strategies from the injected context. Continue the archived vector Thumbnail mode/kernel comparison and retire compatibility callers after source review. The streamed ImageI32 2x2 path now has exact Default and guarded AVX/FMA owners. Mode-specific nearest-filter rules for `1`/`P`, reducing-gap exceptions for straight-alpha `LA`/`RGBA`, stored-sample reduction for `La`/`PA`, and the F32 unboxed Resize policy now live in mode-owned strategy folders. |
+| `compute/pool_cpu/ops/rotate/ops.rs` | The maintained owner declares all 25 exact modes with serial Default strategies, including typed native `u16`/`f32` paths for the five internal identities, each marked `NO_PILLOW_SUPPORT`. The serial three-byte contiguous-copy and RGBA unrolled nearest paths are restored. All byte-backed exact modes declare native-byte nearest strategies for AVX2, SSE2, NEON, and Wasm SIMD128, including raw-byte `I`/`F` carriers; byte modes declare their archived bilinear vector kernel where supported, including typed I/F arithmetic. Architecture-selected identity copies and exact right-angle transposes now use native vector-copy/transpose helpers and retain their receipts for eligible nonempty inputs. Empty-source Rotate requests now use the exact mode's serial Default strategy; byte-backed and native typed Default paths permit empty output only for archived 180° and expanded 90°/270° fast paths, while other empty geometry retains Default's checked behavior. The four I;16 identities remain typed-u16 Default-only. Source comparison confirms the archived raw-byte SIMD nearest route uses signed 16.16 coordinate stepping and byte-plane sampling, which differs from the maintained Pillow I;16 path's floating Geometry.c mapping over typed u16 samples; the mode owner records a TODO for a future exact-geometry typed strategy rather than declaring that incompatible route. Remaining work is per-mode direct/compatibility caller review plus CPU parity, including empty-output and fallback receipts; core-only extensions stay outside Pillow parity. |
+| `compute/registry/registration/imageops.rs` | Source-review direct and eager ImageOps callers against the prepared CPU registry; grayscale's bounded RGB eager path already uses the prepared plan and injected routed context. |
+| `image/materialization.rs` | Keep typed prepared plans flowing through the serial pool and preserve resolved operation dependencies on wrapper-to-pool routes. Single-operation lazy P/PA Grayscale, Equalize, and Invert use their declared exact-mode CPU strategies before generic palette expansion. Other CPU indexed requests validate the first `PipelineOp::support()` mode declaration against the materialized P/PA source before expansion, so direct `Image::push_op` cannot dispatch a rejected request as RGB(A). Finish GPU palette-strategy separation in its later backend stage. |
+| `image/pipeline_ops.rs`, `pipeline/support.rs`, `compute/mod.rs`, `lib.rs` | `PipelineOp::operation_id()` and `PipelineOp::support()` now expose the same typed operation declarations used by preparation; Convert selects the matrix contract when its matrix is present, and draw/chops variants map to their owning operation identities. `OperationId`, support descriptor types, `ExecutionContext`, and `Architecture` are re-exported at the crate root for Rust callers. Autocontrast, Equalize, Posterize, and Solarize wrappers now validate modes through their operation declarations; Filter and GaussianBlur already use the declared support path. Native internal high-depth Posterize/Solarize rejection reasons now match their public mode labels. The Rust `blend` wrapper validates mode pairs and dimensions through `BlendModule`'s `InputContract`, checking mode pairs before dimensions to preserve error order; it retains an explicit backend from the first operand, or inherits the second operand's pin when the first is an eagerly materialized base. The materializer rejects direct P/PA BlendModule requests from that same declaration before palette expansion. Python Color's eager-base/public-Blend caller is source-traced; the context-taking one-shot fallback routes are source-reviewed; output and receipts remain unverified. Verify Brightness float32 byte blending and architecture-fallback receipts in parity, and include Color's host path and metadata behavior in the frozen parity scope. Retain Contrast's documented conversion-first behavior and Sharpness's completed exact-mode route. Preserve exact rejection/error order, then remove the source-mode fallback only when every accepted P/PA transition has a declared result. |
+| `compute/registry/support.rs`, `compute/registry/support/operation.rs`, `raster/mode.rs` | Keep `support.rs` as the shared contract facade and re-export `OperationId` from its size-bounded family mapping submodule. `Mode::uppercase_a_band_index()` exhaustively identifies the uppercase `A` band across all 25 mode identities; ColorSaturation and Contrast consume this typed mode fact. |
+| `image/construction.rs`, `image/mode_boundary.rs`, `image/pixel_access.rs` | Raster identity is typed end to end: constructors and raw-byte creation take `raster::Mode`; generated rasters match that enum into their exact `DynamicImage` variant; pixel writes derive identity from the existing image; and `Draw::new` accepts `Option<Mode>`. Python and JavaScript parse public Pillow spellings at their host boundaries. Remaining `rawmode` strings select raw decoder or palette byte layouts, not raster identity, so they stay a separate contract. `mode_boundary::parse_pillow_mode` has one remaining GPU result-metadata caller, tracked for the GPU stage. |
+| `image/metadata.rs::known_mode_identity` and `mode_identity`; `image/pipeline_ops.rs::PipelineModeCache` | Preserve the exact header `Mode` on lazy byte images and use the `DynamicImage` variant after materialization. Pipeline nodes cache operation-declared output identity when available, otherwise plan once from typed support contracts. Keep materialization fallback only for `Planned(None)` or unresolved/erroring metadata paths; verify the remaining upstream-unknown, palette-dependent P, rejected-descriptor, and incomplete PutData output cases for mode access, output identity, and fault ordering. |
+| `image/codec_adapter.rs`, `image/metadata.rs`, `image/construction.rs` | Header inspection translates the codec-selected identity once into Pillow-owned `Mode` and stores it on lazy `Image::Bytes` without decoding. Materialization chooses the transfer carrier from codec layout, then retags only compatible carriers to the stored identity and attaches compact-mode physical lanes; the resulting `DynamicImage` remains authoritative. Keep the codec and raster enums independent. Remaining: resolve the codec-owned TIFF associated-alpha header semantics and verify header identity, decode faults, samples, hidden lanes, and materialization timing in CPU parity. |
+| `ops/filter.rs` | Filter validation obtains exact `Mode` through `Image::mode_identity()`. The direct ModeFilter preflight uses its operation support descriptor; UnsharpMask, palette, PA GaussianBlur, and F32 compatibility gates remain at this host-facing boundary. Reconcile their outcomes with prepared contracts while preserving lazy error timing, then finish Pillow filter-name/mode/error ordering and the private ImagingCore compatibility review. |
+| `compute/pool_cpu/ops/filter/ops.rs`, `compute/pool_cpu/ops/filter/luma8/ops.rs` | Source crosswalks now cover exact-mode Filter3x3/Filter5x5, native-byte blur/extrema/rank, F32 rank ordering, RGBA radius-seven GaussianBlur, and architecture admission/fallback ownership. The family entry composes typed support, request facts, injected context, and UnsharpMask's GaussianBlur child; mode and architecture owners hold the pixel loops. Public named-filter, generic Kernel, custom callback/split/merge, and direct/eager Rust callers trace into the exact-mode contracts. ModeFilter's 14 byte modes and explicit palette/high-depth rejections are declared. No separate SIMD registrations remain active; Rayon scheduling stays in the future `pool_parallel` backend. The remaining private ImagingCore compatibility question is tracked separately; output, fault order, callback, selection/fallback receipts, and performance remain pending the frozen CPU gates. |
+| `image/metadata.rs::Image::mode_identity`, `image/pipeline_ops/mode.rs`, `image/pipeline_ops.rs`, `pipeline/support.rs` | The source crosswalk now accounts for all 87 `PipelineOp` variants through the exhaustive `operation_id()` match and its 75 `OperationId` results; `PipelineOp::support()` delegates to that same family-owned declaration. The parameter groups are Convert/ConvertMatrix, Equalize/EqualizeMasked, the three Pad forms, the two Expand forms, and ten Draw forms. The normal `Image::push_op` path calls `pipeline_output_metadata` once; `append_pipeline_op` reuses a prefix only for a same-mode preserving chain, and `new_pipeline_node` seeds its cache from the support-derived output. `push_mode_changing_op` is the separate Color3DLut route and seeds from its typed target parameter. The other direct cache-seeding pipeline constructors are the prepared Convert-to-P wrapper, Quantize-to-P output wrapper, and palette-only metadata layer; these carry an exact P/current Mode with no queued operation. `Image::mode_identity` replans only when the cache is unresolved, and materialization compares the producer's exact `DynamicImage` mode against any declared identity. The ImageOps point and module point/eval wrappers now delegate to this resolver. `Image::palette_expansion_mode` resolves PA to RGBA without palette metadata and P with an attached palette to RGB/RGBA according to palette alpha. The branch-level `OutputModeRule` review found typed target extraction for Convert/ConvertMatrix, Merge, and Color3DLut; `ByPayload` is used only by PutData and its 16-entry table; and no raster-producing PipelineOp route declares `NoRasterResult`. Remaining intentional materialization boundaries are unresolved upstream pipelines, palette-dependent P routes without an attached palette, rejected descriptors without a declared rejected output, and PutData payloads absent from the output table. Defensive `None` paths for targetless `ByTargetMode`, non-PutData `ByPayload`, or `NoRasterResult` on a raster PipelineOp would indicate a support/declaration mismatch; no active mapping to those branches was found. The GPU graph planner is another caller of `known_pipeline_op_mode`; its string-to-Mode conversion and no-palette-expansion assumptions remain for the later GPU stage. CPU source crosswalk is complete; exact mode, error-order, and fallback-receipt parity remains pending the Stage 5/7 gates. |
+| `pipeline.rs` | Merge now stores exact typed `Mode`; remove the GPU source-mode snapshot after GPU parameter encoding uses the prepared mode transition. |
+| `compute/pool_cpu/ops/color3dlut/ops.rs`, `compute/pool_cpu/ops/imageops/ops.rs` | Color3DLut active scalar/vector mode strategies, architecture leaves, support declarations, guards, and archived source comparison are source-reviewed; expand its operation × source Mode × target Mode × Architecture parity. ImageOps direct wrappers, fusion callers, histogram, Expand, and owned-buffer Invert routes are source-reviewed; operation × exact Mode × Architecture parity remains pending. No separate SIMD compatibility route remains active. |
+| `compute/pool_cpu/ops/eval/ops.rs` | Source comparison is complete; expand parity across exact Mode × Architecture and LUT/tail cases. Move the archived Rayon row scheduler to `pool_parallel` in its later backend pass. |
+
+Crop input boundary decision (2026-11-21): keep the core carrier primitive and
+typed. The Python facade owns Pillow's original-coordinate comparison, load,
+`round()`/`int()` order, and arbitrary-precision decompression-bomb extent
+check, then passes normalized C-int coordinates to `Image::crop`; Python
+integers are not projected through `f64`. The separate Rust `crop_float` API
+continues to accept four `f64` coordinates. Python host numeric protocols stay
+at the adapter boundary and are not added to the Rust carrier. Large-integer,
+float-tie, non-finite, and callback/error-order parity remain pending.
+
+- The shared support selector now evaluates declarations for the requested `Architecture` before permitted lower-architecture candidates, and both support assessment and preparation use that order. When an operation has only a lower-architecture implementation, selecting it now retains `MissingSpecialization` instead of clearing the reason; Composite is one such declaration set for an AVX2 request when its SSE2 strategy is available. This aligns the inspectable selection with the declared fallback contract. Parity must still verify exact matches, lower-architecture selections, and build/hardware/guard fallback receipts across all operation declarations. Source-only; no runtime validation ran.
+- Merge and BlendModule source review (2026-11-01): the typed Merge wrapper retains the baseline shape, band-mode, and size validation order; prepared execution dispatches by exact target Mode. Identity modes retain their native source, multi-band Default owners interleave the declared native samples, and LAB applies the archived A/B bias. The RGB Default owner restores the archived 64-pixel three-L-band loop; exact SSSE3/NEON specializations retain the 16-pixel admission and use the selected guard, with same-architecture wide-shuffle fallback below it. The portable wide routes preserve the archived 8-pixel two-channel and 4-pixel three/four-channel blocks, scalar tails, and empty/sub-block route receipts. BlendModule's typed mode groups and error order match the baseline wrapper; its Default arithmetic preserves f32 fused blending and LAB bias handling, while eligible AVX/FMA and NEON paths retain the finite-alpha, exact-layout, empty-or-at-least-eight-byte guard and 16-byte/padded-tail receipts. Source review only; CPU parity remains pending.
+- Composite and Paste mask selectors now match the archived accepted mask identities: `1` and `L` select sample 0; `LA`, `RGBA`, and premultiplied `RGBa` select the alpha byte when requested. The Default Composite byte path retains the archived per-byte `(source * mask + destination * (255 - mask) + 127) / 255` operation and keeps image2 as the output canvas.
+- The Composite eager wrapper matches the baseline order: validate image1/mask dimensions, resolve the mask's exact mode, then convert image1 to image2's exact mode if needed. The accepted mask sets are exactly `1`/`L` and `LA`/`RGBA`/`RGBa`; palette metadata for P/PA outputs follows image2. `CompositeNativeByteVector` admission checks exact source/destination identities and byte layouts plus mask identity, layout, and source-size agreement. The prepared architecture plan then routes each byte mode to its corresponding borrowed Paste owner; specialized NEON row owners require the selected Composite L-mask guard and otherwise fall back to the generic same-architecture vector kernel. Wrapper, formulas, tails, and receipts are source-compared; exact-mode owner dispatch, selected-guard consumption, and architecture/build fallback are also traced in the continuation below.
+- The CMYK L-mask NEON row now has a source-to-source comparison against archived `native_paste_cmyk_l_masked_row`: both process 16-pixel interleaved C/M/Y/K blocks, use the same widened DIV255 arithmetic and +128 correction, continue with 16-byte then 8-byte samples, and use a padded 8-byte tail for the `true` short-tail policy passed by archived Paste/Composite. Both count each 16/8/padded vector block and count the active padded-tail bytes as scalar-tail work; the selected path receipt is `neon-cmyk-l-blend`. No formula, threshold, tail, or receipt mismatch was found. This is source review only; no kernel was run.
+- RGB and HSV L-mask NEON rows now have a source comparison against the archived RGB row: both deinterleave the same 16-pixel/48-byte prefix with `vld3q_u8`, apply one mask sample to each of its three byte lanes, then process complete 16-byte and 8-byte groups and the permitted padded 8-byte tail. The sub-strategy guard keeps the archived 16-pixel minimum; vector-block receipts match the archived row-byte accounting, no scalar-tail receipt is emitted for this L-mask specialization, and the `neon-rgb-l-blend` path is selected only when the prefix actually uses NEON. HSV uses the same byte layout while retaining its exact output identity. No formula, threshold, tail, or receipt mismatch was found. This is source review only; no kernel was run.
+- L and LA L-mask NEON rows now have source comparisons against their archived owners. L keeps the 16-pixel threshold, 16-byte NEON groups, exact scalar remainder formula, and matching `neon-blend` receipt counters. LA keeps the eight-pixel threshold, deinterleaves both stored channels with one L sample per pixel, then uses 16/8-byte blocks and a padded 8-byte tail; its active path, vector-block counts, and no-scalar-tail receipt match the archived `allow_short_masked_tail=true` route. Both use the same widened DIV255 rounding as the archive. No formula, threshold, tail, or receipt mismatch was found. This is source review only; no kernel was run.
+- RGBA L-mask NEON now has a source comparison against archived `native_paste_rgba_l_masked_row`: both use the exact four-pixel threshold, 16-byte RGBA NEON blocks, then 16/8-byte remainder blocks and an optional padded four-byte pixel tail. The four stored samples, including alpha, use the same per-byte DIV255 arithmetic. Vector-block and active tail-byte counts match the archived padded-tail accounting, and `neon-rgba-l-blend` is recorded only for the selected NEON route. No formula, threshold, tail, or receipt mismatch was found. This is source review only; no kernel was run.
+- The archive dispatched PA plus an L mask to a distinct two-byte row kernel. The exact `ImagePaletteAlpha8` Paste and Composite architecture declarations now include that Neon substrategy with a one-pixel clipped-width minimum; the `palette_alpha8/neon/pa_row.rs` owner blends the two stored PA lanes independently, expands each L value across its pixel pair, uses the archived 16/8-byte blocks plus padded 8-byte tail, and records its vector path without scalar-tail work. The generic vector implementation remains the fallback for other masks and source layouts.
+- LA/RGBA AlphaComposite support and direct/pipeline callers are source-reviewed against the archived validation order: destination mode, source mode, dimensions, then queue/preparation. The fixed-point serial pixel routine, eight-pixel vector path, zero-alpha preservation, exact-mode output, and RGBA AlphaComposite+Mirror fusion eligibility/receipt flow were also traced to their archived counterparts. This remains source-only and unvalidated.
+- Paste's direct public routes are source-reviewed: Python and JavaScript classify host values into neutral input records and delegate to `Image::paste_with_input`; typed Rust `paste` and `paste_at` share `paste_impl`; Draw Bitmap's compact masked route is gated by its own exact destination/mask checks. Source size lookup, placement validation, dimensions-before-mask ordering, source normalization/conversion, and lazy queueing remain in the wrapper. `paste_mask_uses_alpha` now obtains the accepted mask identity and luma/alpha selector from the exact destination mode's `OperationId::Paste` input declaration, removing the duplicate wrapper table.
+- Pipeline Paste preparation materializes source before mask, records exact mode/dimensions/layout facts for both, assesses the operation declaration, and consumes the injected selection/context to prepare the destination mode owner. The lazy planner preserves the destination `Mode`; P/PA raw-sample materialization retains palette metadata. The public contract covers normalized same-mode sources, specified compact masked-bitmap sources, exact masks, and unchanged mismatch/rejection errors. Direct and pipeline callers, per-mode SIMD/kernel formulas, block/tail receipts, and selection routing are source-reviewed; runtime pixel and telemetry evidence remains pending parity.
+- Composite/Paste's generic masked-byte vector route uses clipped source rows, the full requested-region mask stride, and the clipped source offset when mapping each stored byte to a mask pixel. Binary `1` masks select source for every nonzero sample; fractional `L` and alpha masks use the per-byte DIV255 formula, while premultiplied `RGBa` uses the `+128` preblend formula. The maintained kernel processes full 16-byte and 8-byte groups, then handles any remainder with a zero-padded wide-vector block; it reports that work as vector blocks and does not report scalar-tail work. This receipt accounting intentionally differs from the archived per-mode scalar-tail counters even though the pixel arithmetic is preserved. Empty-overlap handling and the seven specialized L-mask NEON rows were reviewed separately above. This is source evidence only; no route was run. Exact-mode owner selection and architecture/build-unavailable fallback are source-traced; selection receipts and pixel outcomes remain for parity.
+- The two unmasked cross-mode RGB routes are now separately source-compared. RGBA→RGB uses the same four-pixel shuffle, padded partial block, ceiling vector-block receipt, no scalar-tail receipt, `vector` path, and empty-region `vector` receipt as archived `simd_paste_rgba_to_rgb`. RGB→RGBA uses complete four-pixel shuffles plus the same per-pixel scalar remainder, floor vector-block count, scalar-tail count, `vector-rgb-to-rgba-copy` path, and empty-region path receipt as archived `simd_put_alpha_rgb_row`/`simd_paste_rgb_to_rgba`. The Default channel mapping also matches the legacy fallback: LA replicates luma and drops alpha for RGB; four-byte sources preserve their first three raw bytes; RGB inserts opaque alpha for RGBA. Masked mapped-source behavior is source-reviewed; architecture guard selection and same-mode fallback are traced below. This is source review only; no runtime validation ran.
+- The masked LA/RGBA/RGBa→RGB mapped route also matches the legacy fallback at the output-channel level: the wrapper retains these accepted native source payloads, each RGB result lane samples luma or the corresponding first-three source byte, and the declared mask value blends that lane against the destination. The fallback's intermediate source/destination alpha lane is discarded when it restores the RGB identity, so it cannot affect the three retained channels. Exact wrapper normalization excludes other mapped sources and keeps RGB→RGBA masked input rejected. This source comparison found no output-formula discrepancy. The 25-mode contract and typed owner inventory are source-reviewed below; runtime pixels and receipts remain pending.
+- Paste architecture admission/fallback source trace (2026-11-01): `ModeSupport::assess` and `select` share the exact-requested-architecture-first order, lower-architecture permission/build/capability checks, and first-fallback-reason retention. Each Paste mode's `ops.rs` routes the resulting architecture identity to its same-mode owner; `NativeBytes` failure, unavailable architecture/build, or missing specialization leaves the prepared same-mode Default owner selected. The seven exact L-mask NEON subkernels are represented as guards ahead of their generic same-NEON vector entry; each kernel checks the selected guard, and an ineligible specialized row uses the generic vector kernel. `paste_l_mask_neon_guard` and the kernel use the clipped region and mode-specific width minima; `PasteRegion::clipped` matches the archived CPU and SIMD region calculation. The RGBA→RGB and RGB→RGBA inner routes are source-layout-specific helpers within their declared exact mode/architecture owner. Source trace only; parity must still establish selection, fallback receipts, and output pixels on each available architecture.
+- CompositeModule, Merge, and BlendModule source review is closed; runtime behavior remains unverified. Paste's 25 matching support classifications, prepared variants, exact typed preparation routes, mode owners, architecture admission/fallback, and formula/tail comparisons are source-reviewed. The Python wrapper order review reopened on 2026-11-02: staged source/destination/mask loading now preserves palette boundaries and box-as-mask uses the loaded wrapper image; input coercion and custom coordinate timing remain TODOs in CPU_REFACTOR_PLAN.md and the Paste wrapper notes below. Actual pixels and telemetry receipts remain pending parity. No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage command has run.
+- GetChannel mode-contract source review (2026-11-01): Pillow [`ImagingGetBand`](https://github.com/python-pillow/Pillow/blob/main/src/libImaging/Bands.c) rejects non-`UINT8` storage before selector validation, then copies a one-band byte image without changing its mode. The maintained wrapper now declares `1` and `P` as mode-preserving identities (including P palette retention); it rejects I/F before materialization and index checks; native I;16* identity reads are CoreOnly with `NO_PILLOW_SUPPORT` and preserve the exact typed mode/sample buffer. Internal u16/f32 multi-band outputs remain typed. Other supported multi-band routes use their prepared `ExtractBand` child. The exact selector/output contract is source-reviewed, but direct identity/no-op receipt behavior, L shared-buffer, tiny-RGB eager, deferred execution, architecture fallback, and telemetry paths still need the frozen 25-mode CPU parity matrix. No validation ran.
+- GetData caller/context source review (2026-11-01): allocated byte-band reads select the exact-mode contract, use a caller-owned buffer, and route declared SIMD/GPU terminal projections through prepared `ExtractBand`; unsupported projections fall back to the per-mode CPU Default owner. Direct palette-index views use the `Palette8` declaration, and formatted I/F/I;16 reads use typed scalar owners. Full-buffer, scalar-only band, and formatted I/F/I;16 reads now inject the image-pinned/active backend policy into exact-mode CPU strategy selection and record selected/fallback receipts for already materialized host reads. Lazy terminal receipt composition remains pending. GPU terminal eligibility also remains outside the combined support declaration. These routes now have source TODOs and remain in the frozen per-mode CPU parity/receipt matrix; no validation ran.
+- CoreOnly high-depth statistics/GetColors source review (2026-11-01): Histogram and Entropy now scan native u16/f32 samples into the established 256-bin layout without a converted image; Entropy composes the prepared Histogram child under one CPU context. GetColors now declares all 25 modes at the operation level, rejects Pillow's I;16* modes before materialization, counts every byte mode from its exact raster carrier, and counts internal u16/f32 pixels by native sample keys with typed output tuples. Pillow byte-color hash-slot ordering and I/F scalar hash behavior remain in their shared specialized helpers. Stat reduces the prepared 256-bin Histogram output for byte, I;16, and CoreOnly modes without creating a converted source raster; I/F retain their exact scalar formula in their mode owners. The masked Stat wrapper now prepares its Histogram child under the selected Stat context, routes the bins through the selected exact-mode Stat owner, and reduces native u32 bins without a widened f64 histogram buffer; it records Stat selection for materialized source/mask inputs. CPU mode × Architecture parity and lazy terminal receipts for Histogram, Entropy, GetColors, and Stat remain TODO; no validation has run.
+- CoreOnly histogram bin contract (2026-11-01): LA16/RGB16/RGBA16 and RGB32F/RGBA32F retain the 256-bin-per-channel result shape. u16 binning uses `(sample + 128) / 257`; f32 clamps to `[0, 1]` and rounds the scaled value to `[0, 255]`. These formulas match the raster's established `FromPrimitive` byte scaling while calculating indices directly from native typed samples; there is no cross-mode cast, converted image, or intermediate sample buffer for reuse. Masked and unmasked scans are separate, keeping the unmasked loop free of a per-pixel mask check. The user confirmed this direct native scan as the chosen performance path; no conversion or staging raster is to be introduced for code reuse. Pillow-mode parity, CoreOnly edge-case coverage for u16/f32 boundaries and masks, and benchmark evidence remain pending.
+- Lazy output identity review (2026-11-01): supported routes obtain planned output modes from the operation's `ModeSupport::output` declaration. Convert, ConvertMatrix, Merge, RemapPalette, Color3DLut, ConvertLab, Grayscale, Colorize, and EffectNoise declare their rejected-route metadata output through `OperationSupport::rejected_output`; the planner resolves that rule against any typed target parameter without a second operation-to-mode switch. The source audit found no additional rejected source-mode route that exposes a changed raster result before its error: mode-preserving routes retain their source identity; rejected Equalize has no raster result; PutAlpha wrappers reject unsupported source modes before queueing; raw invalid `push_op` descriptors retain their deferred operation error instead of claiming a result mode. Mismatched PutData payload descriptors bypass the mode-preserving identity fast path, and cached-prefix reuse requires the declared output to equal the exact source identity. These metadata and error outcomes remain pending frozen CPU parity. Source-only; no validation ran.
+- Indexed enhancement caller source audit (2026-11-01): Brightness and Sharpness validate exact-mode support before queueing, so P/PA follow their declared wrapper rejections. Contrast and ColorSaturation use the eager base-conversion/Blend path for modes without a prepared strategy; their `OperationModeRoute` declarations expose the intermediate mode and child rejection stage. Direct indexed `push_op` admission checks exact P/PA support before palette expansion, and the planner leaves a mode-preserving palette-unsafe output unresolved for the existing materialization path. Pending: verify indexed metadata, eager base outputs, and public wrapper error order in the frozen CPU parity cases. No validation ran.
+- Analysis support placement (2026-11-01): `analysis/ops.rs` now owns the exhaustive mode classifiers and descriptors for Histogram, Entropy, GetColors, Stat, and GetExtremaBytes beside their operation family entries. The execution helpers consume these declarations for admission and preparation; they no longer own or re-export the support contracts. The `ProjectionOutput` receipt type lives with projection helpers so `analysis/ops.rs` remains under the 1,000-line cap. This structural move is not compiled or runtime-validated.
+- Quantize source migration (2026-11-01): The public Image wrapper routes direct Quantize through the CPU operation owner with injected CPU/Architecture context, palette metadata, exact source mode, P output, and declared parameter guards. L reads native luma samples; P resolves its borrowed RGB palette once into a fixed lookup table and reads native indices; both use statically dispatched quantizer sources, never a relabeled/intermediate DynamicImage. RGB8 and RGBA8 retain their exact-mode Default owners. All 21 CoreOnly identities now dispatch through their exact mode `ops.rs` and Default quantize implementation under `imageops/<mode>/default`; the implementations read native carriers without a converted DynamicImage/RGB/RGBA raster. RGBa and RGBX preserve the prior alpha-aware octree route; I;16 retains clipped byte semantics, while other u16/f32 carriers apply the raster FromPrimitive mapping during sample reads. Each extension owner has a nearby `NO_PILLOW_SUPPORT` comment. The operation contract explicitly restricts methods for RGBA/RGBa/RGBX; pre-materialization wrapper validation remains limited to Pillow RGBA to preserve palette/error ordering, while the prepared contract enforces the same restriction for RGBa/RGBX. Their CoreOnly strategies retain the alpha-aware octree and alpha palette. MaxCoverage and median-cut k-means now access native sources without staging converted pixel lists. Custom-palette mapping reads native L or RGB buffers directly. Quantization helpers remain shared with color conversion only where their sample contract is identical. Materialized Quantize calls now record the requested Backend and exact-mode `StrategySelection`; lazy-source receipt composition remains a TODO. Mode × Architecture parity and CoreOnly extension evidence remain pending; no validation has run.
+- Draw Bitmap mask source correction (2026-11-01): Pillow [`Paste.c::ImagingFill2`](https://github.com/python-pillow/Pillow/blob/main/src/libImaging/Paste.c) accepts `1`, `L`, `RGBA`, and `RGBa` masks. The maintained `BitmapMask` now reads the alpha byte from both RGBA identities; RGBa applies the archived PREBLEND arithmetic, including at zero mask alpha. For nonzero L coverage on alpha-bearing destinations, Pillow's integer expression promotes non-alpha coverage only when destination alpha is exactly zero; the alpha channel always uses the original coverage. The byte-mode LA/La, PA, RGBA/RGBa, RGB/CMYK, and raw four-byte owners now follow these branches; PA writes its palette index and alpha without treating the index as luma. Source-derived code only; no build or runtime verification ran. Pending: I;16* byte-order parity, direct Text ink/palette/error ordering, public Bitmap fast-route and metadata reconciliation, and CPU parity/receipts.
+- CPU byte PREBLEND placement (2026-11-01): moved the scalar Pillow PREBLEND byte formula to `pool_cpu/helpers/bytes/preblend.rs`, the narrow backend helper shared by Draw Bitmap and Paste's scalar byte/I;16 owners. Their source mode and carrier selection remain with each operation; only identical arithmetic is shared. No validation ran.
+- Draw Text mask layout (2026-11-01): mode dispatch now specializes coverage-only and RGBA FreeType masks before entering each mode's Text strategy. Mode owners read the original borrowed mask bytes directly; the former coverage-to-RGBA expansion and its per-call allocation are removed. RGB-family owners still read embedded mask RGB when the declared mask is RGBA. This preserves the current mode algorithms at source level; ink/palette/error-order parity and the remaining Draw TODOs are pending. No validation ran.
+- I;16* Draw Text native path (2026-11-01): Pillow's `ImageDraw` chooses an `L` font mask for I;16* and `Paste.c::fill_mask_L` blends the two ink bytes at the native two-byte sample stride. `fill_mask_RGBA` steps through the raw row byte prefix at one byte per mask pixel and uses alpha coverage. The exact-mode owner now clips the glyph rectangle and applies each mask layout directly to the u16 carrier's byte view; it removes the previous full-canvas u16→u8 projection and rescaling pass. This avoids converting the mode or allocating a staging raster. Each declared I;16* byte-order identity remains pending parity; no validation ran.
+- P-mode Draw Text clipping (2026-11-01): the palette-present and palette-absent branches had different source-mask loop bounds despite `ImagingFill2` using the same destination clip and mask offset for P. Replaced both with one native palette-index loop over the clipped rectangle; the wrapper still requires prepared palette knowledge so metadata handling and error order remain explicit. Negative-origin source clipping now follows Pillow's mask offset. CPU parity and metadata/error-order checks remain pending; no validation ran.
+- Draw Bitmap source borrowing (2026-11-01): after mask mode and dimensions are admitted, the generic direct Bitmap route now borrows bytes from the materialized native mask instead of building a second full-size `Vec<u8>` via `getdata(None)`. The direct typed mode kernel continues to own destination writes. Error ordering, lazy-mask materialization behavior, and backend route parity remain pending; no validation ran.
+- I;16* Draw Bitmap source follow-up (2026-11-20): Pillow 13.0.0 routes `ImageDraw.bitmap` through `ImagingDrawBitmap` to `ImagingFill2`. `fill_mask_L` blends both ink bytes at the 2-byte pixel stride; `fill_mask_1`, `fill_mask_RGBA`, and `fill_mask_RGBa` step through the raw row byte prefix at one byte per mask pixel, with `RGBa` using alpha and PREBLEND. The four exact-mode Default wrappers preserve I;16/I;16N native order and select host-dependent swapping for I;16L/I;16B. The maintained helper clips the region and writes directly into the native u16 carrier's byte view, without a u16→u8 projection or full-frame rewrite. Source review covers all four identities; output parity across each mode and mask remains pending. Sources: [Pillow 13.0 `ImageDraw.bitmap`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageDraw.py#L2453-L2471), [`ImagingDrawBitmap`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Draw.c#L3657-L3667), and [`ImagingFill2` mask paths](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L2206-L2563).
+- Draw Bitmap RGB/RGBA-context route review (2026-11-20): Pillow's `ImagingFill2` blends every physical byte for RGB's four-byte carrier, so an RGBA drawing context writes its ink alpha into the hidden fourth lane. The accelerated Draw→Paste composition resolves a solid RGB destination with an opaque hidden lane. Removed only the RGB-raster/RGBA-context tuples from the accelerated child route; those calls now use the exact-mode Draw Default fallback, which preserves the ink lane. Visible RGB blending remains the same. The context-specific fallback selection, hidden-lane output, and parity receipt remain pending in the CPU matrix. Source: [Pillow 13.0 `Paste.c::fill_mask_L`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L2291-L2398).
+- Draw `fill_mask_L` integer rule correction (2026-11-01): the C expression uses integer division, so only a zero destination alpha promotes non-alpha coverage to 255; alpha values 1–255 retain original coverage. Updated the shared Bitmap helper and PA Text path to reflect that exact branch. This is source review only; no checks or parity ran.
+- F32 rank selection correction (2026-11-03): source comparison found that the archived Rust implementation's partial-comparison sort is not Pillow 12.2's `RankFLOAT32`. Pillow uses the same in-place Wirth partition for UINT8, INT32, and FLOAT32; its `<` comparisons make NaNs and signed-zero ties depend on partition order. The maintained Default owner now mirrors that partition in safe Rust for all F32 windows. The vector strategy remains admitted only for nonempty exact F32 buffers, odd windows through 9x9, valid ranks, and samples with no NaNs or mixed zero signs. Pillow source: [`RankFilter.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/RankFilter.c). This source correction has no runtime verification; freeze NaN payload, mixed signed-zero, compatible-tie, operation, architecture, and fallback-receipt parity cases before claiming parity (`pillow-rs#brg0`).
+- Rank-filter boundary source review (2026-11-03): Pillow 12.2's Python `RankFilter.filter` expands the image by `size // 2` on every side, and `ImagingExpand` repeats the nearest edge samples; `ImagingRankFilter` then shrinks that padded image by the same margin. The maintained same-size clamped gathers are equivalent for nonempty inputs and avoid allocating the temporary expanded raster. For zero-width or zero-height input and rank windows of size 3 or larger, Pillow 12.2's positive-margin expansion dereferences edge storage; the Rust path safely returns an empty same-mode result. Keep those empty-image cases in the frozen parity matrix as a deliberate safe divergence; size 1 has no expansion margin and is not part of this divergence. Sources: [`ImageFilter.py`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageFilter.py#L1537-L1547), [`Filter.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Filter.c#L1242-L1333), [`RankFilter.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/RankFilter.c#L581-L620). This source review does not replace runtime parity.
+- PutAlpha support and wrapper trace (2026-11-01): the public wrapper rejects One, La, LAB, YCbCr, and HSV, and reports the Pillow conversion errors for One/YCbCr/HSV. The operation support declaration now matches those rejections, marks the existing native u16/f32 carrier outputs CoreOnly, and the lazy output planner no longer predicts a result mode for rejected YCbCr/HSV descriptors. This is admission metadata only; the kernels were not changed. `putalpha_data` validates destination-mode support before materializing the mask, matching Pillow's first validation step. Pillow 12.2 then promotes a supported destination before validating an image mask; the Rust boundary does not queue that transition until every mask check passes. Mutation-on-mask-error and Python metadata behavior remain pending review against the pinned source. No validation ran.
+- RGBa PutAlpha source correction (2026-11-01): Pillow's [`Image.putalpha`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py) converts RGBa to RGBA before replacing the alpha band; [`Convert.c::rgba2rgbA`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c) copies RGB at alpha 0/255 and otherwise computes clipped integer `(255 * channel) / alpha`. The archive's generic carrier conversion retained premultiplied RGB, so constant and mask PutAlpha now fuse Pillow's unpremultiplication into the one required native RGBA output allocation, without retagging samples or staging another raster. The scalar unpremultiplication helper is shared under `pool_cpu/helpers/bytes` with Convert. Source review only; CPU parity remains TODO for old-alpha values 0, 1, 254, and 255 under both inputs.
+- Maintained CPU projection scan (2026-11-01): searched active `pool_cpu` outside `color/convert` for calls to `to_rgba8`, `to_rgb8`, `to_luma8`, `to_generic`, `into_rgba8`, `to_luma_alpha8`, and typed luma/RGB output methods. The only call found is P Equalize's palette expansion to RGB, which is part of Pillow's operation semantics and is documented at its mode owner. This is source inspection only; no validation ran.
+- DynamicImage mode-assignment audit (2026-11-01): `DynamicImage::with_mode` preserves bytes and explicitly assigns another identity only when the carrier family matches; callers must certify sample meaning, and this helper is not a conversion strategy. Source review covered decode/frombytes and generated-image adapters; GPU result metadata; Convert, Enhance, Paste, ParamFilter, and Eval result carriers; and the test-only resize compatibility helper. Adapter and operation callers pair their explicit requested `Mode` with a carrier produced for that mode, while internal high-depth identities return unchanged or reject incompatible storage. The test-only resize helper now fails immediately if an output carrier cannot preserve the source identity instead of silently returning the default carrier tag. The uncached-only pipeline retag has been removed. Cached and uncached evaluation now compare the producer's exact variant with declared output metadata and return an internal error on mismatch rather than silently reinterpreting same-carrier samples. Remaining: audit declared and lazily planned outputs against every producer strategy and reconcile any mismatch at its owner. No validation ran.
+- Resize compatibility reachability (2026-11-08): exact CPU Resize owners use prepared typed strategies and shared low-level coefficient/sample helpers; the generic `pil_resize`/`pil_resize_boxed` wrappers have no active callers. The `resize.rs`, `boxed.rs`, and `integer_modes.rs` files under `ops/pil_resize/` were not declared by the active facade, so they were removed as uncompiled duplicate implementations after confirming there were no source includes or call sites. `X86FmaToken::detect` only occurred in that stale boxed wrapper; production F32/I32 AVX/FMA owners construct the token from injected `ExecutionContext` and selected `Architecture`. The retained facade exports the shared primitives used by maintained strategies. Source-only cleanup; no validation ran.
+- Convert nonstandard-source routing review (2026-11-01): `Image::convert` checks the exact source-mode Convert declaration before its fallback routes. CMYK, YCbCr, HSV, P, PA, I, and F each declare L and LA, and their Default Convert owners produce those destinations directly; removed the unreachable generic grayscale/luma and P-to-RGBA branches with the unused YCbCr luma helper. Every candidate pair in `try_convert_between_nonstandard_modes` is covered by those source-mode declarations, so the unused wrapper path is removed. Reviewed the remaining `try_convert_nonstandard_source` target classes: binary and palette routes precede the support check, I;16 and LAB have dedicated composed routes, La/RGBa and RGBX have explicit wrapper routes or rejections, and the remaining accepted targets are declared for each nonstandard source. Removed the generic expansion fallback as unreachable. The separate eager premultiplied-alpha and RGBX compositions still need archived error-order, output-identity, and injected CPU receipt/context review at their owners. This is source-call-graph review only; no build, lint, test, parity, or benchmark ran.
+- GetChannel/Split support-route review (2026-11-01): exact mode contracts expose GetChannel selector counts, P/1/I;16 identity outputs, I/F rejection, CoreOnly u16/f32 bands, and the ExtractBand child declaration. `OperationSupport::routed` now reports each exact mode's wrapper path: direct identity or palette copy, guarded loaded-L shared-buffer identity with a child fallback, guarded tiny-RGB eager child with a lazy child fallback, and per-band Split children. `OperationModeRoute` exposes the declared pipeline child IDs, and GetChannel/Split map those IDs to the queued `PipelineOp` variants instead of independently naming their children. Deferred terminal receipts, metadata/error order, and mode × architecture parity remain pending; no validation ran.
+- GetChannel/Split route follow-up (2026-11-01): `OperationSupport::routed` now reports the per-mode wrapper-owned identity/palette copies, loaded-L shared-buffer identity/child fallback, tiny-RGB eager child/lazy child routes, and Split per-band child routes. The loaded-L shared-buffer path now reports `native-identity`; no architecture is selected for this no-kernel result. Direct `1`/P/I;16 and Split identity-copy receipts remain pending with deferred terminal receipts, metadata/error order, fallback checks, and mode × architecture parity. Source-only; no validation ran.
+- GetChannel/Split route declaration update (2026-11-01): `OperationModeRoute::WrapperOwned` and `OperationRoutePath` now describe the per-mode wrapper paths at each operation entry: identity and palette-preserving copies; loaded-L exact-sized shared-buffer identity on the CPU-only active route followed by ExtractBand fallback; tiny-RGB eager CPU extraction followed by the lazy child; and one ExtractBand child per logical Split band. The mode output contracts and existing child declarations are unchanged. Direct and deferred receipts, metadata/error ordering, architecture fallback evidence, and CPU parity remain TODO; this source-only route-model update is unvalidated.
+- PutAlpha CoreOnly wrapper alignment (2026-11-01): `validate_putalpha_mode` now delegates to the matching `PutAlpha` or `PutAlphaData` support declaration, allowing the exact native u16/f32 strategies for I;16 identities and internal high-depth modes while removing the duplicate wrapper mode list. The per-mode support marks these routes CoreOnly and the pipeline planner declares their typed output identities; `One`, I, F, YCbCr, HSV, La, and LAB retain their prior Pillow errors. This exposes the implemented Rust extension without changing its scan or alpha algorithms. `NO_PILLOW_SUPPORT` is documented at the wrapper and mode owners. Source-only, unvalidated.
+- Convert eager premultiplied-alpha/RGBX source review (2026-11-01): compared the remaining wrapper compositions with the pre-refactor `3f9dfd403` dispatch. Exact source/target strategies are checked first. The fallback premultiplied route retains the archived P rejection, L-like/I;16 errors, and RGB-normalized composition; the RGBX route retains its LA/PA-to-RGBA branch, palette-alpha correction for P, RGB normalization for other modes, and exact RGBX result identity through the compatible four-byte carrier. No conversion formulas changed. TODO `pillow-rs#3ptb`: make these source/target wrapper paths visible beside Convert's operation support and carry one injected Backend/Architecture context through nested eager conversion and receipts. Runtime output/error parity and architecture-selection evidence remain pending; no validation ran.
+- Analysis native-reader source audit (2026-11-01): searched active `pool_cpu/ops/analysis`, `ops/analysis`, and Image statistics/entropy callers for raster conversion APIs. Analysis scans and reducers read exact-mode native buffers; high-depth histogram binning remains direct u16/f32, and public byte-valued readers use only their declared per-sample result projection. No converted staging raster remains in these paths. Direct/deferred receipts and mode × architecture parity remain pending; no validation ran.
+- I;16 Histogram scan path (2026-11-01): retained Pillow's archived first-`width`-bytes-per-row behavior while specializing endian choice at compile time for native, I;16L, and I;16B owners. Masked and unmasked loops are separate, and byte extraction reads the native `u16` lane directly without constructing a per-sample byte array. This changes loop structure only; exact endian, odd-width, and masked-prefix parity remains TODO. No validation ran.
+- Analysis mask/error-order audit (2026-11-01): compared active Histogram, Entropy, masked Stat, and GetColors wrappers with `3f9dfd403`. Histogram/Entropy and masked Stat materialize source before mask, then materialize mask, check dimensions before accepted mask mode (`1`/`L`), and only then prepare the source operation. The typed `ImageAnalysisMask::Invalid` branches return AttributeError before materialization. Masked scalar I/F Histogram rejection occurs after mask validation, as before. GetColors rejects I;16 identities before materialization, and negative `maxcolors` still validates mode then materializes before returning `None`. No source-order discrepancy found in image-mask routes. This remains source-only; no validation ran.
+- CPU-only eager Filter route alignment (2026-11-01): UnsharpMask and ModeFilter now share `Image::cpu_arch_execution_route` to capture the requested backend and injected CPU Architecture in one routing snapshot. When an unpinned CPU-only filter sees GPU preferred and the SIMD compatibility alias active, it records the GPU fallback and can still select the declared CPU architecture. Explicit GPU pins retain CPU Default fallback. Filter arithmetic and lazy pipeline routes are unchanged; this source change is unbuilt and unvalidated.
+- CPU-owned direct route alignment (2026-11-01): Histogram, Entropy, masked/direct Stat, GetColors, GetBBox, Quantize, eager UnsharpMask/ModeFilter, Draw, GetProjection, and GetData now obtain the routed CPU Architecture through `Image::cpu_arch_execution_route` or its policy-aware variant. Scalar point/eval operations use the same strict route resolver; advisory callers retain their previous backend-state error boundary. An active SIMD Architecture survives CPU fallback from an unpinned GPU preference, while an explicit GPU pin stays CPU Default. Eager telemetry now distinguishes the SIMD compatibility request from a true host fallback: prepared selection records architecture fallback, and GPU-to-CPU remains a backend fallback. No pixel formulas or algorithms changed. Remaining direct/eager caller routing and receipts are pending review; source-only and unvalidated.
+- Convert eager context injection (2026-11-01): binary, matrix, I;16-target, and palette-wrapper CPU conversions pass the original Backend request plus the already-resolved CPU Architecture context into eager child strategy execution. GPU preference can fall back through active SIMD, explicit GPU pins remain CPU Default, and wrapper-owned palette/GPU fallback reasons are retained. A lazy source is a separate Image graph: its materialization independently runs `prepare_execution` with that graph's pinned/active Backend route before the wrapper's child executes. Do not inject the child context into source materialization. Remaining TODO `pillow-rs#3ptb`: reconcile nested composition receipts. All arithmetic/output logic is unchanged; source-only and unvalidated.
+- Convert wrapper-composition support view (2026-11-01): `OperationSupport` now enumerates exact exceptional source/target routes with ordered child transitions, scope, output identity, and wrapper rejection stage. The public Convert wrapper dispatches LAB, premultiplied, and RGBX compositions from that same descriptor; direct one-step target strategies remain in exact-mode support. The shared descriptor types live in `compute/registry/support/target.rs`, and Convert's operation-specific classifier lives in `color/convert/helpers/target_compositions.rs`. Pending: reconcile nested composition receipts, complete the archived SIMD source/target/guard map, and review remaining direct callers and parity. No validation commands ran.
+- Callback write route capture (2026-11-01): the reusable `PutDataExecutionContext` now retains both the selected Backend request and its CPU Architecture context for the entire callback-driven sequence, so a callback changing global backend preferences cannot split one write operation across route policies. Synchronous I;16 byte writes and scalar PutPixel use one advisory route snapshot for both execution selection and receipts. Existing native writers and callback mutation order are unchanged; source-only and unvalidated.
+- GetProjection route correction (2026-11-01): direct eager and already-materialized pipeline calls now obtain selected Backend, strict-request status, and CPU Architecture from one route snapshot. The RGB GPU path remains intact; unsupported GPU/mode routes use the selected CPU Architecture, including active SIMD when GPU is preferred, and record the actual CPU architecture in the fallback reason. Existing exact-mode projection kernels are unchanged. Runtime selection/fallback receipts and mode × architecture parity remain pending; source-only and unvalidated.
+- ImageDraw CMYK Text comparison for `pillow-rs#brg0` (2026-11-01): compared baseline `3f9dfd403` `draw/text/composition.rs::text_compose_mode_cmyk` against `pool_cpu/ops/draw/cmyk8/default/text_impl.rs`. The archived `to_rgba8()` path copied the four-byte RgbaImage carrier and restored CMYK metadata; the mode-local owner now writes that same carrier directly. Integer-fill ink mapping, RGBA-mask alpha versus grayscale coverage, signed clipping, per-channel `pil_blend`, and exact CMYK output agree by source inspection. This does not establish the historical parity case; focused runtime reproduction remains gated until CPU source completion. No tests or parity ran.
+- Rotate I;16* architecture admission source comparison (2026-11-01): baseline CPU `rotate_arbitrary_luma16` samples nearest coordinates from the floating Geometry.c affine, while the archived raw-byte SIMD path rounds affine coefficients to signed 16.16 and advances integer coordinates. The old two-byte path also requires exact I;16 endian-specific fill/output mapping. The four exact I;16 owners remain Default-only so SIMD requests fall back to the native-u16 implementation; do not add the archived byte kernel until it preserves that contract. Boundary parity and selection receipts remain pending; no validation ran.
+- ImageDraw RGBA Text source comparison for `pillow-rs#brg0` (2026-11-01): baseline `draw/text/composition.rs::text_compose_rgba` and the exact-mode RGBA Default owner use the same coverage-weighted alpha blend, fill-only RGB branch for ordinary masks, embedded-color RGB blend, and stroke-then-fill order. The new owner reads coverage/ink from the original mask layout instead of allocating an expanded RGBA mask; output identity and metadata reset match by inspection. No source discrepancy found. Historical bytes-mismatch cases still require focused runtime reproduction after CPU source completion; no tests or parity ran.
+- Convert support declaration follow-up (2026-11-01): early `La` source/target validation now reads the same `OperationTargetComposition` rejection used by the operation-level Convert support view, while retaining the matrix exception and pre-target-validation error order. Pillow target validity derives from `Mode::pillow_name()` so the wrapper no longer owns a duplicate spelling list. Nested eager Convert telemetry remains pending at the shared eager CPU executor: it currently resets the source graph's completed receipt before recording the child selection. No build, formatter, lint, test, parity, or benchmark commands ran.
+- Convert support lookup fast-path review (2026-11-01): source/target composition classification now checks the exceptional LAB, premultiplied, RGBX, and `La`-guard families before looking up source-mode support. Ordinary Convert target queries therefore remain on the direct source contract without classifying a mode composition. Source-only; no verification commands ran.
+- CPU ownership boundary scan (2026-11-01): maintained `pool_cpu` outside `pool_cpu/legacy` contains no Rayon or parallel-iterator references, and the source module graph contains no active `pool_cpu::legacy` import or legacy path attribute. This confirms the archive is not compiled into maintained CPU execution and parallel scheduling remains outside the CPU pool. Text/source scan only; the archive accounting, dead-code review, size limits, and all runtime validation remain pending.
+- Archived Convert SIMD route comparison (2026-11-01): the legacy SIMD preflight admits exact L/LA/RGB/RGBA byte carriers and explicitly named aliases; RGBa alpha transforms, CMYK→RGB, I;16 source conversion, and One/L→I;16 use separate routes. The maintained One architecture guards still enumerate exactly the four I;16 targets. The full exact-mode source/target/architecture matrix, alpha-only output lanes, build availability, and receipts remain source-audit TODOs. No validation commands ran.
+- `pillow-rs#brg0` Draw source comparison (2026-11-01): `draw/text.rs` has no diff from `3f9dfd403` in its multiline layout, line spacing, alignment/anchor positioning, or optional-font-size wrappers; the changed inner path now selects the exact-mode Draw strategy. This accounts for centered-anchor, three-line-spacing, and explicit-font-size routes at source level. CMYK Text's direct carrier loop matches the archived four-byte copy/restore route, and RGBA Text keeps the archived coverage/color-mask and stroke-before-fill ordering. Historical exact-output cases still need focused parity after the CPU source gate; no tests or parity ran.
+- Draw P palette input resolution (2026-11-01): Pillow 12.2 `ImageDraw._getink` resolves string/tuple colors through the image palette before native Draw dispatch. Python and JavaScript now use the core stateful Draw resolver, which delegates 3/4-component P colors to the shared palette allocator and passes the returned index to mode kernels. Palette updates replace indexed wrapper metadata directly; for Bytes and pending pipelines an empty metadata layer preserves source operations and avoids decoding pixels just to append a color. Empty-operation overlays pass through the exact DynamicImage variant. Integer indexes and P images without an attached palette retain the existing path. TODO(pillow-rs#3ptb) records malformed short component tuples and full-palette background/pending-transparency reservations. Source-only; no build or runtime verification ran.
+- Draw Bitmap fast-route source trace (2026-11-01): exact-mode CPU Bitmap selects Default because the request is not a geometry-span batch. Its RGB specialization delegates to `rgb8/default/bitmap_impl.rs`, whose native-mask view reads RGBa alpha and applies `PREBLEND`; the general raw-byte owner uses the same `BitmapMask` contract. The non-CPU public Paste shortcut is limited to 1/L masks and the explicit destination/context combinations in `bitmap_masked_paste_matches`; its equivalence with every mode owner's ink, palette, metadata, and deferred receipt remains a TODO. No validation ran.
+- CoreOnly Histogram design decision (2026-11-02): user selected direct native u16/f32 scans into the existing 256-bin-per-band result for CoreOnly multiband modes. Optimize the typed scan while preserving the chosen binning contract; do not convert sample types or stage an intermediate raster to reuse byte-mode code. Edge, mask, and performance evidence remain pending; no checks ran.
+- Fused GetProjection terminal selection (2026-11-01): RGB/CMYK PutPixel terminals retain one prepared `StrategySelection` through CPU terminal execution and telemetry, preserving selected architecture and strategy fallback reason. CPU Default versus architecture execution is chosen from that selection, so a `Backend::Simd` compatibility request that falls back to Default uses the serial kernel. RGB/CMYK kernels and the CMYK positive-write optimization consume that same selection without reselecting during execution. Source review only; lazy receipts for other analysis terminals and CPU parity remain pending. No validation ran.
+- Analysis family source-size correction (2026-11-01): moved GetData caller-owned band-count/support queries and terminal-route helper into the existing GetData execution module, re-exporting them from `analysis/ops.rs`; operation support descriptors and strategy selectors remain at the family boundary. `analysis/ops.rs` is now 967 physical lines. No behavior change intended; source-only and unvalidated.
+- PutAlpha Python metadata-on-error follow-up (2026-11-01): the Rust wrapper preserves Pillow's destination mode promotion when later alpha-mask or input validation fails. The Python facade now refreshes an already-observed `Image.info` mapping in `finally`, so the retained mapping sees any core mutation on both success and failure. No mode or pixel algorithm changed. Source-only; CPU parity remains pending.
+- Draw P palette facade synchronization (2026-11-01): mutating Python Draw calls now synchronize the Rust-owned image in `finally`, so a palette color allocated before a later drawing error remains visible on the original image. `_sync` also refreshes an already-cached `ImagePalette` object after Draw updates the core palette. Remaining TODOs cover Pillow's short tuple behavior and reserved background/transparency slots on full palettes. Source-only; no validation ran.
+- Draw P palette reservation follow-up (2026-11-01): The core Draw context initializes reservations from native compatibility metadata, and Python Draw refreshes them from the current `Image.info` background/transparency values before color resolution. The existing full-palette allocator skips those indices and keeps its reverse scan for unused entries; no image-level staging was added. The remaining source TODO is malformed short-tuple behavior. Source-only; no validation ran.
+- Typed ImageColor descriptor (2026-11-01): `ImageColor.getcolor` now receives `ColorOutputMode`; Python and JavaScript binding entry points parse the public Pillow `ImageMode` string before calling the typed core function. The descriptor preserves accepted names such as `I;32` and `I;16S` without treating them as `raster::Mode` identities, and parser failures retain Pillow's `KeyError`. Existing Rust callers now use enum variants. Source-only; no build, unit test, parity, or lint ran.
+- GetChannel/Split materialized identity receipts (2026-11-01): concrete `Loaded` and `Paletted` GetChannel identity routes validate the selector from the exact mode's band contract before returning a copy. `Loaded` shares its pixel Arc and reports `native-identity`; `Paletted` avoids a redundant materialized-index clone but its public `Image::copy` still clones index bytes, so it reports `native-copy` and accounts the output host buffer. `Bytes`/`Pipeline` caches successful at call entry use `native-identity`; sources first materialized during the call retain materialization-before-index-check order and defer combined terminal receipt composition, avoiding replacement of graph/decode telemetry. Single-band `Split` reports the shared identity path except for cached `Bytes` P and direct `Paletted` P inputs whose palette-index samples are cloned and measured as `native-copy`; metadata clearing remains unchanged. Source-only; no checks or parity ran.
+- GetChannel eager-route guard declaration (2026-11-01): `OperationRoutePath::EagerCpuChild` now carries typed wrapper guards. The RGB `GetChannel` descriptor lists the concrete Loaded source requirement, requested CPU/SIMD backend set, and inclusive 256-pixel cap beside its prepared `ExtractBand` child; the fallback child remains ordered afterward. The wrapper obtains its full `OperationModeRoute` once and evaluates this exact guard array before choosing eager execution, so the source no longer has a separate mode/size/backend predicate. `OperationRouteGuard` is re-exported through the support facade and crate root. Source-only; no checks ran.
+- GetChannel shared-buffer guard declaration (2026-11-01): The loaded-L identity path now carries its Loaded-source, requested-CPU, and exact one-byte-per-pixel guards in the mode's `OperationRoutePath`; the wrapper consumes that same descriptor before returning a shared-buffer identity result. Backend request resolution is factored from CPU Architecture context creation, so this no-kernel path does not select an Architecture. If guards fail, normal child routing remains available. Source review only; deferred materialization receipts, metadata/error ordering, fallback evidence, and mode × architecture parity remain TODO; no validation ran.
+- PutPixel→Thumbnail fusion admission (2026-11-01): RGB fusion preflight now resolves requested Backend, strict-request status, and CPU Architecture through one Image route snapshot, then passes its Architecture context to the CPU support guard. It preserves the existing admission contract: pinned CPU/SIMD requests or a sole active CPU/SIMD backend may fuse; GPU, multiple active preferences, and backend-state errors fall through. No kernel arithmetic or output behavior changed. Source-only; no build, formatting, lint, tests, parity, or benchmark ran.
+- GetData single-band view context (2026-11-01): the direct P/1/L byte view now passes the Backend/Architecture context resolved by its owning Image into the GetData strategy selector after confirming that the route is CPU-compatible. It no longer reconstructs a context from the CPU label. This path remains CPU-only and has no architecture kernel; source-only, unvalidated.
+- Convert palette route visibility (2026-11-01): `OperationTargetCompositionKind::ConvertPalette` now declares every supported cross-mode P/PA target with its exact source/target identities, prepared source strategy, output mode, scope, and wrapper-owned palette output. `Image::convert` reaches this same declaration through the target-composition dispatcher; the duplicate scope-only P/PA wrapper branch was removed. `prepare_pipeline` remains explicitly TODO because lazy terminals do not yet carry generated palette/alpha metadata. No conversion formula changed; source-only and unvalidated.
+- Put wrapper context source audit (2026-11-01): `PutAlpha` and `PutAlphaData` validate and select their mode transition from the owning operation declarations, then enqueue the exact-mode prepared operation; their wrappers do not choose a Backend or Architecture. Immediate PutData/PutPixel writes retain their sequence-scoped resolved context, and ExtractBand/GetChannel routes use the prepared support contract. The former source TODO for wrapper Backend/Architecture bypasses is closed; public promotion/error ordering, CoreOnly outputs, RGBa edge samples, and terminal receipts remain CPU parity TODOs. No validation ran.
+- Draw P palette reservation slot alignment (2026-11-02): when `background` or `transparency` reserves the next RGB/RGBA palette slot, the shared allocator now zero-fills skipped entries before writing the new color at the selected index. The full-table reverse scan remains unchanged. Malformed short-tuple behavior is still a source TODO. Source-only; no build, format, test, parity, or lint ran.
+- Pad fill representation source trace (2026-11-02; resolved at source level by the following entry): the loss occurred before the kernel when `resolve_imageops_color` narrowed scalar/components into `PipelineOp::Pad`'s byte tuple. The typed route below retains the original input for mode-owned native u16/f32 fills while preserving that direct byte-tuple route. Native wrap/default/alpha semantics and fallback remain pending parity. Source-only; no checks ran.
+- Typed Pad fill path (2026-11-02): `ImageOpsColor::Scalar/Components` now retains original integer values in `PipelineOp::PadTyped` for I;16 identities and the five internal high-depth identities. The normalized byte view remains for request facts; exact-mode owners write native u16/f32 fill samples. The previous direct `PipelineOp::Pad` byte-tuple route is unchanged. GPU explicitly declines the typed variant, leaving CPU as its execution owner. CoreOnly modes remain marked `NO_PILLOW_SUPPORT`; mode-specific wrap/default/alpha behavior and fallback still need frozen CPU parity. No validation ran.
+- ImageOps Python fill-shape preservation (2026-11-02): `ImageOpsColor` distinguishes Python integer tuples from integer lists at the binding boundary. Mode-specific resolution accepts Pillow's integer RGB(A) list extension only for P and reports list-type errors for other raster modes; Rotate forwards list provenance to its transform fill resolver. F-mode float tuples remain native scalar fills, while float lists retain their list error. No raster or sample conversion was added. TODO: source-review mixed, nonnumeric, and oversized tuple/list components, P palette mutation/error ordering, and remaining native sample defaults; then verify in the frozen CPU parity matrix. No validation ran.
+- Composed Resize mode-policy source correction (2026-11-02): exact `One` and `ImagePalette8` strategies now own nearest-filter normalization. The public Resize wrapper and prepared CPU Resize normalize before architecture selection; `Contain`, `Cover`, `Fit`, `Scale`, and `Pad` pass their requested filter through the same prepared path, so their nested selection and execution use the mode-effective filter. A preselected child rejects a filter that does not match its exact mode policy. This closes a source-level path where composed geometry bypassed the wrapper's policy; per-operation/mode/architecture parity and receipts remain pending. No validation ran.
+- CoreOnly Histogram native-bin source review (2026-11-02): `LA16`, `RGB16`, `RGBA16`, `RGB32F`, and `RGBA32F` scan their typed samples directly into 256-bin-per-band outputs, with separate masked and unmasked loops and no converted image or staging sample buffer. The user confirmed the implementation should favor the fastest native typed scan while preserving exact parity, without converting modes or staging samples. Source comparison against the pre-refactor path confirmed u16's `(sample + 128) / 257` and f32's normalized clamp/round mapping; `RGB32F` historically returned four bands because the fallback projected to RGBA8, so its native scan now fills the opaque fourth band directly. The same exhaustive mode classifier now exposes the vector result layout as result bands and bins per band. TODO: freeze bin-edge and mask parity and record performance evidence; no checks ran.
+- Draw P tuple source TODO (2026-11-02): Pillow 12.2 `_getink` sends any tuple through `ImagePalette.getcolor` before native ink validation; `getcolor` accepts malformed arities and can append/replace raw tuple bytes. The Python boundary currently collapses tuple/list inputs, and core only palette-allocates 3/4-component sequences. Preserve tuple/list provenance and mirror allocation/error ordering in the P palette owner. No behavior change or validation ran.
+- Serial CPU scheduling source audit (2026-11-02): active `pool_cpu`, core `ops`, `color`, and `image` code contain no Rayon or parallel-iterator calls; Default and SIMD architecture strategies stay serial. The only compiled scheduler helpers are the opt-in, root-level `par` module with no active callers; move or retire it with the later `pool_parallel` work. No scheduling behavior changed; no checks ran.
+- ImageOps Colorize caller reconciliation (2026-11-02): `validate_colorize_mode` now consumes `OperationId::Colorize`'s exhaustive support declaration rather than duplicating its L-only check. The descriptor preserves Pillow's empty-message `AssertionError` for every rejected mode and the wrapper still validates before color-parameter ordering. Source-only; no checks ran.
+- ImageOps Invert wrapper route (2026-11-02): added `OperationId::ImageOpsInvert` as the public wrapper contract, linked to the prepared `Invert` child. Its four Pillow wrapper rejections are declared at `WrapperGuard`; modes rejected by the child remain queued and are reported at `ChildAdmission`, preserving the existing lazy error boundary. `invert` and `invert_ops` now consume this route, with the P-specific NotImplementedError still preceding it. Source-only; parity and route-receipt evidence remain pending.
+- ImageOps Expand typed fill route (2026-11-02): `ImageOpsColor::Scalar/Components` now retains original i64 values through `PipelineOp::ExpandTyped`; I;16 and CoreOnly LA16/RGB16/RGBA16/RGB32F/RGBA32F owners consume native u16/f32 fills. The direct byte-tuple `PipelineOp::Expand` route is unchanged, and GPU explicitly declines the typed variant. Source review remains unvalidated; native wrap/default/component behavior, architecture fallback receipts, and CPU parity remain pending.
+- Pad typed fill source review (2026-11-02): the four I;16 identities and five CoreOnly high-depth identities reach exact-mode Pad owners without changing the native sample type; shared `samples::pad` allocates/copies u16 or f32 buffers directly. I;16 casts the original scalar to u16 (low 16 bits), while multiband owners read each retained component and apply their currently declared missing-band defaults; CoreOnly contracts select the Default kernel for non-Default architecture requests. Existing byte-tuple Pad owners and the direct byte-tuple API remain separate. TODO at `geometry/pad/ops.rs` and the plan row still requires parity for wrap, component/alpha defaults, and fallback receipts before this contract is closed. No validation ran.
+- CPU module-facade source review (2026-11-02): moved the `CpuPool` facade implementation into `pool_cpu/executor.rs`; moved `RgbPixelSource` and its slice implementations into `helpers/quantization/rgb_source.rs`; split Draw's layout/strategy and span writer out of their `mod.rs` files; moved all 39 exact-mode `Input` aliases into their mode `ops.rs` files and re-exported them; moved Filter's blur bias into `blur.rs` and the i32 NEON lane count into its plan. The maintained CPU `mod.rs` files now contain module declarations and deliberate exports only; legacy archive files remain untouched. The code paths and formulas were preserved. No build, formatter, checkstyle, lint, test, parity, or benchmark ran.
+- Geometry orchestration source review (2026-11-02): moved the unchanged Contain/Cover/Fit/Scale dimension and rounding calculations from `geometry/ops.rs` into `geometry/helpers/dimensions.rs`, leaving the family file to select support and compose prepared Resize children. Caller tracing confirms direct Rust ImageOps validates and queues the typed operations; PyO3 and JavaScript delegate to those Rust entry points; lazy materialization injects the routed context before registry preparation; and geometry passes that same context to its exact-mode Resize child. Fit's no-crop branch clones the exact `DynamicImage`, and prepared execution records the nested Resize selection beside the outer geometry selection. Source review is complete; tie-rounding, zero-sized output, validation/error ordering, exact-mode output, and architecture/fallback receipts remain CPU parity TODOs. No validation ran.
+- Tall boxed Resize source comparison (2026-11-02): compared the active vertical-first pipeline with archived `execute_resize_boxed`; the 100:1 height threshold, Float32 box boundaries, LA/RGBA premultiply-once → two prepared stages → unpremultiply-once flow, and nearest bypass retain the archived algorithm. The active route skips the archived redundant horizontal pass only when the horizontal mapping is identity. Added a TODO for exact-mode child selection and output parity across CPU Architecture requests; no validation ran.
+- Resize/Reduce pending-path annotations (2026-11-02): added source TODOs at each family owner for exact-mode output, native I;16 values, empty/bounds behavior, and architecture/fallback parity still required by the frozen CPU matrix. No validation ran.
+- Draw P tuple/list source follow-up (2026-11-02): the Python boundary now preserves tuple versus list provenance in `DrawColorInput`; integer tuples and lists enter distinct core routes, and P tuple colors with 3/4 integer components use palette allocation while lists reach ink validation without allocation. The remaining TODO is non-integer tuple values, malformed tuple arities, and Pillow's allocation/error mutation order. Source-only; no validation ran.
+- Draw P palette error-order follow-up (2026-11-02): 3/4-component integer tuples preflight palette slot availability before byte-range conversion, so a full palette's allocation error takes precedence as in Pillow. RGB/RGBA palette owners and the preflight share slot-selection logic. Remaining TODO: non-integer tuple values, malformed tuple arities, and arbitrary-size integer components. Source-only; no validation ran.
+- Draw P oversized integer tuple follow-up (2026-11-02): the PyO3 boundary now preserves a 3/4-component Python integer tuple when components exceed i64, using an impossible palette-byte sentinel so it reaches P allocation preflight and the existing byte-range resolver. Other modes retain the prior invalid-tuple route. Remaining TODO: non-integer tuple values, malformed tuple arities, and Python palette color-map mutation when raw-byte construction fails. Source-only; no checks ran.
+- Draw P float tuple follow-up (2026-11-02): all-float 3/4-component tuples retain their float values through the Python boundary. P palette resolution compares them numerically with existing byte entries, normalizes RGB/RGBA tuple arity and opaque alpha, and preflights allocation before reporting the `bytes(float)` error for a new color. Mixed/non-numeric tuples, nonstandard arities, and Python palette color-map mutation after allocation errors remain TODOs. Source-only; no checks ran.
+- Draw P mixed numeric tuple follow-up (2026-11-02): the Python boundary now retains integer, wide-integer, and float component kinds for mixed numeric tuples. P palette lookup compares normalized numeric values first; on a miss it checks slot availability, then reports the first `bytes(tuple)` range/type failure in component order. RGB opaque-alpha truncation and RGBA alpha extension are preserved, and an all-integer effective tuple reuses the existing integer palette writer. Remaining TODOs: non-numeric tuple components, other tuple arities, and Python `ImagePalette.colors` mutation after failed raw-byte construction. Source-only; no validation ran.
+- Histogram contract confirmation (2026-11-02): CoreOnly histogram work should use the performance-oriented native typed scan while preserving the archived bin contract exactly; do not convert modes or stage another sample buffer. The current LA16/RGB16/RGBA16/RGB32F/RGBA32F owners implement that plan. Boundary, mask, and performance evidence remains gated; no checks ran.
+- Draw reserved-index source correction (2026-11-02): rechecked Pillow 12.2 `ImagePalette._new_color_index` and `getcolor`. Pillow advances the returned index over reserved background/transparency values, then appends `bytes(color)` at the palette's current byte length without inserting zero entries. Removed the maintained RGB/RGBA allocator's zero-padding, corrected the Draw plan, and superseded the earlier zero-fill claim in this inventory. Verify reserved-slot outcomes in frozen CPU parity; no tests or lints ran.
+- Palette float source repair (2026-11-02): restored the RGB/RGBA palette-byte read in `prepare_palette_float_components`, which the PA capacity branch uses after checking existing float-equal entries. This fixes a source-level missing local found during review; no build or tests ran.
+- Python Draw palette lookup source review (2026-11-02): added Pillow-compatible `ImagePalette.colors` caching and `getcolor` semantics, including arbitrary tuple arities, RGB/RGBA alpha normalization, dictionary key equality, slot selection, and map mutation before `bytes(color)` errors. Rust Draw now consumes up to 256 complete entries without replacing the Python-owned byte buffer; `_sync` updates only the raster handle, so trailing bytes remain visible through the shared ImagePalette object. Strict palette realization remains at load/access boundaries. `ImagePalette.getdata()` and `tobytes()` now preserve Pillow's rawmode contract. The remaining source TODOs cover rawmode/LA/PA transparency realization and routing all load-triggering wrapper operations through the deferred boundary. The direct JS/Rust resolver now treats numeric arrays as tuple-like P colors at every arity, retains normalized color keys before byte-conversion errors, and checks allocation before key insertion. Valid nonstandard arities update complete core entries; incomplete raw palette tails remain TODO because the indexed representation retains only complete RGB/RGBA entries. Source references: [Pillow 12.2.0 Image.load](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L896-L925), [Pillow 12.2.0 ImageDraw._getink](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L135-L158). No build, formatting, lint, test, parity, or benchmark ran.
+- ImagePalette API follow-up (2026-11-02): removed a duplicate `tobytes()` definition that shadowed the rawmode rejection and restored Pillow's `tostring` alias. `copy()` now copies the underlying palette sequence while leaving the derived `colors` cache uninitialized, matching Pillow's copy semantics. Remaining deferred-load and LA/PA transparency behavior is still source review work; no checks ran.
+- Deferred palette load-boundary continuation (2026-11-02): added realization before Python wrapper calls whose Pillow implementation loads immediately: copy, split, filter, pixel statistics/readers, histogram/entropy source and mask, channel extraction, putdata/putalpha, point, bitmap export, and public Draw construction/bitmap masks. This preserves Pillow's load-before-validation order for filter and Draw initialization. The boundary TODO now names the remaining argument-validated operations whose realization placement must follow their exact validation sequence, plus rawmode and LA/PA transparency unpacking. No builds, formatters, lints, tests, parity, or benchmarks ran.
+
+Reduce premultiplied and indexed-mode source comparison (2026-11-08): `La` and
+`RGBa` have separate exact-mode owners with Default-only architecture
+strategies. Their native byte reducers use `<2, false>` and `<4, false>`,
+respectively, averaging every stored sample without premultiply/unpremultiply;
+this matches the archived `reduce_alpha_layout` exclusions and preserves each
+output identity. P and One support factor-one requests only: full-image
+requests copy, sub-boxes crop, and nonidentity factors are rejected by the
+native mode guard. Their indexed mode declarations constrain factors without
+restricting the box. PA remains a
+two-sample mode, and its Default averages the palette index and alpha
+independently into `ImagePaletteAlpha8`, matching the native two-band Reduce
+path. This closes only these source comparisons and their declaration-to-leaf
+mapping. Remaining modes, callback/fault
+order, selection/fallback receipts, output parity, and latency remain open.
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+Sources: [Pillow 12.2 `Image.reduce`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L2238-L2269)
+and [`Reduce.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Reduce.c#L48-L84).
+
+2026-11-21 Draw LAB Bitmap RGBa-mask source correction: Pillow 13.0
+`ImagingDrawBitmap` delegates to `ImagingFill2`; its RGBa-mask leaf applies
+`PREBLEND` using the mask alpha to each physical destination byte, including
+the fourth backing lane. LAB's exact-mode Bitmap owner incorrectly replaced
+that alpha with full coverage. Removed the LAB-only override from the shared
+three-band writer; LAB, HSV, and YCbCr now all use the mask's exact selected
+coverage, while RGBa still takes the shared `PREBLEND` leaf and zero-alpha
+samples remain visited. The focused LAB×RGBa output/hidden-lane TODO remains
+open under `pillow-rs#3ptb`; no build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage command ran. Source: [Pillow 13.0
+`Draw.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Draw.c#L801-L805)
+and [`Paste.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L518-L633).
+
+2026-11-20 analysis API mode/context source crosswalk: traced Python and PyO3
+loading, optional mask handling, I/F extrema parsing, formatted result
+construction, Rust Histogram/Entropy/Stat/GetColors/GetExtrema/GetProjection
+entrypoints, and the prepared analysis owners. Histogram, Entropy, Stat,
+GetColors, and GetExtrema select exact-mode support from the materialized
+`DynamicImage`; Histogram and Entropy pass the routed CPU `ExecutionContext`
+into the mode owner, and Stat composes its histogram child under the same
+context. The support table has explicit entries for all 25 modes, including
+five CoreOnly native-sample extensions. GetProjection's RGB/CMYK PutPixel
+terminal fusion captures the prepared context and exact materialized mode;
+its GPU terminal remains separately tracked for the later backend stage.
+GetColors retains a Python `histogram_mode` boolean based on the public
+`self.mode` property to preserve Pillow's wrapper route while its pixel scan
+still uses DynamicImage. TODO (`pillow-rs#3ptb`): pin the public mode-property
+override contract before deciding whether to replace that route boolean with
+a typed visible-mode input; verify outputs, errors, per-mode architecture and
+fallback receipts, CoreOnly expected values, and latency. This historical
+crosswalk did not include GetBBox; its direct caller is reviewed below. Source review only; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-13 Resize strategy source follow-up: reviewed the remaining exact-mode
+Resize owner dispatches, shared byte/alpha/typed sample kernels, coefficient
+and boxed-crop planning, native nearest and Luma8 vector paths, and the native-
+byte vector planner/convolution/boxed and bounded-i32 routes. Added source
+VERIFY markers to the reviewed functions. The I;16 vector helper returns an
+empty typed buffer when either requested output axis is zero. Its strategy
+guard rejects zero-sized output, while a valid empty source layout is admitted
+and produces a zero-filled destination in the vector kernel. TODO(pillow-rs#3ptb):
+verify empty-source output and zero-axis Default fallback receipts across CPU
+selectors. This review does not close Resize source review: architecture
+leaves and remaining operation/helper closure, parity receipts, and latency
+evidence are still pending. No build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-13 Resize strategy-subtree source review: reviewed the remaining Default and
+architecture leaves for Luma8, One, Palette, CMYK, HSV, LA/La, LAB, LumaA,
+PA, RGB/RGBa/RGBA/RGBX, YCbCr, and typed 16-bit/float modes. This includes
+the narrow fixed-point Luma8/CMYK/HSV kernels, vector wrappers, RGB sparse-row
+and RGBX output-window paths, and hidden-lane composition. The earlier
+`*_impl.rs` audit had missed non-`*_impl.rs` kernels and helpers; the full
+Resize subtree function audit now finds no unmarked function. Added current
+VERIFY markers to the reviewed leaves. This closes source review of the
+maintained `compute/pool_cpu/ops/resize/**` strategy subtree only. The older
+whole-image and boxed dispatcher files named in the inventory are absent, and
+source search found no active calls to those names outside `legacy`. Boxed
+validation/error ordering remains open at the public Resize boundary; the
+operation TODO now names it. Output/error parity, zero/empty fallback receipts,
+architecture receipts, and per-operation latency remain pending. TODOs remain for empty/zero-axis
+I;16 fallback receipts and F32 x86/Wasm product block width. Keep the parity
+input-base work as a prototype; the shared parity and fault-contract standard
+will be designed later. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 Paste hidden-lane and execution source closure: re-traced the
+materialized data path from `ImageBuffer` construction and retained sidecar
+validation through raw/encoded decode, header-mode retagging, typed PutData,
+mode-preserving raster transforms, generic mutable-access invalidation, and
+DynamicImage's sidecar-preserving `put_pixel`/`copy_within` paths. Cross-mode
+producer notes from the prior hidden-lane passes cover Convert, PutAlpha,
+Draw, Filter, Effects, Resize, and other routed operations. Paste preparation
+selects source layout and mask interpretation from exact Modes, validates
+storage extents before execution, admits only declared 1×1 broadcast, and
+clips the region after admission. Its mode-selected execution computes omitted
+destination lanes from the same source physical bytes and mask coordinates as
+the logical kernel, restores those lanes onto the exact-mode output, and keeps
+CoreOnly typed plans on native u16/f32 samples. No uncovered producer or
+Paste source/layout/architecture path remains in source review. TODO
+(`pillow-rs#3ptb`): run the frozen mode × architecture outputs, faults,
+selected/fallback receipts, hidden-lane mutation, clipping, broadcast, and
+CoreOnly expected-output cases. This closes source review only; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command
+ran.
+
+2026-11-20 maintained Rust file-size source scan: enumerated Rust source
+outside all `legacy` directories and counted physical lines. No maintained Rust
+file exceeded the 1,000-line ceiling; the largest observed files were
+`pipeline.rs` (982), `lib.rs` (980), and `pool_cpu/ops/imageops/ops.rs` (978).
+The 100-line Clippy body count, compiler reachability, and dead-code checks were
+not run and remain in the later quality/compile gate. No test, lint, parity, or
+benchmark command ran.
+
+CPU failed-only recovery update (2026-11-15): the frozen 201-case Resize
+retry passed 167 and failed 34 (all 36 One cases passed; 131 I32 passed; 34
+I32 filtered Resize cases remain). The frozen 26-case non-Resize retry failed
+all 26, with no infrastructure errors. The 34 I32 Resize cases then passed
+axis-specific current-build retries. Focused retries for 21 other failed IDs
+now pass: GetXMP plus four filter constructors, two incompatible fromarray
+modes, two zero-width Draw.line cases, four PutData cases, two Windows
+display cases, five Draw text cases, and one mode-F polygon case. This leaves
+46 recorded failure statuses at this intermediate checkpoint (40 I;16 Resize
+extension cases, five other contracts, and one LAB Rotate expected-output
+mismatch); the 41 unchanged-path failures retain their
+101-case confirmation evidence. The focused Reduce retry now matches the user-selected Pillow 13.0.0
+output 1 (`migration-parity-bc19c1a1dc0a41699cfa533caa0bef8f`). At this
+checkpoint the 237 original P-mode NotImplemented cases were still not_run;
+later focused runs resolved them. The current residual is summarized at the
+top of this document. See
+`build/migration-parity/cpu-failed-case-rerun-20261114/failed-only-rerun-status-20261115.json`.
+
+2026-11-15 I;16 Paste source crosswalk: reviewed the maintained typed scalar and
+eight-lane helpers against Pillow 13.0.0 `Paste.c`. Pillow's 1-mask handler has
+an explicit I;16 raw-byte path; its L, LA/RGBA, and RGBa mask handlers do not
+have a separate I;16 branch. The Rust owners use typed sample copies for
+unmasked and binary-mask routes and byte-lane blending for fractional masks.
+Exact output for the I;16 mask/layout combinations, byte order, clipped boxes,
+and selected/fallback receipts remains a TODO under `pillow-rs#3ptb`; source
+inspection does not replace those outcomes. No algorithm changed and no
+runtime verification ran. Sources: [Pillow 13.0.0 `Paste.c` binary-mask
+handler](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L59-L116)
+and [fractional-mask handlers](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L118-L255).
+
+2026-11-15 Paste Default adapter source crosswalk: reviewed the 25 exact-mode
+Default leaves. The 16 byte-carrier modes instantiate the shared byte helper
+with fixed 1/2/3/4-byte layouts and reconstruct their exact `DynamicImage`
+variant; the four Pillow I;16 identities route through the typed I;16 helper;
+the five CoreOnly high-depth identities use typed u16/f32 helpers. No mode
+conversion or runtime architecture decision is added in these adapter leaves.
+This closes Default adapter-to-carrier mapping only. Output parity, palette and
+hidden-lane provenance, SIMD selection/fallback receipts, fault ordering, and
+benchmark evidence remain TODO under `pillow-rs#3ptb`. Source-only; no runtime
+verification ran.
+
+2026-11-15 Draw public route source crosswalk: `ImageDraw.__init__` loads the
+Python image and passes its optional Pillow mode to `RustDraw`; the PyO3
+constructor translates it to `Mode`, constructs the core `Draw`, and validates
+the context against the current raster (including the declared RGB raster with
+RGBA draw-context exception). Python resolves colors and palette entries, then
+delegates pixel work to Rust.
+
+Geometry calls normalize host arguments and queue typed `PipelineOp::Draw*`
+values. The operation registry maps those variants to
+`pool_cpu::ops::draw::prepare_pipeline`. Preparation validates the draw op,
+reads `OperationInputs::mode()` from the materialized raster, derives geometry
+eligibility from that exact mode and input, and asks the per-mode `SUPPORT`
+declaration to select using the injected `ExecutionContext`. Prepared execution
+checks that the selected operation/backend/mode remains declared before
+dispatching to the exact mode owner. This is the queued geometry strategy path;
+its full mode × architecture output/error receipts and public latency remain
+pending.
+
+Bitmap and Text are eager Draw methods rather than queued geometry variants.
+Bitmap validates the mask identity, retains both destination raster mode and
+draw-context mode, and asks the shared Draw route declaration whether the
+request composes through a compatible Paste child for the requested backend.
+Otherwise it selects an exact-mode direct CPU Default owner before taking
+mode-specific fast paths or writing pixels. Text builds a native coverage or
+RGBA mask, supplies raster/context mode, palette, embedded-color, and mask facts
+to the Draw selector, validates the selected direct Default owner, then
+composes into that exact mode. Direct Bitmap/Text output and fault receipts,
+including the conditional Paste backend path, remain pending.
+
+FloodFill is a separate `OperationId::FloodFill` strategy in the same Draw
+family. The Python wrapper supplies the originating Rust image even when
+`load()` returns a custom PixelAccess object. The adapter derives Mode from the
+stored DynamicImage and selects the serial CPU Default strategy with the
+advisory execution context; all reads, writes, and color protocols still use
+the caller's PixelAccess callbacks. This closes the mode/context gap without
+inferring mode from callback values or changing the callback algorithm.
+PreparedFloodFill retains the requested backend and execution records the
+selected Default strategy while preserving nested callback receipts. Callback
+results/fault order, receipt correctness, and public-call latency remain
+pending CPU parity; direct Rust callback callers may still omit
+PreparedFloodFill and use the generic callback utility. Draw family
+mode/architecture parity and benchmarks remain pending; no runtime
+verification ran.
+
+2026-11-15 Resize-to-Reduce context propagation source review: traced
+`Image::resize_with_options` through reducing-gap planning, `apply_reducing_gap`,
+`reduce_for_resize`, lazy Crop/Reduce queuing, and the final Resize append.
+Pipeline extension preserves the pinned backend; materialization selects one
+`ExecutionContext` for the batch, and `CpuPool` passes it unchanged through each
+prepared step. Each step prepares against the current exact `DynamicImage`
+variant, so a Reduce child and its following Resize share backend/architecture
+policy while retaining mode-specific strategies and typed outputs. The Reduce
+child is checked against the declared conditional route before queuing. Source
+trace only; no runtime verification ran. TODO(pillow-rs#3ptb): represent the
+fused LA/RGBA reducing-gap route in top-level Resize route metadata. The public
+wrapper and boxed prepared admission currently duplicate that mode choice; the
+pre-reduction child path is explicit, but the fused path is not.
+
+2026-11-15 Paste compact-carrier provenance source crosswalk: `Mode` owns the
+omitted-lane count and physical byte offsets. New images initialize
+mode-specific lanes; raw decoding retains supplied omitted bytes when its
+declared raw layout exposes them, after row-stride/orientation handling; the
+codec adapter translates the header-selected mode and seeds canonical lanes
+for compact decoder output. Spatial raster transforms remap sidecars by their
+pixel maps. Public PutPixel's prepared mode owner updates the logical sample
+and its omitted lanes together, while logical-only raster writes preserve or
+invalidate sidecars according to the mutable boundary. Convert's exact source
+owners attach retained source lanes, fourth-byte values, or alpha-derived
+values to compact targets. Paste reconstructs the source's four-byte physical
+layout from its exact mode plus sidecar/fallback, then composes destination
+logical bytes and hidden lanes over the clipped region and restores the
+sidecar to the typed output. This is a source crosswalk, not proof of parity.
+TODO(pillow-rs#3ptb): freeze and verify reachable constructor/decode/raw-mode,
+transform, Convert, PutPixel, and cross-mode Paste output cases, including
+masks, clipping, fault order, and architecture/fallback receipts. No runtime
+verification ran.
+
+2026-11-15 Color3DLut public route source crosswalk: `Image.filter` loads before
+filter validation, invokes callable filters, accepts duck-typed `filter`
+objects, and sends multi-band LUT filters directly to `Color3DLUT.filter`.
+`Color3DLUT.filter` chooses its explicit target mode or the Rust image's
+reported mode and calls the PyO3 `color_lut_3d` method. PyO3 parses the Pillow
+mode string into `Mode`, validates the linear-filter/channel/size/table input,
+prepares the typed LUT, and calls `Image::color3dlut`. The core method checks
+the declared source and target support, queues the typed
+`PipelineOp::Color3DLut`, and the CPU registry reaches
+`pool_cpu::ops::color3dlut::prepare_pipeline`. That entry checks the materialized
+source mode, selects the exact source-mode strategy, and passes the same
+`ExecutionContext` to that mode's preparation and architecture selection. This
+closes the source-route mapping for `color3dlut/ops.rs` from the Python public
+filter call through prepared CPU execution; it does not close its runtime
+coverage. Per-mode output/error parity, declared architecture and fallback
+receipts, native CoreOnly outputs, and public-call latency remain pending under
+`pillow-rs#3ptb`. No runtime verification ran.
+
+2026-11-15 Filter public route source crosswalk: Python `Image.filter` loads
+before validating the supplied filter, invokes filter classes/callables, and
+splits non-multiband filters by band; built-in and parameterized filters use
+their Rust operation entry points. `BuiltinFilter` keeps the named-kernel path
+when its class defaults are intact and routes modified `filterargs` through the
+generic Kernel entry. Kernel, Gaussian/Box blur, and rank filters queue typed
+`PipelineOp` requests and reach `pool_cpu::ops::filter::prepare_pipeline` via
+the operation registry. That owner obtains the exact materialized `Mode`,
+constructs input facts, selects the declared per-mode strategy using the same
+`ExecutionContext`, and retains both selection and context through execution.
+Architecture blur paths dispatch only to their declared exact-mode owners;
+other prepared requests dispatch through the exact mode owner, then finish
+physical hidden-lane handling.
+
+UnsharpMask is an eager CPU composition: its direct blend and nested
+GaussianBlur child both prepare from the same `ExecutionContext`. ModeFilter is
+also eager and mode-selected; its P path restores palette metadata, and its
+support is separate from rank filters. The private ImagingCore palette rank
+callback has its own P-only declaration. The Python wrapper owns custom filter
+callbacks and splits non-multiband filters by band; callback code bypasses the
+CPU filter registry unless it explicitly calls a native operation. This closes
+Filter's public-to-prepared-source mapping only. Exact
+mode/output and fault parity, all declared architecture/fallback receipts,
+ModeFilter/P metadata, Kernel error order, and public-call latency remain open
+as listed in the Filter TODOs above `pillow-rs#3ptb`. No runtime verification
+ran.
+
+2026-11-15 Contrast route caller crosswalk: the Python `ImageEnhance.Contrast`
+object materializes and retains `contrast_degenerate()` at construction, then
+calls Rust's `image_blend` from `_apply`; this stateful path does not enqueue
+`PipelineOp::Contrast`. The separate Rust `Image::enhance_contrast` API uses the
+typed Contrast pipeline when the exact source Mode has a prepared mode owner,
+and otherwise composes the same degenerate base with `BlendModule`, carrying
+the caller's pinned backend. `contrast_route.rs` is the operation declaration
+and registry adapter for the typed `PipelineOp::Contrast` path: it declares
+composed child operations and error stages for rejected modes, then delegates
+accepted materialized `DynamicImage` values to the exact mode strategy with
+the injected `ExecutionContext`. The Python stateful path and the Rust one-shot
+path are distinct public contracts; parity must exercise both without treating
+the Python wrapper as a call into `CONTRAST_SUPPORT`. Mode × architecture
+output/error receipts and the route distinction remain pending under
+`pillow-rs#3ptb`. No runtime verification ran.
+
+2026-11-21 Eval/Point public route source crosswalk: Python `Image.eval` delegates
+to `Image.point`. The public wrapper loads first and dispatches
+`ImagePointHandler` objects through their `point(image)` method; other inputs
+forward to PyO3. PyO3 reads the exact source `Mode`; Pillow's callable I/F/
+native-I;16 affine transforms return without consulting the supplied mode.
+Rust also extends that typed-u16 route to I;16L/B/N without mode conversion;
+Pillow 13 rejects those three callable routes, so they are marked
+`NO_PILLOW_SUPPORT` and need target-only expected output/fault records. Other callable LUTs
+are built before the original mode object's `!= "F"` comparison, and LUT
+rounding precedes extracting the Pillow string into typed `Mode`. Sequence
+iteration happens after the comparison. The byte-LUT path queues
+`PipelineOp::Eval` and the
+registered CPU callback prepares against `OperationInputs::mode()`, selects a
+per-mode owner with the injected context, and restores declared hidden lanes
+after execution. Separate core routes handle native scalar `I`/`I;16*`/`F`
+callables through serial `PointScalar`, byte-to-F LUTs through `PointFloat`, and
+L/P-to-One or I-to-L transformations through `PointModeOutput`; they do not
+force those inputs through the byte Eval pipeline. This source crosswalk does
+not verify every mode/architecture result. Existing Point TODOs retain
+operation × mode × architecture outputs, row tails, hidden lanes, L/P-to-One
+and I-to-L outcomes, and public-call latency. Pillow 13.0 returns the same
+output mode for an unrecognized explicit `Image.point` mode as it does when
+the mode is omitted. The PyO3 adapter maps an unrecognized string to no target
+mode, matching that observable output mode. Output values and errors for this
+route remain parity-pending. Source:
+[Pillow 13.0 Image.point](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1828-L1881),
+[Pillow 13.0 ImagePointHandler](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L2894-L2902),
+[Pillow 13.0 ImagePointTransform](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L517-L560),
+[Pillow 13.0 ImagingPoint](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Point.c#L122-L196),
+[Pillow 13.0 mode lookup](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Mode.c#L17-L28).
+The Python package now exposes Pillow's `ImagePointHandler` class and calls
+`self.load()` before handler dispatch or LUT handling; handler `point(image)`
+runs after loading.
+This path returns the handler's object directly and leaves its custom operation
+outside the Rust pixel-kernel path, as Pillow does. Its callback order, output
+identity, and exception behavior remain parity-pending. No runtime verification
+ran. `ImagePointTransform` is exposed from both `pillow_rs` and `PIL.Image`;
+its `scale`/`offset` values stay as Python objects while its arithmetic invokes
+Python numeric protocols, then the final affine parameters are converted at
+the core boundary. It is subclassable and supports mutable attributes. Its
+custom numeric, subclass override, and fault-order cases remain parity-pending.
+
+TODO (`pillow-rs#3ptb`): verify mode-comparison behavior for custom `__ne__`,
+non-string mode objects and bytes, LUT callback/rounding exceptions, F32 output
+mode transitions, custom numeric and `NotImplemented` parity for the exposed
+`ImagePointTransform`, and the complete mode × architecture result/receipt matrix.
+Public loading and mode/LUT ordering now follow the Pillow source route;
+outputs, fault contracts, and latency remain unverified.
+
+2026-11-15 ImageOps geometry public-route source crosswalk: the Rust
+`contain_with_input`, `cover_with_input`, `fit_with_input`, and `scale_with_input`
+entries validate geometry and queue typed `PipelineOp` values. The CPU registry
+maps Contain, Cover, Fit, Scale, and Pad to `geometry::ops::prepare_pipeline`.
+Contain/Cover/Fit/Scale declare all exact `Mode` identities as mode-preserving
+CPU operations; their prepared work composes the corresponding Resize or
+ResizeBoxed strategy using the same `ExecutionContext`. The geometry owner
+selects and retains its operation contract, while the nested Resize owner
+selects the pixel implementation for the requested architecture.
+
+The public Python `ImageOps.scale` callback route computes scale geometry, then
+calls the image's current public `resize`; Contain and Cover compute the target
+size before that same public method; Fit computes its crop box before calling
+public `resize`. Those wrapper routes therefore execute the mode/architecture
+pixel strategy through Resize and preserve public method overrides. They do not
+enqueue the typed Rust Scale/Contain/Cover/Fit variants. Pad has a separate
+native callback route: only an unchanged base `contain` and eligible built-in
+image/argument methods enter the typed path, where geometry, filter, palette
+realization, fill, and centering are processed in Pillow-visible order before a
+native result is produced. When pixel work remains, Pad's CPU support dispatches
+across every exact mode to that mode's Pad owner with per-mode architecture
+declarations; the nested Resize receives the same context. If wrapper checks fail, the
+existing callback fallback uses public `contain`, canvas creation, palette
+copy, and paste.
+
+TODO(pillow-rs#3ptb): freeze output and fault contracts for the public callback
+routes, direct Rust typed routes, Pad's native/fallback split, public method
+overrides, and nested Resize identity. Record per-mode architecture selection
+and fallback receipts, hidden-lane/palette results, and public-call latency.
+This crosswalk is source review only; no runtime verification ran.
+
+2026-11-15 Image.transform public-route source crosswalk: Pillow's public
+`Image.transform` sends custom `ImageTransformHandler` implementations directly
+to their callback and resolves generic `getdata()` objects in Python. Built-in
+methods capture the exact source Mode, prepare the fill and exact-mode output,
+and snapshot P palette and image info before method-data callbacks. Filtered LA
+and RGBA first use the mode-specific La and RGBa paths, then convert back. The
+PyO3 plan retains the CPU backend/architecture context across host callbacks.
+Non-MESH methods prepare method data and execute through `transform::ops::prepare`
+into the preallocated raster; MESH streams records through one accumulator and
+uses that captured context for each per-mode strategy. The CPU registry's
+separate deferred `PipelineOp::Transform` route reaches the same exact-mode
+preparation. The selector covers Pillow modes and explicitly rejects the five
+internal high-depth identities marked `NO_PILLOW_SUPPORT`. One and P use
+nearest sampling; hidden physical lanes are finished by the shared Transform
+lane owner after each selected mode/architecture kernel. MESH remains
+Default-only because its record adapter has no architecture kernel.
+
+The source currently has two PA metadata contracts: the public prepared-output
+allocator copies PA palette metadata, while deferred pipeline metadata marks
+Transform as palette-dropping. This discrepancy needs outcome verification;
+neither path was changed here. TODO(pillow-rs#3ptb): freeze method × mode ×
+architecture output, error, lane, palette, and fallback receipts; check empty
+MESH with a non-default P palette; reconcile PA metadata; and measure full
+public-call latency. Source review only; no runtime verification ran.
+
+2026-11-15 ImageOps public-operation source crosswalk: the Python facade forwards
+Autocontrast, Equalize, Invert, Posterize, Solarize, Expand, and Colorize into
+PyO3 callback adapters; the sequencing lives in `pillow-rs`. Python's public
+Autocontrast route optionally converts to L, obtains the current wrapper's
+histogram, builds the LUT through host numeric/sequence callbacks, then applies
+it through public `Image.point`. Equalize optionally converts P to RGB before
+histogram collection, builds its LUT, and applies it through public `point`.
+These public routes use the mode-aware Histogram, Convert, and Eval/Point paths
+where pixel work occurs; they do not enqueue the direct Rust
+`PipelineOp::Autocontrast` or `PipelineOp::Equalize` routes. Direct Rust APIs
+remain distinct and prepare those typed operations through the CPU registry.
+
+Invert, Posterize, and Solarize preserve Pillow's `_lut` wrapper split: P
+transforms palette entries on an image copy while preserving pixel indexes and
+alpha palette entries; non-P accepted modes call public `Image.point`. The LUT
+construction and palette callbacks remain host-visible. The P palette route
+has six passing focused receipts; custom palette callback fault order and
+mutation receipts remain TODO. Colorize validates L and constructs its LUT
+through callback color resolution and host arithmetic, converts through public
+`Image.convert("RGB")`, then uses `_lut` and public `point`; its direct Rust
+`PipelineOp::Colorize` is a separate typed CPU route.
+
+Python ImageOps Expand resolves geometry and fill through callbacks, creates a
+mode-specific canvas, then delegates source copy to public `paste`. It does not
+use the direct Rust `PipelineOp::Expand`; that typed Rust API remains a separate
+prepared CPU route. Grayscale delegates to public Convert; Flip and Mirror
+delegate to public Transpose; Crop resolves a box then calls public Crop; and
+the already documented Scale/Contain/Cover/Fit/Pad routes compose with public
+Resize or their typed Pad strategy. CropBorder is a core operation contract,
+not the Python `ImageOps.crop` callback route. Quantize is an eager `Image`
+operation rather than an ImageOps wrapper entry.
+
+This closes the public-to-core route distinction for ImageOps, not the mode
+leaf/kernel audit or runtime gate. TODO(`pillow-rs#3ptb`): finish reviewing
+every exact-mode ImageOps leaf against its archived implementation; freeze
+callback fault/output/metadata cases; verify direct Rust operation results and
+mode × architecture/fallback receipts; and measure full public-call latency.
+No ImageOps parity, build, quality, or benchmark command ran during this source
+review.
+
+2026-11-15 Resize public-route source crosswalk: Python `Image.resize` loads
+encoded inputs at the public call boundary, applies Pillow's mode-1/P nearest
+filter rule, and preserves subclass hooks. Its straight-alpha LA/RGBA route
+converts to premultiplied La/RGBa when custom `convert`, `resize`, or reducing
+`reduce` overrides require the Python path. Ordinary built-in calls delegate to
+the Rust `_resize_dispatch`; if a reducing-gap callback plan is returned,
+Python invokes the current `self.reduce` and builds the final wrapper from that
+result. Custom numeric/bounds protocols also stay on the Python callback route.
+
+The Rust `Image::resize_with_options` route obtains the exact cached Mode,
+performs the same effective-filter choice, preflights reducing-gap error order,
+and queues Resize or ResizeBoxed. Non-alpha reducing-gap requests compose a
+same-mode Reduce child before final Resize when the computed factors require
+it; LA/RGBA use the dedicated straight-alpha fused Default path. Registry
+preparation retains the exact `DynamicImage`, request, `ExecutionContext`, and
+selected mode/architecture strategy. Prepared execution routes the concrete
+variant to its mode owner, then finishes physical omitted lanes. The central
+Resize contract names the conditional Reduce child for non-fused modes and now
+declares fused LA/RGBA ResizeBoxed children with exact serial support. The
+2026-11-20 source change still needs focused verification. The earlier
+40-case I;16 target-only receipt at dirty revision `2cd6f6a` was stale after
+resampler changes. The same 40 IDs were rerun after source review on current
+`develop` revision `0d5c0e4`: all 40 recorded Rust outputs passed, with zero
+not_run or infrastructure errors (`migration-parity-75cc2aeb1bde4900b01f7ce223621407`).
+These are expected-output checks because Pillow 13.0 rejects the I;16
+reducing-gap paths; they do not claim Pillow parity. The I-to-PNG save case is
+the only failed-only contract outside this repository, owned by
+image-slash-star.
+
+This closes the public-to-prepared Resize route crosswalk, not every mode leaf
+or architecture kernel review. TODO(`pillow-rs#3ptb`): verify the fused
+straight-alpha route and requested-architecture fallback, finish exact-mode
+leaf and kernel comparison, and retain mode × architecture/fallback and
+public-call latency evidence. The focused 40-case target-output retry passed
+before the 2026-11-20 source change; no follow-up parity or benchmark has run.
+
+2026-11-15 execution-context and strategy-registry source review: traced
+`prepare_execution` and `route_decision` through `ExecutionContext`, CPU
+`OperationSupport`/`OperationModeRoute`, and `ModeSupport::assess`/`select`.
+Automatic routing validates the pipeline before materialization; one captured
+context is then passed through prepared CPU operations. Mode admission checks
+the selected backend, architecture policy, compiled/capability requirements,
+and request guards before recording an implementation or fallback. Wrapper
+child routes are declared at the operation level. The same 40 I;16 target-only
+Resize cases passed on current `develop` revision `0d5c0e4` after the
+resampling pass-order and fused-arithmetic changes (run
+`migration-parity-75cc2aeb1bde4900b01f7ce223621407`; 40/40, zero failures,
+not_run, or infrastructure errors; CPU Default). Pillow 13.0 rejects these
+cases, so this verifies Rust's recorded outputs rather than Pillow parity. The
+current Reduce L reciprocal-zero receipt records Pillow 13.0.0 = Rust = 1. The
+only remaining failed-only case is the I-to-PNG codec failure owned by
+image-slash-star. The standard runner still decompresses its full input
+document before case-ID filtering; the focused run reached about 1.9 GiB RSS.
+TODO (`pillow-rs#bhwe`): route bounded input loading through PostgreSQL before
+further retries. No full-corpus rerun or benchmark ran.
+
+2026-11-20 Paste orchestration re-review: the CPU operation entry point
+classifies all 25 exact `Mode` identities, preserves the selected strategy
+through prepared execution, and routes each `DynamicImage` variant to its
+matching mode owner. Pipeline preparation materializes the source before the
+mask, captures/restores their telemetry receipts, builds secondary-input facts,
+assesses the injected `ExecutionContext`, and prepares the exact destination
+mode. The Python facade's staged route, PyO3 boundary, JavaScript typed-input
+route, and direct Rust `paste`/`paste_at` route all converge on the queued
+`PipelineOp::Paste`; conversion overrides remain a host callback and resolved
+rasters are passed to the core without a second conversion. Renamed the local
+`byte_mode!` macro to `mode_strategy!` because its exhaustive route also covers
+I/F, I;16, and internal typed modes. This closes the orchestration/caller
+crosswalk only. TODO(`pillow-rs#3ptb`): finish source comparison of every
+mode-specific architecture kernel and physical-lane producer, then verify all
+mode × architecture outputs, selected/fallback receipts, callback/error
+ordering, and affected public-call latency. No runtime verification ran.
+
+2026-11-20 Paste masked-vector source re-review: the exact-mode vector helper
+maps compact and physical byte layouts through typed `SourceMap` strategies,
+keeps each mask pixel aligned to its destination sample group, and uses the
+same DIV255/preblend arithmetic for full and partial groups. Fractional-mask
+tails are copied from zero-padded 8-lane vector results; binary-mask tails use
+the 16-lane vector arithmetic. Current telemetry counts those padded groups as
+vector blocks and records no scalar-tail work, unlike the archive's
+mode-specific tail counters. This is a receipt-model change, not a claimed
+pixel-parity result. TODO(`pillow-rs#3ptb`): verify masked Paste/Composite
+outputs plus vector-block/scalar-tail/path receipts for full, partial, and
+empty clipped rows on each built architecture. No runtime verification ran.
+
+2026-11-20 Paste mask and clipping source crosswalk: Pillow 13.0 `ImagingPaste`
+accepts mask modes `1`, `L`, `LA`, `RGBA`, and `RGBa`, selecting alpha lanes for
+the alpha-bearing masks. It validates source and mask dimensions before
+clipping; the maintained plan validates those extents before `PasteRegion`
+clips negative or out-of-canvas positions. Scalar rows and the shared vector
+kernel use Pillow's `BLEND` rounding for ordinary masks, and `PREBLEND`
+(`MULDIV255(destination, 255 - alpha) + premultiplied source`) for `RGBa`.
+Compact destination carriers restore omitted physical bytes using the same
+mask sample and arithmetic after the logical mode kernel. This source comparison
+found no additional formula or indexing discrepancy. It does not verify pixel
+outputs or architecture receipts. TODO(`pillow-rs#3ptb`): run the declared
+mask × destination output and fallback matrix, including clipping, compact
+physical lanes, full/partial/empty vector rows, and RGBa alpha edge values.
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran. Sources: [Pillow 13.0 `ImagingPaste`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L1997-L2127),
+[`PREBLEND` and `BLEND`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/ImagingUtils.h#L292-L302).
+
+2026-11-20 lazy mode-identity source re-review: `Bytes` carries the Pillow-owned
+`Mode` translated from codec header inspection, while successful materialized
+results take identity from the exact `DynamicImage` variant. Pipeline nodes seed
+their `PipelineModeCache` with declared output identity when support metadata
+resolves it; otherwise the cache plans the graph from the same typed operation
+contracts and stores either an exact mode, a `Planned(None)` result, or an
+error. `mode_identity()` reaches pixel materialization only after that plan is
+unavailable, preserving a path for operations whose output identity depends on
+runtime palette state or an existing operation error. This is deliberate lazy
+wrapper metadata, not a duplicate mode tag on `DynamicImage`. TODO(`pillow-rs#3ptb`): verify the unresolved-mode cases together with materialization and fault ordering in the frozen CPU contracts. No runtime verification ran.
+
+2026-11-20 codec/header mode source re-review: `open_bytes_with_formats`
+creates `EncodedImage`, reads its header-selected codec `Mode`, translates it
+once through the exhaustive Pillow-owned adapter, and stores that `Mode` on
+lazy `Image::Bytes`; opening does not call pixel decode. Materialization uses
+the codec transfer `ImageMode` to construct a carrier, then `retag_decoded_image`
+changes only the enum variant for compatible layouts and attaches the existing
+hidden-lane representation. Codec and Pillow mode types stay separate. The
+codec's TIFF associated-alpha interpretation remains an explicit TODO at the
+adapter boundary. TODO(`pillow-rs#3ptb`): verify format/header/mode pairs,
+materialization fault timing, and exact decoded samples and hidden lanes. No
+runtime verification ran.
+
+2026-11-20 F32 Resize strategy source review: traced the `ImageF32` dispatcher,
+Default and AVX FMA entry points, nearest copy path, separable pass order,
+non-finite FMA guards, f32 intermediate stores, and raw little-endian carrier
+encoding. `horizontal_sample` separately rounds the first
+`floor(taps / block_width) * block_width` products and uses fused multiply-add
+for the tail; the eight-tap horizontal shortcut and vertical accumulation are
+fused. The block width remains a `target_arch` constant (4 on AArch64, 16
+elsewhere) inside the Default implementation, although the support declaration
+exposes only AVX FMA. That makes the Default accumulation sequence depend on
+build target without an Architecture strategy selection. The AArch64 grouping
+is recorded as matching the observed Pillow 13.0 output; x86_64 and wasm remain
+unverified. The Default-versus-explicit architecture decision was still open at this
+review point and is resolved in the later F32 Resize architecture decision
+below. Pillow 13.0
+`Resample.c` sums ordered taps in a `double` accumulator and stores each F32
+pass as `float`. Exact contraction and output parity remain unverified beyond
+the observed AArch64 grouping. Source review only; no build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command ran. Source:
+[Pillow 13.0 F32 resampling](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Resample.c#L3248-L3447).
+
+2026-11-20 serial batch context re-review: `execute_batch` rejects non-CPU
+contexts, then passes the same captured context through normal prepared
+operations, Draw batches, Multiply/Screen fusion, AlphaComposite/Mirror,
+Transpose, Point LUT, PutPixel batches, RGB PutPixel/Thumbnail, and owned
+Invert/Chops paths. Each prepared route records the selection it actually
+executes; fallback paths use the selected strategy or retain the failure.
+TODO(`pillow-rs#3ptb`): freeze outputs, error order, and selection/fallback
+receipts for every fused and non-fused CPU route. The existing batch TODO also
+tracks unprepared-failure path telemetry and RGB PutPixel/Thumbnail errors
+before operation telemetry begins. No runtime verification ran.
+
+2026-11-20 Draw Bitmap owner source re-review: Pillow 13.0.0 sends
+`ImageDraw.bitmap` through `ImagingDrawBitmap` to `ImagingFill2`. Its `1` mask
+treats any nonzero sample as active and writes using the destination's storage
+layout; `L` blends each physical
+byte and promotes non-alpha byte coverage only for the color bytes of
+zero-alpha RGBA/RGBa/LA/La/PA destinations; `RGBA` uses alpha coverage with
+ordinary byte blending; `RGBa` applies PREBLEND to each physical destination
+byte. The compact LA/PA/RGB owners expose their mode's logical samples and
+preserve omitted physical lanes in sidecars; I/F remain raw four-byte carriers,
+and I;16 remains native u16 storage with the reviewed byte-prefix rules.
+The Draw support table resolves all 25 exact identities through their mode
+owners; the five internal high-depth identities are rejected before execution.
+Direct Bitmap selects a mode's Default writer when an architecture-specific
+Bitmap kernel is absent; architecture-specific Draw span kernels remain a
+separate geometry-batch route.
+
+This comparison found and removed an unverified LAB-only rule that treated an
+RGBa mask as full coverage. Pillow's `ImagingFill2` applies PREBLEND using the
+mask alpha for LAB too, so LAB now follows the shared byte path. Source review
+does not replace output verification. TODO(`pillow-rs#3ptb`): run focused
+Pillow 13.0 CPU parity for LAB with RGBa masks, non-white inks, varied starting
+pixels and hidden fourth bytes; then cover the complete declared mask ×
+destination matrix, clipping, P/PA metadata, and route receipts. No test,
+parity, benchmark, lint, or compile command ran for this source-only change.
+
+Sources: [Pillow 13.0 `ImageDraw.bitmap`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageDraw.py#L2453-L2471),
+[`ImagingDrawBitmap`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Draw.c#L801-L806),
+[`ImagingFill2` mask paths](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L373-L632),
+and [`PREBLEND`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/ImagingUtils.h#L18-L28).
+
+2026-11-20 Histogram masked two-band Pillow 13 correction: the earlier
+Pillow 12.2 source note records that masked multi-band Histogram counted the
+first four physical bytes, including hidden lanes. Pillow 13.0 specializes
+two-band images and reads physical lane 3 for band two, matching the native
+alpha sample used by its unmasked path. The maintained `La` and `PA` Default
+owners still selected hidden lane 1, which contains repeated luma or palette
+index; removed that stale special case so all byte modes count their native
+logical channels directly. This does not verify output parity. TODO
+(`pillow-rs#3ptb`): run focused masked Histogram cases for `LA`, `La`, and
+`PA`, including noncanonical retained hidden lanes and mixed zero/nonzero
+masks, then refresh the reviewed-function parity markers. No validation ran.
+Source: [Pillow 13.0 `Histo.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Histo.c#L829-L909).
+
+2026-11-20 Histogram source cross-check: verified Pillow 13.0's `Storage.c`,
+`Imaging.h`, `Histo.c`, and the Python Histogram/Entropy wrappers against the
+maintained CPU contracts. `Storage.c` aliases `image8` for pixel sizes 1, 2,
+and 3; `Histo.c` then scans exactly `width` bytes from each row. This confirms
+the per-row I;16 byte-prefix behavior, including its endian-specific byte
+selection and row restart. The mask path checks dimensions, then mask mode;
+single-byte sources read `image8`, while four-byte UINT8 sources read the
+second band from physical lane 3 when `bands == 2`. The compact Rust LA/La/PA
+carriers expose that same semantic alpha as logical channel 1, without relying
+on hidden repeated bytes. I/F masked calls reject after dimension and mask
+validation; unmasked calls use the supplied or wrapper-computed extrema. The
+operation dispatch covers all 25 Mode identities: 20 Pillow-facing histogram
+routes and five explicitly CoreOnly native high-depth extensions, with the
+RGB32F extension retaining its declared opaque fourth band. The strategy
+selects serial Default execution and reports architecture fallback through the
+shared support contract. Refreshed source-review markers for the Histogram
+contract, mask preparation, mode dispatch, and I;16 byte-prefix helpers.
+Pillow parity and benchmarks remain pending, including the focused masked
+LA/La/PA cases, I;16 row/endian cases, I/F edge cases, and recorded CoreOnly
+outputs. No test, build, parity, benchmark, lint, or coverage command ran for
+this source-only follow-up.
+
+Sources: [Pillow 13.0 `Storage.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Storage.c#L2104-L2124),
+[ `Imaging.h` storage aliases](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Imaging.h#L1853-L1865),
+[ `Histo.c` masked and unmasked paths](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Histo.c#L794-L1004),
+and [ `Image.py` Histogram/Entropy wrappers](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1784-L1840).
+
+2026-11-20 CoreOnly float RGB Resize source review: family-level Resize and
+ResizeBoxed support classifiers enumerate all 25 `Mode` identities; their
+exact-mode dispatch forwards `ImageRgb32F` and `ImageRgba32F` to separate
+serial Default owners. Both preserve their matching `DynamicImage` variants
+and use typed `f32` sample buffers directly; no conversion to Pillow `F`,
+another raster mode, or a byte projection is performed. The shared typed
+helper filters each channel in ordered `f64` accumulation and stores the
+horizontal intermediate as `f32`. Nearest copies complete typed samples.
+`ImageRgba32F` filtered Resize premultiplies color by native alpha, filters all
+channels, then unpremultiplies; zero-alpha output color is set to zero. These
+are `NO_PILLOW_SUPPORT` core extensions, so recorded target-output contracts—
+not Pillow comparisons—must verify samples. The alpha route currently clones
+the full input before premultiplication; its public-call cost remains
+unmeasured. TODO (`pillow-rs#3ptb`): verify the selected CoreOnly RGB32F/RGBA32F
+Resize outputs, empty/nearest/filtered routes, same-mode selection receipts,
+and public-call latency in the frozen CPU matrix. Refreshed source-review
+markers on the exact-mode owners, typed f32 helpers, and native nearest helper.
+No algorithm changed and no build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran for this source-only review.
+
+2026-11-20 AArch64 selector coverage wiring: added the explicit `aarch64`
+architecture name to the test-only Python selector, parity result validator,
+and default CPU parity/benchmark selector list. Historical nine-selector
+receipts remain historical; the next frozen architecture matrix includes the
+new target-baseline policy and records actual AArch64 support or fallback. No
+parity or benchmark ran.
+
+2026-11-20 I32 Resize architecture placement review: moved the x86 AVX/FMA
+entry wrapper out of `i32/default/resize_impl.rs` and into the existing
+`i32/avx/resize_impl.rs` owner. The generic two-pass executor remains shared
+by the exact-mode Default and AVX FMA strategies; the Default folder no longer
+contains an x86-only function. Arithmetic and dispatch behavior are unchanged.
+This structural review is source-only; the I32 AVX FMA output and selection
+receipt remain pending in the frozen CPU matrix.
+
+2026-11-21 I32 Resize dispatch and NEON safety review: the mode owner now checks
+that the injected selection names `ImageI32` and the exact ordinary or boxed
+Resize operation. Default and boxed-nearest paths validate the CPU/Default
+selection; AVX/FMA and NEON continue to require their declared architecture
+strategy. Reviewed the checked NEON horizontal 16-sample and vertical 8-sample
+load spans, local vector stores, and AArch64 target gating; no unsafe-memory
+defect was found. This is source-only. I32 AVX/FMA and NEON outputs, selected
+and fallback receipts, and per-architecture latency remain pending in the
+frozen CPU matrix.
+
+2026-11-20 F32 Resize architecture decision: retain target-specific Default
+outputs as distinct strategies. Removed target-architecture product-block
+selection from the shared filtered loop; it now receives the product grouping
+from the selected strategy. Shared orchestration, nearest copy, and filtered
+kernels live in `f32/helpers`; Default, AVX FMA, and AArch64 folders contain
+only their respective strategy entries. Portable Default and AVX FMA use a
+fixed width of 16, while the new `f32/aarch64` baseline strategy uses width 4
+to preserve the existing AArch64 result. Resize and ResizeBoxed declare AArch64 support and
+route through the injected selection; a Default request can select this
+target-baseline implementation on AArch64, with requested policy and selected
+implementation kept separately in the receipt. The selection system now
+permits only this declared target-baseline strategy for Default on its matching
+build target. TODO (`pillow-rs#3ptb`): verify the AArch64 and portable x86 F32
+Resize/ResizeBoxed outputs and strategy/fallback receipts, then benchmark each
+selected path. No build, formatter, checkstyle, lint, test, parity, benchmark,
+or coverage command ran for this source-only refactor.
+
+Source provenance note (2026-11-21): the `3f9dfd403` archive's
+`legacy/ops/resize/float.rs` uses product width 16 for all targets. The
+pre-refactor `develop` F32 strategy used width 4 on AArch64 and 16 elsewhere.
+This explicit strategy split preserves that current `develop` behavior, as
+requested. Archive-versus-current F32 output remains unverified until the
+frozen parity cases run.
+
+2026-11-20 typed raster-mode boundary source review: confirmed
+`Image::new`, `new_with_input`, `frombytes`, and `RawDecoderPlan` take typed
+`raster::Mode`; generated pixels select their exact `DynamicImage` variant;
+pixel mutation reads the existing image identity; and `Draw::new` accepts an
+optional typed mode. The Python and JavaScript adapters parse Pillow's string
+names before core calls. Raw decoder `rawmode` and palette `rawmode` remain
+separate input-layout contracts and are not aliases for raster identity. The
+only core Pillow-name parser call is GPU result metadata in
+`image/backend.rs::GpuResultMetadata::materialize`, which remains a GPU-stage
+TODO. This resolves the stale constructor/pixel-mutation row above. Source
+review only; no build, formatter, checkstyle, lint, test, parity, benchmark,
+or coverage command ran.
+
+2026-11-20 Paste byte-execution and I;16 vector source review: traced the
+complete maintained `helpers/bytes.rs` and `helpers/i16_vector.rs` paths.
+Prepared source layouts select direct native byte mapping or explicit compact
+carrier expansion; empty clipped regions return the initialized destination,
+unmasked regions copy rows, and masked regions select copy, skip, ordinary
+blend, or PREBLEND from the declared mask layout. The 4-byte-to-LA mapping
+selects physical lanes 0 and 3, 4-byte-to-RGB selects the first three lanes,
+and same-width/four-byte routes preserve their declared lanes. Typed I;16
+whole-sample copies translate source byte order to destination byte order;
+fractional masks blend only Pillow's selected physical byte lane per pixel and
+preserve the other byte. Refreshed source-review markers on the fully reviewed
+helper functions; exact pixel, clipping, broadcast/mask-coordinate,
+sidecar-lane, and architecture-receipt parity remains pending under
+`pillow-rs#3ptb`. No algorithm changed and no build, formatter, checkstyle,
+lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 ImageChops public-wrapper source re-review: Pillow 13.0 calls
+`load()` on the first and second image in that order for binary Chops, and
+loads the source before Invert and Offset dispatch. The Python facade now
+preserves that order before entering PyO3, uses `Image.copy()` for Duplicate,
+and uses `Image.new("L", image.size, value)` for Constant, which does not read
+source pixels. ImageChops Blend delegates to the shared `operations.blend`
+wrapper, which loads both inputs before core validation. Pillow Composite is
+`image2.copy()` followed by masked `paste(image1)`; the shared wrapper now
+uses that public sequence, preserving copy/paste mode conversion, metadata,
+mask and callback behavior rather than duplicating the pixel algorithm.
+TODO (`pillow-rs#3ptb`): verify Chops pixels, output mode and metadata, decode
+and argument-fault order, subclass callback behavior, declared and fallback
+strategy receipts, and public-call latency over the frozen CPU matrix. The
+lower-level Rust Chops APIs retain their separate lazy contracts. Sources:
+[Pillow 13.0 ImageChops](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageChops.py#L766-L1088),
+[Pillow 13.0 Image.blend and Image.composite](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L3439-L3473),
+[Pillow 13.0 Image.copy](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1248-L1258).
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-21 F32 Resize architecture decision confirmation: preserve the
+target-specific Default outputs as distinct selected strategies. Portable
+Default remains fixed-width 16; AArch64 Default selects the declared baseline
+strategy with width 4. This confirms the earlier strategy decision and leaves
+the existing output and selection-receipt matrix TODO unchanged. Source trace
+of `ExecutionContext::permits_architecture`, the shared support selector, and
+the exact ImageF32 declaration confirms Default can select the AArch64 strategy
+only on an AArch64 build; x86 Default skips architecture-specific strategies
+and retains portable width 16. The selected AArch64 implementation remains
+visible in the receipt while requested policy stays Default, with no fallback
+reason for this declared target-baseline choice. Explicit AVX FMA remains
+available only when requested and hardware/build guards pass. These are source
+findings only; output and receipt evidence remains pending.
+
+2026-11-21 F32 Resize vector audit: the active `f32` mode tree had portable
+scalar Default, AArch64 baseline, and AVX/FMA scalar entries. The archived
+ordinary, nearest, and boxed 8-lane kernels were missing from the maintained
+architecture strategy layout. This source gap is closed by the F32 vector
+migration note below; output parity, selection receipts, fallback behavior,
+and performance remain pending.
+
+2026-11-20 Paste generic vector and mode-declaration review: traced all shared
+`helpers/vector.rs` operations and the architecture declaration constructors.
+Each exact-mode entry forwards its prepared plan to its declared serial or
+SSE2/NEON/Wasm SIMD128 leaf. The shared vector kernel consumes the precomputed
+source layout and mask layout, selects whole-sample copy for nonzero binary
+coverage, and applies DIV255 or PREBLEND to fractional coverage; its final
+8-byte and padded 16-byte work writes only active bytes. The seven explicit
+NEON L-mask specializations are ordered before each mode's generic NEON
+strategy; requests outside that specialization can select the generic vector,
+and requests with no eligible architecture keep the same-mode Default route.
+This closes shared-vector/declaration review only. Per-mode NEON row
+arithmetic, output bytes, telemetry, and selected/fallback receipts remain
+pending under `pillow-rs#3ptb`. Refreshed source-review markers on the fully
+reviewed shared vector and architecture helper functions. No runtime or
+quality command ran.
+
+2026-11-20 Paste explicit NEON L-mask row review: traced six row owners for
+seven identities and their exact mode-level wrapper selection. The declared
+minimum clipped widths are L/16, LA/8, PA/1, RGB/16, HSV/16, RGBA/4, and
+CMYK/16 pixels. Each row applies Pillow's L-mask DIV255 blend to every
+physical byte in the destination pixel. RGB and HSV share the three-band
+interleaved kernel; LA, PA, RGBA, and CMYK expand each coverage sample across
+their corresponding stored lanes. The source rows, destination rows, mask
+rows, NEON prefixes, wide continuations, and active tails were traced against
+the clipped Paste plan. The wrappers retain their mode's generic vector
+fallback when the exact NEON row guard is not selected. The unmasked
+same-pixel-size RGBA→RGB lane drop and RGB→RGBA four-byte source copy adapters
+were separately reviewed. Refreshed source-review markers on these leaves and
+their telemetry helpers; output parity, NEON selection receipts, and public
+latency remain pending under `pillow-rs#3ptb`. No runtime or quality command
+ran. Source: [Pillow 13.0 `Paste.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L118-L255).
+
+2026-11-20 Paste preparation-plan review: traced the complete
+`helpers/plan.rs` byte and typed plan constructors. Byte routes resolve the
+source/destination pair from typed `Mode`, expose hidden physical lanes only
+for admitted same-pixel-size layouts, validate source/destination storage
+lengths, derive mask layout from mask Mode and the prepared alpha policy, and
+validate masks against the admitted region. Source broadcasting remains
+limited to 1×1 input and clipping is applied after these checks. The I;16 plan
+preserves each endian identity, while CoreOnly native-u16 and f32 plans retain
+typed samples without projection. Refreshed source-review markers across the
+fully reviewed plan helpers. Wrapper callback ordering, exact outputs/faults,
+clipped and broadcast receipts, and hidden-lane mutation remain pending under
+`pillow-rs#3ptb`. No runtime or quality command ran.
+
+2026-11-20 Paste layout and region source review: reviewed `SourceLayout`,
+physical four-byte reconstruction, hidden-lane offsets, exact mask layouts,
+mode support declarations, clipping, and checked row ranges. Same-mode routes
+stay native; equal-pixel-size cross-mode paths select explicit 4-to-LA,
+4-to-RGB, or 4-to-four-byte mappings. Compact carriers reconstruct physical
+lanes from the exact mode and retained sidecar state. Mask support and execution
+agree on One, L, LA, RGBA, and RGBa layouts. Region validation uses checked
+arithmetic before row slicing. This is a source cross-check only; it does not
+verify all encoded layouts, hidden-lane outcomes, errors, or architecture
+receipts. Later Paste source reviews close the per-mode kernel crosswalk. TODO
+(`pillow-rs#3ptb`): audit remaining hidden physical-lane producer paths and run
+the frozen output/fault/selection matrix. No algorithm changed and no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-20 ImageF32 Paste source cross-check: the exact `ImageF32` owner keeps
+four stored bytes per pixel through Default and vector execution; it does not
+convert to another mode or decode a float to blend it numerically. Pillow 13.0
+masked Paste uses the same per-byte output operation over its four-byte pixel
+storage for this mode. Refreshed the F32 Paste support/preparation/dispatch
+markers and recorded the observable byte-lane contract beside Default. The
+focused mode × mask × architecture parity and fallback receipts remain
+pending under `pillow-rs#3ptb`. No runtime or quality command ran. Source:
+[Pillow 13.0 `Paste.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L1733-L1819).
+
+2026-11-20 Paste direct-caller context review: public Rust Paste resolves the
+destination `Mode`, validates its prepared source, and queues `PipelineOp::Paste`;
+`Image::push_op` inherits the destination pipeline's backend. Crop's signed
+composition appends Paste and reapplies the source's pinned backend recursively
+to the resulting graph. Expand and Pad host fallbacks create a fresh canvas
+through `Image.new` and call its public `paste`; the Rust binding callbacks
+now capture a pinned source backend before Paste loads the source, then apply
+that pin to the queued destination pipeline. The image pins Backend only;
+Architecture is selected when the queued Paste builds its ExecutionContext
+from active routing policy, so no per-image architecture value is lost here.
+Exact behavior and backend/architecture receipts remain pending. Source review
+only; no runtime or quality command ran.
+
+2026-11-20 Paste I;16 mode and architecture source review: all four exact
+`I;16` owners declare the same SSE2, NEON, and Wasm SIMD128 strategy set and
+pass their own mode into the shared `Luma16Plan`; architecture wrappers return
+the exact destination variant. The shared typed-u16 route converts whole
+samples between the source and destination byte orders for unmasked and binary
+copy. Fractional masks operate on the mode-selected raw byte lane while
+preserving its neighboring byte, in both Default and eight-lane vector paths.
+This captures the Pillow 13.0 byte output contract, not a claim that its
+storage walk is desirable. Per-mode output, fault, selection/fallback, and
+latency evidence remain pending under `pillow-rs#3ptb`. Refreshed source markers
+on the four mode entries, I;16 helper, and Default owner; no algorithm changed
+and no runtime or quality command ran. Source: [Pillow 13.0 `Paste.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L1733-L1819).
+
+2026-11-20 Paste CoreOnly high-depth source review: the five internal
+`LumaA16`, `RGB16`, `RGBA16`, `RGB32F`, and `RGBA32F` identities are explicitly
+marked `NO_PILLOW_SUPPORT` and expose only exact-mode Default strategies. Their
+owners keep u16 or f32 sample buffers typed throughout preparation, native
+blending, and output construction; no conversion to Pillow F, byte channels,
+or another image mode occurs. The shared typed helper applies binary masks as
+whole-sample copies and fractional masks with native u16/f32 arithmetic. These
+are core-only output contracts, not Pillow parity routes. Refreshed source
+markers across all five mode strategies, Default owners, and the typed helper.
+TODO (`pillow-rs#3ptb`): verify expected outputs, mask/fault behavior, and
+public-call latency for all five identities. No build, formatter, checkstyle,
+lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-20 Paste host-fallback backend handoff: direct core Expand and Pad
+composition inherits the source pin through `Image::push_op`; custom host
+callbacks create a fresh canvas and public Paste would otherwise route from that
+canvas's empty backend context. The Rust binding callbacks capture the source
+or contained image pin immediately before public Paste and apply it to the
+queued output pipeline afterward. This preserves explicit backend selection
+without changing mode selection or architecture dispatch. Unpinned calls remain
+automatically routed. Source-reviewed only; context-selection, outputs, faults,
+and fallback receipts remain TODO under `pillow-rs#3ptb`. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-20 embedded-color Text route review: ink opacity now follows the
+effective Draw-context Mode, including explicit RGBA drawing over RGB storage.
+Draw's per-mode route metadata declares the nonempty, zero-stroke embedded-
+color Text Paste child beside its masked Bitmap child, and eager Text selects
+that same declared route. The supported mode list is shared with the Draw
+input contract. Output and conversion-fault parity, child strategy and fallback
+receipts, and full-call latency remain pending under `pillow-rs#3ptb`. No build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-20 hidden physical-lane producer source review, pass 1: traced the
+EffectSpread SIMD lane replay against its immutable-source pixel swaps and
+cloned RNG state; Brightness, Color Saturation, Contrast, and Sharpness lane
+composition against their mode-owned native outputs; Color3DLut's retained
+fourth byte; LA AlphaComposite's two physical color lanes; Point and Expand
+initialization; Filter border/interior handling; Rotate identity, discrete,
+nearest, and filtered paths; and decoded RGB padding. The reviewed functions
+now carry current source-review markers. Pillow 13.0 writes RGB decode padding
+as 255, ColorLUT copies input byte 3 for a three-channel table, and
+AlphaComposite applies its three-color-channel arithmetic to LA's two hidden
+color lanes as well as visible luma. This is a source cross-check only.
+The PutData/PutAlpha source comparison and downstream Paste trace are completed
+in pass 3 below. Keep the existing frozen output, fault, and
+architecture/fallback receipt matrix pending until focused execution. No
+algorithm changed; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+Sources: [Pillow 13.0 `Unpack.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Unpack.c),
+[Pillow 13.0 `ColorLUT.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/ColorLUT.c),
+[Pillow 13.0 `AlphaComposite.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/AlphaComposite.c),
+[Pillow 13.0 `ImageEnhance.py`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageEnhance.py),
+and [Pillow 13.0 `Blend.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Blend.c).
+
+2026-11-20 CoreOnly F32 Sharpness edge review: inspected the edited native
+F32 sample and four-byte-carrier kernels. Both now skip edge blending so the
+copied edge samples retain every f32 bit pattern; the RGB32F and RGBA32F
+strategies also leave the inactive alpha sample untouched. Pillow 13.0 rejects
+float32 storage in `ImagingFilter`, so these Rust Sharpness routes are
+`NO_PILLOW_SUPPORT` native extensions and must not claim Pillow parity. The
+pre-edit parity receipt on both changed functions is stale and their markers
+now leave parity pending. TODO (`pillow-rs#3ptb`): add recorded CoreOnly
+expected-output and architecture-selection evidence for F32 Sharpness after
+the source audit and migration gates. Source review only; no build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command ran. Sources:
+[Pillow 13.0 `Filter.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Filter.c#L484-L518),
+[Pillow 13.0 `Blend.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Blend.c#L24-L46),
+and [Pillow 13.0 `ImageEnhance.py`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageEnhance.py#L91-L103).
+
+2026-11-20 hidden physical-lane producer source review, pass 2: traced Pad's
+mode-resolved fill through the native visible-sample kernels and the separate
+hidden-lane composition; traced Expand's fill and copied regions through its
+matching lane compositor. Pillow 13.0 accepts a fourth component for its
+three-band RGB-family modes, and that component can affect later raw-byte Paste
+results. The shared color normalizer previously replaced that supplied byte
+with 255 for RGB, YCbCr, LAB, and HSV. Updated it to retain an explicit fourth
+component for those exact modes while keeping three-component fills opaque.
+Pillow's LAB `putdata` path also treats its three component values as raw byte
+values; the Rust normalization had added 128 to the A and B values. Removed
+that adjustment so LAB shares the same native three-byte packing as RGB,
+YCbCr, and HSV. Palette `P` promotion is `PA`, and its Rust route preserves the
+index before replacing alpha. Pillow 13.0 also supports PutAlpha for bilevel
+`1`: it converts to LA and expands each input sample to 0 or 255. Added Default
+PutAlpha and PutAlphaData strategies that write LA directly from the expanded
+Rust carrier. Output parity for Pad, Expand, PutData, and PutAlpha, including
+downstream Paste visibility, remains pending under `pillow-rs#3ptb`;
+architecture/fallback receipts and latency remain pending as well. The wider
+LAB audit mentioned here is completed in the appended LAB public-byte contract
+review below; its source findings correct this interim TODO. No build,
+formatter, checkstyle, lint, test,
+parity, benchmark, or coverage command ran. Sources: [Pillow 13.0 `_imaging.c`
+`getpixel`, `getink`, `_fill`, and `_putdata`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L498-L648),
+[Pillow 13.0 `Image.py` `putalpha`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1882-L1931),
+[Pillow 13.0 `ImageMode.py`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageMode.py#L37-L58),
+[Pillow 13.0 `Convert.c` palette and bilevel conversions](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Convert.c#L1333-L1428),
+[Pillow 13.0 `Storage.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Storage.c#L124-L185),
+[Pillow 13.0 `Fill.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Fill.c#L23-L75),
+and [Pillow 13.0 `ImageOps.py` Pad/Expand](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L352-L396).
+
+2026-11-20 LAB public-byte contract review: Pillow 13.0's storage layout
+documents LAB A/B as signed channel values, but the public pixel access returns
+the underlying four-byte carrier unchanged, and `getink` clips tuple values
+directly into those bytes. `Image.getband`/`split` select the stored channel
+bytes; Merge interleaves them unchanged; Chops applies its byte operation to
+the stored raster; masked Histogram reads physical lane 3 for the second band;
+GetBBox and GetProjection test only the visible three stored bytes and ignore
+the fourth padding lane. Removed the Rust-only `+128`/`-128` mappings from
+public pixel access, Draw color normalization, image construction, Put Extract
+Band, GetData, Chops, Merge, GetBBox, and GetProjection. The operation-specific
+Resize input/output bias remains isolated because its frozen Resize parity
+receipt already passes; it does not define public LAB sample representation.
+The LAB bitmap/RGBa special case is also retained pending its dedicated parity
+cases. These source findings correct old notes that described public LAB A/B
+as normalized signed values. Output parity, fault behavior, hidden padding,
+and the affected architecture matrix remain pending under `pillow-rs#3ptb`;
+no build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran. Sources: [Pillow 13.0 `_imaging.c` pixel and ink paths](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L3070-L3317),
+[Pillow 13.0 `Storage.c` LAB layout](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Storage.c#L168-L176),
+[Pillow 13.0 `Bands.c` split, merge, and band operations](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Bands.c#L23-L68),
+[Pillow 13.0 `Chops.c` byte kernels](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Chops.c#L717-L827),
+[Pillow 13.0 `Histo.c` masked histogram](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Histo.c#L91-L131),
+and [Pillow 13.0 `GetBBox.c` and projection](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/GetBBox.c#L108-L157).
+
+2026-11-20 PutData/PutAlpha hidden-lane source review, pass 3: traced Pillow's
+`putdata` four-byte ink packing and partial-prefix updates against the Rust
+mode-owned `HiddenLaneUpdate` path. Full and partial writes preserve the same
+physical bytes exposed by `getink`; later Paste reconstructs compact LA/PA/RGB
+carriers through `physical_four_byte_source`, reads each hidden source lane,
+and applies the selected binary, ordinary, or premultiplied mask arithmetic
+lane by lane. Pillow's PutAlpha conversion promotes L/1 to LA and P to PA
+before writing alpha into physical lane 3, so lanes 1 and 2 repeat the
+pre-conversion luma sample or palette index. The existing LA/PA canonical
+hidden-lane fallback already reconstructs those exact repeated samples, so
+scalar and vector L/1 and P PutAlpha/PutAlphaData paths need no per-pixel
+sidecar allocation. Same-mode LA/PA alpha updates retain any explicit
+noncanonical hidden lanes. This resolves the source-review TODO from pass 1,
+including its Paste dataflow, but does not claim exact output
+parity. Output and fault contracts, mode × architecture selection/fallback
+receipts, and latency remain pending under `pillow-rs#3ptb`. No build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+Sources: [Pillow 13.0 `_imaging.c` `getink` and `putdata`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L498-L648),
+[Pillow 13.0 `Image.py` `putalpha`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1882-L1931),
+[Pillow 13.0 `Convert.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Convert.c#L1333-L1428),
+and [Pillow 13.0 `Paste.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L118-L255).
+
+2026-11-20 PutAlpha direct-caller source review: traced the Python facade,
+PyO3 adapter, public Rust methods, lazy `PipelineOp` creation, prepared
+PutAlpha/PutAlphaData dispatch, and mode support checks. Each mode's support
+declaration and prepared selector share the same architecture list; the
+selector maps the selected strategy to that mode's exact leaf and retains
+Default for the serial fallback. Pillow-visible mode
+promotion occurs before custom integer coercion or mask callbacks; exact built-in
+integers and facade Image masks retain the direct path. Unsupported
+destinations are rejected before mask loading, supported masks promote the
+destination before mode/load callbacks, and self-alias masks preserve the
+promotion when source and destination share the wrapper. Rust records the
+typed pre-promotion mode on the queued operation and keeps successful pixel
+work lazy. The wrapper also synchronizes retained metadata when promotion
+precedes an error. This closes source tracing only; callback order, mode/data
+outputs, metadata, faults, strategy receipts, and latency remain pending under
+`pillow-rs#3ptb`. Refreshed source-review markers on the traced core, binding,
+and facade functions. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran. Source: [Pillow 13.0 `Image.py`
+`putalpha`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1882-L1931).
+
+2026-11-20 Reduce reciprocal-zero architecture source review: the 4,097 ×
+4,096 factor area exceeds `reduce_native_byte_vector_guard`'s u32 lane-sum
+bound (`u32::MAX / 256`), so every declared native-byte vector strategy is
+ineligible for this request. The prepared selector records `IneligibleRequest`
+and returns the mode's Default implementation, whose zero-reciprocal branch
+uses rounded integer division and returns the observed Pillow byte `1`.
+Default parity is recorded above; requested-architecture output and fallback
+receipts plus the focused benchmark remain TODO under `pillow-rs#3ptb`. No
+build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-20 active CPU boundary source scan: maintained `pool_cpu` contains no
+Rayon scheduler calls and active Rust modules contain no imports or module
+declarations into `pool_cpu/legacy`. The current operation TODOs that mention
+`pool_parallel` describe a later backend migration; they are not active CPU
+dependencies. This read-only scan does not prove cross-target compilation or
+runtime reachability. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-20 F32 Resize strategy-selection source review: traced ordinary CPU
+routing from `ExecutionContext::for_routed_backend` through
+`ExecutionContext::permits_architecture`, `ModeSupport::select`, the exact
+ImageF32 Resize/ResizeBoxed declarations, and their prepared dispatch. On an
+AArch64 build, a CPU/Default request can select the declared AArch64 baseline
+strategy; the request remains Default while the implementation receipt names
+AArch64. On other targets, the AArch64 owner is unavailable and CPU/Default
+selects portable Default. AVX FMA remains a separate explicitly requested
+strategy guarded by its declared build and CPU capability requirements. The
+selected leaf fixes its arithmetic width, so no target check remains in the
+shared filtered loop. This confirms the selected user contract at source level
+only; AArch64/x86 output, selection/fallback receipts, and per-strategy latency
+remain pending under `pillow-rs#3ptb`. No build, formatter, checkstyle, lint,
+test, parity, benchmark, or coverage command ran.
+
+2026-11-20 CPU architecture-leaf visibility source scan: a read-only scan of
+the active `pool_cpu/ops` `core::arch` references found target intrinsics in
+architecture leaves guarded by target-specific parent modules or
+function-level target attributes. Several family `mod.rs` files intentionally
+keep thin architecture wrappers available so the operation's selected-strategy
+match remains exhaustive; those wrappers use portable fallbacks where the
+hardware leaf is cfg-disabled. No direct intrinsic visibility gap was found
+in this scan. This does not prove every declared strategy is reachable, every
+wrapper is used, or cross-target compilation is clean; those checks and
+dead-code findings remain open for the post-source-review quality/compile
+gates. No build, formatter, checkstyle, lint, test, parity, benchmark, or
+coverage command ran.
+
+2026-11-20 Transform Wasm floating-point helper review: compared the active
+`transform/helpers/scalar.rs` NaN quieting, canonical exceptional results, and
+f32/f64 conversion and FMA helpers with the inert legacy source; the reviewed
+block is unchanged. These compile-target adaptations preserve the prior Wasm
+numeric behavior and are shared by Default and Wasm SIMD Transform leaves; the
+operation architecture is still chosen by the injected strategy before that
+helper is called. Added a TODO at the operation owner to verify NaN payloads
+and exceptional arithmetic against the pinned oracle before treating this
+target behavior as closed. Refreshed source-review markers on the helpers.
+Output parity, caller coverage, architecture/fallback receipts, and latency
+remain pending under `pillow-rs#3ptb`. No runtime or quality command ran.
+
+2026-11-20 Transform public call-path source review: traced the Python facade,
+PyO3 plans, core prepared-output route, direct Rust lazy route, registry
+registration, and CPU mode/architecture preparation. The facade reads the
+typed raster mode and asks Rust to allocate the destination and capture its
+ExecutionContext before method-data callbacks; it passes neutral method data
+and does not pass the Python mode string into the kernels. Ordinary transforms
+revalidate the current source mode, prepare the selected exact-mode strategy
+with the captured context, and execute into the prepared output. MESH reuses
+that destination/context while preparing each streamed record; its architecture
+guard admits affine/projective methods and excludes MESH, and its record path
+rejects non-Default selection because it has no MESH architecture kernel.
+Direct Rust transform methods enqueue `PipelineOp::Transform`; materialization
+reaches the same `prepare_pipeline` → `prepare` → exact `DynamicImage` mode
+router. Palette-preserving materialization keeps P/PA in their native sample
+layouts, while the leaf strategy owns algorithm and architecture dispatch.
+This confirms composition and context propagation in source only. The existing
+TODOs still cover mode/method/filter outputs and fault order, P/PA palette
+metadata/callback mutation, every declared architecture and fallback receipt,
+Wasm floating-point edge cases, and latency under `pillow-rs#3ptb`. Refreshed
+source-review markers on the paths read. No build, formatter, checkstyle, lint,
+test, parity, benchmark, or coverage command ran.
+
+2026-11-20 central CPU context propagation source review: the pipeline router
+selects the backend, constructs one immutable `ExecutionContext`, and stores it
+in `PreparedExecution` before source materialization. The serial CPU executor
+passes that same context through each prepared operation and fused operation;
+registry preparation rejects non-CPU contexts and dispatches from the exact
+`DynamicImage` mode. The compatibility `Backend::Simd` request uses the CPU
+executor while its context carries the selected architecture. Direct eager
+CPU execution uses the image's route helper before `registry::prepare_cpu`;
+GetChannel's tiny RGB route follows that path, while declared identity-copy
+routes intentionally have no architecture kernel. GPU-to-CPU palette-convert
+fallback constructs an explicit CPU Default context. This closes the central
+router/executor and GetChannel source crosswalk. Later 2026-11-20 entries also
+close source tracing for direct/eager Convert, GetData, PutData, FloodFill,
+GetPixel/PutPixel, ImagingCore SetMode/band mutation, and Draw mode/context
+call paths. Any remaining caller paths still need source review; receipts,
+outputs, fault order, fallback behavior, and performance remain unverified. No build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-20 Convert direct/eager context source review: the prepared eager
+helpers for `One`, I;16 targets, palette conversion, matrix conversion, and
+the declared I/F→RGBX extension resolve the image's CPU/architecture route,
+pass that `ExecutionContext` through the eager execution helper, and call
+`registry::prepare_cpu` before executing the selected mode strategy. The early
+RGB/alpha conversions enqueue typed `PipelineOp::Convert` values for ordinary
+pipeline dispatch; same-mode conversion is a native identity-copy path with no
+pixel kernel. Palette raster output and wrapper palette/metadata remain
+separate values. GPU-only Convert work is still pending for the later backend
+stage; some CPU-owned routes explicitly record a CPU fallback, while the I/F
+RGBX path leaves GPU routing to its caller. This closes source tracing of these
+Convert helpers only. Full source/target-mode outputs and errors, exact
+architecture selection/fallback receipts, palette metadata, and latency remain
+pending under `pillow-rs#3ptb`. No build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage command ran.
+
+2026-11-20 GetData CPU source review: traced the Python `getdata` adapter, core
+materialization and band validation, exact-mode operation declarations, all 25
+mode-owner dispatchers, the Default byte/sample leaves, borrowed P/1/L views,
+caller-owned buffers, and the SIMD ExtractBand terminal route. The declarations
+cover 20 Pillow modes and five `NO_PILLOW_SUPPORT` CoreOnly modes. `GetData` and
+`GetDataBand` use each mode's Default owner; caller-owned `GetDataBandInto`
+rejects `I;16*`, `I`, and `F`, while their scalar formatted routes preserve the
+typed integer/float results. `GetDataBandInto`'s accelerated child is the
+architecture-selected `ExtractBand` strategy, using the routed
+`ExecutionContext`; P palette indices remain raw and direct P/1/L views avoid
+materialization. The internal CoreOnly byte API currently narrows u16/f32
+samples through `FromPrimitive`, so expected-output receipts for those
+Rust-only modes must explicitly pin that public byte result. GPU terminal
+eligibility still uses a hard-coded mode filter pending composition with GPU
+support declarations. Band error order, partial buffer writes, exact outputs,
+selected/fallback receipts, and latency remain pending under
+`pillow-rs#3ptb`. Refreshed source-review tags on the reviewed accessors,
+operation selectors, helpers, and all exact-mode GetData leaves. No build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-20 PutData CPU source crosswalk: traced the Python sequence adapter,
+bulk numeric and byte fast paths, callback-preserving per-item writes, core
+normalization, exact-mode dispatch, native CoreOnly writes, I;16 byte writes,
+and execution-context receipts. Python snapshots `PutDataValueKind` before
+per-item callbacks, while core rechecks the live image mode for each write;
+reentrant mode changes therefore need a pinned Pillow contract. Bytes-subclass
+length/iteration and generic sequence materialization exceptions were changed
+in the current WIP and their earlier parity receipt is stale; both need frozen
+cases. CoreOnly bulk output, error order and prefix writes, callback-visible
+mutation, fallback receipts, and latency remain pending. Refreshed source tags
+on the reviewed core and binding functions. No build, formatter, checkstyle,
+lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-20 FloodFill strategy source review: all 25 mode declarations admit or
+reject FloodFill through the exact stored raster identity, and admitted modes
+currently share one host-callback traversal with CPU Default selection. The
+Python wrapper passes the originating Rust image for strategy preparation even
+when `load()` supplies a custom PixelAccess; pixel protocol calls still use
+that custom object. PreparedFloodFill retains the requested backend and
+execution records its selected strategy while preserving nested callback
+receipts. Output, swallowed/propagated callback faults, receipt correctness,
+and public-call latency remain TODO under `pillow-rs#3ptb`. No build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-20 GetPixel/PutPixel source crosswalk: Python `Image.getpixel` loads
+before coordinate tuple conversion; Rust selects the formatted read from the
+materialized exact Mode, with an already-loaded RGB fast route using its own
+declared strategy. Stored PixelAccess reads/writes keep their tuple and
+coordinate parsers in the host adapter. Public `Image.putpixel` keeps Pillow's
+palette callback and allocation order in Python, then sends a typed value to
+core; scalar/byte modes queue exact-mode PutPixel, while I;16/I/F immediate
+writes select a strategy with the routed context. PixelAccess writes use the
+ImagingCore conversion path without public palette lookup; deletion validates
+coordinates and does not modify pixels. Negative/C-int boundaries, float
+coordinate edges, palette mutation and callback order, mode outputs, faults,
+strategy/fallback receipts, and latency remain TODO under `pillow-rs#3ptb`.
+Source tags refreshed; no build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage ran.
+
+2026-11-20 ImagingCore SetMode and band-mutation source crosswalk: traced the
+PyO3 `PyImage` adapters, typed core `Image` methods, exhaustive operation-level
+mode declarations, serial strategy selection, native storage helpers, and
+materialization invalidation. Python mode spelling is translated to `Mode` at
+the binding boundary; the core reads source and destination identities from
+their stored `DynamicImage` variants. SetMode declares identity-only routes
+for every mode, `1`/`L` transitions, and RGB/RGBA/RGBX transitions; unsupported
+targets are rejected by the declared target contract. PutBand separates
+single-band exact-mode inputs from multiband one-byte inputs, and FillBand
+accepts only declared byte modes. Their execution uses the selected serial
+Default strategy; no architecture leaf is declared for these operations.
+Loaded storage invalidates zero-fill knowledge after mutation; paletted
+storage mutates indices and clears its materialization cache. Native band
+helpers retain omitted physical lanes. The RGB-to-RGBX path reuses a captured
+padding lane when available and otherwise writes zero, whose parity remains
+pending. TODO (`pillow-rs#3ptb`): freeze mode-pair and band outputs, validation
+and fault order, callback-visible mutation, hidden-lane behavior, and requested
+architecture versus selected Default fallback receipts; benchmark the public
+paths after those contracts are verified. This source review did not validate
+runtime behavior; no build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 ImageDraw mode/context crosswalk correction: Python and JavaScript
+translate an optional Pillow mode string to `raster::Mode`; both adapters call
+`Draw::validate_mode`, which allows the RGBA drawing context over RGB storage
+and otherwise requires an exact match. The core retains typed raster and
+drawing-context modes separately. Queued line, shape, and curve operations
+capture RGB alpha-blend semantics and append to the image graph; prepared
+execution selects the exact `DynamicImage` mode strategy with its injected
+`ExecutionContext`. One multiline Text route now carries a single selected
+backend and context through direct lines, custom-font masks, callback-reentrant
+Bitmap writes, embedded-color Text, and the prepared Paste child. Ordinary
+top-level Bitmap and text-mask calls retain their input validation before route
+capture. Python continues to own Pillow callback dispatch and palette
+allocation; Rust owns typed mode selection and pixel algorithms.
+TODO (`pillow-rs#3ptb`): verify Draw outputs/fault order, including route-policy
+errors before Python direct-route callbacks; explicit RGBA-over-RGB behavior;
+direct and queued selected/fallback receipts; Bitmap child receipts; palette
+callbacks; and per-strategy latency for the mode/architecture matrix. Verify
+direct Rust `Draw::new` mismatch timing against the host constructor.
+Source review only; no build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-20 GetBBox mode/context source crosswalk: Python loads the image before
+PyO3 extracts the optional `alpha_only` boolean, preserving the wrapper's
+load-before-coercion order. Rust `Image::getbbox` materializes the lazy graph,
+retains source operation receipts, and prepares the exact-mode strategy from
+the injected CPU `ExecutionContext`. All 25 `DynamicImage` identities map to
+mode owners; each declares a CPU Default strategy, so unavailable or
+unimplemented architecture requests execute Default and retain a fallback
+receipt. Alpha-only scanning applies to modes with semantic alpha; RGBX
+padding remains data, and CoreOnly 16-bit/float scans read native samples with
+no mode conversion. TODO (`pillow-rs#3ptb`): verify outputs and error order for
+all 25 modes, empty/zero-axis images, alpha-only modes, CoreOnly expected
+outputs, selected/fallback receipts, and CPU latency. Source review only; no
+build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-20 GetProjection mode/context source crosswalk: Python loads the image
+before the PyO3 call. Rust first checks for terminal PutPixel fusion, then
+materializes and selects the routed CPU context for the exact `DynamicImage`
+mode. The exhaustive support classifier names all 25 mode owners; each returns
+its own CPU Default declaration, while RGB8 and CMYK8 additionally declare
+SSE2, NEON, and Wasm SIMD128 strategies. All other modes scan their native
+sample representation without conversion; I/F preserve stored-word
+nonzero semantics. The RGB8 and CMYK8 architecture leaves use the shared
+128-bit vector scanner and report selected vector blocks and scalar tails.
+Direct and fused routes preserve the prepared mode/architecture selection.
+TODO (`pillow-rs#3ptb`): verify axis values, empty/error behavior, selected and
+fallback receipts for all modes and declared architectures, direct versus
+fused routes, and CPU latency. GPU terminal behavior remains for the later
+backend stage. Source review only; no build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage command ran.
+
+2026-11-21 Crop mode/context crosswalk: the earlier binding's eager `f64`
+extraction was removed. The Python facade now follows Pillow 13.0's host
+sequence: `None` or an exact full-image box delegates through `copy()`; other
+boxes compare original coordinates before load, then `load()` runs before
+`round()`/`int()` and the four resulting coordinates cross the binding as
+integers. This preserves Python numeric protocols, ordering, and arbitrary
+integer precision up to the fixed C-int boundary. The Python facade checks the
+arbitrary-precision output extent before crossing that boundary, matching
+Pillow's `Image._crop` order. Other crops materialize before the Pillow-sized
+extent check, including zero-area and out-of-bounds boxes. P retains its
+palette through the palette constructor; PA copies palette and alpha metadata
+onto padded canvases; other modes retain image info and EXIF. The exhaustive CPU owner maps all 25 exact
+DynamicImage identities to their mode declarations. All byte carriers use
+native row-span copy and preserve hidden lanes; the five CoreOnly identities
+copy native samples. I;16/I;16L/I;16B/I;16N declare SSE2, NEON, and Wasm SIMD128
+copy strategies. The exact Crop and padded Crop/Paste routes now reapply a
+pinned source backend after materializing their source branch; selection and
+fallback receipts remain TODO. TODO (`pillow-rs#3ptb`): verify crop pixels,
+metadata, lazy decode fault order, empty/full/out-of-bounds cases, huge and
+non-finite float boxes, all declared/fallback receipts, and latency against the
+frozen Pillow 13.0 matrix. Source: [Pillow 13.0 Image.crop and Image._crop](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1259-L1301).
+Source: [Pillow 13.0 Image.crop and Image._crop](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1259-L1301).
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-21 Crop extent source confirmation: Pillow 13.0's
+`_decompression_bomb_check` computes `max(1, width) * max(1, height)` for
+`Image._crop`, so zero-width or zero-height boxes still count the other axis
+as at least one pixel. `check_crop_extent` already matches this rule; added
+the source rationale beside the multiplication. A source gap remains: Pillow
+warns above `MAX_IMAGE_PIXELS` and raises only above twice that threshold;
+core currently implements only the hard-error threshold and the Python
+facade has no matching warning route. TODO (`pillow-rs#3ptb`): carry the
+warning through Python's warning filters and honor its configured threshold.
+Output and fault-order receipts remain pending. Source:
+[Pillow 13.0 Image.py](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L3278-L3297).
+
+2026-11-21 central CPU routing source crosscheck: re-read automatic and
+explicit backend selection, the injected backend/architecture/capability
+snapshot, architecture permission ordering, support selection and fallback
+reason retention, prepared execution, and eager CPU execution. `Backend::Simd`
+continues through `CpuPool` with a CPU context carrying the selected host or
+test architecture; ordinary CPU supplies Default policy, while each operation
+may choose only a declared target-baseline strategy. Pipeline preparation
+passes the same context to each operation; eager helpers validate the CPU
+backend and pass that context to the prepared operation. This confirms the
+central path only; direct/eager callers still need the remaining cross-family
+review and all routing/selection/fallback receipts remain pending. Refreshed
+source-review tags on the reviewed router, selector, executor, and context
+helpers. No build, formatter, checkstyle, lint, test, parity, benchmark, or
+coverage command ran.
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-20 ImageOps CropBorder caller crosswalk: Pillow's `_border` accepts
+scalars or tuples of length 2/4 and raises the exact ValueError for other tuple
+lengths before reading image size. Rust's shared border normalizer previously
+treated malformed tuples as scalars; it now returns the matching core
+ValueError, shared by ImageOps crop and expand. The ImageOps crop facade routes
+only exact base images with unmodified size/crop methods and an exact
+nonnegative u32 border through Rust geometry, then delegates to public
+`Image.crop`; subclass, tuple, and protocol inputs keep Python arithmetic and
+crop dispatch through callbacks. The prepared operation lists all 25 exact
+modes, keeps the five internal high-depth identities CoreOnly, and composes
+nonempty output through the exact Crop strategy. The four I;16 identities
+declare the native copy architecture set; valid empty output stays Default.
+TODO (`pillow-rs#3ptb`): verify malformed border errors and callback order,
+custom overrides, all exact-mode pixels/metadata, empty and invalid dimensions,
+selected/fallback receipts, and public latency. Source: [Pillow 13.0
+ImageOps._border and crop](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L34-L45) and [ImageOps.crop](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L398-L412).
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-21 Transform alpha-route source correction: the Python facade
+recursively converts every non-nearest LA/RGBA call to La/RGBa before built-in
+method, handler, or getdata dispatch. Direct typed Rust Transform instead uses
+mode-owned fused premultiply/resample/unpremultiply strategies. Corrected the
+CPU plan and inventory and made the route comparison explicit in the owner
+TODO; output, callback/error order, and strategy receipts remain unverified.
+No implementation algorithm changed and no validation command ran.
+
+2026-11-21 Draw explicit-mode Rust contract: Python and JavaScript already
+validate the optional typed drawing context during construction. Direct Rust
+`Draw::new` remains infallible, so mode-sensitive operations validate the
+stored override before writing: mode-reading strategies use `effective_mode`,
+and queued geometry uses the alpha-context resolver. Both preserve the sole
+RGBA-context over RGB exception and report `ValueError("mode mismatch")` for
+other pairs. The direct Rust first-operation timing and valid exception still
+need parity confirmation; other Draw mode/error review and all output/fault/
+route parity remain open. No build, format, checkstyle, lint, test, parity, or
+benchmark ran.
+
+2026-11-21 Draw Bitmap source crosswalk: traced the direct Rust Bitmap entry
+through mask-mode admission, exact raster/context selection, guarded Paste
+child routing, RGB/CMYK fast paths, typed mode writers, and metadata reattachment.
+The preserved Rust archive has no Bitmap implementation, so this path is based
+on the reviewed Pillow 13 source contract rather than a copied legacy routine.
+The shared mask view keeps 1/L/RGBA/RGBa coverage distinct; clipping promotes
+coordinates to i64 for the full i32 origin range. The top-level route maps all
+20 Pillow-facing raster identities to exact-mode Default writers and rejects
+the five CoreOnly identities before writing. Standalone Bitmap does not use
+geometry-span kernels, so its architecture request selects the declared
+Default writer; architecture-specific Draw kernels remain on geometry batches.
+Refreshed route source-review markers. Mask outputs, P/PA metadata, error order,
+i32 boundary cases, and architecture receipts remain parity TODOs. No build,
+format, checkstyle, lint, test, parity, or benchmark ran.
+
+2026-11-21 Draw Text context source correction: direct Rust multiline Text and
+the host custom-font callback route receive one requested backend and immutable
+`ExecutionContext` for the whole call. The context flows through per-line Text,
+custom-font masks, callback-reentrant Bitmap, embedded-color Text composition,
+and its prepared Paste child without reselecting an architecture. Per-line
+operation telemetry is retained. Ordinary top-level Draw methods select at
+their operation boundary; Bitmap and text-mask validation remains ahead of
+context capture. Source review only; output, error ordering, architecture
+receipts, and latency remain unverified under `pillow-rs#3ptb`. No build,
+format, checkstyle, lint, test, parity, or benchmark ran.
+
+2026-11-21 Draw direct Text mode crosswalk: direct font masks carry an explicit
+Coverage or RGBA kind and select support from the exact raster identity plus
+effective Draw-context mode. The direct route excludes geometry spans and
+selects the mode's Default owner; the exhaustive dispatch maps all 20
+Pillow-facing modes, with the five CoreOnly modes rejected. Embedded-color
+Text adds its declared conditional Paste child for nonempty, zero-stroke masks;
+ordinary masks execute through the exact mode owner. Architecture-specific
+Draw kernels remain on geometry batches. Output, font/mask conversion faults,
+callback order, selection/fallback receipts, and latency remain TODO. No build,
+format, checkstyle, lint, test, parity, or benchmark ran.
+
+2026-11-21 Color3DLut target reachability crosswalk: reviewed the RGB, RGBA,
+CMYK, LAB, YCbCr, and HSV mode owners. Their AVX2, SSE2, NEON, and Wasm
+SIMD128 folder gates match the build-availability declarations, the selected
+`ARCHITECTURES` slice, and the corresponding architecture dispatch arms. SSE2
+is omitted when AVX2 is built; unsupported target configurations expose the
+Default strategy with no vector specialization. LAB, YCbCr, and HSV remain
+explicit `NO_PILLOW_SUPPORT` native-channel extensions; this CoreOnly status
+does not remove their declared architecture strategies. This was a source scan
+only; no cross-target compile ran. Output, fault order, selected/fallback
+receipts, and latency remain pending, and the cross-family reachability audit
+stays open.
+
+2026-11-21 Color3DLut caller/context crosswalk: the public Rust method reads the
+exact source Mode, checks input facts through the operation's mode support,
+stores source and target Mode in the lazy PipelineOp, and records its output
+Mode. Registry preparation verifies that source tag against the materialized
+`DynamicImage`, passes the injected `ExecutionContext` through exact-mode
+preparation, and retains the resulting `StrategySelection` through per-mode
+architecture dispatch. LAB/YCbCr/HSV retain their explicit native-channel
+`NO_PILLOW_SUPPORT` contract. This is source review only; input/error order,
+pixels, mode metadata, architecture selection/fallback receipts, and latency
+remain pending under `pillow-rs#3ptb`. No build, format, checkstyle, lint, test,
+parity, or benchmark ran.
+
+2026-11-21 Draw geometry mismatch guard source correction: direct Rust Draw
+shape methods used a pure RGB-context flag and could queue filled operations
+with an incompatible explicit mode. The shared alpha-context resolver now
+validates before direct geometry queueing; partial rounded-rectangle helpers
+receive the once-resolved alpha flag to avoid repeating mode checks per queued
+primitive. This leaves valid geometry algorithms and per-pixel kernels intact.
+Direct Rust mismatch timing/error order, the RGB/RGBA exception output, and
+valid-call latency remain unverified under `pillow-rs#3ptb`. No validation
+command ran.
+
+2026-11-21 Draw no-ink shape mode correction: direct Rust `Draw::shape` now
+returns the declared unsupported-mode error for CoreOnly high-depth modes
+instead of treating the missing default ink as a successful no-op. Python's
+wrapper skips Rust when both inks are omitted; this change is limited to the
+direct Rust API path. Verify the direct error contract and prepared rejection
+under `pillow-rs#3ptb`; no validation command ran.
+
+2026-11-21 Draw wide F outline mode-guard correction: the direct Rust wide
+polygon-outline path now validates its explicit drawing context before the
+existing F-mode no-op and reuses that mode result for queued operations. The
+F pixel algorithm is unchanged. Fault order, outputs, and receipts remain
+unverified under `pillow-rs#3ptb`; no validation ran.
+
+2026-11-21 Draw typed Polygon minimum-vertex contract: the typed slice API now
+returns Pillow's source-confirmed `TypeError("coordinate list must contain at
+least 2 coordinates")` before ink or mode resolution when fewer than two
+vertices are supplied. Valid polygon raster work is unchanged. Direct Rust
+fault-order and parity receipts remain pending under `pillow-rs#3ptb`; no
+validation ran.
+
+2026-11-21 RGBA8 Transpose x86_64 baseline strategy: moved the packed-word
+Rotate270 kernel out of `default` and declared it as the exact mode's
+`Architecture::X86_64` target-baseline strategy. `Architecture::Default` may
+select this declared baseline only on x86_64; explicit AVX2 remains a separate
+strategy and is still preferred when selected and eligible. The tiled kernel
+uses no optional instructions and preserves the same RGBA samples. Its support
+guard leaves methods and shapes it does not tile on the portable Default
+strategy before execution.
+Updated the PyO3 test architecture selector and structure/inventory documentation.
+TODO (`pillow-rs#3ptb`): compile the x86_64 route, verify selected/fallback
+receipts and outputs against Pillow for both Default and X86_64 requests, and
+compare its public-call latency against Default and AVX2. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 Chops owned Add/Sub source review: preparation materializes the
+secondary image and includes its exact width, height, and byte length in the
+request facts. The selected vector guard rejects unequal dimensions before a
+non-Default Add/Sub strategy can be chosen; `can_execute_in_place` relies on
+that prepared selection, and the shared in-place kernel checks dimensions and
+both exact byte lengths again before mutation. Thus the reviewed path does not
+admit an unequal-size pair into the in-place kernel. SSE2, NEON, and Wasm
+SIMD128 mode leaves currently re-export the same portable 16-byte `wide`
+helpers, so source selection is architecture-explicit but does not by itself
+prove distinct ISA instruction generation. The user's F32 Resize decision is
+also confirmed in source: retain portable Default width 16 and the AArch64
+baseline width 4 as distinct implementations. Chops output/fault/selection
+receipts and all affected latency remain TODO; no build, formatter, checkstyle,
+lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 Chops three-band guard correction: source comparison found that an
+old support-guard comment claimed the serial LAB path maps biased chroma into
+signed samples. The active Default path and archived implementation both apply
+the operation to raw bytes; RGB, YCbCr, LAB, and HSV use the same `RgbImage`
+carrier, and the RGB mode dispatcher accepts LAB as a secondary. Removed the
+unnecessary LAB-specific vector exclusion from the equal-dimension and
+Add/Subtract guards. Primary LAB remains Default-only because it declares no
+architecture strategies. This changes only eligible strategy selection; its
+output and receipt effects remain unverified, and no validation ran.
+
+2026-11-21 Chops vector arithmetic source comparison: reviewed the active
+shared `wide` kernels against the archived SIMD formulas. Both retain float32
+Add/Subtract ordering and saturating exact-default Add/Subtract; integer
+divide-by-255 Multiply/Screen; exact divide-by-127 Overlay/HardLight; ordered
+integer SoftLight; min/max/difference; wrapping modulo; and canonical One
+truth operations. The active vector dispatcher binds each kernel before its
+byte loop. Block tails are either padded with only active bytes stored or use
+the same scalar affine formula. SSE2, NEON, and Wasm SIMD128 leaves all re-export
+this helper, so emitted target instructions and numerical output still require
+target-specific validation. No build or runtime validation ran.
+
+2026-11-21 Chops per-mode and Default-strategy source closure: reviewed the
+support, dispatch, and Default owner for all 25 exact modes, plus every
+declared SSE2, NEON, and Wasm SIMD128 leaf. Pillow byte modes route through
+their exact typed carriers; same-layout secondary mode groups preserve the
+primary output identity, while binary output clips to the archived minimum
+extent. `One` alone declares logical operations. Constant remains an L output,
+Duplicate keeps the exact image identity, and mode-owned Offset/Invert keep
+their source mode. The byte Offset path rotates complete byte-carrier pixels,
+then remaps omitted physical lanes; I;16 endian variants rotate native `u16`
+samples. CoreOnly high-depth Offset/Invert use native carriers and stay tagged
+`NO_PILLOW_SUPPORT`. Only L, LA, RGB, and RGBA expose the fused Multiply→Screen
+route. Architecture entries inject their selection but currently re-export
+shared `wide` helpers; this source review does not prove target-specific
+instruction generation. Refreshed function source-review tags on the reviewed
+owners and helpers. The LAB-secondary guard correction is source-consistent
+with the archived raw-byte formula, but its selection receipt is unverified.
+Output/mode/metadata parity, errors and callback order, all selected/fallback
+receipts, and performance remain open under `pillow-rs#3ptb`. Preserve the
+chosen F32 Resize Default split: portable width 16 and AArch64 baseline width 4
+are distinct strategies. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 F32 Resize vector source migration: ported the reviewed 8-lane
+ordinary, nearest, and boxed kernels into `resize/f32/helpers/vector.rs` and
+its boxed helper. Added mode-owned SSE2, NEON, and Wasm SIMD128 leaves that
+validate the injected selection before calling that exact-mode helper. The
+existing runtime AVX/FMA scalar leaf remains separate. The helper receives and
+returns the existing four-byte ImageF32 carrier; the mode owner performs the
+DynamicImage match and reconstruction. The Default width-16 and AArch64
+baseline width-4 sequences remain distinct and unchanged.
+TODO (`pillow-rs#3ptb`): verify all supported F32 Resize architecture outputs,
+selection and fallback receipts, and per-lane benchmark results in the frozen
+CPU campaign. No build, formatter, checkstyle, lint, test, parity, benchmark,
+or coverage command ran.
+
+2026-11-21 ImageDraw existing-Text option source correction: Pillow 13.0
+applies `embedded_color` and `stroke_width` while constructing a new
+`ImageText.Text`; when passed an existing Text object, it uses that object's
+stored text/font/mode/spacing/layout and stroke state without mutating it.
+The public `direction`, `features`, and `language` arguments still go to each
+font mask call, while the call's `embedded_color` selects the fill mask mode.
+The Python facade now follows that split and confines `embed_color()` and
+`stroke()` mutation to newly constructed Text objects. Add existing-Text cases
+with conflicting stored, layout-call, and mask-call options to the frozen Draw
+contract; output, fault, and mutation receipts remain pending under
+`pillow-rs#3ptb`. Source only; no validation ran.
+
+2026-11-21 FreeType advance precision source correction: Pillow's FreeType
+binding returns its integer 26.6 advance and the Python wrapper divides by 64,
+preserving the full binary fraction in a Python float. The Rust public length
+API and multiline layout previously narrowed the advance to `f32`; these now
+retain the native integer precision through `f64` conversion, and mode-aware
+layout flags (including RGBA color loading) apply to every requested mode.
+Rust, Python, and JavaScript bindings now carry the `f64` result. This is a
+source-derived behavior correction, not runtime evidence. TODO
+(`pillow-rs#3ptb`): add long-advance/fractional-anchor and RGBA color-font
+contracts, verify all font-length/Text-layout callers, and resolve the
+remaining signed 26.6 overflow boundary (`length_from_basic_layout_with_flags`
+uses saturating i32 accumulation). References: [Pillow 13.0 `ImageFont.py`
+getlength](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageFont.py#L302-L370)
+and [`_imagingft.c` getlength](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imagingft.c#L465-L510).
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 ImageText font-mode precedence source correction: Pillow checks
+destination modes `1`, `P`, `I`, and `F` before checking `embedded_color` in
+`ImageText.Text._get_fontmode`. The Rust helper previously let
+`embedded_color=True` override those modes, so manually configured Text objects
+could request RGBA length/render flags where Pillow selects mono. The helper now
+uses the same precedence. TODO (`pillow-rs#3ptb`): freeze direct Text cases for
+the four modes with conflicting embedded-color state and verify output,
+mutation, and errors. Source only; no validation ran. Source:
+[Pillow 13.0 ImageText.py](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageText.py#L1469-L1481).
+
+2026-11-21 direct caller context crosswalk, pass 1: PointScalar, PointFloat,
+and PointModeOutput derive one CPU/architecture route and pass its context into
+the exact-mode prepared selector. GetChannel's tiny-RGB child and GetData's
+SIMD band sink reuse their routed context. CPU-only parameter filters share a
+route helper that maps a GPU request to CPU execution while retaining its
+fallback reason. Nested Draw Paste receives the parent context and prepares
+the declared Paste child with it. Transform prepares its exact-mode output and
+MESH accumulator with a captured context before Python method-data callbacks,
+then uses that same context for each record. Updated reviewed markers on these
+paths. This is a partial caller crosswalk; other direct/eager routes, callback
+and output/error behavior, selected/fallback receipts, and latency remain
+pending under `pillow-rs#3ptb`. No build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage command ran.
+
+2026-11-21 direct caller context crosswalk, pass 2: GetPixel's formatted,
+loaded-RGB, and write paths route before selecting the exact-mode operation;
+GetProjection's direct and eager routes pass the routed context into the
+prepared mode strategy. Its RGB/CMYK terminal PutPixel fusion snapshots the
+prepared context and one projection selection before entering the terminal;
+Default and architecture leaves execute that selection through the matching
+prepared CPU receipt. Entropy and Stat pass the same route context to the
+native histogram/statistics preparation, including mask and extrema inputs.
+Refreshed reviewed markers on these paths and the fused Projection terminal.
+The Crop boundary decision is a fixed four-coordinate built-in integer carrier:
+the Python facade owns Pillow's equality, ordering, loading, `round()`, and
+`int()` protocol sequence, then PyO3 extracts the C-int tuple; no generic
+Python-object carrier or Rust callback path is added. Built-in int/float boxes
+still pass through the host sequence before reaching the carrier. TODO
+(`pillow-rs#3ptb`): verify C-int overflow order, decompression-limit warning
+and error order, exact public outputs/faults, all selected/fallback receipts,
+remaining direct/eager callers, and CPU latency. This is partial source review;
+no build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-21 direct caller context crosswalk, pass 3: GetExtrema, GetBBox, and
+Histogram route their requested backend and architecture before preparing the
+exact-mode analysis strategy. Quantize and its palette composition likewise
+pass one captured context into the selected native Convert/Quantize owner.
+Convert's eager binary, I;16, scalar-to-RGBX, matrix, and palette paths preserve
+their CPU/architecture context through prepared execution; lazy conversion
+branches retain the backend request and select their mode strategy when
+materialized. Split has no pixel kernel for identity/copy results; returned
+ExtractBand children retain the source backend and defer their own selection
+until used. Generated effects snapshot the active backend at their public
+execution boundary, construct one `ExecutionContext`, and pass it into the
+mode-specific generator preparation. PutData's callback-free replacements
+defer through the source image's backend context, while callback-visible Python
+and JavaScript writes create one `PutDataExecutionContext` per sequence and
+reuse it for each native write; ImagingCore writes inject one context into
+their declared serial strategy. Materialization creates one prepared context
+per pipeline node and passes it through that node's operations and terminals;
+an already-materialized cached prefix is an independent completed node, while
+the suffix prepares from its inherited backend request. Palette-target output
+retains that prepared context; the GPU-to-CPU wrapper-metadata route explicitly
+uses CPU Default. Source markers were refreshed on the reviewed entry points.
+This remains a partial caller crosswalk: callback/error order, exact output,
+selector/fallback receipts, and CPU latency remain open under
+`pillow-rs#3ptb`. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 maintained CPU archive-reference scan: searched active
+`pillow-rs/src/compute/pool_cpu`, `compute`, and `image` sources for legacy
+module declarations, `legacy::` paths, `pool_cpu::legacy` imports, path
+attributes, and includes while excluding the preserved archive itself. No
+active legacy code references were found. `pool_cpu/mod.rs` exposes only the
+serial batch/executor and helpers/ops facades; `ops/mod.rs` lists maintained
+operation families and retains its explicit quality-gate TODO for module,
+target, and dead-code reachability. This read-only scan does not replace that
+compiler-backed gate. No tests or quality checks ran.
+
+2026-11-21 active architecture-probe source scan: within maintained `compute`,
+`pool_cpu`, and `image` sources, runtime x86 feature probes are confined to
+`ExecutionContext` detection; operation and kernel leaves do not probe
+hardware. Binding architecture-string parsing is limited to the explicit
+test-API selector. The reviewed GetProjection terminal dispatch reads the
+retained selection: RGB/CMYK Default selections call their matching CPU paths,
+and selected non-Default architectures call their architecture paths.
+Per-family target cfg/guard alignment, instruction reachability, and target
+builds remain the open module-quality review; no checks or tests ran.
+
+2026-11-21 dispatch and Draw context crosswalk, pass 4: The router invokes
+`BackendImpl::execute_batch_with_context_and_palette`; `CpuPool` overrides both
+context-aware methods and passes the same context to its batch executor. Its
+legacy `execute_batch` entry creates CPU Default only for callers that do not
+provide a routed context. Eager CPU image/byte helpers reject non-CPU contexts
+and pass the supplied context to the prepared closure; CPU terminal helpers
+consume the already selected `StrategySelection` instead of reselecting.
+Draw Bitmap captures or receives a parent context and carries it through
+admission, direct strategy execution, or nested Paste. Text captures one
+context for multiline lines, stroke/fill passes, and nested Paste children.
+FloodFill prepares its exact mode/architecture selection before calling
+host-provided pixel callbacks, then executes with that retained selection.
+Primitive Draw shapes queue `PipelineOp`s on the backing Image, retaining its
+backend request until the pipeline materializes. Refreshed source-review tags
+on these context boundaries. Remaining callback/error/output receipts,
+selected/fallback receipts, and CPU latency are open under `pillow-rs#3ptb`;
+no build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-21 CPU batch context crosswalk, pass 5: `CpuPool` hands one injected
+`ExecutionContext` to `batch_execution::execute_batch`. The generic operation
+step and every fused run receive that same reference. Generic preparation
+passes it to `registry::prepare_cpu`; Draw, Chops, AlphaComposite/Mirror,
+Multiply/Screen, PutPixel/Thumbnail, Transpose, composed Point, and PutPixel
+batch paths pass it into their operation-owned preparers. Owned Invert and
+Chops in-place routes select under that context and retain the selection for
+execution. No architecture selection is repeated inside a batch. The existing
+source TODO in `batch_execution.rs` remains: unprepared failure telemetry can
+label an operation `cpu` without a selection, and PutPixel+Thumbnail
+preparation errors return before per-operation telemetry begins. Those
+selection, fault, output, and telemetry contracts are pending the frozen CPU
+matrix. Source only; no build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 Python Draw adapter crosswalk, pass 6: `ImageDraw` constructs its
+Rust `Draw` from the backing Rust Image, so mode remains an explicit draw-mode
+input while backend/architecture selection comes from the image execution
+route. The PyO3 text entry captures one `(requested_backend, ExecutionContext)`
+before entering Rust's multiline strategy and passes it to direct text,
+stroke/fill, custom masks, and text-color Paste. The custom-font `bitmap`
+callback temporarily installs that same parent context on `PyDraw`, re-enters
+the public Python method, and restores the prior context after either a
+successful result or a Python error. The direct bitmap binding uses the
+override when present; ordinary calls use the image's normal route. Source
+review confirms no wrapper-side re-selection across these callbacks. Remaining
+Python callback order, public output/fault contracts, mode/architecture
+selection and fallback receipts, and CPU latency require the frozen CPU
+evidence. No build, formatter, checkstyle, lint, test, parity, benchmark, or
+coverage command ran.
+
+2026-11-21 ImageOps callback context crosswalk, pass 7: Invert, Posterize,
+Solarize, Autocontrast, Equalize, and Colorize preserve Pillow's public
+`Image.point` callback. Autocontrast and Equalize also call public `histogram`,
+and Colorize and Equalize may call public `convert`. Those callback traits
+currently carry no parent `ExecutionContext`, so nested operations can select
+from their own Image routing state after host callbacks. This does not yet
+prove the top-level Backend/Architecture is retained. Added source TODOs at
+the shared LUT, Autocontrast, Equalize, and Colorize owners. Resolve context
+handoff without bypassing subclass dispatch, then verify callback order,
+outputs, selection/fallback receipts, and latency in frozen CPU evidence. No
+build, formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 direct ModeFilter context crosswalk, pass 8: the old inventory item
+claiming `ops/param_filters.rs` still owns an unregistered ModeFilter was
+stale. The public method calls the CPU-only route selector after source
+materialization and carries its Backend/Architecture context into
+`prepare_mode_filter`; the prepared selector assesses the mode-owned support
+declaration with normalized window facts and retains the exact selection for
+the mode-owned Default leaf. The exhaustive route maps all fourteen declared
+byte identities and explicitly rejects the remaining eleven before kernel
+execution. The P wrapper captures and restores its palette around native-index
+output. Refreshed source tags on this orchestration and selector path and
+removed the stale pending-source row. Per-mode kernel output, wrapper/load
+fault order, palette metadata, selected/fallback receipts, and latency remain
+in frozen CPU evidence. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 pipeline mode-identity crosswalk, pass 9: the pending-source row
+claiming `pipeline/support.rs` still carries mode strings was stale. The
+pipeline payloads use `raster::Mode`, including Convert, Merge, PutData,
+PutAlpha, and Color3DLut; `ColorMode` is a type alias, not another enum.
+`PipelineOp::operation_id()` and `PipelineOp::support()` resolve typed support
+declarations. Remaining mode-name conversions and string snapshots are in
+`pool_gpu` graph/routing code and remain deferred to the GPU stage. Removed the
+stale CPU source item; parity, output identity, and error-order receipts remain
+pending. No build, formatter, checkstyle, lint, test, parity, benchmark, or
+coverage command ran.
+
+2026-11-21 Crop carrier boundary follow-up: the Python facade implements the
+chosen built-in int/float route with Pillow's source comparison, load,
+`round()`, and `int()` ordering, then passes a fixed four-coordinate integer
+tuple to PyO3. Source tracing confirms the Python facade's arbitrary-precision
+extent warning/error check runs before this narrowing, as Pillow's
+`Image._crop` does before its native parser. The binding now uses the shared
+`c_int_from_python` helper for PyLong-to-C-long conversion and signed C-int
+bounds, preserving the built-in typed carrier without a generic Python-object
+route. The remaining Crop boundary item is exact runtime error/output parity;
+no build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran.
+
+2026-11-21 Color enhancer context follow-up: direct Rust `Image::enhance_color`
+uses the prepared ColorSaturation strategy when declared; composed fallback
+builds `color_degenerate()` with multiple eager Convert calls, then creates a
+Blend route. Those child calls do not receive one shared `ExecutionContext`.
+Added TODOs at `color_degenerate` and `enhance_color`; preserve the eager base
+snapshot and error timing while threading the parent context through both
+children. Python's stateful ImageEnhance.Color constructor and later public
+Blend are separate public-call boundaries and must retain their subclass and
+metadata behavior. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 Color enhancer context audit correction: the `color_degenerate`
+source TODO from the preceding note was stale. The YCbCr/LAB/HSV fallback
+queues its mode-changing Convert operations into one flattened pipeline before
+`load()`. Convert is excluded from `op_preserves_mode`, so prefix caching
+cannot split these children into separate prepared executions. The single
+`evaluate_pipeline` call invokes `prepare_execution` once for the whole op
+slice, and each child strategy receives that same Backend/Architecture
+context. The source comment at `Image::color_degenerate` records this reason.
+`Image::enhance_color` still has a separate context TODO for fallback Blend
+composition and its lazy/eager boundary; it is not cleared by this audit.
+Source-only review; output, error-order, and selection receipts remain pending.
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 enhancer temporary-image context audit: the remaining
+`color_transparency` and `contrast_degenerate` context TODOs are implementation
+gaps. Their `Image::new` temporaries are already Loaded/Paletted values, and
+`Image::use_backend` deliberately annotates only Pipeline values. The current
+temporary eager PutPixel, Convert, GetChannel, and PutAlphaData calls can
+therefore route independently of the parent operation. Deferred byte
+PutPixel work in `color_transparency` now inherits an explicit parent backend,
+and its following Convert shares that flattened pipeline. Synchronous typed
+PutPixel and eager Convert paths still require a context-bearing child route.
+Implement the remaining route without changing conversion, snapshot, or error
+ordering; do not paper over it by attaching a backend to a materialized
+DynamicImage. No runtime verification ran.
+
+2026-11-21 enhancer context audit correction: the typed PutPixel path already
+accepts the caller's `(Backend, Architecture)` route, Convert's eager and lazy
+children already accept `ExecutionContext`, GetChannel has a context-bearing
+child entry point, and queued PutAlpha work inherits the context when the base
+pipeline is bound. The remaining concrete gap was Convert's same-mode fast
+path: it returned `image.copy()` without applying the supplied context. This
+could leave a queued PutPixel in Color's temporary `L` image to select its
+strategy independently. The fast path now applies `with_execution_context` to
+the copy, preserving the parent route through that pending graph. This changes
+route propagation only; output, fallback receipts, and latency remain TODO in
+the frozen CPU matrix. Source-only; no build, formatter, checkstyle, lint,
+test, parity, benchmark, or coverage ran.
+
+2026-11-21 Crop extent-order implementation: Pillow 13's `Image._crop`
+computes arbitrary-precision absolute extents and applies the mutable
+`MAX_IMAGE_PIXELS` warning/error policy before its C binding parses four
+`int` coordinates. The Python facade now performs that preflight after
+`round()`/`int()` and before PyO3 extraction, exposes the Pillow warning/error
+names and configurable limit from `PIL.Image`, then passes the matching
+`u64` fatal limit to Rust. Rust crop remains the pixel implementation;
+`crop_with_max_pixels` applies the fatal bound and `CheckedDims` retains its
+allocation guard. `Image.open` applies the same mutable policy to the decoded
+header before returning its still-lazy pixel payload. Oversized or non-integer
+host limits are fully checked by Python and disable the duplicate native crop
+threshold. Remaining TODOs: compare warning escalation, custom limit values,
+C-int overflow after preflight, open/lazy-decode order, zero-area crop faults,
+exact pixels and metadata, route/fallback receipts, and latency against the
+frozen CPU matrix. Source-only; no build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage ran.
+
+Crop carrier audit disposition: this implementation supersedes the earlier
+note that marked the preflight-before-C-int ordering as an unresolved source
+TODO. Python now completes its extent policy before PyO3 extracts the fixed
+four-`i32` carrier. Preserve the overflow exception's type/message in the
+frozen fault matrix; no generic Python-object carrier or runtime algorithm
+change is pending at this boundary. Source-only; no validation ran.
+
+2026-11-21 AlphaComposite host-contract correction: Pillow 13 validates that
+`source` and `dest` are lists or tuples, checks their lengths in order, applies
+`min(source)` without coercing the coordinate values, and performs destination
+box arithmetic in Python. It skips the public source or destination Crop call
+when that region is the whole image. The staged `i64` planner narrowed those
+inputs early, rejected float coordinates accepted by Crop, and always invoked
+both callbacks. The Python facade now owns only this host protocol and callback
+orchestration; compositing and pixel mutation remain in Rust. Removed the
+unused PyO3 planner entry. TODO (`pillow-rs#3ptb`): verify callback/error order,
+empty-region outcomes, mode/output/metadata, shared Backend/Architecture
+handoff, receipts, and latency in the frozen CPU matrix. Source only; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage ran. Source:
+[Pillow 13.0 Image.alpha_composite](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1777-L1826).
+
+2026-11-21 Alpha-composite crop-policy follow-up: Pillow 13's in-place
+`Image.alpha_composite` routes non-full source and destination regions through
+public `Image.crop`, so both regions inherit the mutable `MAX_IMAGE_PIXELS`
+warning/error policy. The current Python facade calls the Rust high-level
+compositor directly; its internal crop checks retain the fixed native limit
+and do not emit Pillow's warning. Added TODOs beside the facade and core guard
+to inject the host policy at both crop boundaries while preserving Pillow's
+geometry and fault order. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 Crop binding safety follow-up: split the PyO3 surface into a
+normal `crop(box)` entry that always uses the core fixed safety policy and an
+internal `_crop_with_max_pixels(box, limit)` entry used by the Python facade
+after its mutable Pillow preflight. Omitting the policy can no longer disable
+the core guard on direct `_core` access. Source-only; no build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 `pillow-rs#brg0` Draw source comparison: its six recorded CPU
+ImageDraw failures were observed on 2026-10-24, after `cdd938c67` split Draw
+responsibilities on 2026-10-23. The older multiline implementation stepped
+each line directly from `y`; the current route uses shared `ImageText` split
+positions for alignment, anchors, and line spacing. The old CMYK text owner
+converted through `to_rgba8()` before restoring a CMYK identity; the current
+exact-mode owner blends the stored CMYK lanes directly. These are relevant
+source differences, not proof that the current output matches Pillow. Added
+case-specific TODOs at the text layout and CMYK owners; reproduce the six
+frozen cases and compare against the refactor parent after full CPU source
+closure. No validation ran.
+
+2026-11-21 AlphaComposite crop-policy audit correction: the earlier
+crop-policy follow-up's claim that the Python facade calls the Rust compositor
+directly is stale. The current wrapper applies Pillow's host coordinate
+protocol, then calls public source and destination `crop` for non-full regions
+in Pillow order; those callbacks apply the mutable `MAX_IMAGE_PIXELS` policy
+and preserve subclass overrides. Rust performs the equal-size composite and
+public `paste` performs the final mutation. The direct Rust
+`alpha_composite_public` API retains its fixed native crop guard. The shared
+Backend/Architecture context and runtime output/fault receipts remain open;
+host crop-policy injection itself is implemented. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 temporary color-pixel route follow-up: `color_transparency` now
+captures its source's requested Backend and CPU `ExecutionContext` once, then
+passes both into synchronous typed PutPixel (I;16, I, and F). Its byte PutPixel
+and following Convert stay in one deferred graph; a source-pinned backend is
+applied to that graph after conversion. The dispatcher now lives in
+`image/pixel_access/putpixel.rs` and uses scalar/component helpers, keeping
+normalization and validation order intact while bringing `pixel_access.rs`
+under the 1,000-line limit. Eager Convert routes and an active, unpinned
+pipeline's captured context still need an explicit context-bearing child path;
+the function TODO remains.
+Source-only; no build, formatter, checkstyle, lint, test, parity, benchmark,
+or coverage command ran.
+
+2026-11-21 enhancer context source completion: `PipelineOps` can now retain an
+injected `ExecutionContext`; pipeline materialization, prefix/suffix execution,
+uncached verification, and the PutPixel projection terminal pass it to
+preparation. Injection recursively covers source pipelines and image operands
+inside nested operations, and invalidates materialized/prefix/palette caches.
+`Image::use_backend` continues to replace that context when a caller explicitly
+selects a backend. Convert exposes an internal context-bearing route for eager
+matrix, palette, scalar-to-RGBX, binary, and I;16 execution as well as queued
+children. GetChannel carries the context through direct tiny-RGB execution and
+queued extraction. Contrast and Color fallback construction and Blend now use
+the route captured at their public operation boundary. These changes supersede
+the earlier source TODOs claiming missing context plumbing for temporary
+`color_transparency`, `contrast_degenerate`, and fallback Blend paths. This is
+source review only: output parity, fault order, strategy/fallback receipts, and
+latency remain pending in the frozen CPU matrix. Nested ImageOps callback and
+AlphaComposite cross-callback context plumbing was subsequently added; runtime
+verification remains pending. No build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage command ran.
+
+2026-11-21 context-plumbing source update: composed Python ImageOps and
+AlphaComposite callbacks now share one lazily captured CPU architecture
+context through the public Image methods they call. The Rust bridge has
+context-bearing routes for Load, Histogram, Convert, Crop, Paste, Point,
+module AlphaComposite, Expand, Pad, and EXIF transpose. Native Color and
+Contrast fallback routes also carry the captured context through their
+degenerate-base children and queued Blend graphs. This closes the
+source-plumbing gaps described in older inventory entries; runtime
+output/fault parity, route receipts, and latency remain pending under
+`pillow-rs#3ptb`.
+
+2026-11-21 ImageFilter route follow-up: the Python facade now passes its
+captured route through built-in `UnsharpMask` and `ModeFilter`, whose callbacks
+execute eagerly before `_new` can bind the returned image. Their existing
+PyO3 methods call route-aware Rust strategy entry points; other built-in
+filter results remain lazy and are bound by `_new`. Custom `Filter` subclasses
+retain the `filter(rust_image)` callback signature and receive a cloned
+`PyImage` handle already bound to the captured route. Duck-typed callbacks get
+the same routed handle. Output/fault parity, fallback receipts, and latency
+remain pending. The route-bound clone's callback-visible identity and direct
+input-mutation semantics are an explicit TODO. No validation command ran.
+
+2026-11-21 ImageEnhance route follow-up: Brightness and Sharpness return lazy
+Rust pipeline images, and the Python result wrapper binds those images to the
+source's captured route. Color and Contrast retain their construction-time
+base under an explicitly captured route. Color's optional transparency metadata
+conversion was an eager child that previously selected again from the source;
+the Color constructor now passes its captured requested backend and execution
+context through PyO3 into the native pixel/conversion path. Output/fault parity,
+selected/fallback receipts, and latency remain pending; no validation command
+ran.
+
+2026-11-21 ImageOps.deform callback route follow-up: the facade now keeps one
+lazy execution-context scope across `deformer.getmesh(image)` and the later
+public `Image.transform` call. This preserves the existing callback and
+resample-validation order while allowing nested image work in `getmesh` to use
+the selected route. Reentrant output/fault behavior, strategy receipts, and
+latency remain pending; no validation command ran.
+
+2026-11-21 ImageDraw route follow-up: `ImageDraw.Draw` scopes the overridable
+`image.getdraw(mode)` callback and its default constructor fallback. The
+retained `PyExecutionContext` is also installed around public drawing entry
+points so numeric, shape-close, color, and font callbacks can compose nested
+image work on the same route. Existing AttributeError handling and callback
+order are unchanged. Override errors, route receipts, and draw latency remain
+pending; no validation command ran.
+
+2026-11-21 Crop/Reduce callback route follow-up: the public Python facades now
+enter their lazy route scope before full-box equality, coordinate comparisons,
+factor normalization, and identity delegation. This keeps user numeric hooks
+and the `(1, 1)` Reduce-to-Crop child on one captured route without changing
+load, rounding, C-int conversion, or fault order. Callback/fault parity and
+route receipts remain pending; no validation command ran.
+
+2026-11-21 ImageOps Equalize route crosswalk review: the Python facade already
+keeps one lazy execution-context scope around the generic callback flow; its
+public Convert, Histogram, and Point calls therefore reuse the captured route
+without bypassing user overrides. The remaining TODO is to verify callback
+order and selected/fallback receipts in CPU parity, not to add a second route
+path. No validation command ran.
+
+2026-11-21 terminal materialization route follow-up: `Image.save` now scopes
+format/path host callbacks and its before-encode `load` on one captured route.
+`Image.tobytes` and `Image.tobitmap` pass the active route into PyO3, which
+injects it only into pending image graphs and leaves cached materializations
+alone. The core byte-export and bitmap algorithms are unchanged. Fault order,
+selected/fallback receipts, exact bytes, and public-call latency remain pending;
+no validation command ran.
+
+2026-11-21 deferred operation callback scope follow-up: `Image.effect_spread`
+now scopes PyO3's distance conversion and binds its lazy result to the same
+route. `ImageEnhance.Sharpness.enhance` now scopes factor conversion and result
+binding, matching the shared enhancer path. These entry points can execute
+user numeric protocols before returning their lazy pipeline. The core still
+owns all pixel execution. Callback faults, selected/fallback receipts, and
+public-call latency remain pending; no validation command ran.
+
+2026-11-21 save terminal route correction: the wrapper now supplies a lazy
+execution-context provider to PyO3. If the graph remains pending after the
+existing format, path, load, filesystem, and encoder-option steps, the adapter
+calls the provider and routes it before encoding. This keeps the selected
+backend/architecture even when an overridden `load` callback does not
+materialize the graph, while already materialized images avoid route capture.
+A provider that returns `None` retains inferred routing. Callback/fault order,
+encoded bytes, route receipts, and latency remain pending; no validation
+command ran.
+
+2026-11-21 EffectNoise deferred-route correction: the Rust EffectNoise API
+captures the source image's CPU/architecture context when it creates the lazy
+graph and attaches that context to the queued operation. The size-based entry
+delegates through the same routed operation. Materializing the result later no
+longer reselects its architecture from a changed active backend configuration.
+The Python wrapper remains unchanged. Output/fault parity, selected/fallback
+receipts, and latency remain pending; no validation command ran.
+
+2026-11-21 PyO3 adapter size correction: moved `Image.point`'s Python LUT
+conversion, typed operation choice, and PyO3 method into the existing
+`pillow-rs-py/src/image/point.rs` module. This keeps point adaptation beside
+`ImagePointTransform` and brings `image/operations.rs` from 1,064 to 859
+physical lines without changing the operation code. Point callback/fault
+parity and mode/architecture receipts remain pending; no validation command
+ran.
+
+2026-11-21 GetProjection strategy audit: its aggregate support declaration and
+prepared executor exhaustively cover all 25 `Mode` identities and verify that
+the selected mode matches the actual `DynamicImage` variant. Exactly RGB8 and
+CMYK8 declare SSE2, NEON, and Wasm SIMD128 strategies behind matching target
+and ISA requirements; all other exact modes keep their Default owner. Their
+architecture dispatch reaches the declared native-carrier projection leaf.
+The RGB 48-byte blocks and CMYK 16/64-byte grouping retain their existing
+pixel scan. Corrected the SIMD receipt accounting so an all-columns-covered
+row does not report scalar tail pixels that its short-circuit skipped. This
+closes GetProjection's support/guard/dispatch source review only. All-mode
+output and fault parity, direct/fused selected and fallback receipts, and
+latency remain TODO under `pillow-rs#3ptb`; the wider family and direct-caller
+crosswalk remains open. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 Transform PA palette metadata source reconciliation: source tracing
+shows the prepared public destination copies attached PA palette and
+palette-alpha metadata, while lazy Transform declares P/PA raw-sample
+preservation and carries attached palette metadata into materialization. The
+previous source TODO claiming the deferred route drops that metadata was stale;
+there is no source-level discrepancy to reconcile. Exact PA palette output and
+selected/fallback receipts, including empty and nonempty transforms, remain
+TODO under `pillow-rs#3ptb`. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 RemapPalette support/guard/dispatch source review: the operation
+admits only exact L and P rasters and declares P as the output identity. Both
+mode owners share the inverse-index mapping semantics; L's output palette is
+grayscale, while P's reordered palette and alpha remain wrapper metadata. The
+operation applies its exact one-byte native input contract before
+selection; Default is the unconditional strategy, while each SSE2, NEON, and
+Wasm SIMD128 leaf has an empty-inclusive one-byte guard plus declared target
+and ISA availability. Context-based selection retains Default when a vector
+leaf is unavailable or ineligible. Empty inputs report the selected vector
+owner's scalar-control path when eligible. Python keeps its source-mode and
+palette callback order in `_execution_context_scope`; `_new` binds that captured
+context to the lazy result after sequence conversion, and core `Image::push_op`
+preserves an injected route through exact L/P preparation. Direct unbound Rust
+calls retain ordinary context inference. Output pixels, palette metadata, fault
+order, and Default/vector/unavailable-architecture receipts remain pending in
+`pillow-rs#3ptb`; no target build or runtime validation ran.
+
+2026-11-21 RGBA8 Transpose x86_64 baseline support/dispatch source review:
+the exact `ImageRgba8` support entry is compiled only for x86_64, has no
+optional-ISA requirement, and uses `TransposeRgbaX86_64Tiled`. Its guard admits
+a complete logical four-byte RGBA prefix (backing suffix bytes are ignored),
+Rotate270, dimensions at least 32 by 32, at least 256K pixels, and dimensions
+divisible by four; the packed-word kernel repeats the method, tile-threshold,
+and divisibility checks before allocating output.
+The `ExecutionContext` permits this target baseline under ordinary CPU Default
+on x86_64 and as a lower strategy under compatible x86 requests; exact
+architecture candidates are considered first. `prepare_transpose` binds the
+selected X86_64 variant only on x86_64, and execution dispatches it to the
+packed-word leaf. Its method and geometry admission checks agree with the
+leaf; typed RGBA input and checked preparation supply the storage-validity
+precondition. Unsupported methods or shapes stay on portable Default. This closes support/guard/dispatch
+source review only. Output parity, selected/fallback receipts, target builds,
+and public-call latency remain pending under `pillow-rs#3ptb`; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 I;16 Bitmap byte-order source review: `ImagingFill2` writes both
+raw sample bytes for an L mask, while its 1/RGBA/RGBa routes step through the
+row byte prefix one byte per mask pixel. The Rust I;16 owner maps these exact
+byte offsets through each declared `I;16*` byte order onto native `u16`
+storage; L uses both lanes, while RGBa preserves PREBLEND behavior. All four
+I;16 identities share the reviewed kernel with compile-time endian selection.
+Output bytes, edge clipping, and selection receipts remain pending; no
+build, formatter, checkstyle, lint, test, parity, benchmark, or coverage
+command ran. Source: [Pillow 13.0 `Paste.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L374-L474).
+
+2026-11-21 Draw geometry strategy source review: the family classifier and
+prepared executor exhaustively map all 25 `Mode` identities. Sixteen byte
+carrier modes declare the x86/SSE2, AArch64/NEON, and Wasm SIMD128 span
+strategies; four I;16 identities use their exact Default owner, and the five
+internal high-depth modes reject explicitly. The mode layouts, operation
+eligibility guards, injected architecture selection, and mode-owner dispatch
+agree. The architecture wrappers call the shared native-byte span executor;
+`wide` lowers its vectors from the compilation target features. Geometry uses
+the shared Pillow-compatible scan converters and native byte writes retain
+physical hidden lanes. No CPU fallback is called from an admitted vector
+geometry path. Draw output, callback/fault order, and selected/fallback
+receipts remain pending under `pillow-rs#3ptb`. TODO (`pillow-rs#3ptb`): verify
+the emitted ISA and reported architecture for AVX2-enabled builds; `wide`
+selects AVX2 for `u16x16` at compile time while this Draw family currently
+declares only SSE2 for x86. This source review ran no build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command.
+
+2026-11-21 Draw execution-context handoff source review: the Python
+`ImageDraw` constructor captures the image route once and passes it to
+`PyDraw`; core `Draw` retains the backend pin and execution context for queued
+operations and direct eager operations. Custom-font mask callbacks carry the
+parent route into direct color-mask paste or temporarily install it while
+re-entering `ImageDraw.bitmap`, restoring the prior override afterward.
+FloodFill loads the image before capturing its route and prepares the exact
+mode strategy while continuing to access pixels through the caller's Python
+`PixelAccess` object. Direct Rust Draw calls without an injected route retain
+the established image-context inference path. This closes source tracing of
+the Draw route handoff only; callback/error ordering, mode/architecture
+outputs, selected/fallback receipts, and latency remain pending under
+`pillow-rs#3ptb`. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 Crop warning source correction: the earlier Crop extent note saying
+the Python facade lacked a Pillow warning route is stale. `Image.open` applies
+`_decompression_bomb_check` to decoded header dimensions before constructing
+the public wrapper, and `Image.crop` applies it to exact Python integer extents
+after `load()`/`round()`/`int()` but before PyO3 narrows the coordinate tuple to
+C `i32`. The helper reads the mutable `PIL.Image.MAX_IMAGE_PIXELS`, counts each
+zero axis as one, raises `DecompressionBombError` above twice the limit, and
+uses the exported `DecompressionBombWarning` for the warning threshold so
+Python warning filters can escalate it. Rust receives the same representable
+hard limit; unrepresentably large or disabled host limits leave allocation
+safety to checked dimensions. This closes source tracing only; warning class
+and message parity, mutable-limit boundaries, C-int overflow precedence, lazy
+decode faults, outputs, route receipts, and latency remain pending under
+`pillow-rs#3ptb`. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 Resize context binding source crosscheck: the ordinary Python path
+loads the source before `_resize_dispatch`, capturing the active route in the
+scope. The dirty P/PA palette path commits palette metadata first; if its
+encoded source still needs decoding, core Resize materializes that source but
+queues pixel Resize rather than selecting an architecture there. In both
+paths, `_new` resolves the scope's route and binds it to the lazy result before
+the result is returned. The reducing-gap callback path likewise calls public
+`reduce` inside the same scope and binds context to the reduced image; its
+final direct Rust resize is rebound by the result wrapper.
+`resize_reducing_gap_plan` is geometry-only and does not execute a pixel
+strategy. Thus the lack of an explicit context argument on `_resize_dispatch`
+does not cause route reselection before the lazy result is materialized.
+Pixel outputs, fault ordering, architecture receipts, callback overrides, and
+latency remain pending under `pillow-rs#3ptb`. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 PutPixel batch receipt-order source correction: multi-operation CPU
+PutPixel runs and the RGB PutPixel/Thumbnail fused run push telemetry entries
+onto a stack, while the collector completes entries in LIFO order. Opening
+those entries in logical order therefore emitted receipts in reverse order.
+The batch and fused paths retain setup in pipeline order to preserve pending
+handoff attribution, then reverse only their newly completed receipt slice to
+restore logical order after LIFO completion. Operation execution order and
+handoff attribution are unchanged.
+Single-operation-at-a-time vector failure receipts were already ordered. RGB
+PutPixel/Thumbnail fusion preparation errors now emit ordered per-operation
+CPU receipts without a selected strategy; an ordinary declined fusion still
+leaves receipt creation to the subsequent operation path. The general
+unprepared-batch CPU receipt has no selected strategy and remains open for
+parity review. No build, formatter, checkstyle, lint, test, parity, benchmark,
+or coverage command ran.
+
+2026-11-21 PutPixel execution-context handoff source crosscheck: public
+`Image.putpixel` loads inside its captured route scope before palette callbacks,
+coordinate conversion, and typed value conversion; the PyO3 adapter passes
+that same requested backend and `ExecutionContext` into the Rust write. The
+RGB byte fast path binds it directly, other byte-backed modes bind it after
+successful exact-mode queuing, and I/F/I;16 writes use the exact mode's
+`PutPixelValueAt` Default selection and record the requested route. `load()`
+also stores the captured context in the returned Python `PixelAccess`; its
+`__setitem__` forwards it through the low-level ImagingCore adapter, which
+avoids the public palette callback and calls the same typed core route. Thus
+stored views do not recompute architecture after materialization. Direct Rust
+calls without a supplied route retain their advisory inference path. Palette
+callback mutation/fault order, scalar and coordinate edge contracts, actual
+receipts, per-mode output parity, and latency remain pending under
+`pillow-rs#3ptb`. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 PutData callback-route source crosscheck: `Image.putdata` loads
+within the active context scope, then passes that captured route through the
+PyO3 adapter. Callback-free built-in bulk paths and deferred PutData operations
+bind the same context to their prepared graph; callback-visible sequences
+create one `PutDataExecutionContext` and reuse it across ordered writes.
+`write_item` converts the current value before borrowing `PyImage`, so nested
+callbacks can observe prior writes; core then reads the current exact Mode and
+refreshes the cached per-mode Default selection without re-resolving backend
+or architecture. Per-write receipt capture preserves nested callback receipts
+and reports the requested backend with the synchronous CPU path. Source
+plumbing is closed for this route only. Bytes-subclass length/iteration,
+callback-driven mode changes after the wrapper's initial value-shape snapshot,
+generic-sequence exception fidelity, CoreOnly typed output/fault order, exact
+per-mode outputs, receipts, and latency remain pending under
+`pillow-rs#3ptb`. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command ran.
+
+2026-11-21 Crop built-in numeric carrier decision: keep the Python wrapper's
+Pillow-compatible equality, coordinate comparison, load, `round()`, and
+`int()` sequence, then pass the resulting four built-in integers through the
+fixed C-int carrier. This preserves large integer precision until Pillow's
+native C-int boundary without adding generic Python-object callbacks to Rust.
+The decompression warning/error preflight already runs on arbitrary-precision
+extents before C-int extraction. Crop now uses the shared binding helper that
+performs `PyLong_AsLong`-equivalent extraction followed by signed C-int bounds,
+matching Pillow's native parser sequence and error messages without an eager
+f64 conversion. Focused parity remains for overflow class/message and its
+interaction with default and mutable decompression limits; no runtime check
+was run for this source change.
+
+2026-11-22 Resize reducing-gap strategy source review: the 25-mode route
+declaration sends One/P through their nearest-only strategies with no reduction
+child, gives LA/RGBA a fused `ResizeBoxed` child whose support contains only
+Default, and declares a conditional Reduce child for the remaining 21 modes.
+The direct Resize wrapper chooses the child from that declaration only after a
+reduction plan exists. Thumbnail keeps LA/RGBA's gap inside the fused child and
+does not prepare a separate Reduce; other applicable modes prepare Reduce and
+then select their exact Resize strategy using reduced-image facts. The
+prepared Resize boundary carries the selection and `ExecutionContext` through
+both paths. A non-Default request for the fused alpha child resolves to its
+serial Default selection with `MissingSpecialization`; the execution guard
+rejects an impossible non-Default selection before entering the alpha kernel.
+The Python wrapper keeps public `reduce` overrides observable in the same
+context scope and binds returned lazy graphs before they are materialized.
+This closes the reducing-gap mode/architecture route source review only.
+Per-mode pixel/fault parity, requested-architecture fallback receipts, and
+latency remain TODO under `pillow-rs#3ptb`; no build, formatter, checkstyle,
+lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 Draw AVX2 strategy correction: the shared RGB span kernel widens
+16 byte lanes to `wide::u16x16` for alpha blending, which compiles to AVX2 on
+AVX2-enabled x86 builds. Draw now declares an exact RGB8 AVX2 strategy and
+routes it through `rgb8/avx2`; RGB8's SSE2 declaration is unavailable in those
+builds, preventing an SSE2 receipt from naming the AVX2-compiled vector path.
+Other Draw mode routes keep their existing architecture declarations and
+kernels. This closes the source declaration/dispatch
+mismatch only. Target-code inspection, selection receipts, mode output parity,
+fault order, and latency remain pending; no build, formatter, checkstyle,
+lint, test, parity, benchmark, or coverage command ran.
+
+2026-11-21 CPU batch failure-receipt source correction: the current
+finish_failed_unprepared_run records a CPU backend path without a selected
+architecture or strategy fallback because preparation returned before any
+implementation was selected; the telemetry schema defines the absent selection
+as None. This preserves truthful telemetry instead of assigning a false
+Default architecture. The RGB PutPixel+Thumbnail preparation-error branch does
+open and finish one receipt per fused operation, also without inventing a
+selection. The earlier source TODO claiming those receipts were absent is
+superseded; parity still needs to confirm receipt order, absence of a selection,
+and the original fault/output contract. Source review only; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 PutData sequence-error source correction: Pillow 13.0 first runs
+PySequence_Check. Generic modes then use PySequence_Size and PySequence_Fast;
+image8 bytes input takes the raw-byte exception documented below. The binding now preserves sequence-size errors; while acquiring the
+iterator it rewrites only TypeError to Pillow's canonical sequence message and
+propagates other exception classes, matching CPython's PySequence_Fast
+contract. The binding also validates the materialized item count and writes
+all items returned by PySequence_Fast, rather than limiting writes to the
+original reported length. Generic materialization uses the built-in exact
+list's extend method so iterator length hints and iteration faults occur before
+writes; exact list/tuple routes retain callback-visible live-item reads. TODO
+(pillow-rs#3ptb): parity-check reported versus
+materialized lengths, length-hint callbacks, custom length errors, iterator
+TypeError versus non-TypeError, iteration faults before writes, and item
+coercion faults after materialization. Source review only; no build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage ran. Sources:
+[Pillow 13.0 _putdata_impl](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1711-L1765)
+and [CPython 3.13 PySequence_Fast](https://github.com/python/cpython/blob/3.13/Objects/abstract.c#L2010-L2034)
+plus [CPython 3.13 list materialization and length hints](https://github.com/python/cpython/blob/3.13/Objects/listobject.c#L1162-L1225).
+
+2026-11-21 PutData bytes-subclass route source correction: Pillow 13.0 checks
+`image->image8 && PyBytes_Check(data)` before calling `PySequence_Size`; that
+raw storage path takes `PyBytes_GET_SIZE` and reads the physical bytes directly.
+The maintained adapter now applies that route only to exact `Mode` identities
+whose Pillow storage uses `image8` (`1`, `L`, `P`, and `I;16*`). Exact bytes may
+use the retained-buffer optimization; bytes subclasses use the same safe raw
+byte semantics without retaining their buffer. Other modes preserve
+`PySequence_Size` and `PySequence_Fast` iteration for subclasses, including
+length and iterator errors. This supersedes the Pillow 12.2-specific bytes
+subclass length note for the pinned 13.0 public contract. TODO
+(`pillow-rs#3ptb`): verify subclass `__len__`/`__iter__` outcomes and mutation
+visibility for raw-byte and sequence modes. Source-only; no validation ran.
+Sources: [Pillow 13.0 `_putdata_impl`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1711-L1778),
+[CPython 3.13 `PySequence_Fast`](https://github.com/python/cpython/blob/3.13/Objects/abstract.c#L2010-L2033).
+
+2026-11-21 GetChannel context source correction: the composed-call entry point
+previously forwarded `ExecutionContext` to the extraction strategy but could
+materialize an uncached parent pipeline first using that graph's existing
+route. It now binds the supplied context to an unmaterialized source graph
+before mode dispatch and materialization, then passes the same context to the
+child strategy. A successful cached source is reused without invalidating or
+replaying it. This covers eager identity copies as well as tiny-RGB and queued
+ExtractBand routes. Output/fault order and selection/fallback receipts remain
+pending in the frozen CPU matrix. Source-only; no build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-21 AutoContrast callback source correction: the earlier note claiming
+that custom histogram values are narrowed to `Vec<u32>` is stale. The Python
+adapter retains histogram and channel values as generic Python objects and
+delegates length/range, slicing, indexed reads and writes, cutoff arithmetic,
+truthiness, and iteration to host callbacks while Rust owns operation order
+and LUT construction. Pillow 13.0 uses `sum(h)` for each channel; the Rust
+state machine previously replaced that with 256 indexed reads, which skipped
+the channel object's iteration protocol and module-level `sum` lookup. It now
+invokes the host `sum` callback at that point. The fixed-loop range/list
+behavior was an open source gap at this checkpoint; the later follow-up below
+replaces those assumptions with a host-protocol path. Callback fault order and
+selected/fallback receipts remain unverified. Source review only; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+
+2026-11-21 ImageOps Equalize protocol source review (builtin guard details
+superseded): compared the `ImageOpsEqualizeCallbacks` state machine and PyO3
+adapter with Pillow 13.0.0 `ImageOps.equalize`. The channel slice is filtered
+by host iteration, then `len`, `sum`, `range`, list extension, and indexed
+histogram reads flow through the generic adapter path; the native `Vec<u32>`
+path accepts exact integer lists with per-channel totals fitting u32. The
+subsequent scope decision removed all builtin-identity checks and excludes
+builtin mutation from the compatibility contract. Output, callback/fault
+order, selected/fallback receipts, and latency remain pending the frozen CPU
+gates. Source review only; no build, formatter, checkstyle, lint, tests, parity,
+benchmark, or coverage ran. Reference:
+[Pillow 13.0 ImageOps.equalize](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L2622-L2674).
+
+2026-11-22 AutoContrast range/list source closure: the Python adapter selects
+the native LUT loop only when the channel is an exact list of exact integers,
+cutoff values are exact built-in numeric values, and the module `int`, `list`,
+and `range` globals are the canonical builtins. When cutoff is active, `sum`
+must still be the module's captured callable; it is invoked by the host adapter.
+Missing or replaced globals take the host-protocol fallback, where Rust consumes
+the actual `range` iterators and values for cutoff scans, edge searches, and LUT
+generation. The fallback preserves expression order for `hi <= lo`,
+`255.0 / (hi - lo)`, `-lo * scale`, per-value `int(...)` lookup before
+arithmetic, byte comparisons, `list(range(256))`, and list append/extend. It
+also carries the Python `lo` and `hi` loop locals across cutoff scans and image
+channels: an empty later iterator leaves the previous value in place, while a
+first empty scan faults at the same later local-variable read. The exact
+common-input fast path remains allocation-free for these saved loop values.
+The AutoContrast callback strategy now lives in
+`pillow-rs/src/ops/imageops/autocontrast.rs`, separate from the other pointwise
+ImageOps and under the 1,000-line file limit. TODO (`pillow-rs#3ptb`):
+parity-check module-global `range`, `list`, and `int`
+replacements; custom range iterator values, empty ranges, and indexing faults;
+callback order; and selected/fallback receipts. Source-only; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+Reference: [Pillow 13.0 ImageOps.autocontrast](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageOps.py#L1966-L2087).
+
+2026-11-21 Equalize builtin-guard investigation (superseded): an intermediate
+version added exact callable/type checks for `len`, `sum`, `range`, and `list`
+and identified limits against spoofed C callables. The 2026-11-22 decision
+made all builtin mutation unsupported, removed the identity checks, and
+rejected replacement-specific parity work. The investigated CPython details
+are historical context only. No validation ran.
+
+2026-11-22 Equalize builtin-mutation scope decision: all Python builtin
+replacement is outside the compatibility contract, including ordinary Python
+replacements and C extensions that forge builtin metadata before import. Do
+not add identity checks, trusted-callable mechanisms, mutation-specific
+fallbacks, or parity cases. This supersedes the earlier guard proposal.
+Supported native and generic histogram paths still have pending output,
+callback/fault-order, and route-receipt parity under `pillow-rs#3ptb`. No
+validation ran.
+
+2026-11-21 CMYK Text kernel source re-review: Pillow 13.0 routes bitmap text
+through `ImagingFill2`; L masks use their byte coverage, RGBA masks use the
+alpha lane, and both masked-fill loops blend each physical destination lane.
+The CMYK Default kernel keeps those four bytes native and follows that layout.
+This source comparison does not establish glyph placement or full text output
+parity; the exact CPU `text.mode.cmyk` and `multiline_text.mode.cmyk` cases
+remain pending after source closure. No build, formatter, checkstyle, lint,
+test, parity, benchmark, or coverage ran. References: [Pillow 13.0
+DrawBitmap](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Draw.c#L3657-L3667),
+[Pillow 13.0 masked fill](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Paste.c#L2291-L2479),
+and [Pillow 13.0 blend arithmetic](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/ImagingUtils.h#L271-L280).
+
+2026-11-21 multiline Text layout source re-review: the built-in Rust path
+matches Pillow 13.0 `ImageText.Text._split` ordering for newline splitting,
+the single-line early return, multiline-anchor validation, line-spacing
+calculation, width measurement, centered-anchor arithmetic, and per-line
+positioning. Custom host objects retain the Python `_split` callback route.
+No source-level discrepancy was found for the historical centered-anchor,
+explicit-font-size, or three-line-spacing cases; their exact output and fault
+parity remain pending after CPU source closure. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage ran. References:
+[Pillow 13.0 ImageText._split](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageText.py#L1734-L1950)
+and [Pillow 13.0 ImageDraw.text](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageDraw.py#L3148-L3301).
+
+2026-11-22 ImageOps AutoContrast/Convert source review: compared the public
+AutoContrast route with Pillow 13.0. It retains the host sequence
+Convert(`"L"`) when tone preservation is truthy, Histogram, LUT callbacks, and
+Point; the Python execution scope carries one captured CPU context through
+those public calls. Pillow `Image.convert` loads before conversion arguments
+are resolved. The wrapper previously realized dirty palette state and entered
+PyO3 conversion argument extraction without first invoking `Image.load()`, so
+a lazy decode error could lose precedence to an invalid conversion argument.
+The wrapper now calls `self.load()` first. Conversion argument protocol/fault
+order and selected-context receipts remain pending in CPU parity; no parity,
+tests, build, formatter, checkstyle, lint, benchmark, or coverage ran. Reference:
+[Pillow 13.0 Image.convert](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py).
+
+2026-11-22 Convert argument source review: Pillow `Image.convert` loads before
+resolving its optional inputs, chooses a target for falsey/default mode input,
+returns a copy for a falsey mode or same-mode request with a falsey matrix, and
+enters matrix conversion only when the matrix is truthy. The matrix branch
+selects a target-specific expected length before converting matrix samples and
+does not use dither; copy and default-mode paths do not consume dither, palette,
+or colors either. The PyO3 adapter currently extracts the matrix, colors, and
+dither before its mode reaches Rust, so errors from ignored inputs can precede
+Pillow's early return or mode/matrix errors. The source TODO now names this
+staging gap. Exact truthiness and sequence callbacks, matrix extraction order,
+palette/quantize branches, output/fault parity, and route receipts remain
+pending under `pillow-rs#3ptb`; no implementation or verification ran. Reference:
+[Pillow 13.0 Image.convert](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py).
+
+2026-11-22 Filter Default blur source correction: comparing the active native-
+byte Default helper with the preserved CPU implementation found that the
+refactor enabled three-pass row fusion for every one-to-four-byte mode. The
+archived serial route enabled it only for exact L, LA, RGB, and RGBA identities.
+The Default helper now receives the exact mode selected by its mode leaf and
+uses one operation-level mode declaration for both visible samples and
+retained physical lanes. Other modes keep the archived repeated full-row pass
+path. This restores the archived specialization and allocation choice without
+changing filter arithmetic. Output parity and mode/architecture selection
+receipts remain pending under `pillow-rs#3ptb`; no build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-22 Grayscale architecture dispatch source review: all seven exact-mode
+owners with declared SIMD strategies (CMYK8, LA8, RGB8, premultiplied RGB8,
+RGBA8, RGBX8, and YCbCr8) expose every referenced architecture module. For
+each declared architecture, the `ops.rs` strategy cfg matches the enclosing
+mode `mod.rs` export cfg; the strategy macro uses that same cfg for the
+support declaration's compiled bit and the executable enum arm. Preparation
+selects from the mode owner's `SUPPORT` using the injected context before
+constructing the architecture enum, and the shared selector checks backend,
+requested-architecture permission, compiled availability, hardware
+capabilities, required instruction sets, and mode guard before execution.
+The YCbCr x86 SSSE3 owner also has matching x86_64 target-feature and 32-bit
+x86 wide-kernel submodule gates. No source-level cfg/module/dispatch mismatch
+was found in this family. This does not prove compiler reachability or native
+kernel execution; those remain Stage 6/runtime gates. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-22 Color Convert architecture source crosscheck: traced the mode-owner
+dispatch and architecture-module references for CMYK8, One, L/LA/P, La, RGB,
+RGBa, RGBA, RGBX, and all four I;16 identities. The references resolve to
+their declared mode modules; cfg-gated AVX2/SSSE3/SSE2, NEON, and Wasm arms
+are present only with their corresponding implementation modules, while the
+portable wrapper modules use support declarations to gate compiled
+availability and the shared selector checks host requirements before
+selection. The four I;16 owners share the same luma16 architecture catalog;
+L/P palette remapping shares one architecture declaration helper. No source-
+level module/dispatch mismatch was found in these Convert routes. This does
+not prove every target/guard combination, compiler reachability, or native
+execution; those remain open. No build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage ran.
+
+2026-11-22 architecture module reference inventory: a read-only scan of all
+maintained `pool_cpu/ops/**/ops.rs` files found 177 files with literal direct
+`super::<architecture>::` references; each reference had a declaration in
+that exact mode directory's `mod.rs`. This verifies the direct module-name
+crosswalk only. It does not prove cfg equivalence, nested-module availability,
+support-guard correctness, target compilation, or selected-kernel reachability;
+those checks remain open across the other operation families. No validation
+command ran.
+
+2026-11-22 Convert staged-input source review: Pillow 13.0 loads before
+conversion routing, copies on falsey/default and same-mode/no-matrix paths,
+resolves a default P conversion through the attached palette mode, checks
+matrix conversion before its RGBA-to-P quantize path, and compares the
+palette with `Palette.ADAPTIVE` only for the remaining P target route. The
+wrapper now asks a Rust core plan which host values the selected route consumes:
+copy reads none, matrix reads only the matrix, quantize reads only `colors`,
+and ordinary conversion reads only `dither`. Python matrix truthiness is
+deferred until the plan requests it; the same-mode path preserves Pillow's two
+truth checks. Matrix length is checked before item conversion and coefficients
+are passed through float32, following Pillow's C matrix entry point. Rust's
+LAB matrix route is explicitly marked `NO_PILLOW_SUPPORT`. Arbitrary mode
+truth/equality overrides, matrix sequence callbacks, palette comparison order
+through transparent routes, adaptive-P transparency palette remapping, and
+custom dither `__index__` exception behavior remain TODOs under
+`pillow-rs#3ptb`. Source review only; parity, fault order,
+architecture receipts, and performance remain pending. Sources: [Pillow 13.0
+Image.convert](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L937-L1128),
+[Pillow 13.0 matrix binding](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1037-L1089).
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-22 Pillow 13.0 Filter host-boundary source follow-up: the public
+`Image.filter` order is source-reviewed through ImageFilter import, load,
+callable construction,
+duck-typed `.filter` validation, single-band/Multiband dispatch, sequential
+band callbacks, immediate result wrapping, and merge. Built-in GaussianBlur
+and BoxBlur exact-zero copies, scalar-to-pair conversion, and BoxBlur's
+nonnegative-then-`2**31` checks match Pillow. Kernel's default `sum(kernel)`
+precedes coefficient-count validation. Private PyImage filter adapters now
+live in `pillow-rs-py/src/image/filters.rs` and use Pillow's one-margin
+`expand`, blur radii with optional C-int pass counts, and required
+UnsharpMask/ModeFilter arguments; rank and expand values enter the
+C-int conversion path. `getpalettemode` now
+returns the palette mode or Pillow's no-palette ValueError. Private ImageChops
+`offset` and `chop_*` methods delegate to existing core operations and
+materialize results before returning. Private GaussianBlur/BoxBlur pass counts
+now flow through the CPU blur pipeline, including Pillow's defaults, empty
+image handling, and pass/radius validation order. Direct ImagingCore Paste now
+uses the prepared mode-owned Paste path and active execution context; output,
+mutation timing, faults, and route receipts remain pending. Remaining source
+TODOs are custom-callback ImagingCore compatibility for `convert_into`,
+`transform`, Arrow methods, and invalid-return fault order (excluding raw
+pointer access). `convert_transparent` now has a direct PyImage adapter and
+native mode-specific CPU Default strategies; output, argument faults, and
+route receipts remain pending parity.
+`PyImage.isblock` has since been added; its exact return parity remains
+pending. ImageChops Add/Subtract adapter fault order is source-reviewed; its
+output and fault parity remain pending. `PyImage.point`
+already carries the active filter route through `ImagePointTransform`; output
+and callback-fault parity remain pending. `PyImage.setalpha` now routes RGB and
+RGBX through the existing exact-mode PutAlpha strategies and updates the live
+image handle; its mode, fault, output, and route parity remains pending.
+`PyImage.getpalette` also has its direct rawmode adapter; packed output and
+argument-fault parity remain pending. `PyImage.pixel_access()` now creates the
+existing PixelAccess carrier with the active route; factory, pixel-fault,
+mutation, and receipt parity remain pending. `PyImage.convert_matrix()` now
+uses the typed Convert matrix plan; mode-arity faults, output, and
+architecture/fallback receipts remain pending. Output,
+fault, mode, metadata, architecture/fallback receipts, and performance are not
+verified. References: [Pillow 13.0 Image.filter](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L1325-L1353),
+[Image._new](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L3219-L3243),
+[Pillow 13.0 ImageFilter](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageFilter.py#L1421-L1707),
+and Pillow 13.0 [ImagingCore method table](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L4009-L4085),
+[expand](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1147-L1165),
+[ModeFilter](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1525-L1539),
+[getpalettemode](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1286-L1301),
+and [blur/UnsharpMask bindings](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L2377-L2439).
+No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-22 ImagingCore blur-pass source follow-up: private GaussianBlur and
+BoxBlur now accept optional C-int pass counts, defaulting to 3 and 1. The Rust
+adapter forwards them to CPU core methods; non-default Gaussian pass counts
+lower to `BoxBlurXY` using Pillow's per-pass Gaussian radius formula. Empty
+images copy before pass/radius/mode checks, and nonempty images validate pass
+count, radius, then mode. The shared Gaussian radius helper preserves C's
+float32 `sigma²` and fractional-radius arithmetic with double-precision
+`sqrt`/`floor` conversion points. Public output, fault order, strategy
+receipts, and latency remain parity-pending. Source review only; no validation
+ran. Reference: [Pillow 13.0 BoxBlur.c](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/BoxBlur.c#L1230-L1396).
+
+2026-11-22 ImageChops offset default correction: Pillow 13.0 assigns
+`yoffset = xoffset` when omitted before loading the image, then calls the
+private ImagingCore offset with both values. The thin facade now applies that
+default before its load-and-dispatch helper, retaining the original value for
+both C-int conversions. Unary and binary ImagingCore operations dispatch
+through private PyImage methods, pass the captured backend/architecture
+context, and eagerly materialize at the ImagingCore callback boundary.
+`constant` and `duplicate` use the public `Image.new` and `copy` routes;
+`blend` and `composite` use the corresponding Image operations. The duplicate
+module-level Chops bindings were removed. TODO (`pillow-rs#3ptb`): verify
+Chops output and mode/fault order, omitted and explicit y offsets, C-int
+faults, and selected/fallback receipts in the frozen CPU matrix. Source review
+only; no build, formatter, checkstyle, lint, test, parity, benchmark, or
+coverage ran.
+Sources: [Pillow 13.0 ImageChops](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/ImageChops.py#L760-L1088),
+[Image.composite](https://github.com/python-pillow/Pillow/blob/13.0.0/src/PIL/Image.py#L3460-L3473),
+and [ImagingCore method table](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L4009-L4085).
+
+Direct Chops calls made by a Python callback now resolve the active wrapper
+ContextVar at the PyO3 binding boundary when no explicit route is supplied;
+they ask the scoped owner to capture the route if that scope has not captured it
+yet.
+The route lookup is shared in `pillow-rs-py/src/image/execution.rs`.
+Direct `Image.im.crop()` now applies that same active route to its lazy result
+before returning, so later materialization keeps the wrapper's Backend and
+Architecture without replacing the mutable PyImage handle.
+Direct `Image.im.tobitmap()` resolves the explicit or active route before its
+pending pipeline terminal as well.
+Direct `Image.im.load()` now applies the active or explicit route to lazy
+materialization while keeping the same mutable `PyImage` handle. Direct
+`Image.im.split()` routes the source before splitting and binds the route to
+lazy band children.
+Direct `Image.im.getpixel_formatted()`, sequence indexing, and
+`getdata_formatted()` resolve and apply the active route at their materialize
+or dispatch boundary while preserving the live `PyImage` handle.
+Direct `Image.im.paste()` captures the same route after source and mask
+conversion callbacks, applies it to the mutation, and pins the selected
+backend after a successful queued write.
+Direct `Image.im.putpixel()` and `putdata_formatted()` now send the active route
+to Rust and pin a selected backend after successful mutation. Direct pixel
+reads, sequence indexing, and formatted data reads apply the route at their
+load or dispatch boundary. Direct ImagingCore SetMode, PutBand, and FillBand
+now receive the scoped Backend/Architecture context at their selector and
+materialization boundary. Palette metadata edits route a pending source before
+materialization, and the Python `apply_transparency()` and `putpalette()` calls
+establish the active wrapper scope. These calls preserve the same mutable
+PyImage handle, including mutations retained on an error path.
+Direct ImagingCore analysis reads and Point now resolve the active route at
+their native execution boundary. Transform preparation and mesh/apply entry
+points bind the route to their pending source or output graph. Brightness and
+Sharpness route their lazy results. Contrast/Color one-shot fallbacks now have
+context-taking Rust entry points so their eager bases and deferred Blend graph
+share the wrapper-selected Architecture. The Transform source crosswalk covers
+premultiplied recursion, custom handlers, `getdata` callbacks, prepared output,
+and per-record MESH routing under one active context. Output, callback-fault,
+and selected/fallback receipts remain pending; no runtime validation ran.
+
+2026-11-22 Crop carrier decision reaffirmed: keep Pillow's source-box equality
+and coordinate comparisons, load, `round()`, `int()`, and arbitrary-precision
+extent policy in Python, then pass four normalized built-in integers through
+the fixed C-int carrier. The maintained wrapper already follows this order;
+do not route coordinates through `f64` or add generic Python callbacks to
+Rust. Output, C-int overflow faults, and selected/fallback receipts remain in
+the frozen CPU parity work. Source review only; no validation ran.
+
+2026-11-22 ImageChops Add/Subtract C-int adapter correction: the private
+PyImage methods now receive offset as a Python object and call the shared
+`c_int_from_python` converter, preserving the prior C-int range and integer
+protocol boundary while carrying the captured execution context. The scale
+argument remains a float32 carrier pending exact PyArg conversion/fault-order
+parity. Source review only; no build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage ran.
+
+2026-11-22 direct ImagingCore route handoff: `setmode`, `putband`, and
+`fillband` now pass the active Backend/Architecture context into their eager
+mode strategy selectors, and route pending source/destination graphs before
+materialization. Palette edits and `apply_transparency` route pending images
+at the materialization boundary while retaining the existing PyImage handle.
+PutAlpha now keeps the full route (including a pinned backend), calls the
+context-taking core operations, and applies the route to the updated image on
+success or failure. Unpacked ImagingCore bytes resolve an active route before
+their terminal read. The Crop boundary remains a four-built-in-int C-int
+carrier after Python has performed Pillow's original comparisons, load,
+`round()`, `int()`, and arbitrary-precision extent policy; this matches the
+selected carrier design without routing values through `f64`. Source review
+only; output/fault parity, route receipts, and latency remain pending. No build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-22 Enhance fallback context handoff: Contrast and Color now expose
+context-taking Rust entry points for the one-shot modes whose base images are
+materialized during the public call. The Python binding passes the active
+route before that work, and the returned Blend graph receives the same
+Architecture and pinned-backend policy. These methods preserve the ordinary
+Rust entry points' existing route behavior. Fallback pixels, errors, receipts,
+and latency remain TODO; no build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage ran.
+
+2026-11-22 direct mutation route-order correction: ImagingCore SetMode,
+PutBand, and FillBand no longer route the destination before core validation.
+Their core entry points apply pinned Backend and Architecture only after mode,
+band, and layout admission, before required materialization; PutBand routes its
+source at the same boundary. Palette and transparency mutations now receive the
+route explicitly and defer it until their mode, palette, index, and table
+checks pass. PutAlpha route-taking methods apply the route after supported-mode
+validation and preserve Pillow's staged promotion behavior. This prevents a
+rejected call from changing a pending graph's selected route. Thumbnail now
+passes the route to core, which validates its filter, reducing gap, and no-op
+geometry before routing any source needed for materialization. Source review
+only; output/fault parity and receipts remain pending. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+2026-11-22 active CPU archive and scheduling source scan: no maintained Rust
+source imports or names `pool_cpu::legacy`; active `pool_cpu` source has no
+Rayon or parallel scheduling references. The remaining `pool_parallel` text is
+documentation describing the later backend boundary. This closes those source
+crosschecks only; compile-time reachability, architecture configurations, mode
+support outcomes, parity, and performance remain pending. No validation ran.
+
+2026-11-22 ImageChops Add/Subtract scale source correction: Pillow 13.0's
+`O!|fi` adapter applies `PyFloat_AsDouble` and then casts to C `float` without
+range rejection, before parsing the offset as C `int`. PyO3's `f32` extraction
+uses the same f64-to-f32 conversion, and the binding converts the offset only
+after argument extraction, so finite values outside the f32 range correctly
+become infinities and the callback/fault order is already represented. Removed
+the false overflow TODO; output and fault parity remain pending. Source review
+only; no build, formatter, checkstyle, lint, test, parity, benchmark, or
+coverage ran. Source: [Pillow 13.0 `_imaging.c`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c).
+
+2026-11-22 Image data-access size source review: split the private ImagingCore
+SetMode, PutBand, and FillBand methods from `data_access/put.rs` into the
+focused `data_access/imaging_core.rs` module. This keeps the PutData source at
+738 lines and the extracted mutation module at 269 lines while preserving the
+same inherent Image API and route/validation implementation. Both remain below
+the 1,000-line limit; behavior verification remains pending. No formatter,
+checkstyle, lint, build, test, parity, benchmark, or coverage ran.
+
+2026-11-22 ImagingCore band support source review: PutBand declares 20
+supported exact modes and five explicit ValueError rejections; FillBand
+declares 14 supported modes and eleven explicit rejections. The exhaustive
+matches account for all 25 Mode identities, the two selectors compose serial
+Default under the injected context, and the executors check the selected
+operation/mode/architecture before calling native band helpers. These source
+contracts match the route-taking Image methods; pixels, public fault order,
+and route receipts remain pending. No validation ran.
+
+2026-11-22 ImageChops input-order source recheck: the public Python facade
+loads the first and second images in that order before invoking the private
+PyImage operation, and `Image.load()` materializes the underlying Rust image.
+The PyO3 helper's result load therefore follows already-loaded inputs on the
+public ImageChops path; no extra input loads were added at that boundary. The
+remaining `ops/chops.rs` TODO is limited to direct Rust lazy constructors,
+whose mode-validation versus secondary decode-error order is distinct from
+the Python facade contract. Output/fault parity and selected/fallback receipts
+remain pending; no validation command ran.
+
+
+2026-11-22 ImagingCore `isblock` source follow-up: the direct no-argument
+`PyImage.isblock()` method delegates to a core query for Pillow's explicit
+single-block allocator state. Pillow tests whether `Imaging.block` is non-null;
+Rust-owned raster vectors do not use that allocator and report false. The
+property read has no pixel strategy or backend selection. Exact public return
+parity remains pending the frozen CPU matrix. Source review only; no build,
+formatter, checkstyle, lint, test, parity, benchmark, or coverage ran. Sources:
+[Pillow 13.0 `_isblock`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L2442-L2452),
+[block allocation](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Storage.c#L458-L478),
+and [array allocation](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Storage.c#L388-L423).
+
+2026-11-22 ImagingCore Paste callback source follow-up: added direct
+`PyImage.paste(source, box, mask=None)` with Pillow's nested four-coordinate
+box parser. It reuses the mode-owned prepared Paste path and injects the active
+Backend/Architecture context; its parser accepts only the internal PyImage
+carrier for ImagingCore sources and leaves public Image wrapper handling to
+high-level `Image.paste`. Removed direct Paste from the custom-filter source
+TODO. Output, in-place mutation timing, faults, and route receipts remain
+pending CPU parity. Source-only; no build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage ran. Source:
+[Pillow 13.0 `_paste_impl`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1561-L1604).
+
+2026-11-22 ImagingCore `convert_transparent` source review: Pillow 13.0
+supports RGB→RGBA/RGBa/LA/La and One/I32/native-I16/L→RGBA/LA. The
+transparency comparison is source-layout-sensitive: RGB-to-LA/La compares
+against original RGB, while scalar-to-RGBA/LA compares against converted RGB;
+premultiplied targets apply alpha arithmetic after the key decision. The
+maintained PyImage adapter and mode-specific CPU Default strategies are now
+written for One/L/RGB/I/I;16 sources. Ordinary Convert or cross-mode casts are
+not used. Output, argument fault, and route-receipt parity remain pending.
+Source review only; no validation ran. References: [Pillow 13.0
+`_convert_transparent`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1091-L1116)
+and [ImagingConvertTransparent](https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Convert.c#L1550-L1616).
+
+2026-11-22 ImagingCore Paste callback source follow-up: added direct
+`PyImage.paste(source, box, mask=None)` with Pillow's nested four-coordinate
+box parser. It reuses the mode-owned prepared Paste path and injects the active
+Backend/Architecture context; its parser accepts only the internal PyImage
+carrier for ImagingCore sources and leaves public Image wrapper handling to
+high-level `Image.paste`. Removed direct Paste from the custom-filter source
+TODO. Output, in-place mutation timing, faults, and route receipts remain
+pending CPU parity. Source-only; no build, formatter, checkstyle, lint, test,
+parity, benchmark, or coverage ran. Source:
+[Pillow 13.0 `_paste_impl`](https://github.com/python-pillow/Pillow/blob/13.0.0/src/_imaging.c#L1561-L1604).

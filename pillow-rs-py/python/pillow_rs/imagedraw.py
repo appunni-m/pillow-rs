@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence as _Sequence
+from functools import wraps
 
 from ._core import ImageDraw as RustDraw
 from ._core import Outline  # public compatibility re-export
 from . import imagecolor
 from . import image as Image
-from .image import PixelAccess
 
 _Ink = float | tuple[int, ...] | str
 Coords = _Sequence[float] | _Sequence[_Sequence[float]]
@@ -20,23 +20,43 @@ def _invoke_text_mask_callback(method, positionals, keywords, extra_keywords):
     return method(*positionals, **keywords, **extra_keywords)
 
 
+# TODO(pillow-rs#3ptb): verify nested host callback routing, faults, and draw
+# latency when the retained route scope wraps Python drawing entry points.
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+def _with_draw_execution_context(method):
+    """Keep nested host callbacks on this Draw object's selected route."""
+
+    @wraps(method)
+    def routed(self, *args, **kwargs):
+        with Image._execution_context_scope(
+            self._image, self._execution_context, override=True
+        ):
+            return method(self, *args, **kwargs)
+
+    return routed
+
+
 class ImageDraw:
     """Draw lines, rectangles, ellipses, polygons, and text on images."""
 
     font = None
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def __init__(self, im: Image.Image, mode: str | None = None) -> None:
         # Pillow's ImageDraw constructor calls Image._ensure_mutable(), which
         # loads the image before validating the optional draw mode.
-        im.load()
-        self.mode = im.mode if mode is None else mode
-        self.draw = RustDraw(im._rust_image, mode)
-        self.im = im._rust_image
-        self.palette = im.palette if self.mode == "P" else None
-        self._image = im
-        self.fontmode = "1" if self.mode in ("1", "P", "I", "F") else "L"
-        self.ink = self._draw.draw_ink(1 if self.mode in ("I", "F") else -1)
-        self.fill = False
+        with Image._execution_context_scope(im):
+            im.load()
+            execution_context = im._current_execution_context()
+            self._execution_context = execution_context
+            self.mode = im.mode if mode is None else mode
+            self.draw = RustDraw(im._rust_image, mode, execution_context)
+            self.im = im._rust_image
+            self.palette = im.palette if self.mode == "P" else None
+            self._image = im
+            self.fontmode = "1" if self.mode in ("1", "P", "I", "F") else "L"
+            self.ink = self._draw.draw_ink(1 if self.mode in ("I", "F") else -1)
+            self.fill = False
 
     @property
     def draw(self):
@@ -79,6 +99,7 @@ class ImageDraw:
             self._sync()
         return index
 
+    # VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     def _getink(self, ink, fill=None):
         """Resolve Pillow's default ink state and explicit colors."""
         if ink is None and fill is None:
@@ -179,6 +200,8 @@ class ImageDraw:
             font = self._getfont(font_size)
         return self._prepare_text_font(font, None, embedded_color)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def line(
         self,
         xy: Coords,
@@ -254,17 +277,22 @@ class ImageDraw:
                         ]
                         self.line(gap_coords, fill, width=3)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def rectangle(self, xy, fill=None, outline=None, width: int = 1):
         fill, outline = self._palette_fill_outline(fill, outline)
         if fill is not None or outline is not None:
             self._draw_fill_outline(self._draw.rectangle, xy, fill, outline, width)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def ellipse(self, xy, fill=None, outline=None, width: int = 1):
         fill, outline = self._palette_fill_outline(fill, outline)
         if fill is not None or outline is not None:
             self._draw_fill_outline(self._draw.ellipse, xy, fill, outline, width)
 
-    # VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def polygon(self, xy, fill=None, outline=None, width: int = 1):
         fill, outline = self._palette_fill_outline(fill, outline)
         if fill is not None:
@@ -282,16 +310,22 @@ class ImageDraw:
             outline_width = width * 2 - 1
             self._mutate(self._draw._polygon_outline, xy, outline, outline_width)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def point(self, xy, fill=None):
         ink, _ = self._getink(fill)
         if ink is not None:
             self._mutate(self._draw.point, xy, ink)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def arc(self, xy, start, end, fill=None, width=1):
         ink, _ = self._getink(fill)
         if ink is not None:
             self._mutate(self._draw.arc, xy, start, end, ink, width)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def chord(self, xy, start, end, fill=None, outline=None, width=1):
         fill, outline = self._palette_fill_outline(fill, outline)
         if fill is not None or outline is not None:
@@ -299,6 +333,8 @@ class ImageDraw:
                 self._draw.chord, xy, fill, outline, width, start, end
             )
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def pieslice(self, xy, start, end, fill=None, outline=None, width=1):
         fill, outline = self._palette_fill_outline(fill, outline)
         if fill is not None or outline is not None:
@@ -306,6 +342,8 @@ class ImageDraw:
                 self._draw.pieslice, xy, fill, outline, width, start, end
             )
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def circle(self, xy, radius, fill=None, outline=None, width=1):
         ellipse_xy = (
             xy[0] - radius,
@@ -315,6 +353,8 @@ class ImageDraw:
         )
         self.ellipse(ellipse_xy, fill, outline, width)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def rounded_rectangle(
         self,
         xy: Coords,
@@ -361,6 +401,8 @@ class ImageDraw:
             return xy
         return [tuple(xy[index : index + 2]) for index in range(0, len(xy), 2)]
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def bitmap(self, xy, bitmap, fill=None):
         """Draw a bitmap. Pixel iteration done in Rust."""
         bitmap.load()
@@ -370,6 +412,8 @@ class ImageDraw:
         if ink is not None:
             self._mutate(self._draw.bitmap, xy, bitmap._rust_image, ink)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def multiline_text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
                        align="left", direction=None, features=None, language=None,
                        stroke_width=0, stroke_fill=None, embedded_color=False, *,
@@ -383,6 +427,8 @@ class ImageDraw:
             font_size=font_size,
         )
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def textbbox(
         self, xy, text, font=None, anchor=None, spacing=4, align="left",
         direction=None, features=None, language=None, stroke_width=0,
@@ -408,6 +454,8 @@ class ImageDraw:
             image_text.stroke(stroke_width)
         return image_text.get_bbox(xy, anchor, align)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def textlength(
         self, text, font=None, direction=None, features=None, language=None,
         embedded_color=False, *, font_size=None,
@@ -436,6 +484,8 @@ class ImageDraw:
         self.font = ImageFont.load_default()
         return self.font
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left',
                            direction=None, features=None, language=None, stroke_width=0,
                            embedded_color=False, *, font_size=None):
@@ -454,6 +504,8 @@ class ImageDraw:
             font_size=font_size,
         )
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def shape(self, shape, fill=None, outline=None):
         """Draw a shape using Rust's Pillow-compatible outline semantics."""
         # Pillow closes the outline before resolving either color, so custom
@@ -463,7 +515,8 @@ class ImageDraw:
         if fill is not None or outline is not None:
             self._mutate(self._draw.shape, shape, fill, outline)
 
-    # VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    @_with_draw_execution_context
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         """Draw a regular polygon. Vertex computation done in Rust."""
         points = self._draw.regular_polygon_vertices(
@@ -471,6 +524,9 @@ class ImageDraw:
         )
         return self.polygon(points, fill, outline, width)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    # TODO(pillow-rs#3ptb): freeze existing Text state and option-conflict cases.
+    @_with_draw_execution_context
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
              align="left", direction=None, features=None, language=None,
              stroke_width=0, stroke_fill=None, embedded_color=False, *args,
@@ -486,10 +542,10 @@ class ImageDraw:
             image_text = ImageText(
                 text, font, self.mode, spacing, direction, features, language
             )
-        if embedded_color:
-            image_text.embed_color()
-        if stroke_width:
-            image_text.stroke(stroke_width, stroke_fill)
+            if embedded_color:
+                image_text.embed_color()
+            if stroke_width:
+                image_text.stroke(stroke_width, stroke_fill)
         mask_kwargs = dict(kwargs)
         try:
             self._draw_text_lines(
@@ -509,6 +565,7 @@ class ImageDraw:
         finally:
             self._sync()
 
+    # VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     def _draw_text_lines(
         self, xy, image_text, fill, anchor, align, direction, features,
         language, embedded_color, args, mask_kwargs, native_text_input,
@@ -568,12 +625,16 @@ class ImageDraw:
         )
 
 
+# TODO(pillow-rs#3ptb): verify overridden getdraw callback errors, nested route
+# selection, and returned draw-context behavior in CPU parity.
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def Draw(im: Image.Image, mode: str | None = None) -> ImageDraw:
     """Create a drawing context, allowing images to override ``getdraw``."""
-    try:
-        return getattr(im, "getdraw")(mode)
-    except AttributeError:
-        return ImageDraw(im, mode)
+    with Image._execution_context_scope(im):
+        try:
+            return getattr(im, "getdraw")(mode)
+        except AttributeError:
+            return ImageDraw(im, mode)
 
 
 def getdraw(im: Image.Image | None = None):
@@ -584,6 +645,7 @@ def getdraw(im: Image.Image | None = None):
     return draw, ImageDraw2
 
 
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def floodfill(
     image: Image.Image,
     xy: tuple[int, int],
@@ -592,13 +654,20 @@ def floodfill(
     thresh: float = 0,
 ) -> None:
     """Flood-fill a four-connected region through Pillow's pixel-access API."""
-    pixel = image.load()
-    assert pixel is not None
-    x, y = xy
-    native_image = None
-    if type(pixel) is PixelAccess:
-        try:
-            native_image = object.__getattribute__(pixel, "_image")
-        except AttributeError:
-            pass
-    return RustDraw._floodfill(pixel, x, y, value, border, thresh, native_image)
+    with Image._execution_context_scope(image):
+        pixel = image.load()
+        assert pixel is not None
+        x, y = xy
+        # Pixel reads and writes stay on the caller's PixelAccess protocol. Pass
+        # the image separately so FloodFill can select its declared mode strategy
+        # even when load() returns a custom PixelAccess implementation.
+        return RustDraw._floodfill(
+            pixel,
+            x,
+            y,
+            value,
+            border,
+            thresh,
+            image._rust_image,
+            image._current_execution_context(),
+        )

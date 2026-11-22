@@ -3,10 +3,11 @@
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
     byte_coefficients_fit_i32, byte_coefficients_fit_source, fixed_point_to_u8_i32,
+    horizontal_first,
 };
 use crate::ops::pil_resize::FilterCoeffs;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-2bfa926483a74aacabb70f25db18f807; benchmark=pending
 pub(crate) fn execute(
     source: &[u8],
     source_size: (u32, u32),
@@ -27,7 +28,7 @@ pub(crate) fn execute(
     Some(output)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-2bfa926483a74aacabb70f25db18f807; benchmark=pending
 /// Resizes native L bytes into a caller-owned output window.
 pub(crate) fn execute_into(
     source: &[u8],
@@ -37,6 +38,9 @@ pub(crate) fn execute_into(
     vertical: &FilterCoeffs,
     output: &mut [u8],
 ) -> Option<()> {
+    if !horizontal_first(source_size, destination_size) {
+        return None;
+    }
     let source_dims = CheckedDims::new(source_size.0, source_size.1, 1).ok()?;
     let intermediate_dims = CheckedDims::new(destination_size.0, source_size.1, 1).ok()?;
     let output_dims = CheckedDims::new(destination_size.0, destination_size.1, 1).ok()?;

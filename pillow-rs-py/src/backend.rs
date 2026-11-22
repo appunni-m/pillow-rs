@@ -72,11 +72,14 @@ fn backend_enabled(name: &str) -> PyResult<bool> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[cfg(feature = "test-api")]
 #[pyfunction]
 fn _set_migration_target_architecture(name: &str) -> PyResult<()> {
     let architecture = match name {
         "default" => pillow_rs::Architecture::Default,
+        "aarch64" => pillow_rs::Architecture::Aarch64,
+        "x86_64" => pillow_rs::Architecture::X86_64,
         "neon" => pillow_rs::Architecture::Neon,
         "sse2" => pillow_rs::Architecture::Sse2,
         "sse3" => pillow_rs::Architecture::Sse3,

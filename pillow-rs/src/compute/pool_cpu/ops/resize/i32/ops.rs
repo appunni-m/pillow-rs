@@ -54,7 +54,7 @@ pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::cpu(
     &RESIZE_BOXED_ARCHITECTURES,
 );
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn resize(
     context: &ExecutionContext,
     image: &DynamicImage,
@@ -65,6 +65,18 @@ pub(crate) fn resize(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     let architecture = selection.implementation.architecture;
+    let expected_operation = if bounds.is_some() {
+        OperationId::ResizeBoxed
+    } else {
+        OperationId::Resize
+    };
+    if selection.implementation.mode != Mode::ImageI32
+        || selection.implementation.operation != expected_operation
+    {
+        return Err(PilError::InternalError(
+            "ImageI32 Resize received a mismatched mode or operation selection".into(),
+        ));
+    }
     let DynamicImage::ImageI32(input) = image else {
         return Err(PilError::InternalError(
             "ImageI32 Resize strategy received another raster mode".into(),
@@ -73,12 +85,14 @@ pub(crate) fn resize(
     if let Some(box_bounds) = bounds
         && matches!(filter, ResampleFilter::Nearest)
     {
+        super::super::helpers::strategy::require_default_architecture(context, selection)?;
         return Ok(DynamicImage::ImageI32(
             super::default::nearest::execute_boxed(input, (width, height), box_bounds)?,
         ));
     }
     let output = match architecture {
         Architecture::Default => {
+            super::super::helpers::strategy::require_default_architecture(context, selection)?;
             super::default::resize_impl::execute(input, width, height, filter, bounds)?
         }
         #[cfg(target_arch = "x86_64")]

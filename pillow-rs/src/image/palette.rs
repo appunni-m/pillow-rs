@@ -11,26 +11,26 @@ use crate::raster::{DynamicImage, Mode};
 
 use super::{Image, LoadedData, PalettedData, declared_pipeline_mode, materialization_cache};
 
+type PaletteExecutionRoute = (
+    Option<crate::compute::Backend>,
+    crate::compute::ExecutionContext,
+);
+
 pub(super) fn padded_palette(rgb: &[u8]) -> Vec<u8> {
     let mut palette = rgb.to_vec();
     palette.resize(768, 0);
     palette
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
 fn split_palette_data(data: &[u8], rawmode: &str) -> Result<(Vec<u8>, Vec<u8>), PilError> {
     match rawmode {
         "RGB" => {
             let complete = data.len() / 3 * 3;
-            if complete > 768 {
-                return Err(PilError::ValueError("invalid palette size".to_owned()));
-            }
             Ok((data[..complete].to_vec(), Vec::new()))
         }
         "RGBA" => {
             let complete = data.len() / 4 * 4;
-            if complete > 1024 {
-                return Err(PilError::ValueError("invalid palette size".to_owned()));
-            }
             let mut rgb = Vec::with_capacity(complete / 4 * 3);
             let mut alpha = Vec::with_capacity(complete / 4);
             for color in data[..complete].chunks_exact(4) {
@@ -45,9 +45,6 @@ fn split_palette_data(data: &[u8], rawmode: &str) -> Result<(Vec<u8>, Vec<u8>), 
             // alpha (ImagePalette.py `_raw`/mode transforms); getpalette
             // therefore returns (L,L,L,A) per entry.
             let complete = data.len() / 2 * 2;
-            if complete > 512 {
-                return Err(PilError::ValueError("invalid palette size".to_owned()));
-            }
             let mut rgb = Vec::with_capacity(complete / 2 * 3);
             let mut alpha = Vec::with_capacity(complete / 2);
             for color in data[..complete].chunks_exact(2) {
@@ -486,9 +483,34 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Returns [`PilError::ValueError`] for an illegal image mode, unsupported
-    /// raw palette mode, or an oversized palette.
+    /// Returns [`PilError::ValueError`] for an illegal image mode or unsupported
+    /// raw palette mode. Oversized palettes are retained and rejected by byte
+    /// export, matching Pillow's deferred validation.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn putpalette(&mut self, data: &[u8], rawmode: &str) -> Result<(), PilError> {
+        self.putpalette_with_route(data, rawmode, None)
+    }
+
+    /// Attaches a palette while materializing through the caller's pipeline route.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putpalette_with_execution_context(
+        &mut self,
+        data: &[u8],
+        rawmode: &str,
+        pinned_backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.putpalette_with_route(data, rawmode, Some((pinned_backend, context)))
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn putpalette_with_route(
+        &mut self,
+        data: &[u8],
+        rawmode: &str,
+        route: Option<PaletteExecutionRoute>,
+    ) -> Result<(), PilError> {
         let mode = self.mode_identity()?;
         if !matches!(
             mode,
@@ -500,7 +522,13 @@ impl Image {
         let source_format = self.source_format();
         let info = self.image_info();
         let exif = self.exif_metadata();
-        let materialized = self.materialize()?;
+        let materialized = match route {
+            Some((pinned_backend, context)) => self
+                .clone()
+                .with_backend_and_execution_context(pinned_backend, context)
+                .materialize()?,
+            None => self.materialize()?,
+        };
 
         *self = match mode {
             Mode::ImageLuma8 | Mode::ImagePalette8 => Image::Paletted(PalettedData {
@@ -536,7 +564,31 @@ impl Image {
     /// retained color entries. The Python wrapper keeps its public
     /// `info["transparency"]` value; this method clears only the codec-side
     /// pending marker after committing the alpha table.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn putpalettealpha(&mut self, index: i32, alpha: i32) -> Result<(), PilError> {
+        self.putpalettealpha_with_route(index, alpha, None)
+    }
+
+    /// Applies one palette alpha write after validation using the caller's route.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putpalettealpha_with_execution_context(
+        &mut self,
+        index: i32,
+        alpha: i32,
+        pinned_backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.putpalettealpha_with_route(index, alpha, Some((pinned_backend, context)))
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn putpalettealpha_with_route(
+        &mut self,
+        index: i32,
+        alpha: i32,
+        route: Option<PaletteExecutionRoute>,
+    ) -> Result<(), PilError> {
         if !self.has_attached_palette() {
             return Err(PilError::ValueError("image has no palette".to_owned()));
         }
@@ -546,6 +598,7 @@ impl Image {
             ));
         }
 
+        self.apply_palette_execution_route(route);
         self.load()?;
         let mut palette_alpha = self.palette_alpha().unwrap_or_default();
         palette_alpha.resize(256, 255);
@@ -558,7 +611,29 @@ impl Image {
     /// Existing raw LA palette alpha is preserved after the supplied prefix;
     /// missing entries remain opaque. The Python wrapper keeps its public
     /// `info["transparency"]` value and clears the codec-side pending marker.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn putpalettealphas(&mut self, values: &[u8]) -> Result<(), PilError> {
+        self.putpalettealphas_with_route(values, None)
+    }
+
+    /// Applies a palette alpha prefix after validation using the caller's route.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putpalettealphas_with_execution_context(
+        &mut self,
+        values: &[u8],
+        pinned_backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.putpalettealphas_with_route(values, Some((pinned_backend, context)))
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn putpalettealphas_with_route(
+        &mut self,
+        values: &[u8],
+        route: Option<PaletteExecutionRoute>,
+    ) -> Result<(), PilError> {
         if !self.has_attached_palette() {
             return Err(PilError::ValueError("image has no palette".to_owned()));
         }
@@ -568,6 +643,7 @@ impl Image {
             ));
         }
 
+        self.apply_palette_execution_route(route);
         self.load()?;
         let mut palette_alpha = self.palette_alpha().unwrap_or_default();
         palette_alpha.resize(256, 255);
@@ -576,14 +652,44 @@ impl Image {
     }
 
     /// Commits alpha already supplied by an LA raw palette.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn commit_palette_alpha(&mut self) -> Result<(), PilError> {
+        self.commit_palette_alpha_with_route(None)
+    }
+
+    /// Commits raw palette alpha after validation using the caller's route.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn commit_palette_alpha_with_execution_context(
+        &mut self,
+        pinned_backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.commit_palette_alpha_with_route(Some((pinned_backend, context)))
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn commit_palette_alpha_with_route(
+        &mut self,
+        route: Option<PaletteExecutionRoute>,
+    ) -> Result<(), PilError> {
         if !self.has_attached_palette() {
             return Err(PilError::ValueError("image has no palette".to_owned()));
         }
+        self.apply_palette_execution_route(route);
         self.load()?;
         let mut palette_alpha = self.palette_alpha().unwrap_or_default();
         palette_alpha.resize(256, 255);
         self.store_committed_palette_alpha(palette_alpha)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn apply_palette_execution_route(&mut self, route: Option<PaletteExecutionRoute>) {
+        if let Some((pinned_backend, context)) = route {
+            *self = self
+                .clone()
+                .with_backend_and_execution_context(pinned_backend, context);
+        }
     }
 
     fn store_committed_palette_alpha(&mut self, palette_alpha: Vec<u8>) -> Result<(), PilError> {
@@ -730,6 +836,7 @@ impl Image {
     /// Pillow interprets `dest_map[new_index]` as the old index. Pixel samples
     /// therefore use the inverse mapping, while palette triples are copied in
     /// `dest_map` order.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn remap_palette_with_source(
         &self,
         dest_map: &[u8],

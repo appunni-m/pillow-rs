@@ -6,7 +6,7 @@ use crate::raster::{Mode, Rgba32FImage};
 use super::super::helpers::get_data::{self as helpers, GetDataOutput, GetDataRequest};
 use super::default::get_data_impl;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute_get_data(
     image: &Rgba32FImage,
     selection: StrategySelection,

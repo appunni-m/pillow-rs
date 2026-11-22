@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 const MODE: Mode = Mode::ImageYCbCr8;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
@@ -14,8 +15,6 @@ pub(crate) fn merge(
         source,
         remaining,
         MODE,
-        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three {
-            lab_encoding: false,
-        },
+        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three,
     )
 }

@@ -3,6 +3,7 @@
 use crate::compute::pool_cpu::ops::eval::helpers::scalar::{self, U16LumaImage};
 use crate::error::PilError;
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn affine(image: &mut U16LumaImage, scale: f64, offset: f64) -> Result<(), PilError> {
     scalar::map_u16(
         image,
@@ -10,6 +11,7 @@ pub(crate) fn affine(image: &mut U16LumaImage, scale: f64, offset: f64) -> Resul
     )
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn callable<F>(image: &mut U16LumaImage, callback: &mut F) -> Result<(), PilError>
 where
     F: FnMut(f64) -> Result<f64, PilError>,

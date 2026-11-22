@@ -65,11 +65,12 @@ impl FreeTypeFont {
     }
 
     /// Return text length after applying Pillow's text-input rules.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn getlength_input_with_options(
         &self,
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
-    ) -> Result<f32, PilError> {
+    ) -> Result<f64, PilError> {
         let text = match text {
             ImageFontTextInput::InvalidType => return invalid_text_after_layout_check(options),
             text => text.into_font_text()?,
@@ -77,11 +78,12 @@ impl FreeTypeFont {
         self.getlength_text_with_options(text.as_ref(), options)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn getlength_text_with_options(
         &self,
         text: FontTextRef<'_>,
         options: &ImageFontTextOptions,
-    ) -> Result<f32, PilError> {
+    ) -> Result<f64, PilError> {
         imagingft::getlength_text_with_options(self, text, options)
     }
 

@@ -9,21 +9,22 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum MergeLayout {
     Two,
-    Three { lab_encoding: bool },
+    Three,
     Four,
 }
 
 impl MergeLayout {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) const fn channels(self) -> u8 {
         match self {
             Self::Two => 2,
-            Self::Three { .. } => 3,
+            Self::Three => 3,
             Self::Four => 4,
         }
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn interleave(
     first: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
@@ -38,7 +39,7 @@ pub(crate) fn interleave(
 
     match layout {
         MergeLayout::Two => interleave_two(&bands, &mut output),
-        MergeLayout::Three { lab_encoding } => interleave_three(&bands, &mut output, lab_encoding),
+        MergeLayout::Three => interleave_three(&bands, &mut output),
         MergeLayout::Four => interleave_four(&bands, &mut output),
     }
 
@@ -79,23 +80,17 @@ fn interleave_two(bands: &[&[u8]], output: &mut [u8]) {
     }
 }
 
-fn interleave_three(bands: &[&[u8]], output: &mut [u8], lab_encoding: bool) {
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+fn interleave_three(bands: &[&[u8]], output: &mut [u8]) {
     for (index, pixel) in output.chunks_exact_mut(3).enumerate() {
         pixel[0] = bands[0][index];
-        pixel[1] = if lab_encoding {
-            bands[1][index].wrapping_add(128)
-        } else {
-            bands[1][index]
-        };
-        pixel[2] = if lab_encoding {
-            bands[2][index].wrapping_add(128)
-        } else {
-            bands[2][index]
-        };
+        pixel[1] = bands[1][index];
+        pixel[2] = bands[2][index];
     }
 }
 
 /// Retains zero-filled physical padding written by Pillow's band interleave.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn preserve_merged_padding(
     output: &mut DynamicImage,
     mode: Mode,
@@ -104,7 +99,7 @@ pub(crate) fn preserve_merged_padding(
 ) -> Result<(), PilError> {
     let lane_count = match layout {
         MergeLayout::Two => 2,
-        MergeLayout::Three { .. } => 1,
+        MergeLayout::Three => 1,
         MergeLayout::Four => 0,
     };
     let Some(expected_lanes) = mode.hidden_pixel_lane_count() else {

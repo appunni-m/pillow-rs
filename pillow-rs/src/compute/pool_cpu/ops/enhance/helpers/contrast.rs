@@ -72,6 +72,7 @@ pub(crate) fn contrast_byte(sample: u8, midpoint: u8, factor: f32) -> u8 {
 }
 
 /// Applies Contrast's native byte formula to compact omitted pixel lanes.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn carry_hidden_lanes(
     source: &DynamicImage,
     output: &mut DynamicImage,

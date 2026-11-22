@@ -1,10 +1,10 @@
-use super::text_color_mask_impl;
+use super::text_color_mask_impl_with_context;
 use crate::PyImage;
 use crate::draw::PyDraw;
 use crate::map_error;
 use pillow_rs::{DrawTextMaskCallbacks, DrawTextMaskPosition, Mode, PilError};
 use pyo3::basic::CompareOp;
-use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyResult, Python};
 use pyo3::types::{PyAnyMethods, PyDict, PyDictMethods, PyInt, PyModule, PyString, PyTuple};
 
@@ -57,22 +57,12 @@ impl<'py> PythonTextMaskCallbacks<'py> {
         PyTuple::new(self.py, positionals)
     }
 
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
     fn keyword_arguments(
         &self,
-        line: &Bound<'py, PyAny>,
         start: &Bound<'py, PyAny>,
-        include_options: bool,
     ) -> PyResult<(Bound<'py, PyDict>, Bound<'py, PyDict>)> {
         let keywords = PyDict::new(self.py);
-        if include_options {
-            keywords.set_item("direction", self.direction.clone())?;
-            keywords.set_item("features", self.features.clone())?;
-            keywords.set_item("language", self.language.clone())?;
-            keywords.set_item("stroke_width", self.image_text.getattr("stroke_width")?)?;
-            keywords.set_item("stroke_filled", true)?;
-            keywords.set_item("anchor", line.getattr("anchor")?)?;
-            keywords.set_item("ink", self.ink)?;
-        }
         keywords.set_item("start", start.clone())?;
         let extra = self.mask_kwargs.cast::<PyDict>()?.copy()?;
         Ok((keywords, extra))
@@ -88,31 +78,6 @@ impl<'py> PythonTextMaskCallbacks<'py> {
         PyModule::import(self.py, "pillow_rs.imagedraw")?
             .getattr("_invoke_text_mask_callback")?
             .call1((method, positionals, keywords, extra_keywords))
-    }
-
-    fn unpack_mask_and_offset(
-        &self,
-        result: Bound<'py, PyAny>,
-    ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
-        let mut values = result.try_iter()?;
-        let Some(mask) = values.next() else {
-            return Err(PyValueError::new_err(
-                "not enough values to unpack (expected 2, got 0)",
-            ));
-        };
-        let mask = mask?;
-        let Some(offset) = values.next() else {
-            return Err(PyValueError::new_err(
-                "not enough values to unpack (expected 2, got 1)",
-            ));
-        };
-        let offset = offset?;
-        if values.next().transpose()?.is_some() {
-            return Err(PyValueError::new_err(
-                "too many values to unpack (expected 2)",
-            ));
-        }
-        Ok((mask, offset))
     }
 }
 
@@ -164,31 +129,7 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
             .map_err(TextMaskError::Python)
     }
 
-    fn getmask2(
-        &mut self,
-        line: &Self::Value,
-        mode: &Self::Value,
-        start: &Self::Value,
-    ) -> Result<(Self::Value, Self::Value), Self::Error> {
-        let font = self
-            .image_text
-            .getattr("font")
-            .map_err(TextMaskError::Python)?;
-        let method = font.getattr("getmask2").map_err(TextMaskError::Python)?;
-        let text = line.getattr("text").map_err(TextMaskError::Python)?;
-        let positionals = self
-            .extra_positionals(vec![text, mode.clone()])
-            .map_err(TextMaskError::Python)?;
-        let (keywords, extra_keywords) = self
-            .keyword_arguments(line, start, true)
-            .map_err(TextMaskError::Python)?;
-        let result = self
-            .invoke_keyword_callback(&method, &positionals, &keywords, &extra_keywords)
-            .map_err(TextMaskError::Python)?;
-        self.unpack_mask_and_offset(result)
-            .map_err(TextMaskError::Python)
-    }
-
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-e26f1119fdbd4e96bfec5a3029c153e7; benchmark=n/a
     fn getmask(
         &mut self,
         line: &Self::Value,
@@ -223,7 +164,7 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
             .extra_positionals(std::mem::take(&mut positionals))
             .map_err(TextMaskError::Python)?;
         let (keywords, extra_keywords) = self
-            .keyword_arguments(line, start, false)
+            .keyword_arguments(start)
             .map_err(TextMaskError::Python)?;
         self.invoke_keyword_callback(&method, &positionals, &keywords, &extra_keywords)
             .map_err(TextMaskError::Python)
@@ -239,28 +180,9 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
         method.call1((text,)).map_err(TextMaskError::Python)
     }
 
-    fn is_attribute_error(&self, error: &Self::Error) -> bool {
-        matches!(error, TextMaskError::Python(error) if error.is_instance_of::<PyAttributeError>(self.py))
-    }
-
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
     fn is_type_error(&self, error: &Self::Error) -> bool {
         matches!(error, TextMaskError::Python(error) if error.is_instance_of::<PyTypeError>(self.py))
-    }
-
-    fn add_offset(
-        &mut self,
-        position: &mut DrawTextMaskPosition<Self::Value>,
-        offset: &Self::Value,
-        index: usize,
-    ) -> Result<(), Self::Error> {
-        let amount = offset.get_item(index).map_err(TextMaskError::Python)?;
-        let coordinate = if index == 0 {
-            &mut position.x
-        } else {
-            &mut position.y
-        };
-        *coordinate = coordinate.add(amount).map_err(TextMaskError::Python)?;
-        Ok(())
     }
 
     fn mask_size(&mut self, mask: &Self::Value) -> Result<Option<Self::Value>, Self::Error> {
@@ -341,11 +263,14 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
             .map_err(TextMaskError::Python)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn draw_rgba_mask(
         &mut self,
         position: &DrawTextMaskPosition<Self::Value>,
         mask_image: &Self::Value,
         coverage: &Self::Value,
+        requested_backend: Option<pillow_rs::Backend>,
+        context: &pillow_rs::ExecutionContext,
     ) -> Result<(), Self::Error> {
         let width = coverage
             .getattr("size")
@@ -383,14 +308,25 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
             .map_err(|error| TextMaskError::Python(error.into()))?;
         // This path mutates the native Draw directly and has no host callback.
         let mut draw = self.py_draw.borrow_mut(self.py);
-        text_color_mask_impl(&mut draw.draw, (x, y), color, coverage).map_err(TextMaskError::Python)
+        text_color_mask_impl_with_context(
+            &mut draw.draw,
+            (x, y),
+            color,
+            coverage,
+            requested_backend,
+            *context,
+        )
+        .map_err(TextMaskError::Python)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn draw_bitmap(
         &mut self,
         position: &DrawTextMaskPosition<Self::Value>,
         mask_image: &Self::Value,
         fill: &Self::Value,
+        requested_backend: Option<pillow_rs::Backend>,
+        context: &pillow_rs::ExecutionContext,
     ) -> Result<(), Self::Error> {
         // Do not borrow PyDraw here: the public bitmap method re-enters it.
         let method = self
@@ -405,14 +341,21 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
         keywords
             .set_item("fill", fill.clone())
             .map_err(TextMaskError::Python)?;
-        method
-            .call(positionals, Some(&keywords))
-            .map(|_| ())
-            .map_err(TextMaskError::Python)
+        let previous_context = {
+            let mut draw = self.py_draw.borrow_mut(self.py);
+            draw.replace_execution_context_override(Some((requested_backend, *context)))
+        };
+        let result = method.call(positionals, Some(&keywords));
+        {
+            let mut draw = self.py_draw.borrow_mut(self.py);
+            draw.replace_execution_context_override(previous_context);
+        }
+        result.map(|_| ()).map_err(TextMaskError::Python)
     }
 }
 
 #[allow(clippy::too_many_arguments)]
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn draw_custom_font_mask<'py>(
     py: Python<'py>,
     py_draw: Py<PyDraw>,
@@ -433,6 +376,8 @@ pub(super) fn draw_custom_font_mask<'py>(
     ink: i64,
     args: &Bound<'py, PyAny>,
     mask_kwargs: &Bound<'py, PyAny>,
+    requested_backend: Option<pillow_rs::Backend>,
+    context: pillow_rs::ExecutionContext,
 ) -> PyResult<()> {
     let mut callbacks = PythonTextMaskCallbacks {
         py,
@@ -452,6 +397,14 @@ pub(super) fn draw_custom_font_mask<'py>(
         args: args.clone(),
         mask_kwargs: mask_kwargs.clone(),
     };
-    pillow_rs::draw_custom_font_mask_with_callbacks(&mut callbacks, line, fill, ink, default_mode)
-        .map_err(map_text_mask_error)
+    pillow_rs::draw_custom_font_mask_with_callbacks(
+        &mut callbacks,
+        line,
+        fill,
+        ink,
+        default_mode,
+        requested_backend,
+        &context,
+    )
+    .map_err(map_text_mask_error)
 }

@@ -12,6 +12,7 @@ impl BitmapRegion {
     /// Since `clipped` constrains both mask ranges to the image, callers can
     /// advance from this point using offsets within those ranges without
     /// another signed-coordinate check.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[inline]
     pub(crate) fn destination_origin(
         &self,
@@ -27,6 +28,7 @@ impl BitmapRegion {
     }
 
     /// Add a mask offset without overflowing a signed image coordinate.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[inline]
     fn destination_coordinates(
         x: i32,
@@ -53,6 +55,7 @@ impl BitmapRegion {
     /// Promote the signed origin and unsigned extents before subtraction:
     /// every possible `i32` origin plus a `u32` mask offset fits in `i64`,
     /// including `i32::MIN` and `i32::MAX`.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn clipped(
         x: i32,
         y: i32,

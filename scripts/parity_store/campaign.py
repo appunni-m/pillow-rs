@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Protocol
@@ -50,8 +50,15 @@ class CampaignSummary:
     run_id: str
     profile_id: str
     selected_cases: int
-    completed_batches: int
+    completed_hydration_batches: int
     outcomes: Mapping[str, int]
+
+
+@dataclass(frozen=True, slots=True)
+class CampaignWindowSummary:
+    window_index: int
+    window_count: int
+    campaign: CampaignSummary
 
 
 def run_target_profile(
@@ -89,7 +96,9 @@ def run_target_profile(
         )
     if not selected:
         raise ValueError(f"profile {profile_id!r} selects no imported cases")
-    if case_ids is not None and {case_id for case_id, _digest in selected} != set(case_ids):
+    if case_ids is not None and {
+        case_id for case_id, _digest in selected
+    } != set(case_ids):
         raise ValueError("explicit case selection includes unknown or profile-ineligible IDs")
     selected_digest = case_set_digest(selected)
     run_id = run_id or str(uuid.uuid4())
@@ -115,7 +124,7 @@ def run_target_profile(
         )
 
     outcomes: Counter[str] = Counter()
-    completed_batches = 0
+    completed_hydration_batches = 0
     error_recorded = False
     try:
         batches = store.iter_case_batches(
@@ -167,7 +176,7 @@ def run_target_profile(
                 raise
             with store.transaction():
                 store.finish_batch(batch_id)
-            completed_batches += 1
+            completed_hydration_batches += 1
     except Exception as exc:
         with store.transaction():
             if not error_recorded:
@@ -198,9 +207,74 @@ def run_target_profile(
         run_id=run_id,
         profile_id=profile_id,
         selected_cases=len(selected),
-        completed_batches=completed_batches,
+        completed_hydration_batches=completed_hydration_batches,
         outcomes=dict(sorted(outcomes.items())),
     )
+
+
+def run_target_profile_windows(
+    store: EvidenceStore,
+    *,
+    project_id: str,
+    specification_digest: bytes,
+    profile_id: str,
+    target: BatchExecutor,
+    comparator: Comparator,
+    source: BatchExecutor | None = None,
+    host_description: str,
+    case_ids: Sequence[str] | None = None,
+    limit: int | None = None,
+    window_size: int = 10_000,
+    maximum_cases: int = 128,
+    maximum_estimated_bytes: int = 32 * 1024 * 1024,
+) -> Iterator[CampaignWindowSummary]:
+    """Yield durable profile runs over consecutive bounded case-ID windows.
+
+    Run windows control durable progress and report granularity. Database
+    hydration remains bounded independently by ``maximum_cases`` and
+    ``maximum_estimated_bytes`` inside each window.
+    """
+
+    if window_size <= 0:
+        raise ValueError("campaign run-window size must be positive")
+    if limit is not None and limit <= 0:
+        raise ValueError("campaign case limit must be positive")
+    if case_ids is not None and limit is not None:
+        raise ValueError("use an explicit case selection or a case limit, not both")
+    if case_ids is not None and len(case_ids) != len(set(case_ids)):
+        raise ValueError("explicit case selection contains duplicate IDs")
+    with store.transaction():
+        selected = store.selected_case_digests(
+            project_id,
+            specification_digest,
+            profile_id=profile_id,
+            case_ids=case_ids,
+        )
+    if not selected:
+        raise ValueError(f"profile {profile_id!r} selects no imported cases")
+    if case_ids is not None and {case_id for case_id, _digest in selected} != set(case_ids):
+        raise ValueError("explicit case selection includes unknown or profile-ineligible IDs")
+    if limit is not None:
+        selected = selected[:limit]
+    window_count = (len(selected) + window_size - 1) // window_size
+    selected_ids = [case_id for case_id, _digest in selected]
+    for window_index, start in enumerate(
+        range(0, len(selected_ids), window_size), start=1
+    ):
+        summary = run_target_profile(
+            store,
+            project_id=project_id,
+            specification_digest=specification_digest,
+            profile_id=profile_id,
+            source=source,
+            target=target,
+            comparator=comparator,
+            host_description=host_description,
+            case_ids=selected_ids[start : start + window_size],
+            maximum_cases=maximum_cases,
+            maximum_estimated_bytes=maximum_estimated_bytes,
+        )
+        yield CampaignWindowSummary(window_index, window_count, summary)
 
 
 def _run_batch(

@@ -28,17 +28,44 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &ARCHITECTURES,
 );
 
+pub(crate) const CONVERT_TRANSPARENT_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::ConvertTransparent,
+    Mode::ImageLuma8,
+    OutputModeRule::ByTargetMode,
+    super::super::ops::TRANSPARENT_GRAY_BYTE_INPUTS,
+    &[],
+);
+
 pub(crate) struct Prepared<'a> {
     source: &'a GrayImage,
     dest_map: &'a [u8],
     selection: StrategySelection,
 }
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn execute_transparent(
+    source: &GrayImage,
+    target: Mode,
+    key: [u8; 3],
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::default::convert_transparent_impl::execute(source, target, key)
+        }
+        _ => Err(PilError::InternalError(
+            "ConvertTransparent selected an undeclared L architecture".into(),
+        )),
+    }
+}
+
 impl Prepared<'_> {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let bytes = match self.selection.implementation.architecture {
             Architecture::Default => {
@@ -68,6 +95,7 @@ impl Prepared<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     dest_map: &'a [u8],

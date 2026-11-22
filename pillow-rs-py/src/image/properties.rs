@@ -21,7 +21,7 @@ impl PyImage {
         Ok(h)
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
     #[getter]
     fn mode(&mut self) -> PyResult<String> {
         let mode = self.inner.mode_identity().map_err(map_error)?;

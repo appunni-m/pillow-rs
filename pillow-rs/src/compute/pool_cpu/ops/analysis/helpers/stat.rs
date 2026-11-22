@@ -199,6 +199,7 @@ fn stat_from_scalar_histogram(histogram: &[i64; 256], n_pixels: usize) -> Vec<f6
     ]
 }
 
+// VERIFY: source=reviewed@2026-11-14; parity=pass@migration-parity-fd2dac291b8048e39dde660533387660 (13/13 ImageStat var/stddev, CPU/default); benchmark=pending
 fn stat_from_byte_histogram(histogram: &[u32]) -> StatOutput {
     let mut results = Vec::with_capacity(histogram.len() / 256);
     for band in histogram.chunks_exact(256) {
@@ -208,22 +209,26 @@ fn stat_from_byte_histogram(histogram: &[u32]) -> StatOutput {
             results.push(vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 255.0, 0.0]);
             continue;
         }
-        let sum: f64 = band
+        let sum_u64: u64 = band
             .iter()
             .enumerate()
-            .map(|(value, &frequency)| value as f64 * frequency as f64)
+            .map(|(value, &frequency)| value as u64 * u64::from(frequency))
             .sum();
-        let sum2: f64 = band
+        let sum2_u64: u64 = band
             .iter()
             .enumerate()
-            .map(|(value, &frequency)| {
-                let value = value as f64;
-                value * value * frequency as f64
-            })
+            .map(|(value, &frequency)| (value as u64).pow(2) * u64::from(frequency))
             .sum();
+        let sum = sum_u64 as f64;
+        let sum2 = sum2_u64 as f64;
         let mean = sum / count;
         let rms = (sum2 / count).sqrt();
-        let variance = (sum2 - sum * sum / count) / count;
+        // Pillow squares its integer sum before converting the quotient to a
+        // float. Preserve that exact intermediate to avoid rounding the square
+        // early, which can create small variance errors or a negative zero-case.
+        let sum_squared_over_count =
+            exact_integer_ratio_to_f64(u128::from(sum_u64) * u128::from(sum_u64), count_u64);
+        let variance = (sum2 - sum_squared_over_count) / count;
         let stddev = variance.sqrt();
         let half = count_u64 / 2;
         let (mut cumulative, mut median) = (0u64, None);
@@ -252,4 +257,48 @@ fn stat_from_byte_histogram(histogram: &[u32]) -> StatOutput {
         ]);
     }
     results
+}
+
+/// Converts an exact nonnegative integer ratio to its correctly rounded `f64`.
+// VERIFY: source=reviewed@2026-11-14; parity=pass@migration-parity-fd2dac291b8048e39dde660533387660 (13/13 ImageStat var/stddev, CPU/default); benchmark=pending
+fn exact_integer_ratio_to_f64(numerator: u128, denominator: u64) -> f64 {
+    if numerator == 0 {
+        return 0.0;
+    }
+
+    let denominator = u128::from(denominator);
+    debug_assert_ne!(denominator, 0);
+
+    let numerator_bits = (u128::BITS - numerator.leading_zeros()) as i32;
+    let denominator_bits = (u128::BITS - denominator.leading_zeros()) as i32;
+    let mut exponent = numerator_bits - denominator_bits;
+    let below_power = if exponent >= 0 {
+        numerator < (denominator << exponent as u32)
+    } else {
+        (numerator << exponent.unsigned_abs()) < denominator
+    };
+    if below_power {
+        exponent -= 1;
+    }
+
+    let scale = 52 - exponent;
+    let (scaled_numerator, scaled_denominator) = if scale >= 0 {
+        (numerator << scale as u32, denominator)
+    } else {
+        (numerator, denominator << scale.unsigned_abs())
+    };
+    let mut significand = scaled_numerator / scaled_denominator;
+    let remainder = scaled_numerator % scaled_denominator;
+    let distance_to_next = scaled_denominator - remainder;
+    if remainder > distance_to_next || (remainder == distance_to_next && significand & 1 == 1) {
+        significand += 1;
+    }
+    if significand == (1_u128 << 53) {
+        significand >>= 1;
+        exponent += 1;
+    }
+
+    let exponent_bits = (exponent + 1023) as u64;
+    let fraction_bits = (significand - (1_u128 << 52)) as u64;
+    f64::from_bits((exponent_bits << 52) | fraction_bits)
 }

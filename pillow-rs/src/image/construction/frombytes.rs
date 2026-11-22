@@ -143,6 +143,7 @@ impl RawDecoderPlan {
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     fn prepare_hidden_lanes(
         self,
         data: &[u8],
@@ -185,6 +186,7 @@ impl RawDecoderPlan {
 }
 
 impl RawDecoderHiddenLane {
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     fn value(self, row: &[u8], width: usize, x: usize) -> Option<u8> {
         match self {
             Self::Default => None,
@@ -323,6 +325,7 @@ fn packed_image_bytes(row_bytes: usize, height: u32) -> Result<usize, PilError> 
         .ok_or_else(|| PilError::DimensionError("image buffer size overflow".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn attach_raw_hidden_lanes(image: &mut Image, lanes: HiddenPixelLanes) -> Result<(), PilError> {
     let Image::Loaded(data) = image else {
         return Err(PilError::InternalError(

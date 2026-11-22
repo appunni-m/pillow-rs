@@ -10,25 +10,32 @@
 //! and drawing-context relations are validated by the same support declaration
 //! used for CPU selection, and its selected raster mode drives the Bitmap
 //! executor. Direct Text resolves the same declaration with its raster/context
-//! modes, indexed palette presence, mask representation, ink provenance/value, and
-//! embedded-color facts, then executes the selected raster owner.
+//! modes, indexed palette presence, mask representation, ink provenance/value,
+//! and embedded-color facts. Ordinary masks execute the selected raster owner;
+//! embedded-color masks compose through the destination's Paste strategy.
 //! Mode-owned Bitmap/Text and Default/SIMD geometry writers preserve omitted
 //! physical lanes using the same mode-specific sidecar. Focused CPU parity
 //! covers every supported Bitmap mask against every public byte mode.
 //! TODO(pillow-rs#3ptb): verify direct Bitmap/Text selected-route receipts and
 //! backend fallback selection across operation × mode × architecture.
+//! TODO(pillow-rs#3ptb): verify queued primitive output/fault contracts and
+//! requested-versus-selected architecture receipts for every exact mode,
+//! including explicit RGBA drawing context over RGB storage.
 //! TODO(pillow-rs#3ptb): add direct Bitmap parity at `i32::MIN`/`i32::MAX`
 //! origins for every supported byte mode after the CPU source migration closes.
 //! The five internal high-depth modes report an explicit ValueError rejection
 //! because no byte-mask Bitmap/Text strategy is implemented for them.
-//! Pillow 12.2's `ImagingFill2` confirms I;16 L masks blend both sample bytes,
+//! Pillow 13.0's `ImagingFill2` confirms I;16 L masks blend both sample bytes,
 //! while 1/RGBA/RGBa masks step through the raw row byte prefix; RGBa reads
 //! alpha and applies PREBLEND. Draw support declares the compatible
 //! accelerated Bitmap route's Paste child and exact raster/context/mask,
-//! backend, and nonempty guards; the wrapper evaluates that declaration. The
-//! Source tracing confirms the queued child receipt is Paste; route parity
-//! remains TODO. Text masks are dispatched without an expanded intermediate
-//! buffer; the complete mode and route receipt matrix remains TODO. The Python
+//! backend, and nonempty guards; RGB storage with RGBA drawing context remains
+//! on the Draw owner to preserve the hidden ink lane. The wrapper evaluates
+//! that declaration. Source tracing confirms the queued child receipt is
+//! Paste; route parity remains TODO. Ordinary text masks dispatch without an
+//! expanded intermediate buffer. Embedded-color text materializes an RGBA
+//! source and L coverage image for mode-aware Paste conversion; its complete
+//! mode and route receipt matrix remains TODO. The Python
 //! facade and direct PyO3 Bitmap entry load the mask before fill
 //! parsing/palette resolution. Bitmap ordering
 //! is source-reviewed: both resolve fill before coordinates, then core validates
@@ -58,7 +65,38 @@ const BITMAP_MASK_MODES: &[Mode] = &[
 ];
 const TEXT_MASK_KINDS: &[DrawTextMaskKind] = &[DrawTextMaskKind::Coverage, DrawTextMaskKind::Rgba];
 const PALETTE_MODES: &[Mode] = &[Mode::ImagePalette8, Mode::ImagePaletteAlpha8];
-const TEXT_EMBEDDED_COLOR_MODES: &[Mode] = &[Mode::ImageRgb8, Mode::ImageRgba8];
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// ImageDraw.text converts its RGBA glyph source to the destination mode through
+// Image.paste, then uses glyph alpha as the paste mask. Keep this declaration
+// aligned with modes whose exact Convert and Paste strategies are composed by
+// the Rust core.
+// NO_PILLOW_SUPPORT: Pillow's ImageText.Text.embed_color accepts only RGB and
+// RGBA. This core extension composes embedded-color glyphs in the other listed
+// Pillow modes through their exact Convert and Paste strategies.
+// TODO(pillow-rs#3ptb): freeze embedded-color output, conversion faults, and
+// selected/fallback receipts across all Pillow modes and CPU architectures.
+const TEXT_EMBEDDED_COLOR_MODES: &[Mode] = &[
+    Mode::One,
+    Mode::ImageLuma8,
+    Mode::ImageLumaA8,
+    Mode::ImageLaPremultiplied8,
+    Mode::ImagePalette8,
+    Mode::ImagePaletteAlpha8,
+    Mode::ImageRgb8,
+    Mode::ImageRgba8,
+    Mode::ImageRgbPremultiplied8,
+    Mode::ImageRgbx8,
+    Mode::ImageCmyk8,
+    Mode::ImageYCbCr8,
+    Mode::ImageLab8,
+    Mode::ImageHsv8,
+    Mode::ImageI32,
+    Mode::ImageF32,
+    Mode::ImageI16,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
+];
 pub(in crate::compute::pool_cpu::ops::draw) const DRAW_INPUTS: &[InputContract] = &[
     crate::compute::registry::support::InputContract::DrawInputs {
         bitmap_masks: BITMAP_MASK_MODES,
@@ -68,11 +106,36 @@ pub(in crate::compute::pool_cpu::ops::draw) const DRAW_INPUTS: &[InputContract] 
         embedded_color_modes: TEXT_EMBEDDED_COLOR_MODES,
         mode_rejection: "mode mismatch",
         mask_rejection: "bad transparency mask",
-        embedded_color_rejection: "Embedded color supported only in RGB and RGBA modes",
+        embedded_color_rejection: "Embedded color is not supported for this image mode",
     },
 ];
 const DRAW_COMPOSED_OPERATIONS: &[OperationId] = &[OperationId::Paste];
 const DRAW_ACCELERATED_BACKENDS: &[Backend] = &[Backend::Gpu, Backend::Simd];
+const DRAW_EMBEDDED_COLOR_TEXT_PASTE_GUARDS: &[OperationRouteGuard] = &[
+    OperationRouteGuard::NonEmptyInput,
+    OperationRouteGuard::DrawEmbeddedColorTextPaste,
+];
+const DRAW_EMBEDDED_COLOR_TEXT_PASTE_PATHS: &[OperationRoutePath] =
+    &[OperationRoutePath::ConditionalPipelineChild {
+        operation: OperationId::Paste,
+        guards: DRAW_EMBEDDED_COLOR_TEXT_PASTE_GUARDS,
+        support: None,
+    }];
+const DRAW_BITMAP_AND_TEXT_PASTE_PATHS: &[OperationRoutePath] = &[
+    OperationRoutePath::ConditionalPipelineChild {
+        operation: OperationId::Paste,
+        guards: DRAW_BITMAP_MASKED_PASTE_GUARDS,
+        support: None,
+    },
+    OperationRoutePath::ConditionalPipelineChild {
+        operation: OperationId::Paste,
+        guards: DRAW_EMBEDDED_COLOR_TEXT_PASTE_GUARDS,
+        support: None,
+    },
+];
+// RGBA draw context over RGB storage stays on Draw's native owner so its
+// hidden fourth ink lane is not replaced by Paste's opaque RGB source lane.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 const DRAW_BITMAP_MASKED_PASTE_ROUTES: &[(Mode, Mode, Mode)] = &[
     (Mode::One, Mode::One, Mode::One),
     (Mode::ImageLuma8, Mode::ImageLuma8, Mode::One),
@@ -81,8 +144,6 @@ const DRAW_BITMAP_MASKED_PASTE_ROUTES: &[(Mode, Mode, Mode)] = &[
     (Mode::ImagePalette8, Mode::ImagePalette8, Mode::One),
     (Mode::ImageRgb8, Mode::ImageRgb8, Mode::One),
     (Mode::ImageRgb8, Mode::ImageRgb8, Mode::ImageLuma8),
-    (Mode::ImageRgb8, Mode::ImageRgba8, Mode::One),
-    (Mode::ImageRgb8, Mode::ImageRgba8, Mode::ImageLuma8),
     (Mode::ImageRgba8, Mode::ImageRgba8, Mode::One),
     (Mode::ImageCmyk8, Mode::ImageCmyk8, Mode::One),
     (Mode::ImageCmyk8, Mode::ImageCmyk8, Mode::ImageLuma8),
@@ -94,44 +155,28 @@ const DRAW_BITMAP_MASKED_PASTE_GUARDS: &[OperationRouteGuard] = &[
     OperationRouteGuard::NonEmptyInput,
     OperationRouteGuard::DrawBitmapRouteIn(DRAW_BITMAP_MASKED_PASTE_ROUTES),
 ];
-const DRAW_BITMAP_MASKED_PASTE_PATHS: &[OperationRoutePath] =
-    &[OperationRoutePath::ConditionalPipelineChild {
-        operation: OperationId::Paste,
-        guards: DRAW_BITMAP_MASKED_PASTE_GUARDS,
-    }];
-
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn classify_route_paths(mode: Mode) -> &'static [OperationRoutePath] {
-    match mode {
+    if matches!(
+        mode,
         Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageLumaA8
-        | Mode::ImagePalette8
-        | Mode::ImageRgb8
-        | Mode::ImageRgba8
-        | Mode::ImageCmyk8
-        | Mode::ImageHsv8 => DRAW_BITMAP_MASKED_PASTE_PATHS,
-        Mode::ImageLaPremultiplied8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N
-        | Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => &[],
+            | Mode::ImageLuma8
+            | Mode::ImageLumaA8
+            | Mode::ImagePalette8
+            | Mode::ImageRgb8
+            | Mode::ImageRgba8
+            | Mode::ImageCmyk8
+            | Mode::ImageHsv8
+    ) {
+        DRAW_BITMAP_AND_TEXT_PASTE_PATHS
+    } else if TEXT_EMBEDDED_COLOR_MODES.contains(&mode) {
+        DRAW_EMBEDDED_COLOR_TEXT_PASTE_PATHS
+    } else {
+        &[]
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn classify_route(mode: Mode) -> OperationModeRoute {
     OperationModeRoute::Prepared {
         support: classify_mode(mode),
@@ -149,7 +194,7 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::routed(
 
 const FLOODFILL_INPUTS: &[InputContract] = &[InputContract::FloodFillInputs];
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn classify_floodfill_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One
@@ -189,7 +234,7 @@ fn classify_floodfill_mode(mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn pillow_floodfill_strategy(mode: Mode) -> ModeSupport {
     ModeSupport::cpu(
         OperationId::FloodFill,
@@ -206,16 +251,17 @@ pub(crate) static FLOODFILL_SUPPORT: OperationSupport = OperationSupport::new(
     classify_floodfill_mode,
 );
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn prepare_floodfill(
     mode: Mode,
     context: &ExecutionContext,
+    requested_backend: Option<Backend>,
 ) -> Result<PreparedFloodFill, PilError> {
     let selection = FLOODFILL_SUPPORT.for_mode(mode).select_serial(context)?;
-    Ok(PreparedFloodFill::new(mode, selection))
+    Ok(PreparedFloodFill::new(mode, selection, requested_backend))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute_floodfill<A: FloodFillAccess>(
     prepared: &PreparedFloodFill,
     access: &mut A,
@@ -240,7 +286,7 @@ pub(crate) fn execute_floodfill<A: FloodFillAccess>(
 }
 
 /// Validates the bitmap mode using the mask identities declared by Draw support.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn validate_bitmap_mask_mode(mode: Mode) -> Result<(), PilError> {
     let contract = SUPPORT.inputs.iter().find_map(|contract| {
         let InputContract::DrawInputs {
@@ -294,7 +340,7 @@ impl PreparedDraw<'_> {
 /// Direct Bitmap loops do not use the native span kernels selected by Draw's
 /// geometry batch, so a non-Default architecture request resolves to this
 /// mode's Default strategy.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn select_bitmap_strategy(
     support: ModeSupport,
     context: &ExecutionContext,
@@ -321,7 +367,7 @@ pub(crate) fn select_bitmap_strategy(
 }
 
 /// Selects the exact raster-mode strategy for direct Text composition.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn select_text_strategy(
     support: ModeSupport,
     context: &ExecutionContext,
@@ -350,7 +396,7 @@ pub(crate) fn select_text_strategy(
 }
 
 /// Executes Text through the exact mode selected by the shared Draw contract.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn apply_text(
     selection: StrategySelection,
     input: TextComposeInput<'_>,
@@ -363,7 +409,7 @@ pub(crate) fn apply_text(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn apply_text_for_mode<const RGBA_MASK: bool>(
     mode: Mode,
     input: TextComposeInput<'_>,
@@ -405,7 +451,7 @@ fn apply_text_for_mode<const RGBA_MASK: bool>(
 }
 
 /// Applies the prepared bitmap through the selected exact-mode Default owner.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn apply_bitmap(
     selection: StrategySelection,
     image: DynamicImage,
@@ -465,7 +511,7 @@ pub(crate) fn apply_bitmap(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn select_direct_strategy(
     support: ModeSupport,
     context: &ExecutionContext,
@@ -489,7 +535,7 @@ fn select_direct_strategy(
 }
 
 /// Confirms a direct Draw executor received its exact mode and Default strategy.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn validate_direct_selection(
     selection: StrategySelection,
     mode: Mode,
@@ -506,7 +552,7 @@ pub(crate) fn validate_direct_selection(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::support(),
@@ -537,7 +583,7 @@ fn classify_mode(mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn prepare_mode(
     image: &DynamicImage,
     ops: &[PipelineOp],
@@ -570,7 +616,7 @@ fn prepare_mode(
     SUPPORT.for_mode(mode).select(context, input)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -590,7 +636,7 @@ pub(crate) fn prepare<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -599,7 +645,7 @@ pub(crate) fn prepare_pipeline<'a>(
     prepare(input, op, context).map(crate::compute::registry::PreparedOperation::from_draw)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_batch(
     image: &DynamicImage,
     ops: &[PipelineOp],
@@ -635,7 +681,7 @@ pub(crate) fn execute_batch(
     execute_mode(image, ops, mode, &selection)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_batch(
     image: &DynamicImage,
     ops: &[PipelineOp],
@@ -645,7 +691,7 @@ pub(crate) fn prepare_batch(
     prepare_mode(image, ops, context)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_mode(
     image: &DynamicImage,
     ops: &[PipelineOp],
@@ -685,7 +731,7 @@ fn execute_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn is_draw_op(op: &PipelineOp) -> bool {
     super::helpers::is_draw_op(op)
 }

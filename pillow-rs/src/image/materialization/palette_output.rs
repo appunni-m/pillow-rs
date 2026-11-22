@@ -10,6 +10,7 @@ use crate::raster::{DynamicImage, Mode};
 
 // TODO(pillow-rs#3ptb): freeze direct lazy P/PA output, palette, wrapper
 // metadata, and CPU architecture/fallback receipts in the parity matrix.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn evaluate_palette_target_convert(
     source: &Image,
     image: &DynamicImage,

@@ -1615,12 +1615,15 @@ function fontMethod(receiver, operation, args) {
         ));
     }
     if (operation === 'get_variation_axes') {
-        return Array.from(receiver.getVariationAxes(), (axis) => ({
-            minimum: axis.minimum,
-            default: axis.default,
-            maximum: axis.maximum,
-            name: bytesRecord(axis.name),
-        }));
+        return Array.from(receiver.getVariationAxes(), (axis) => {
+            const record = {
+                minimum: axis.minimum,
+                default: axis.default,
+                maximum: axis.maximum,
+            };
+            if (axis.name != null) record.name = bytesRecord(axis.name);
+            return record;
+        });
     }
     if (operation === 'get_variation_names') {
         return Array.from(receiver.getVariationNames(), (name) => bytesRecord(name));

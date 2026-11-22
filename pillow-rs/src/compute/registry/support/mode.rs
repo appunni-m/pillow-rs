@@ -246,6 +246,7 @@ impl ModeSupport {
         None
     }
 
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     /// Declares a concrete serial strategy with no vector specialization.
     pub const fn serial(
         operation: OperationId,
@@ -255,6 +256,7 @@ impl ModeSupport {
         Self::cpu(operation, mode, OutputModeRule::Preserve, inputs, &[])
     }
 
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     /// Declares a Pillow-defined strategy for this exact operation and mode.
     ///
     /// Use this only when Pillow defines the operation/mode behavior. A Pillow
@@ -278,6 +280,7 @@ impl ModeSupport {
         Self::cpu_with_scope(operation, mode, output, inputs, architectures, scope)
     }
 
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     /// Declares a native strategy that extends Pillow's operation/mode contract.
     pub const fn cpu_core_only(
         operation: OperationId,
@@ -297,6 +300,7 @@ impl ModeSupport {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     const fn cpu_with_scope(
         operation: OperationId,
         mode: Mode,
@@ -341,7 +345,7 @@ impl ModeSupport {
     }
 
     /// Assesses known metadata without treating unknown guards as a fallback.
-    // VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn assess(
         self,
         ctx: &ExecutionContext,
@@ -394,7 +398,9 @@ impl ModeSupport {
     }
 
     /// Selects only from this declaration using captured capabilities and source facts.
-    // VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
+    /// A Default request may choose a declared target-baseline strategy when
+    /// its build target matches; the selected implementation remains explicit.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn select(
         self,
         ctx: &ExecutionContext,
@@ -421,9 +427,6 @@ impl ModeSupport {
             fallback: (ctx.architecture() != Architecture::Default)
                 .then_some(FallbackReason::MissingSpecialization),
         };
-        if ctx.architecture() == Architecture::Default {
-            return Ok(selection);
-        }
         if !ctx.supports_architecture(ctx.architecture()) {
             selection.fallback = Some(FallbackReason::UnavailableHardware);
         }

@@ -51,7 +51,70 @@ pub(crate) fn resize_filtered_fma_guard(input: StrategyInputs) -> GuardAssessmen
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(crate) fn resize_f32_vector_guard(input: StrategyInputs) -> GuardAssessment {
+    let (width, height, filter, boxed, bounds_bits) = match input.request {
+        RequestFacts::Resize {
+            width,
+            height,
+            filter,
+            boxed,
+            box_bounds_bits,
+        } => (width, height, filter, boxed, box_bounds_bits),
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    if width == 0 || height == 0 || input.width == 0 || input.height == 0 {
+        return GuardAssessment::Ineligible;
+    }
+    if !boxed && bounds_bits.is_some() {
+        return GuardAssessment::Ineligible;
+    }
+    if !boxed && (input.width, input.height) == (width, height) {
+        return GuardAssessment::Ineligible;
+    }
+    if matches!(filter, crate::pipeline::ResampleFilter::Nearest) && boxed && bounds_bits.is_none()
+    {
+        return GuardAssessment::Ineligible;
+    }
+    let source = checked_native_bytes_guard(input, 4);
+    if !matches!(source, GuardAssessment::Satisfied) {
+        return source;
+    }
+    if crate::checked_dims::CheckedDims::new(width, height, 4).is_err()
+        || crate::checked_dims::CheckedDims::new(width, input.height, 4).is_err()
+    {
+        return GuardAssessment::Ineligible;
+    }
+    if boxed {
+        let Some(bounds_bits) = bounds_bits else {
+            return GuardAssessment::Ineligible;
+        };
+        let Some(bounds) = boxed_crop::narrow_valid_bounds(
+            (input.width, input.height),
+            (
+                f64::from_bits(bounds_bits.0),
+                f64::from_bits(bounds_bits.1),
+                f64::from_bits(bounds_bits.2),
+                f64::from_bits(bounds_bits.3),
+            ),
+        ) else {
+            return GuardAssessment::Ineligible;
+        };
+        if boxed_crop::uses_default_shortcut(
+            (input.width, input.height),
+            (width, height),
+            filter,
+            bounds,
+            false,
+        ) {
+            return GuardAssessment::Ineligible;
+        }
+    }
+    GuardAssessment::Satisfied
+}
+
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height) = match input.request {
         RequestFacts::Resize {
@@ -91,15 +154,18 @@ pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessme
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// TODO(pillow-rs#3ptb): Verify filtered I32 NEON output and Default fallback
+// parity on AArch64 after CPU source closure.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn resize_i32_neon_guard(input: StrategyInputs) -> GuardAssessment {
-    let (width, height) = match input.request {
+    let (width, height, filter) = match input.request {
         RequestFacts::Resize {
             width,
             height,
+            filter,
             boxed: false,
             ..
-        } => (width, height),
+        } => (width, height, filter),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -108,6 +174,16 @@ pub(crate) fn resize_i32_neon_guard(input: StrategyInputs) -> GuardAssessment {
         || width == 0
         || height == 0
         || (input.width, input.height) == (width, height)
+    {
+        return GuardAssessment::Ineligible;
+    }
+    // This kernel always rounds horizontal before vertical. Preserve Pillow's
+    // order for tall reductions by routing those filtered requests to Default.
+    if !matches!(filter, crate::pipeline::ResampleFilter::Nearest)
+        && !crate::compute::pool_cpu::ops::resize::helpers::coefficients::horizontal_first(
+            (input.width, input.height),
+            (width, height),
+        )
     {
         return GuardAssessment::Ineligible;
     }

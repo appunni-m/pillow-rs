@@ -2,6 +2,7 @@
 
 use crate::draw::FloodFillAccess;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn run<A: FloodFillAccess>(
     access: &mut A,
     seed: A::Point,
@@ -34,6 +35,7 @@ pub(crate) fn run<A: FloodFillAccess>(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn fill_seed<A: FloodFillAccess>(
     access: &mut A,
     seed: &A::Point,
@@ -60,6 +62,7 @@ fn fill_seed<A: FloodFillAccess>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn fill_frontier<A: FloodFillAccess>(
     access: &mut A,
     edge: &A::Frontier,
@@ -79,6 +82,7 @@ fn fill_frontier<A: FloodFillAccess>(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn fill_neighbors<A: FloodFillAccess>(
     access: &mut A,
     point: &A::Point,
@@ -110,6 +114,7 @@ fn fill_neighbors<A: FloodFillAccess>(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn should_fill_neighbor<A: FloodFillAccess>(
     access: &mut A,
     pixel: &A::Pixel,
@@ -124,6 +129,7 @@ fn should_fill_neighbor<A: FloodFillAccess>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn color_diff_is_within<A: FloodFillAccess>(
     access: &mut A,
     first: &A::Pixel,

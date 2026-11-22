@@ -12,6 +12,7 @@ pub(crate) fn prepare(image: &Input, alpha: u8) -> Kernel<'_> {
     AlphaInput { image, alpha }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     Ok(DynamicImage::ImagePaletteAlpha8(helpers::luma_constant(

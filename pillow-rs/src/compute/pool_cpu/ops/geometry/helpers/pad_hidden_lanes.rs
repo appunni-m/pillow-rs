@@ -8,6 +8,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, buffer::HiddenPixelLanes};
 
 /// Carries known source lanes through a Pad whose content is not resampled.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn preserve_same_size_content(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -105,6 +106,7 @@ pub(crate) fn preserve_same_size_content(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn fill_lanes(mode: Mode, color: Option<(u8, u8, u8, u8)>) -> [u8; 2] {
     match mode {
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
@@ -135,6 +137,7 @@ fn is_borderless(frame: PadFrame) -> bool {
         && frame.content_height == frame.height
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn compose_lanes(
     source: &HiddenPixelLanes,
     lane_count: usize,

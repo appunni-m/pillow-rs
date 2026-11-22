@@ -49,6 +49,14 @@ pub enum ImageOpsAspectSize<Value> {
     Original,
     /// Use the newly computed pair for the public resize call.
     Resized(Value),
+    /// Return `Image.new(image.mode, (size[0], 0))` before resize handling.
+    EmptySourceHeight,
+    /// Return `Image.new(image.mode, (0, 0))` before resize handling.
+    EmptyZeroSize,
+    /// Return `Image.new(image.mode, size)` with the original size object.
+    EmptyOriginalSize,
+    /// Return `Image.new(image.mode, size)` with a computed size value.
+    EmptySize(Value),
 }
 
 /// Host operations shared by the core-owned ImageOps aspect-ratio and fit strategies.
@@ -65,6 +73,8 @@ pub trait ImageOpsAspectCallbacks {
     fn image_height(&mut self) -> Result<Self::Value, Self::Error>;
     /// Read one value from the requested output size.
     fn size_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error>;
+    /// Create the host's integer zero for the Pillow empty-size guards.
+    fn zero_value(&mut self) -> Result<Self::Value, Self::Error>;
     /// Apply the requested host numeric operation.
     fn arithmetic(
         &mut self,
@@ -94,8 +104,8 @@ pub trait ImageOpsAspectCallbacks {
 pub trait ImageOpsBorderCallbacks {
     /// Carrier for the border components and crop-box coordinates.
     type Value: Clone;
-    /// Callback error type.
-    type Error;
+    /// Callback error type, which accepts core validation errors.
+    type Error: From<PilError>;
 
     /// Check whether the border follows Python's tuple branch.
     fn border_is_tuple(&mut self, border: &Self::Value) -> Result<bool, Self::Error>;
@@ -109,6 +119,7 @@ pub trait ImageOpsBorderCallbacks {
     ) -> Result<Self::Value, Self::Error>;
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn border_components<C: ImageOpsBorderCallbacks>(
     callbacks: &mut C,
     border: &C::Value,
@@ -126,12 +137,11 @@ fn border_components<C: ImageOpsBorderCallbacks>(
                 callbacks.border_coordinate(border, 2)?,
                 callbacks.border_coordinate(border, 3)?,
             )),
-            _ => Ok((
-                border.clone(),
-                border.clone(),
-                border.clone(),
-                border.clone(),
-            )),
+            // Pillow raises before it reads image dimensions for malformed tuples.
+            _ => Err(PilError::ValueError(
+                "border must be an integer, or a tuple of two or four elements".into(),
+            )
+            .into()),
         }
     } else {
         Ok((
@@ -194,7 +204,7 @@ where
     fn native_box_tuple(&mut self, box_: (u32, u32, u32, u32)) -> Result<Self::Value, Self::Error>;
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Expand a scalar, pair, or four-value border and compute its crop box.
 pub fn crop_box_with_callbacks<C: ImageOpsCropCallbacks>(
     callbacks: &mut C,
@@ -208,7 +218,7 @@ pub fn crop_box_with_callbacks<C: ImageOpsCropCallbacks>(
     callbacks.box_tuple(&left, &top, &right, &bottom)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Select native crop geometry for the unmodified base-image route, otherwise
 /// preserve Python's dynamic border protocols through the host callbacks.
 pub fn crop_box_with_route_callbacks<C: ImageOpsCropRouteCallbacks>(
@@ -290,7 +300,8 @@ where
         value: &Self::Value,
         expected: i64,
     ) -> Result<bool, Self::Error>;
-    /// Resolve a tuple fill with the copied palette's public `getcolor` method.
+    /// Resolve a tuple fill with the copied palette's public `getcolor` method
+    /// and source image context, which protects reserved indices and full palettes.
     fn palette_get_color(
         &mut self,
         palette: &Self::Palette,
@@ -333,7 +344,9 @@ where
         palette: &Self::Palette,
         mode: &Self::Value,
     ) -> Result<(), Self::Error>;
-    /// Call the output wrapper's public `paste` method with the current source.
+    /// Copy the source's Pillow `info["transparency"]` entry when present.
+    fn copy_transparency_info(&mut self, output: &mut Self::Output) -> Result<(), Self::Error>;
+    /// Call public Paste and preserve the source's pinned backend on its result pipeline.
     fn paste(
         &mut self,
         output: &mut Self::Output,
@@ -408,7 +421,7 @@ pub trait ImageOpsPadCallbacks {
         size: &Self::Value,
         centering: &Self::Value,
     ) -> Result<Self::Value, Self::Error>;
-    /// Call `output.paste(resized, position)` through the public wrapper.
+    /// Call public Paste and preserve the resized image's pinned backend on its result pipeline.
     fn paste_at(
         &mut self,
         output: &mut Self::Image,
@@ -521,8 +534,15 @@ pub trait ImageOpsAspectRouteCallbacks:
         width: u32,
         height: u32,
     ) -> Result<<Self as ImageOpsAspectCallbacks>::Value, <Self as ImageOpsAspectCallbacks>::Error>;
+    /// Apply Pillow's final `min(size) == 0` check for Contain.
+    /// `None` selects the original size object; `Some` selects a computed pair.
+    fn size_has_zero_axis(
+        &mut self,
+        size: Option<&<Self as ImageOpsAspectCallbacks>::Value>,
+    ) -> Result<bool, <Self as ImageOpsAspectCallbacks>::Error>;
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn expand_geometry_values_with_callbacks<C: ImageOpsExpandGeometryCallbacks>(
     callbacks: &mut C,
     border: &C::Value,
@@ -537,12 +557,17 @@ pub(super) fn expand_geometry_values_with_callbacks<C: ImageOpsExpandGeometryCal
     Ok((width, height, left, top))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Compute the size argument that ImageOps passes to public Image.resize.
 fn aspect_size_with_callbacks<C: ImageOpsAspectCallbacks>(
     callbacks: &mut C,
     operation: ImageOpsAspectOperation,
 ) -> Result<ImageOpsAspectSize<C::Value>, C::Error> {
+    let source_height_check = callbacks.image_height()?;
+    let zero = callbacks.zero_value()?;
+    if callbacks.compare(ImageOpsAspectComparison::Equal, &source_height_check, &zero)? {
+        return Ok(ImageOpsAspectSize::EmptySourceHeight);
+    }
     let source_width = callbacks.image_width()?;
     let source_height = callbacks.image_height()?;
     let source_ratio = callbacks.arithmetic(
@@ -550,6 +575,10 @@ fn aspect_size_with_callbacks<C: ImageOpsAspectCallbacks>(
         &source_width,
         &source_height,
     )?;
+    let target_height = callbacks.size_coordinate(1)?;
+    if callbacks.compare(ImageOpsAspectComparison::Equal, &target_height, &zero)? {
+        return Ok(ImageOpsAspectSize::EmptyZeroSize);
+    }
     let target_width = callbacks.size_coordinate(0)?;
     let target_height = callbacks.size_coordinate(1)?;
     let target_ratio = callbacks.arithmetic(
@@ -570,8 +599,9 @@ fn aspect_size_with_callbacks<C: ImageOpsAspectCallbacks>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Selects native or callback-driven contain/cover geometry from one core route.
+/// Host arithmetic preserves Cover dimensions outside the native image range.
 #[doc(hidden)]
 pub fn aspect_size_with_route_callbacks<C: ImageOpsAspectRouteCallbacks>(
     callbacks: &mut C,
@@ -582,19 +612,69 @@ pub fn aspect_size_with_route_callbacks<C: ImageOpsAspectRouteCallbacks>(
 > {
     if let Some((width, height)) = native_size_pair_with_callbacks(callbacks)? {
         let image = callbacks.native_image()?;
-        let (width, height) = callbacks.run_core(move || match operation {
-            ImageOpsAspectOperation::Contain => {
-                super::contain_geometry_preflight(&image, width, height)
-            }
-            ImageOpsAspectOperation::Cover => {
-                super::cover_geometry_preflight(&image, width, height)
-            }
+        let (source_height, dimensions) = callbacks.run_core(move || {
+            let source_height = image.size()?.1;
+            let dimensions = if source_height == 0 || height == 0 {
+                None
+            } else {
+                Some(match operation {
+                    ImageOpsAspectOperation::Contain => {
+                        Some(super::contain_geometry_preflight(&image, width, height)?)
+                    }
+                    ImageOpsAspectOperation::Cover => {
+                        super::cover_geometry_preflight(&image, width, height)?
+                    }
+                })
+            };
+            Ok::<_, PilError>((source_height, dimensions))
         })?;
-        return Ok(ImageOpsAspectSize::Resized(
-            callbacks.host_size_pair(width, height)?,
-        ));
+        let result = if source_height == 0 {
+            ImageOpsAspectSize::EmptySourceHeight
+        } else if height == 0 {
+            ImageOpsAspectSize::EmptyZeroSize
+        } else if let Some(Some((width, height))) = dimensions {
+            ImageOpsAspectSize::Resized(callbacks.host_size_pair(width, height)?)
+        } else {
+            // Keep arbitrary-size Cover results as host integers so the public
+            // Image.resize boundary can report its normal range failure.
+            let result = aspect_size_with_callbacks(callbacks, operation)?;
+            return finish_aspect_size(callbacks, operation, result);
+        };
+        return finish_aspect_size(callbacks, operation, result);
     }
-    aspect_size_with_callbacks(callbacks, operation)
+    let result = aspect_size_with_callbacks(callbacks, operation)?;
+    finish_aspect_size(callbacks, operation, result)
+}
+
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+fn finish_aspect_size<C: ImageOpsAspectRouteCallbacks>(
+    callbacks: &mut C,
+    operation: ImageOpsAspectOperation,
+    result: ImageOpsAspectSize<<C as ImageOpsAspectCallbacks>::Value>,
+) -> Result<
+    ImageOpsAspectSize<<C as ImageOpsAspectCallbacks>::Value>,
+    <C as ImageOpsAspectCallbacks>::Error,
+> {
+    if operation != ImageOpsAspectOperation::Contain {
+        return Ok(result);
+    }
+    match result {
+        ImageOpsAspectSize::Original => {
+            if callbacks.size_has_zero_axis(None)? {
+                Ok(ImageOpsAspectSize::EmptyOriginalSize)
+            } else {
+                Ok(ImageOpsAspectSize::Original)
+            }
+        }
+        ImageOpsAspectSize::Resized(size) => {
+            if callbacks.size_has_zero_axis(Some(&size))? {
+                Ok(ImageOpsAspectSize::EmptySize(size))
+            } else {
+                Ok(ImageOpsAspectSize::Resized(size))
+            }
+        }
+        result => Ok(result),
+    }
 }
 
 // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending

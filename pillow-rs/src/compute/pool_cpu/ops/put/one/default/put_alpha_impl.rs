@@ -1,0 +1,22 @@
+//! Native bilevel-to-LA scalar alpha insertion for `Mode::One`.
+
+use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
+use crate::error::PilError;
+use crate::raster::DynamicImage;
+
+pub(crate) type Input = crate::raster::GrayImage;
+pub(crate) type Kernel<'a> = AlphaInput<'a, crate::raster::Luma<u8>>;
+
+#[inline]
+pub(crate) fn prepare(image: &Input, alpha: u8) -> Kernel<'_> {
+    AlphaInput { image, alpha }
+}
+
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+#[inline]
+pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
+    Ok(DynamicImage::ImageLumaA8(helpers::luma_constant(
+        input.image,
+        input.alpha,
+    )))
+}

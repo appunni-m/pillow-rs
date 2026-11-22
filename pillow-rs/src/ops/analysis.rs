@@ -71,12 +71,26 @@ impl Image {
         mask: ImageAnalysisMask,
         extrema: Option<HistogramExtrema>,
     ) -> Result<Vec<u32>, PilError> {
+        self.histogram_with_input_and_extrema_with_context(mask, extrema, None)
+    }
+
+    /// Computes a histogram while retaining a composed caller's CPU context.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn histogram_with_input_and_extrema_with_context(
+        &self,
+        mask: ImageAnalysisMask,
+        extrema: Option<HistogramExtrema>,
+        context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Vec<u32>, PilError> {
         match mask {
-            ImageAnalysisMask::None => self.histogram_with_extrema(extrema),
+            ImageAnalysisMask::None => {
+                self.histogram_with_mask_and_extrema_with_context(None, extrema, context)
+            }
             // Pillow supplies a fixed (0, 0) range to the masked ImagingCore
             // route; the mask itself is unsupported for I/F modes.
             ImageAnalysisMask::Image(mask) => {
-                self.histogram_with_mask_and_extrema(Some(&mask), None)
+                self.histogram_with_mask_and_extrema_with_context(Some(&mask), None, context)
             }
             ImageAnalysisMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
                 "'{type_name}' object has no attribute 'load'"
@@ -96,9 +110,25 @@ impl Image {
         mask: ImageAnalysisMask,
         extrema: Option<HistogramExtrema>,
     ) -> Result<f64, PilError> {
+        self.entropy_with_input_and_extrema_with_context(mask, extrema, None)
+    }
+
+    /// Computes entropy while retaining a composed caller's CPU context.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn entropy_with_input_and_extrema_with_context(
+        &self,
+        mask: ImageAnalysisMask,
+        extrema: Option<HistogramExtrema>,
+        context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<f64, PilError> {
         match mask {
-            ImageAnalysisMask::None => self.entropy_with_extrema(extrema),
-            ImageAnalysisMask::Image(mask) => self.entropy_with_mask_and_extrema(Some(&mask), None),
+            ImageAnalysisMask::None => {
+                self.entropy_with_mask_and_extrema_with_context(None, extrema, context)
+            }
+            ImageAnalysisMask::Image(mask) => {
+                self.entropy_with_mask_and_extrema_with_context(Some(&mask), None, context)
+            }
             ImageAnalysisMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
                 "'{type_name}' object has no attribute 'load'"
             ))),
@@ -116,7 +146,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization fails.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn getextrema(&self) -> Result<Vec<(u8, u8)>, PilError> {
         let mode = self.mode_identity()?;
         OperationId::GetExtremaBytes

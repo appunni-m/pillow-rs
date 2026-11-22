@@ -66,6 +66,7 @@ fn draw_line_blend_byte(source: u8, destination: u8, alpha: u8) -> u8 {
 /// neighbouring pixels.  RGB alpha blending uses the same exact rounded
 /// formula as `NativeDrawCanvas`; the 16 lanes are byte channels, not packed
 /// pixels, so a three-byte layout needs no RGBA widening.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[inline]
 pub(super) fn draw_line_vector_block(
     row: &mut [u8],
@@ -110,6 +111,7 @@ pub(super) fn draw_line_vector_block(
 /// block, including a masked block for a short span, is written by the same
 /// native-byte vector kernel used by the line fast path. Only a trailing
 /// partial block after a completed vector block is scalar.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn simd_draw_span(
     output: &mut [u8],
     image_width: u32,
@@ -249,6 +251,7 @@ fn push_simd_draw_point(
 /// on one row are coalesced so a point cloud that forms a span still gets wide
 /// vector stores; isolated points use a masked vector block and never call the
 /// scalar CPU drawing adapter.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_points_native(
     img: &DynamicImage,
     points: &[(i32, i32)],
@@ -357,6 +360,7 @@ fn draw_rectangle_outline_spans(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_rectangle_native(
     img: &DynamicImage,
     x0: i32,

@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage};
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute(input: &GrayImage, threshold: u8) -> Result<DynamicImage, PilError> {
     let bytes = input
         .as_raw()

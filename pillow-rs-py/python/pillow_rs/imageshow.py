@@ -183,6 +183,20 @@ class Viewer:
         os.system(self.get_command(path, **options))  # nosec
         return 1
 
+    # VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-aeeaee64d50d49249cb725e647852ce8; benchmark=n/a
+    def _remove_path_after_delay(self, path: str) -> None:
+        pyinstaller = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+        executable = (not pyinstaller and sys.executable) or shutil.which("python3")
+        if executable:
+            subprocess.Popen(
+                [
+                    executable,
+                    "-c",
+                    "import os, sys, time; time.sleep(20); os.remove(sys.argv[1])",
+                    path,
+                ]
+            )
+
 
 class WindowsViewer(Viewer):
     """Use the default Windows application to display a PNG file."""
@@ -197,14 +211,13 @@ class WindowsViewer(Viewer):
             f'&& del /f "{file}"'
         )
 
+    # VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-aeeaee64d50d49249cb725e647852ce8; benchmark=n/a
     def show_file(self, path: str, **options: Any) -> int:
         if not os.path.exists(path):
             raise FileNotFoundError
-        subprocess.Popen(
-            self.get_command(path, **options),
-            shell=True,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW"),
-        )  # nosec
+        if sys.platform == "win32":
+            os.startfile(path)
+        self._remove_path_after_delay(path)
         return 1
 
 
@@ -222,22 +235,12 @@ class MacViewer(Viewer):
         command = "open -a Preview.app"
         return f"({command} {quote(file)}; sleep 20; rm -f {quote(file)})&"
 
+    # VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-aeeaee64d50d49249cb725e647852ce8; benchmark=n/a
     def show_file(self, path: str, **options: Any) -> int:
         if not os.path.exists(path):
             raise FileNotFoundError
         subprocess.call(["open", "-a", "Preview.app", path])
-
-        pyinstaller = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
-        executable = (not pyinstaller and sys.executable) or shutil.which("python3")
-        if executable:
-            subprocess.Popen(
-                [
-                    executable,
-                    "-c",
-                    "import os, sys, time; time.sleep(20); os.remove(sys.argv[1])",
-                    path,
-                ]
-            )
+        self._remove_path_after_delay(path)
         return 1
 
 

@@ -228,6 +228,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     /// Returns the rectangular crop bounded by left, top, right, and bottom coordinates.
     #[wasm_bindgen(js_name = "crop")]
     pub fn crop(&self, l: u32, t: u32, r: u32, b: u32) -> Result<Image, JsValue> {
@@ -236,6 +237,7 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     /// Crops the image using an optional four-coordinate box.
     ///
     /// A `null` or `undefined` box selects the full image; other boxes must contain

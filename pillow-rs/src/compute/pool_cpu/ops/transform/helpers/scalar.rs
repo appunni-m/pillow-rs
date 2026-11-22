@@ -448,17 +448,20 @@ fn sample_transform_scalar32<const IS_FLOAT: bool>(
 /// source-coordinate shift and edge clipping.
 #[inline]
 #[cfg(target_arch = "wasm32")]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn quiet_f32_nan(value: f32) -> f32 {
     f32::from_bits(value.to_bits() | (1 << 22))
 }
 
 #[inline]
 #[cfg(target_arch = "wasm32")]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn canonical_f32_nan() -> f32 {
     f32::from_bits(0x7fc0_0000)
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn f32_sub_c(left: f32, right: f32) -> f32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -483,6 +486,7 @@ pub(super) fn f32_sub_c(left: f32, right: f32) -> f32 {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn f32_add_c(left: f32, right: f32) -> f32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -507,6 +511,7 @@ pub(super) fn f32_add_c(left: f32, right: f32) -> f32 {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn f32_fma_c(left: f32, right: f32, addend: f32) -> f32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -538,6 +543,7 @@ pub(super) fn f32_fma_c(left: f32, right: f32, addend: f32) -> f32 {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn f64_from_f32_c(value: f32) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -556,6 +562,7 @@ pub(super) fn f64_from_f32_c(value: f32) -> f64 {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn f32_from_f64_c(value: f64) -> f32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -574,6 +581,7 @@ pub(super) fn f32_from_f64_c(value: f64) -> f32 {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn f64_neg_c(value: f64) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -594,6 +602,7 @@ pub(super) fn f64_neg_c(value: f64) -> f64 {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn f64_sub_c(left: f64, right: f64) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -618,6 +627,7 @@ pub(super) fn f64_sub_c(left: f64, right: f64) -> f64 {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn f64_add_c(left: f64, right: f64) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -642,6 +652,7 @@ pub(super) fn f64_add_c(left: f64, right: f64) -> f64 {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn f64_fma_c(left: f64, right: f64, addend: f64) -> f64 {
     #[cfg(not(target_arch = "wasm32"))]
     {

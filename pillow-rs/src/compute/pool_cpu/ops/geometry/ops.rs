@@ -295,7 +295,7 @@ fn prepare_contain<'a>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 fn prepare_cover<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -321,7 +321,7 @@ fn prepare_cover<'a>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
 fn prepare_fit<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -361,7 +361,7 @@ fn prepare_fit<'a>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn prepare_scale<'a>(
     inputs: OperationInputs<'a>,
     factor: f64,
@@ -396,7 +396,7 @@ fn prepare_scale<'a>(
 }
 
 /// Prepares Contain, Cover, Fit, or Scale with its exact mode and nested Resize plan.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -449,7 +449,7 @@ pub(super) const NATIVE_F32_FILL_INPUTS: &[InputContract] = &[
 ];
 const PAD_RESIZE_CHILD: &[OperationId] = &[OperationId::Resize];
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn classify_pad_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -704,7 +704,7 @@ fn pad_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn prepare_pad_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &'a PipelineOp,

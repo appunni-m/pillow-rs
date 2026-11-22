@@ -1,3 +1,4 @@
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::Mode;
 
@@ -30,13 +31,6 @@ pub trait DrawTextMaskCallbacks {
     fn font_mask_mode(&mut self, default: Mode) -> Result<Self::Value, Self::Error>;
     /// Apply Pillow's `mode == "RGBA"` branch to the selected host value.
     fn mode_is_rgba(&mut self, mode: &Self::Value) -> Result<bool, Self::Error>;
-    /// Call `font.getmask2` with the requested Pillow arguments.
-    fn getmask2(
-        &mut self,
-        line: &Self::Value,
-        mode: &Self::Value,
-        start: &Self::Value,
-    ) -> Result<(Self::Value, Self::Value), Self::Error>;
     /// Call `font.getmask` with its full legacy argument list.
     fn getmask(
         &mut self,
@@ -46,17 +40,8 @@ pub trait DrawTextMaskCallbacks {
     ) -> Result<Self::Value, Self::Error>;
     /// Call the final `font.getmask(text)` fallback after a TypeError.
     fn getmask_text_only(&mut self, line: &Self::Value) -> Result<Self::Value, Self::Error>;
-    /// Identify AttributeError from `getmask2`, the only error that selects getmask.
-    fn is_attribute_error(&self, error: &Self::Error) -> bool;
     /// Identify TypeError from the full `getmask` call, which selects text-only fallback.
     fn is_type_error(&self, error: &Self::Error) -> bool;
-    /// Add one returned mask offset to the matching destination coordinate.
-    fn add_offset(
-        &mut self,
-        position: &mut DrawTextMaskPosition<Self::Value>,
-        offset: &Self::Value,
-        index: usize,
-    ) -> Result<(), Self::Error>;
     /// Read `mask.size` with Pillow's default-None behavior.
     fn mask_size(&mut self, mask: &Self::Value) -> Result<Option<Self::Value>, Self::Error>;
     /// Compare one mask-size component with zero and convert the result to bool.
@@ -97,6 +82,8 @@ pub trait DrawTextMaskCallbacks {
         position: &DrawTextMaskPosition<Self::Value>,
         mask_image: &Self::Value,
         coverage: &Self::Value,
+        requested_backend: Option<Backend>,
+        context: &ExecutionContext,
     ) -> Result<(), Self::Error>;
     /// Draw a coverage mask through ImageDraw.bitmap.
     fn draw_bitmap(
@@ -104,17 +91,22 @@ pub trait DrawTextMaskCallbacks {
         position: &DrawTextMaskPosition<Self::Value>,
         mask_image: &Self::Value,
         fill: &Self::Value,
+        requested_backend: Option<Backend>,
+        context: &ExecutionContext,
     ) -> Result<(), Self::Error>;
 }
 
 /// Retrieve, adapt, and composite a custom font mask using ordered callbacks.
 #[doc(hidden)]
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn draw_custom_font_mask_with_callbacks<C: DrawTextMaskCallbacks>(
     callbacks: &mut C,
     line: &C::Value,
     fill: &C::Value,
     ink: i64,
     mode: Mode,
+    requested_backend: Option<Backend>,
+    context: &ExecutionContext,
 ) -> Result<(), C::Error> {
     let mode = callbacks.font_mask_mode(mode)?;
     let mut position = callbacks.position(line)?;
@@ -126,33 +118,28 @@ pub fn draw_custom_font_mask_with_callbacks<C: DrawTextMaskCallbacks>(
     if callbacks.mode_is_rgba(&mode)? {
         let coverage = callbacks.alpha_channel(&mask_image)?;
         callbacks.set_alpha(&mask_image, ((ink >> 24) & 0xff) as u8)?;
-        callbacks.draw_rgba_mask(&position, &mask_image, &coverage)
+        callbacks.draw_rgba_mask(
+            &position,
+            &mask_image,
+            &coverage,
+            requested_backend,
+            context,
+        )
     } else {
-        callbacks.draw_bitmap(&position, &mask_image, fill)
+        callbacks.draw_bitmap(&position, &mask_image, fill, requested_backend, context)
     }
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-e26f1119fdbd4e96bfec5a3029c153e7; benchmark=n/a
 fn retrieve_custom_mask<C: DrawTextMaskCallbacks>(
     callbacks: &mut C,
     line: &C::Value,
     mode: &C::Value,
     position: &mut DrawTextMaskPosition<C::Value>,
 ) -> Result<C::Value, C::Error> {
-    let mask_result: Result<C::Value, C::Error> = (|| {
-        let (mask, offset) = callbacks.getmask2(line, mode, &position.start)?;
-        callbacks.add_offset(position, &offset, 0)?;
-        callbacks.add_offset(position, &offset, 1)?;
-        Ok(mask)
-    })();
-    match mask_result {
+    match callbacks.getmask(line, mode, &position.start) {
         Ok(mask) => Ok(mask),
-        Err(error) if callbacks.is_attribute_error(&error) => {
-            match callbacks.getmask(line, mode, &position.start) {
-                Ok(mask) => Ok(mask),
-                Err(error) if callbacks.is_type_error(&error) => callbacks.getmask_text_only(line),
-                Err(error) => Err(error),
-            }
-        }
+        Err(error) if callbacks.is_type_error(&error) => callbacks.getmask_text_only(line),
         Err(error) => Err(error),
     }
 }

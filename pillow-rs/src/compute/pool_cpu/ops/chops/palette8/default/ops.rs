@@ -5,7 +5,7 @@ use crate::raster::DynamicImage;
 
 use super::super::super::ops::ChopsRequest;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     request: ChopsRequest,
@@ -19,7 +19,7 @@ pub(crate) fn execute(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_binary(
     image: &DynamicImage,
     other: Option<&DynamicImage>,
@@ -51,7 +51,7 @@ fn execute_binary(
     Ok(DynamicImage::ImagePalette8(output))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_offset(image: &DynamicImage, x: i32, y: i32) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImagePalette8(buffer) = image else {
         return Err(PilError::InternalError(
@@ -62,7 +62,7 @@ fn execute_offset(image: &DynamicImage, x: i32, y: i32) -> Result<DynamicImage, 
     Ok(DynamicImage::ImagePalette8(output))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_invert(image: &DynamicImage) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImagePalette8(buffer) = image else {
         return Err(PilError::InternalError(

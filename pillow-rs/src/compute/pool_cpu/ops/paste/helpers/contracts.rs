@@ -50,6 +50,7 @@ pub(crate) const PHYSICAL_FOUR_BYTE_SOURCES: &[Mode] = &[
     Mode::ImageF32,
 ];
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn physical_byte_sources(mode: Mode) -> &'static [Mode] {
     match mode {
         Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => PHYSICAL_ONE_BYTE_SOURCES,
@@ -70,6 +71,7 @@ pub(crate) const fn physical_byte_sources(mode: Mode) -> &'static [Mode] {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn same_mode_source(mode: Mode) -> &'static [Mode] {
     match mode {
         Mode::One => &[Mode::One],
@@ -100,6 +102,7 @@ pub(crate) const fn same_mode_source(mode: Mode) -> &'static [Mode] {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn compact_sources(mode: Mode) -> &'static [Mode] {
     match mode {
         Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => PHYSICAL_ONE_BYTE_SOURCES,
@@ -128,6 +131,7 @@ pub(crate) const fn compact_sources(mode: Mode) -> &'static [Mode] {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn compact_masks(mode: Mode) -> &'static [Mode] {
     match mode {
         Mode::One | Mode::ImagePalette8 | Mode::ImageLumaA8 => COMPACT_MASK_ONE,

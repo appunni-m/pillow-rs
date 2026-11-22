@@ -61,7 +61,7 @@ pub trait ImageOpsPadRouteCallbacks:
     ) -> Result<<Self as ImageOpsPadCallbacks>::Image, <Self as ImageOpsPadCallbacks>::Error>;
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 /// Select typed Pad or its host-protocol fallback from one core route.
 ///
 /// Keep the native branch ordered: contain geometry precedes filter parsing;

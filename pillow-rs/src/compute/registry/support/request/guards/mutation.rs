@@ -32,6 +32,7 @@ pub(crate) fn alpha_composite_vector_guard(input: StrategyInputs, channels: u8) 
     checked_native_bytes_guard(input, channels)
 }
 
+// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
 pub(crate) fn paste_l_mask_neon_guard(
     input: StrategyInputs,
     mode: Mode,
@@ -96,6 +97,7 @@ pub(crate) fn paste_l_mask_neon_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
 fn clipped_paste_size(
     position: (i64, i64),
     region: (u32, u32),
@@ -530,6 +532,35 @@ pub(crate) fn rgba_transpose_avx2_guard(input: StrategyInputs) -> GuardAssessmen
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(crate) fn rgba_transpose_x86_64_tiled_guard(
+    input: StrategyInputs,
+    tile_min_dimension: u32,
+    minimum_pixels: usize,
+    block_size: u32,
+) -> GuardAssessment {
+    let layout = native_transpose_storage_guard(input, 4, true);
+    if !matches!(layout, GuardAssessment::Satisfied) {
+        return layout;
+    }
+    if block_size == 0
+        || input.width < tile_min_dimension
+        || input.height < tile_min_dimension
+        || (input.width as usize).saturating_mul(input.height as usize) < minimum_pixels
+        || input.width % block_size != 0
+        || input.height % block_size != 0
+    {
+        return GuardAssessment::Ineligible;
+    }
+    match input.request {
+        RequestFacts::Transpose {
+            method: TransposeMethod::Rotate270,
+        } => layout,
+        RequestFacts::Unspecified => GuardAssessment::Deferred,
+        _ => GuardAssessment::Ineligible,
+    }
+}
+
 pub(crate) fn native_transpose_bytes_guard(
     input: StrategyInputs,
     channels: u8,
@@ -613,7 +644,7 @@ pub(crate) fn color3dlut_guard(input: StrategyInputs, source_channels: u8) -> Gu
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn reduce_native_byte_vector_guard(
     input: StrategyInputs,
     channels: u8,
@@ -683,6 +714,7 @@ pub(crate) fn native_mirror_rows_guard(input: StrategyInputs, channels: u8) -> G
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn native_pointwise_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     exact_native_rows_guard(input, channels)
 }
@@ -705,6 +737,7 @@ pub(crate) fn native_pointwise_bytes_including_empty_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn exact_native_rows_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     if input.width == 0 || input.height == 0 || !(1..=4).contains(&channels) {
         return GuardAssessment::Ineligible;

@@ -8,6 +8,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
@@ -17,14 +18,7 @@ pub(crate) fn merge(
     let dimensions = CheckedDims::new_allow_empty(width, height, 3)?;
     let pixels = dimensions.total_bytes() / 3;
     if selection.guard != StrategyGuard::MergeRgbInterleave {
-        return merge::interleave_wide(
-            source,
-            remaining,
-            Mode::ImageRgb8,
-            MergeLayout::Three {
-                lab_encoding: false,
-            },
-        );
+        return merge::interleave_wide(source, remaining, Mode::ImageRgb8, MergeLayout::Three);
     }
     let bands = merge::collect_bands(source, remaining, pixels)?;
     let [red, green, blue] = bands.as_slice() else {
@@ -36,14 +30,7 @@ pub(crate) fn merge(
     let (output, vector_blocks, scalar_tail) =
         interleave_rgb_neon(red, green, blue, pixels, output_len);
     let mut image = native_bytes::construct(width, height, Mode::ImageRgb8, output)?;
-    merge::preserve_merged_padding(
-        &mut image,
-        Mode::ImageRgb8,
-        MergeLayout::Three {
-            lab_encoding: false,
-        },
-        pixels,
-    )?;
+    merge::preserve_merged_padding(&mut image, Mode::ImageRgb8, MergeLayout::Three, pixels)?;
     crate::compute::record_pipeline_allocation(output_len);
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);

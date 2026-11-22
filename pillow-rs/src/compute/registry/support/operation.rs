@@ -57,9 +57,11 @@ macro_rules! operation_support_match {
             | Self::ImagingCoreExpand
             | Self::ExtractBand
             | Self::Color3DLut => imageops_support($operation),
-            Self::ConvertLab | Self::Convert | Self::ConvertMatrix | Self::RemapPalette => {
-                color_support($operation)
-            }
+            Self::ConvertLab
+            | Self::Convert
+            | Self::ConvertMatrix
+            | Self::ConvertTransparent
+            | Self::RemapPalette => color_support($operation),
             Self::EffectSpread
             | Self::EffectNoise
             | Self::LinearGradient
@@ -230,6 +232,8 @@ pub enum OperationId {
     Convert,
     /// Apply Pillow's RGB conversion matrix to one exact source mode.
     ConvertMatrix,
+    /// Convert a source raster to RGBA/LA while applying a transparent color key.
+    ConvertTransparent,
     /// Remap native L/P samples into a P index plane with reordered palette metadata.
     RemapPalette,
     /// Relocate native pixels using Pillow's process-global random stream.
@@ -452,6 +456,7 @@ fn color_support(id: OperationId) -> &'static OperationSupport {
         OperationId::ConvertLab => &cpu_ops::color::ops::SUPPORT,
         OperationId::Convert => &cpu_ops::color::ops::CONVERT_SUPPORT,
         OperationId::ConvertMatrix => &cpu_ops::color::ops::MATRIX_SUPPORT,
+        OperationId::ConvertTransparent => &cpu_ops::color::ops::CONVERT_TRANSPARENT_SUPPORT,
         OperationId::RemapPalette => &cpu_ops::color::ops::REMAP_PALETTE_SUPPORT,
         _ => unreachable!("non-color operation sent to color support"),
     }

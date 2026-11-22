@@ -29,6 +29,113 @@ fn gpu_dynamic_mode_name(image: &DynamicImage) -> Result<String, PilError> {
 }
 
 impl Image {
+    /// Binds pending child pipelines to a caller-selected CPU architecture.
+    ///
+    /// Composed operations use this to keep their conversion, extraction, and
+    /// blend children on the context selected at the public operation boundary.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn with_execution_context(mut self, context: crate::compute::ExecutionContext) -> Image {
+        self.inject_execution_context_recursive(context);
+        self
+    }
+
+    /// Returns the context attached to this pipeline node, if one was injected.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub(crate) fn injected_execution_context(&self) -> Option<crate::compute::ExecutionContext> {
+        match self {
+            Image::Pipeline { ops, .. } => ops.execution_context(),
+            _ => None,
+        }
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn inject_execution_context_recursive(&mut self, context: crate::compute::ExecutionContext) {
+        let Image::Pipeline {
+            source,
+            ops,
+            materialized,
+            ..
+        } = self
+        else {
+            return;
+        };
+
+        Arc::make_mut(source).inject_execution_context_recursive(context);
+        let mut operations = ops.to_vec();
+        for operation in &mut operations {
+            Self::inject_op_execution_context_recursive(operation, context);
+        }
+        let operation_origins = if ops.has_operation_origins() {
+            ops.operation_origins().to_vec()
+        } else {
+            Default::default()
+        };
+        let mut rebuilt = PipelineOps::from_vec_with_origins(operations, operation_origins)
+            .with_palette_preservation(ops.preserves_palette())
+            .with_execution_context(context);
+        if ops.source_format_suppressed() {
+            rebuilt.suppress_source_format();
+        }
+        if ops.source_info_suppressed() {
+            rebuilt.suppress_source_info();
+        }
+        *ops = rebuilt;
+        *materialized = materialization_cache();
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn inject_op_execution_context_recursive(
+        operation: &mut PipelineOp,
+        context: crate::compute::ExecutionContext,
+    ) {
+        match operation {
+            PipelineOp::Add { other, .. }
+            | PipelineOp::Subtract { other, .. }
+            | PipelineOp::Multiply { other }
+            | PipelineOp::Screen { other }
+            | PipelineOp::Darker { other }
+            | PipelineOp::Lighter { other }
+            | PipelineOp::Difference { other }
+            | PipelineOp::Overlay { other }
+            | PipelineOp::HardLight { other }
+            | PipelineOp::SoftLight { other }
+            | PipelineOp::AddModulo { other }
+            | PipelineOp::SubtractModulo { other }
+            | PipelineOp::LogicalAnd { other }
+            | PipelineOp::LogicalOr { other }
+            | PipelineOp::LogicalXor { other }
+            | PipelineOp::BlendModule { other, .. } => {
+                Arc::make_mut(other).inject_execution_context_recursive(context);
+            }
+            PipelineOp::CompositeModule { other, mask, .. } => {
+                Arc::make_mut(other).inject_execution_context_recursive(context);
+                Arc::make_mut(mask).inject_execution_context_recursive(context);
+            }
+            PipelineOp::Paste { source, mask, .. } => {
+                Arc::make_mut(source).inject_execution_context_recursive(context);
+                if let Some(mask) = mask {
+                    Arc::make_mut(mask).inject_execution_context_recursive(context);
+                }
+            }
+            PipelineOp::AlphaComposite { source, .. } => {
+                Arc::make_mut(source).inject_execution_context_recursive(context);
+            }
+            PipelineOp::Merge { bands, .. } => {
+                for band in Arc::make_mut(bands).iter_mut() {
+                    band.inject_execution_context_recursive(context);
+                }
+            }
+            PipelineOp::Autocontrast {
+                mask: Some(mask), ..
+            }
+            | PipelineOp::EqualizeMasked { mask } => {
+                Arc::make_mut(mask).inject_execution_context_recursive(context);
+            }
+            _ => {}
+        }
+    }
+
     /// Locks this image pipeline to one compute backend.
     ///
     /// The backend choice is applied when the image is materialized. Non-pipeline
@@ -36,6 +143,23 @@ impl Image {
     pub fn use_backend(mut self, b: crate::compute::Backend) -> Image {
         self.lock_backend_recursive(b);
         self
+    }
+
+    /// Applies a caller-selected pipeline backend and architecture together.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    pub(crate) fn with_backend_and_execution_context(
+        self,
+        backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> Image {
+        if self.is_materialized() {
+            return self;
+        }
+        let image = match backend {
+            Some(backend) => self.use_backend(backend),
+            None => self,
+        };
+        image.with_execution_context(context)
     }
 
     fn lock_backend_recursive(&mut self, b: crate::compute::Backend) {
@@ -143,7 +267,7 @@ impl Image {
     // strategy, and fallback receipts for direct eager routes across the
     // frozen CPU mode/architecture matrix; this source audit is not runtime
     // evidence.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn cpu_arch_execution_route(
         &self,
     ) -> Result<
@@ -157,9 +281,37 @@ impl Image {
         Ok((requested_backend, context))
     }
 
+    /// Captures the CPU architecture policy for a composed child operation.
+    ///
+    /// Host adapters use this only after Pillow's wrapper validation reaches
+    /// the first public child call. Passing the result into that call keeps
+    /// nested work on the parent's selected architecture.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn capture_cpu_execution_context(
+        &self,
+    ) -> Result<crate::compute::ExecutionContext, PilError> {
+        self.cpu_arch_execution_route().map(|(_, context)| context)
+    }
+
+    /// Captures the requested CPU backend and architecture for a composed call.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn capture_cpu_execution_route(
+        &self,
+    ) -> Result<
+        (
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        ),
+        PilError,
+    > {
+        self.cpu_arch_execution_route()
+    }
+
     /// Resolves one CPU-owned operation's route and whether its backend is an
     /// explicit request rather than an automatic preference.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn cpu_arch_execution_route_with_policy(
         &self,
     ) -> Result<
@@ -187,15 +339,14 @@ impl Image {
             (_, Some(Backend::Simd)) => Backend::Simd,
             _ => Backend::Cpu,
         };
-        Ok((
-            requested_backend,
-            strict_request,
-            crate::compute::ExecutionContext::for_routed_backend(context_backend),
-        ))
+        let context = self.injected_execution_context().unwrap_or_else(|| {
+            crate::compute::ExecutionContext::for_routed_backend(context_backend)
+        });
+        Ok((requested_backend, strict_request, context))
     }
 
     /// Resolves the requested backend without choosing a CPU architecture.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn requested_backend_route(
         &self,
     ) -> Result<Option<crate::compute::Backend>, PilError> {
@@ -203,7 +354,7 @@ impl Image {
             .map(|(requested_backend, _, _)| requested_backend)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn backend_request_policy(
         &self,
     ) -> Result<
@@ -236,7 +387,7 @@ impl Image {
     ///
     /// Direct host operations that historically ignored backend-state errors
     /// retain CPU Default when routing policy cannot be inspected.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn cpu_arch_execution_route_advisory(
         &self,
     ) -> (
@@ -249,7 +400,7 @@ impl Image {
 
     /// Advisory CPU route that also retains whether the route is explicitly
     /// pinned or is the only active backend.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn cpu_arch_execution_route_advisory_with_policy(
         &self,
     ) -> (
@@ -273,7 +424,7 @@ impl Image {
 impl Image {
     /// Try applying ImageOps.grayscale immediately for the bounded native-RGB
     /// CPU/SIMD path. Other inputs keep the ordinary lazy pipeline semantics.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn try_grayscale_eager_rgb(&self) -> Result<Option<Image>, PilError> {
         let Image::Loaded(data) = self else {
             return Ok(None);

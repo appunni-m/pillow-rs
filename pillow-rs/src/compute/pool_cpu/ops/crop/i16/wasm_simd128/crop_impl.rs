@@ -5,6 +5,7 @@ use crate::error::PilError;
 
 pub(crate) type Input = super::super::default::crop_impl::Input;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute(image: &Input, region: CropRegion) -> Result<Input, PilError> {
     vector_copy::crop_luma16(image, region)
 }

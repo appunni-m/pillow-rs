@@ -8,7 +8,7 @@ use crate::ops::pil_resize::X86FmaToken;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute(
     context: &ExecutionContext,
     input: &RgbaImage,
@@ -24,5 +24,7 @@ pub(crate) fn execute(
             "ImageI32 AVX FMA strategy received an ineligible execution context".into(),
         )
     })?;
-    super::super::default::resize_impl::execute_with_fma(input, width, height, filter, bounds, &fma)
+    super::super::default::resize_impl::execute_with_pass_fma(
+        input, width, height, filter, bounds, &fma, &fma,
+    )
 }

@@ -115,6 +115,7 @@ pub(crate) fn native_mask<
     )
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn native_mask_samples<
     const SOURCE: usize,
     const OUTPUT: usize,

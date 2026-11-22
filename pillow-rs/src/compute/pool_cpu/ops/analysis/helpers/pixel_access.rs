@@ -96,13 +96,6 @@ pub(crate) fn components_u8_3(image: &RgbImage, x: u32, y: u32) -> FormattedPixe
     FormattedPixelValue::Components(image.get_pixel(x, y).0.to_vec())
 }
 
-/// Reads LAB samples in Pillow's signed-offset component representation.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-pub(crate) fn components_lab8(image: &RgbImage, x: u32, y: u32) -> FormattedPixelValue {
-    let [luma, a, b] = image.get_pixel(x, y).0;
-    FormattedPixelValue::Components(vec![luma, a.wrapping_sub(128), b.wrapping_sub(128)])
-}
-
 /// Reads four native byte components, including physical RGBX and CMYK lanes.
 // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn components_u8_4(image: &RgbaImage, x: u32, y: u32) -> FormattedPixelValue {

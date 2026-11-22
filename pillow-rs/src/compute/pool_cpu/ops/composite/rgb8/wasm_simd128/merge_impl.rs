@@ -6,16 +6,10 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
 ) -> Result<DynamicImage, PilError> {
-    merge::interleave_wide(
-        source,
-        remaining,
-        Mode::ImageRgb8,
-        MergeLayout::Three {
-            lab_encoding: false,
-        },
-    )
+    merge::interleave_wide(source, remaining, Mode::ImageRgb8, MergeLayout::Three)
 }

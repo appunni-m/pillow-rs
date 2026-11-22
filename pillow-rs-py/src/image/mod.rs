@@ -4,10 +4,15 @@ use pyo3::pyclass;
 use pyo3::types::PyModuleMethods;
 mod analysis;
 mod arrays;
+mod chops;
 mod constructors;
 mod creation;
+mod crop;
 mod data;
 mod enhance;
+mod execution;
+mod filters;
+mod imaging_core;
 mod operations;
 mod point;
 mod properties;
@@ -15,6 +20,7 @@ mod put_alpha;
 mod quantize;
 mod sequence;
 mod transform;
+pub(crate) use execution::PyExecutionContext;
 use point::PyPointTransform;
 use sequence::PyImageSequenceIterator;
 #[pyclass(name = "Image")]
@@ -28,6 +34,7 @@ pub(super) fn register_image_class(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 pub(super) fn register_adapter_classes(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPointTransform>()?;
+    m.add_class::<PyExecutionContext>()?;
     m.add_class::<PyImageSequenceIterator>()?;
     m.add_class::<operations::PyRotatePlan>()?;
     m.add_class::<transform::PyTransformPlan>()?;

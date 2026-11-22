@@ -5,7 +5,6 @@ use super::{
     round_two_decimals_to_i32,
 };
 use crate::error::PilError;
-use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
 impl Draw {
@@ -15,8 +14,9 @@ impl Draw {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns `ValueError("mode mismatch")` for an incompatible explicit
+    /// drawing context. Deferred pipeline execution reports later failures.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn line(
         &mut self,
         x0: i32,
@@ -26,18 +26,15 @@ impl Draw {
         fill: (u8, u8, u8, u8),
         width: u32,
     ) -> Result<(), PilError> {
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawLine {
-                x0,
-                y0,
-                x1,
-                y1,
-                fill,
-                width,
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        self.queue_draw_op(PipelineOp::DrawLine {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            width,
+            alpha_blend_rgb: self.alpha_blend_rgb()?,
+        });
         Ok(())
     }
 
@@ -46,7 +43,10 @@ impl Draw {
     /// # Errors
     ///
     /// Returns [`PilError::ValueError`] when fewer than two points are given.
+    /// It also returns `ValueError("mode mismatch")` when the explicit drawing
+    /// context is incompatible with the destination.
     /// Deferred pipeline execution reports materialization failures later.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn polyline(
         &mut self,
         points: &[(i32, i32)],
@@ -83,6 +83,7 @@ impl Draw {
 
     /// Normalizes and draws a Python-facing line, including Pillow's optional
     /// rounded-joint treatment for thick polylines.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn polyline_with_input_joint(
         &mut self,
         input: DrawPointsInput,
@@ -185,6 +186,9 @@ impl Draw {
     /// Returns [`PilError::ValueError`] when the right or bottom edge precedes
     /// the corresponding left or top edge, matching Pillow's public draw
     /// validation before the operation is queued.
+    /// It also returns `ValueError("mode mismatch")` for an incompatible
+    /// explicit drawing context.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn rectangle(
         &mut self,
         x0: i32,
@@ -206,19 +210,16 @@ impl Draw {
             ));
         }
         let (fill, outline) = self.shape_inks(fill, outline)?;
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawRectangle {
-                x0,
-                y0,
-                x1,
-                y1,
-                fill,
-                outline,
-                width,
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        self.queue_draw_op(PipelineOp::DrawRectangle {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            outline,
+            width,
+            alpha_blend_rgb: self.alpha_blend_rgb()?,
+        });
         Ok(())
     }
 
@@ -229,8 +230,10 @@ impl Draw {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns `ValueError` for a reversed bounding box and
+    /// `ValueError("mode mismatch")` for an incompatible explicit drawing
+    /// context. Deferred pipeline execution reports later failures.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn ellipse(
         &mut self,
         x0: i32,
@@ -255,32 +258,34 @@ impl Draw {
             ));
         }
         let (fill, outline) = self.shape_inks(fill, outline)?;
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawEllipse {
-                x0,
-                y0,
-                x1,
-                y1,
-                fill,
-                outline,
-                width: _width,
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        self.queue_draw_op(PipelineOp::DrawEllipse {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            outline,
+            width: _width,
+            alpha_blend_rgb: self.alpha_blend_rgb()?,
+        });
         Ok(())
     }
 
     /// Draws a polygon from integer vertices.
     ///
-    /// Fewer than three points is a no-op. `fill` paints the interior and
-    /// `outline` paints the boundary when present.
+    /// `fill` paints the interior and `outline` paints the boundary when
+    /// present.
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; deferred pipeline execution reports later
-    /// materialization failures.
-    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+    /// Returns `TypeError("coordinate list must contain at least 2 coordinates")`
+    /// when fewer than two points are supplied. It also returns
+    /// `ValueError("mode mismatch")` when an operation is queued with an
+    /// incompatible explicit context. Deferred pipeline execution reports
+    /// later materialization failures.
+    // TODO(pillow-rs#3ptb): verify typed-slice minimum-vertex faults and
+    // direct mode-fault ordering through the Rust parity adapter.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn polygon(
         &mut self,
         points: &[(i32, i32)],
@@ -288,21 +293,20 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
-        let (fill, outline) = self.shape_inks(fill, outline)?;
         if points.len() < 2 {
-            return Ok(());
+            return Err(PilError::TypeError(
+                "coordinate list must contain at least 2 coordinates".into(),
+            ));
         }
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawPolygon {
-                points: points.to_vec().into(),
-                fill,
-                outline,
-                width: _width,
-                outline_width: None,
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        let (fill, outline) = self.shape_inks(fill, outline)?;
+        self.queue_draw_op(PipelineOp::DrawPolygon {
+            points: points.to_vec().into(),
+            fill,
+            outline,
+            width: _width,
+            outline_width: None,
+            alpha_blend_rgb: self.alpha_blend_rgb()?,
+        });
         Ok(())
     }
 
@@ -314,7 +318,15 @@ impl Draw {
     }
 
     /// Draw a polygon outline using Pillow's already-transformed signed C width.
-    // VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pending
+    ///
+    /// # Errors
+    ///
+    /// Returns `ValueError("mode mismatch")` when an outline is queued with
+    /// an incompatible explicit context. Coordinate and materialization
+    /// errors retain their existing boundaries.
+    // TODO(pillow-rs#3ptb): verify invalid explicit modes on the F wide-outline
+    // no-op path and retain the existing F output contract.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn polygon_outline_with_input(
         &mut self,
@@ -327,17 +339,20 @@ impl Draw {
         if points.len() < 2 || outline.is_none() {
             return Ok(());
         }
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawPolygon {
-                points: points.into(),
-                fill: None,
-                outline,
-                width: 0,
-                outline_width: Some(outline_width),
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        let alpha_blend_rgb = self.alpha_blend_rgb()?;
+        // Pillow's masked wide-outline route does not paint mode F, although
+        // the separately issued polygon fill remains visible.
+        if self.image.mode_identity()? == crate::raster::Mode::ImageF32 && outline_width != 1 {
+            return Ok(());
+        }
+        self.queue_draw_op(PipelineOp::DrawPolygon {
+            points: points.into(),
+            fill: None,
+            outline,
+            width: 0,
+            outline_width: Some(outline_width),
+            alpha_blend_rgb,
+        });
         Ok(())
     }
 
@@ -460,6 +475,16 @@ impl Draw {
     /// Pillow draws `fill` first and `outline` last, but its outline primitive
     /// fills the complete path. Therefore `outline`, when present, is the
     /// effective color for the whole shape.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ValueError("unsupported image mode")` when a CoreOnly mode
+    /// has no Draw strategy and no default ink can be selected. An explicit
+    /// ink reaches the queued Draw operation and its rejection is deferred
+    /// until materialization.
+    // TODO(pillow-rs#3ptb): verify direct Rust no-ink defaults, CoreOnly
+    // rejection timing, and the explicit-ink materialization fault.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn shape(
         &mut self,
         points: &[(i32, i32)],
@@ -486,17 +511,15 @@ impl Draw {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns `ValueError("mode mismatch")` for an incompatible explicit
+    /// drawing context. Deferred pipeline execution reports later failures.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn point(&mut self, points: &[(i32, i32)], fill: (u8, u8, u8, u8)) -> Result<(), PilError> {
-        self.image = Image::push_op(
-            &self.image,
-            PipelineOp::DrawPoint {
-                points: points.to_vec().into(),
-                fill,
-                alpha_blend_rgb: self.alpha_blend_rgb(),
-            },
-        );
+        self.queue_draw_op(PipelineOp::DrawPoint {
+            points: points.to_vec().into(),
+            fill,
+            alpha_blend_rgb: self.alpha_blend_rgb()?,
+        });
         Ok(())
     }
 

@@ -1,5 +1,8 @@
 //! Exact ImageI16L strategy with Pillow's little-endian resampling contract.
 
+// NO_PILLOW_SUPPORT: When Pillow 13's reducing-gap planner selects its I;16L
+// reducer, it raises `image has wrong mode`; Rust supports native-u16 reduction.
+
 use crate::compute::registry::support::{ModeSupport, OperationId, StrategySelection};
 use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
 
@@ -14,7 +17,7 @@ pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::serial(
     super::super::helpers::support::INPUTS,
 );
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-75cc2aeb1bde4900b01f7ce223621407; benchmark=pending
 pub(crate) fn resize_selected(
     context: &crate::compute::ExecutionContext,
     selection: &StrategySelection,

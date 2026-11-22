@@ -21,6 +21,7 @@ from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 import datetime as _dt
 from functools import wraps
+import gc
 import gzip
 import hashlib
 import importlib
@@ -126,6 +127,8 @@ TARGET_GPU_ADAPTER_INDEX = os.environ.get(
 ).strip()
 TARGET_ARCHITECTURE_NAMES = {
     "default",
+    "aarch64",
+    "x86_64",
     "neon",
     "sse2",
     "sse3",
@@ -1339,10 +1342,41 @@ def _call_arguments(
         and "encoder_name" in descriptors
         and "args" in descriptors
     )
+    force_frombytes_positional = (
+        opdef["source"].get("path")
+        in {"PIL.Image.frombytes", "PIL.Image.Image.frombytes"}
+        and "args" in descriptors
+    )
     positional: list[Any] = []
     keywords: dict[str, Any] = {}
     handled: set[str] = set()
-    if force_tobytes_positional:
+    if force_frombytes_positional:
+        # ``frombytes(..., *args)`` receives raw decoder arguments after its
+        # ordinary parameters. Keep every preceding parameter positional so
+        # the first raw decoder argument cannot bind to ``mode`` or another
+        # earlier parameter a second time.
+        for param in opdef["source"]["parameters"]:
+            if param["style"] == "variadic_positional":
+                break
+            name = param["id"]
+            if param["style"] not in {"positional", "positional_or_keyword"}:
+                continue
+            if name in descriptors:
+                value = resolve_descriptor(
+                    descriptors[name], bindings, assets, side=side
+                )
+            else:
+                omission = param.get("omission", {})
+                if omission.get("kind") != "literal":
+                    continue
+                value = omission["value"]
+            positional.append(value)
+            handled.add(name)
+        positional.extend(
+            resolve_descriptor(descriptors["args"], bindings, assets, side=side)
+        )
+        handled.add("args")
+    elif force_tobytes_positional:
         encoder_descriptor = descriptors.get(
             "encoder_name", {"kind": "literal", "value": "raw"}
         )
@@ -1578,13 +1612,21 @@ def _metadata(value: Any, name: str) -> Any:
         return None
 
 
+# VERIFY: source=reviewed@2026-11-22; parity=pass@migration-parity-4c5d34d7b71049b6a1d55c9485e0e1e8; benchmark=n/a
 def _serialized_palette(value: Any) -> Any:
     """Serialize the public palette table instead of its opaque wrapper."""
 
+    if getattr(value, "mode", None) not in {"P", "PA"}:
+        return None
     getpalette = getattr(value, "getpalette", None)
     if not callable(getpalette):
         return None
-    palette = getpalette()
+    try:
+        palette = getpalette()
+    except ValueError as error:
+        if str(error) == "image has no palette":
+            return None
+        raise
     return None if palette is None else json_safe(bytes(palette))
 
 
@@ -4144,7 +4186,13 @@ def _phase_totals(
 
 def load_manifest(path: Path) -> dict[str, Any]:
     manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return validate_fixed_manifest(manifest, manifest_path=path)
+    input_store = os.environ.get("MIGRATION_PARITY_INPUT_STORE", "fixtures")
+    input_store = input_store.strip().lower()
+    # PostgreSQL snapshots are the source of input documents for DB-backed
+    # runs, so their manifest is validated structurally here and its indexed
+    # documents are verified against the snapshot during case hydration.
+    manifest_root = None if input_store in {"postgres", "postgresql"} else path
+    return validate_fixed_manifest(manifest, manifest_path=manifest_root)
 
 
 # VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
@@ -4163,12 +4211,46 @@ def ensure_generated_parity_inputs(manifest: dict[str, Any]) -> None:
     build_inputs(manifest, FIXTURE_ROOT, FIXTURE_ROOT / "assets")
 
 
-# VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
-def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: str | None) -> tuple[list[dict[str, Any]], dict[str, str]]:
+# VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=n/a
+def selected_case_ids(args: argparse.Namespace) -> list[str]:
+    """Read explicit case IDs from CLI values and newline-delimited files."""
+
+    selected = [str(item).strip() for item in (args.case_id or [])]
+    for path in args.case_id_file or []:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            case_id = line.strip()
+            if not case_id or case_id.startswith("#"):
+                continue
+            selected.append(case_id)
+    if any(not case_id for case_id in selected):
+        raise ValueError("explicit case IDs must not be empty")
+    if len(selected) != len(set(selected)):
+        raise ValueError("explicit case selection contains duplicate IDs")
+    return selected
+
+
+# VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=n/a
+def load_cases(
+    manifest: dict[str, Any],
+    *,
+    case_ids: set[str] | None,
+    surface: str | None,
+    manifest_path: Path = DEFAULT_MANIFEST,
+) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, str]]:
+    input_store = os.environ.get("MIGRATION_PARITY_INPUT_STORE", "fixtures")
+    input_store = input_store.strip().lower()
+    if input_store in {"postgres", "postgresql"}:
+        return load_cases_from_postgres(
+            manifest,
+            case_ids=case_ids,
+            surface=surface,
+            manifest_path=manifest_path,
+        )
+    if input_store not in {"", "fixture", "fixtures", "file", "files"}:
+        raise ValueError(f"unsupported parity input store: {input_store!r}")
+
     ensure_generated_parity_inputs(manifest)
-    validate_fixed_inputs(
-        manifest, FIXTURE_ROOT, lane="parity", retain_documents=False
-    )
+    validate_fixed_inputs(manifest, FIXTURE_ROOT, lane="parity", retain_documents=False)
     cases: list[dict[str, Any]] = []
     case_inputs: dict[str, str] = {}
     known_case_ids: set[str] = set()
@@ -4194,7 +4276,144 @@ def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: 
             + ", ".join(unknown_case_ids)
         )
     cases.sort(key=lambda item: item["case_id"])
-    return cases, case_inputs
+    return cases, case_inputs, {}
+
+
+# VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=n/a
+def open_postgres_snapshot(
+    manifest: dict[str, Any], manifest_path: Path
+):
+    """Open and validate the immutable input snapshot selected for this run."""
+
+    raw_digest = os.environ.get(
+        "MIGRATION_PARITY_INPUT_SPECIFICATION_DIGEST", ""
+    ).strip()
+    try:
+        specification_digest = bytes.fromhex(raw_digest)
+    except ValueError as exc:
+        raise ValueError(
+            "MIGRATION_PARITY_INPUT_SPECIFICATION_DIGEST must be a SHA-256 hex digest"
+        ) from exc
+    if len(specification_digest) != 32:
+        raise ValueError(
+            "MIGRATION_PARITY_INPUT_SPECIFICATION_DIGEST must be a SHA-256 hex digest"
+        )
+
+    repository_path = str(ROOT)
+    if repository_path not in sys.path:
+        sys.path.insert(0, repository_path)
+    from scripts.migration_parity.pillow_fixture_adapter import (
+        IMPORTER_SCHEMA,
+        PROJECT_ID,
+    )
+    from scripts.parity_store.connection import (
+        DEFAULT_ENV_FILE,
+        database_dsn,
+        load_env_file,
+    )
+    from scripts.parity_store.postgres import PostgresStore
+
+    env_file = Path(os.environ.get("PARITY_STORE_ENV_FILE", DEFAULT_ENV_FILE))
+    load_env_file(env_file)
+    store = PostgresStore.connect(database_dsn())
+    try:
+        specification = store.connection.execute(
+            "SELECT schema_id, source_ref FROM parity_specification "
+            "WHERE project_id = %s AND specification_digest = %s",
+            (PROJECT_ID, specification_digest),
+        ).fetchone()
+        if specification is None or specification[0] != manifest["schema"]:
+            raise ValueError("PostgreSQL snapshot does not match the selected manifest")
+        manifest_row = store.connection.execute(
+            "SELECT document_sha256 FROM parity_specification_document "
+            "WHERE project_id = %s AND specification_digest = %s AND source_path = %s",
+            (PROJECT_ID, specification_digest, specification[1]),
+        ).fetchone()
+        manifest_digest = hashlib.sha256(manifest_path.read_bytes()).digest()
+        if manifest_row is None or bytes(manifest_row[0]) != manifest_digest:
+            raise ValueError("PostgreSQL snapshot manifest digest differs from this checkout")
+        if store.completed_case_import_count(
+            PROJECT_ID, specification_digest, IMPORTER_SCHEMA
+        ) is None:
+            raise ValueError("PostgreSQL parity snapshot is not a verified full import")
+        return store, specification_digest
+    except BaseException:
+        store.close()
+        raise
+
+
+# VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=n/a
+def load_cases_from_postgres(
+    manifest: dict[str, Any],
+    *,
+    case_ids: set[str] | None,
+    surface: str | None,
+    manifest_path: Path,
+) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, str]]:
+    """Hydrate one explicit case selection from an immutable PostgreSQL snapshot."""
+
+    if not case_ids:
+        raise ValueError("PostgreSQL parity input requires explicit case IDs")
+    if len(case_ids) > 10_000:
+        raise ValueError("PostgreSQL parity selections are limited to 10,000 cases per run")
+    repository_path = str(ROOT)
+    if repository_path not in sys.path:
+        sys.path.insert(0, repository_path)
+    from scripts.migration_parity.pillow_fixture_adapter import (
+        record_to_runner_case,
+    )
+    from scripts.migration_parity.pillow_fixture_adapter import PROJECT_ID
+
+    store, specification_digest = open_postgres_snapshot(manifest, manifest_path)
+    try:
+        selected_ids = sorted(case_ids)
+        selected = store.selected_case_digests(
+            PROJECT_ID,
+            specification_digest,
+            case_ids=selected_ids,
+        )
+        if {case_id for case_id, _digest in selected} != case_ids:
+            raise ValueError("PostgreSQL case selection contains unknown case IDs")
+        records = store.load_cases(PROJECT_ID, specification_digest, selected_ids)
+        document_paths = sorted({record.source_document for record in records})
+        if not set(document_paths).issubset(manifest["input_index"]["parity"]):
+            raise ValueError("PostgreSQL case references a document outside the manifest")
+        document_rows = store.connection.execute(
+            "SELECT source_path, document_sha256 FROM parity_specification_document "
+            "WHERE project_id = %s AND specification_digest = %s "
+            "AND source_path = ANY(%s)",
+            (PROJECT_ID, specification_digest, document_paths),
+        ).fetchall()
+        document_digests = {
+            path: bytes(digest).hex() for path, digest in document_rows
+        }
+        if set(document_digests) != set(document_paths):
+            raise ValueError("PostgreSQL snapshot is missing a selected source document")
+
+        cases = []
+        case_inputs = {}
+        for record in records:
+            if bytes.fromhex(document_digests[record.source_document]) != record.source_document_digest:
+                raise ValueError(
+                    f"case {record.case_id!r} has a mismatched source-document digest"
+                )
+            case = record_to_runner_case(record)
+            if surface is not None and case["surface"] != surface:
+                continue
+            cases.append(case)
+            case_inputs[record.case_id] = record.source_document
+        cases.sort(key=lambda item: item["case_id"])
+        selected_documents = {case_inputs[case["case_id"]] for case in cases}
+        return (
+            cases,
+            case_inputs,
+            {
+                path: document_digests[path]
+                for path in sorted(selected_documents)
+            },
+        )
+    finally:
+        store.close()
 
 
 def build_operation_index(manifest: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
@@ -5270,16 +5489,12 @@ def compare_case(
     return ("pass" if not diffs else "fail"), diffs
 
 
-def build_identity(
-    manifest_path: Path,
-    input_paths: list[str],
-    command: dict[str, Any],
-    cases: list[dict[str, Any]],
-    case_inputs: dict[str, str],
-    *,
-    target_dirty: bool,
-) -> dict[str, Any]:
-    manifest = load_manifest(manifest_path)
+# VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=n/a
+def identity_asset_records(
+    cases: Iterable[dict[str, Any]], case_inputs: dict[str, str]
+) -> list[dict[str, Any]]:
+    """Return lightweight input asset provenance without copying asset data."""
+
     assets: list[dict[str, Any]] = []
     for case in cases:
         input_path = case_inputs[case["case_id"]]
@@ -5312,6 +5527,21 @@ def build_identity(
                     "sha256": digest,
                 }
             )
+    return assets
+
+
+# VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=n/a
+def build_identity(
+    manifest_path: Path,
+    input_paths: list[str],
+    command: dict[str, Any],
+    cases: list[dict[str, Any]],
+    case_inputs: dict[str, str],
+    *,
+    target_dirty: bool,
+    input_document_digests: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    manifest = load_manifest(manifest_path)
     return {
         "run_id": f"migration-parity-{uuid.uuid4().hex}",
         "started_at": now_rfc3339(),
@@ -5321,11 +5551,12 @@ def build_identity(
             {
                 "path": path,
                 "schema": "migration-parity/parity-input@3",
-                "sha256": sha256_file(ROOT / "pillow-rs" / "tests" / "fixtures" / path),
+                "sha256": (input_document_digests or {}).get(path)
+                or sha256_file(ROOT / "pillow-rs" / "tests" / "fixtures" / path),
             }
             for path in input_paths
         ],
-        "assets": assets,
+        "assets": identity_asset_records(cases, case_inputs),
         "oracles": [{"oracle_id": ORACLE_ID, "name": ORACLE_NAME, "version": ORACLE_VERSION, "runtime": "CPython 3.12"}],
         "targets": [{"target_profile": target_profile_for_backend(TARGET_BACKEND), "target_id": TARGET_ID, "revision": git_revision(), "dirty": target_dirty, "runtime": platform.python_version(), "backend": TARGET_BACKEND, "architecture": TARGET_ARCHITECTURE if TARGET_BACKEND == "cpu" else None, "features": TARGET_FEATURES.copy()}],
         "command": command,
@@ -5442,6 +5673,7 @@ def comparison_record(
     return record
 
 
+# VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=n/a
 def run_orchestrator(args: argparse.Namespace) -> int:
     attestation_path = getattr(args, "attestation_output", None)
     producer_output = getattr(args, "producer_attestation_output", None)
@@ -5455,9 +5687,35 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     )
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
-    case_ids = set(args.case_id or [])
-    cases, case_inputs = load_cases(manifest, case_ids=case_ids or None, surface=args.surface)
+    selected_ids = selected_case_ids(args)
+    case_ids = set(selected_ids)
     operation_index = build_operation_index(manifest)
+    target_timeout = effective_adapter_timeout(args.timeout)
+    input_store = os.environ.get("MIGRATION_PARITY_INPUT_STORE", "fixtures")
+    if input_store.strip().lower() in {"postgres", "postgresql"}:
+        sidecar_requested = bool(
+            os.environ.get("MIGRATION_PARITY_EXECUTION_OUTPUT")
+            or os.environ.get("MIGRATION_GPU_WGSL_COVERAGE_OUTPUT")
+        )
+        if sidecar_requested:
+            raise ValueError(
+                "PostgreSQL streamed parity does not support execution or shader sidecars"
+            )
+        return run_orchestrator_postgres_streamed(
+            args,
+            manifest_path,
+            manifest,
+            selected_ids,
+            operation_index,
+            target_timeout,
+            attestation=attestation,
+        )
+    cases, case_inputs, input_document_digests = load_cases(
+        manifest,
+        case_ids=case_ids or None,
+        surface=args.surface,
+        manifest_path=manifest_path,
+    )
     cases, case_inputs = select_cases_for_profile(
         cases,
         case_inputs,
@@ -5470,7 +5728,6 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         case_inputs = {case["case_id"]: case_inputs[case["case_id"]] for case in cases}
     if not cases:
         raise ValueError("no active parity cases selected")
-    target_timeout = effective_adapter_timeout(args.timeout)
     batch_size = parity_batch_size(len(cases))
     sidecar_requested = bool(
         os.environ.get("MIGRATION_PARITY_EXECUTION_OUTPUT")
@@ -5489,6 +5746,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
             operation_index,
             target_timeout,
             batch_size,
+            input_document_digests=input_document_digests,
             **({"attestation": attestation} if attestation is not None else {}),
         )
     command = {
@@ -5504,6 +5762,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         cases,
         case_inputs,
         target_dirty=git_dirty(),
+        input_document_digests=input_document_digests,
     )
     started = now_rfc3339()
     source_cases = [
@@ -5632,6 +5891,181 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     return 0 if summary["failed"] == 0 and summary["not_run"] == 0 else 1
 
 
+def iter_postgres_case_batches(
+    store: Any,
+    project_id: str,
+    specification_digest: bytes,
+    case_ids: list[str],
+    case_inputs: dict[str, str],
+    document_digests: dict[str, str],
+    identity: dict[str, Any],
+) -> Iterable[list[dict[str, Any]]]:
+    """Hydrate bounded input batches and release stored values after use."""
+
+    from scripts.migration_parity.pillow_fixture_adapter import record_to_runner_case
+
+    for records, _estimated_bytes in store.iter_case_batches(
+        project_id,
+        specification_digest,
+        maximum_cases=500,
+        maximum_estimated_bytes=16 * 1024 * 1024,
+        case_ids=case_ids,
+    ):
+        cases = []
+        for record in records:
+            if (
+                bytes.fromhex(document_digests[record.source_document])
+                != record.source_document_digest
+            ):
+                raise ValueError(
+                    f"case {record.case_id!r} has a mismatched source-document digest"
+                )
+            cases.append(record_to_runner_case(record))
+        identity["assets"].extend(identity_asset_records(cases, case_inputs))
+        del records
+        if cases:
+            yield cases
+        del cases
+
+
+def run_orchestrator_postgres_streamed(
+    args: argparse.Namespace,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    selected_ids: list[str],
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+    target_timeout: int,
+    *,
+    attestation: AttestationCollector | None = None,
+) -> int:
+    """Run a selected PostgreSQL corpus without hydrating it all at once."""
+
+    if not selected_ids:
+        raise ValueError("PostgreSQL parity input requires explicit case IDs")
+    if len(selected_ids) > 10_000:
+        raise ValueError("PostgreSQL parity selections are limited to 10,000 cases per run")
+
+    # The stored input trees are acyclic. Reference counting releases each
+    # bounded batch; automatic cyclic collection otherwise scans the complete
+    # live batch repeatedly during deserialization.
+    gc.disable()
+    store, specification_digest = open_postgres_snapshot(manifest, manifest_path)
+    try:
+        from scripts.migration_parity.pillow_fixture_adapter import PROJECT_ID
+
+        ordered_ids = sorted(selected_ids)
+        selected_digests = store.selected_case_digests(
+            PROJECT_ID,
+            specification_digest,
+            case_ids=ordered_ids,
+        )
+        if {case_id for case_id, _digest in selected_digests} != set(ordered_ids):
+            raise ValueError("PostgreSQL case selection contains unknown case IDs")
+
+        metadata_rows = store.connection.execute(
+            "SELECT case_id, surface_id, operation_id, verification_kind, source_document "
+            "FROM parity_case WHERE project_id = %s AND specification_digest = %s "
+            "AND case_id = ANY(%s) ORDER BY case_id",
+            (PROJECT_ID, specification_digest, ordered_ids),
+        ).fetchall()
+        if len(metadata_rows) != len(ordered_ids):
+            raise ValueError("PostgreSQL case metadata does not match the selected IDs")
+        case_inputs_all = {
+            case_id: source_document
+            for case_id, surface, _operation, _verification, source_document in metadata_rows
+            if args.surface is None or surface == args.surface
+        }
+        metadata_cases = [
+            {
+                "case_id": case_id,
+                "surface": surface,
+                "operation": operation,
+                "verification": verification.replace("_", "-"),
+            }
+            for case_id, surface, operation, verification, _source_document in metadata_rows
+            if args.surface is None or surface == args.surface
+        ]
+        cases_for_profile, case_inputs = select_cases_for_profile(
+            metadata_cases,
+            case_inputs_all,
+            operation_index,
+            profile=target_profile_for_backend(TARGET_BACKEND),
+            explicitly_selected=set(ordered_ids),
+        )
+        if args.limit is not None:
+            cases_for_profile = cases_for_profile[: args.limit]
+            case_inputs = {
+                case["case_id"]: case_inputs[case["case_id"]]
+                for case in cases_for_profile
+            }
+        if not cases_for_profile:
+            raise ValueError("no active parity cases selected")
+
+        case_batch_ids = [case["case_id"] for case in cases_for_profile]
+        document_paths = sorted(set(case_inputs.values()))
+        if not set(document_paths).issubset(manifest["input_index"]["parity"]):
+            raise ValueError("PostgreSQL case references a document outside the manifest")
+        document_rows = store.connection.execute(
+            "SELECT source_path, document_sha256 FROM parity_specification_document "
+            "WHERE project_id = %s AND specification_digest = %s "
+            "AND source_path = ANY(%s)",
+            (PROJECT_ID, specification_digest, document_paths),
+        ).fetchall()
+        document_digests = {
+            path: bytes(digest).hex() for path, digest in document_rows
+        }
+        if set(document_digests) != set(document_paths):
+            raise ValueError("PostgreSQL snapshot is missing a selected source document")
+
+        command = {
+            "command_id": "parity",
+            "argv": current_command_argv(),
+            "cwd": current_command_cwd(),
+            "timeout_seconds": target_timeout,
+        }
+        identity = build_identity(
+            manifest_path,
+            document_paths,
+            command,
+            [],
+            {},
+            target_dirty=git_dirty(),
+            input_document_digests=document_digests,
+        )
+        identity["assets"] = []
+        case_summaries = [
+            {
+                "case_id": case["case_id"],
+                "verification": case.get("verification", "parity"),
+            }
+            for case in cases_for_profile
+        ]
+        batches = iter_postgres_case_batches(
+            store,
+            PROJECT_ID,
+            specification_digest,
+            case_batch_ids,
+            case_inputs,
+            document_digests,
+            identity,
+        )
+        return run_orchestrator_batched(
+            args,
+            manifest_path,
+            None,
+            None,
+            operation_index,
+            target_timeout,
+            1,
+            attestation=attestation,
+            case_batches=batches,
+            case_summaries=case_summaries,
+            identity_override=identity,
+        )
+    finally:
+        store.close()
+
+
 def parity_batch_size(total: int) -> int:
     """Return the optional low-memory adapter batch size.
 
@@ -5652,16 +6086,21 @@ def parity_batch_size(total: int) -> int:
     return min(value, total)
 
 
+# VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=n/a
 def run_orchestrator_batched(
     args: argparse.Namespace,
     manifest_path: Path,
-    cases: list[dict[str, Any]],
-    case_inputs: dict[str, str],
+    cases: list[dict[str, Any]] | None,
+    case_inputs: dict[str, str] | None,
     operation_index: dict[tuple[str, str], dict[str, Any]],
     target_timeout: int,
     batch_size: int,
     *,
+    input_document_digests: dict[str, str] | None = None,
     attestation: AttestationCollector | None = None,
+    case_batches: Iterable[list[dict[str, Any]]] | None = None,
+    case_summaries: list[dict[str, Any]] | None = None,
+    identity_override: dict[str, Any] | None = None,
 ) -> int:
     """Run parity in bounded batches and stream the unchanged result schema.
 
@@ -5677,14 +6116,23 @@ def run_orchestrator_batched(
         "cwd": current_command_cwd(),
         "timeout_seconds": target_timeout,
     }
-    identity = build_identity(
-        manifest_path,
-        sorted(set(case_inputs.values())),
-        command,
-        cases,
-        case_inputs,
-        target_dirty=git_dirty(),
-    )
+    summary_cases = case_summaries if case_summaries is not None else cases
+    if summary_cases is None:
+        raise ValueError("batched parity requires case summaries")
+    if identity_override is None:
+        if cases is None or case_inputs is None:
+            raise ValueError("batched parity requires cases to build its identity")
+        identity = build_identity(
+            manifest_path,
+            sorted(set(case_inputs.values())),
+            command,
+            cases,
+            case_inputs,
+            target_dirty=git_dirty(),
+            input_document_digests=input_document_digests,
+        )
+    else:
+        identity = identity_override
     started = now_rfc3339()
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -5720,8 +6168,16 @@ def run_orchestrator_batched(
         # fails. JSON object key order is intentionally irrelevant to the
         # versioned result validator.
         temporary.write('{"schema":"migration-parity/parity-result@3","comparisons":[')
-        for start in range(0, len(cases), batch_size):
-            batch = cases[start : start + batch_size]
+        if case_batches is None:
+            if cases is None:
+                raise ValueError("batched parity requires cases or a case-batch iterator")
+            batch_iterator = (
+                cases[start : start + batch_size]
+                for start in range(0, len(cases), batch_size)
+            )
+        else:
+            batch_iterator = case_batches
+        for batch in batch_iterator:
             source_cases = [
                 case for case in batch if verification_kind(case) == "parity"
             ]
@@ -5790,6 +6246,7 @@ def run_orchestrator_batched(
                         "message": str(exc),
                     }
                 )
+                del batch, source_cases
                 continue
             if batch_target_handshake is None:
                 raise RuntimeError("target adapter returned no identity handshake")
@@ -5840,7 +6297,9 @@ def run_orchestrator_batched(
                         "verification": comparison["verification"],
                     }
                 )
-            del source_results, target_results
+            del case, comparison, diffs, outcome
+            del source_results, target_results, source_cases
+            del batch
         status = "completed" if not infrastructure_errors else "infrastructure_failed"
     except RuntimeError as exc:
         status = "infrastructure_failed"
@@ -5855,7 +6314,9 @@ def run_orchestrator_batched(
     finally:
         identity["started_at"] = started
         identity["finished_at"] = now_rfc3339()
-        summary = parity_summary(cases, outcome_by_case, len(infrastructure_errors))
+        summary = parity_summary(
+            summary_cases, outcome_by_case, len(infrastructure_errors)
+        )
         temporary.write("],\"identity\":")
         json.dump(identity, temporary, separators=(",", ":"))
         temporary.write(',"status":')
@@ -5882,7 +6343,13 @@ def run_orchestrator_batched(
     print(json.dumps(summary, sort_keys=True))
     if infrastructure_errors:
         return 2
-    return 0 if summary["failed"] == 0 and summary["not_run"] == 0 and comparisons == len(cases) else 1
+    return (
+        0
+        if summary["failed"] == 0
+        and summary["not_run"] == 0
+        and comparisons == len(summary_cases)
+        else 1
+    )
 
 
 def write_result(path: Path, result: dict[str, Any]) -> None:
@@ -6637,6 +7104,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--producer-attestation-output", type=Path)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--case-id", action="append")
+    parser.add_argument(
+        "--case-id-file",
+        action="append",
+        type=Path,
+        help="read explicit case IDs from newline-delimited files",
+    )
     parser.add_argument("--surface")
     parser.add_argument("--timeout", type=int, default=3600)
     parser.add_argument("--side", choices=("source", "target"))

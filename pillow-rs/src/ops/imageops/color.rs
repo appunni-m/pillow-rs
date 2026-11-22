@@ -342,6 +342,7 @@ fn resolve_named_color(name: &str, mode: Mode) -> Result<(u8, u8, u8, u8), PilEr
     Ok(color_value(value, mode))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn resolve_color_components(values: &[i64], mode: Mode) -> Result<(u8, u8, u8, u8), PilError> {
     match values {
         [value] => Ok(scalar_color(*value, mode)),
@@ -394,14 +395,18 @@ fn resolve_color_components(values: &[i64], mode: Mode) -> Result<(u8, u8, u8, u
                         | Mode::ImageLumaA16
                 ) =>
         {
-            let alpha = if matches!(
-                mode,
-                Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8
-            ) && values.len() == 4
-            {
-                clamp_color_component(values[3])
-            } else {
-                u8::MAX
+            let alpha = match (mode, values.len()) {
+                (
+                    Mode::ImageRgb8
+                    | Mode::ImageYCbCr8
+                    | Mode::ImageLab8
+                    | Mode::ImageHsv8
+                    | Mode::ImageRgba8
+                    | Mode::ImageRgbPremultiplied8
+                    | Mode::ImageRgbx8,
+                    4,
+                ) => clamp_color_component(values[3]),
+                _ => u8::MAX,
             };
             Ok((
                 clamp_color_component(*red),

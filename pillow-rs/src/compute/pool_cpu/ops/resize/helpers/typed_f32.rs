@@ -4,7 +4,7 @@ use super::{coefficients, typed_nearest::BoxBounds};
 use crate::pipeline::ResampleFilter;
 use crate::raster::{ImageBuffer, Pixel};
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn resize<P: Pixel<Subpixel = f32>>(
     input: &ImageBuffer<P, Vec<f32>>,
     destination_width: u32,
@@ -73,7 +73,7 @@ pub(crate) fn resize<P: Pixel<Subpixel = f32>>(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn resize_with_alpha<P: Pixel<Subpixel = f32>>(
     input: &ImageBuffer<P, Vec<f32>>,
     destination_width: u32,
@@ -104,7 +104,7 @@ pub(crate) fn resize_with_alpha<P: Pixel<Subpixel = f32>>(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn premultiply_f32(image: &mut ImageBuffer<impl Pixel<Subpixel = f32>, Vec<f32>>, channels: usize) {
     for pixel in image.chunks_exact_mut(channels) {
         let alpha = pixel[channels - 1];
@@ -114,7 +114,7 @@ fn premultiply_f32(image: &mut ImageBuffer<impl Pixel<Subpixel = f32>, Vec<f32>>
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn unpremultiply_f32(
     image: &mut ImageBuffer<impl Pixel<Subpixel = f32>, Vec<f32>>,
     channels: usize,
@@ -127,7 +127,7 @@ fn unpremultiply_f32(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn horizontal_pass(
     source_row: &[f32],
     coefficients: &crate::ops::pil_resize::FilterCoeffsF64,
@@ -151,7 +151,7 @@ fn horizontal_pass(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn vertical_pass(
     intermediate: &[f32],
     coefficients: &crate::ops::pil_resize::FilterCoeffsF64,

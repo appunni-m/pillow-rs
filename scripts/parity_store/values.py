@@ -331,7 +331,7 @@ def canonical_value_digest(value: Any) -> bytes:
             digest.update(struct.pack(">d", item))
         elif isinstance(item, str):
             digest.update(b"s")
-            feed(item.encode("utf-8"))
+            feed(item.encode("utf-8", "surrogatepass"))
         elif isinstance(item, (bytes, bytearray, memoryview)):
             raw = bytes(item)
             digest.update(b"x")
@@ -350,7 +350,7 @@ def canonical_value_digest(value: Any) -> bytes:
             for key in keys:
                 if not isinstance(key, str):
                     raise TypeError("object keys must be strings")
-                feed(key.encode("utf-8"))
+                feed(key.encode("utf-8", "surrogatepass"))
                 visit(item[key], depth + 1)
         elif isinstance(item, Sequence) and not isinstance(item, (str, bytes, bytearray)):
             digest.update(b"a")
@@ -409,7 +409,11 @@ def rebuild_value_tree(
         elif kind == "float64":
             value = struct.unpack(">d", bytes(row["float64_bits"]))[0]
         elif kind == "text":
-            value = row["text_value"]
+            stored_text = row["text_value"]
+            if isinstance(stored_text, str):
+                value = stored_text
+            else:
+                value = bytes(stored_text).decode("utf-8", "surrogatepass")
         elif kind == "bytes":
             digest = bytes(row["blob_sha256"])
             value = blobs[digest]

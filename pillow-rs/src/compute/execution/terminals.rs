@@ -23,6 +23,7 @@ use crate::compute::registry::support::StrategySelection;
 /// Runs a serial CPU terminal that folds a pending image pipeline into its
 /// result instead of materializing an intermediate image. The closure must
 /// produce the exact public result for every operation in `ops`.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_prepared_cpu_terminal<T>(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
@@ -97,6 +98,7 @@ pub(crate) fn execute_prepared_cpu_terminal<T>(
 
 /// Runs an architecture-specialized CPU terminal and records its vector work.
 /// The closure returns vector-block and scalar-tail counts with the result.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_prepared_cpu_arch_terminal<T>(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
@@ -132,6 +134,7 @@ pub(crate) fn execute_prepared_cpu_arch_terminal<T>(
     Ok(result)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn record_cpu_arch_terminal_telemetry(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],

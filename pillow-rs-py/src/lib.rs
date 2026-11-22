@@ -41,7 +41,6 @@ mod gpu_batch;
 mod inputs;
 pub(crate) use inputs::*;
 mod image;
-mod image_chops;
 mod image_color;
 mod image_filter;
 mod image_ops;
@@ -52,7 +51,6 @@ mod telemetry;
 pub(crate) use errors::map_error;
 
 pub(crate) use image::PyImage;
-pub(crate) use image_chops::chops_offset_from_python;
 
 // Pillow's custom exception for images exceeding its decompression-bomb limit.
 #[cfg(not(feature = "parallel-wheel"))]
@@ -88,7 +86,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     font::register_classes(m)?;
     font::register_functions(m)?;
     image_ops::register(m)?;
-    image_chops::register(m)?;
     image_color::register(m)?;
     image::register_analysis(m)?;
     image::register_functions(m)?;

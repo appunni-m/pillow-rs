@@ -170,17 +170,14 @@ pub(crate) fn color_saturation_vector_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn chops_equal_dimensions_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     match input.request {
         RequestFacts::ChopsBinary { other, .. }
             if input.width == other.width && input.height == other.height =>
         {
-            // The serial three-band strategy maps LAB's biased chroma bytes
-            // to signed samples before applying the operation. The current
-            // native-byte vector kernels do not, so keep that pair on Default.
-            if channels == 3 && other.mode == Mode::ImageLab8 {
-                return GuardAssessment::Ineligible;
-            }
+            // Chops applies raw per-byte arithmetic to compatible layouts;
+            // three-band LAB uses the same RgbImage carrier as RGB/YCbCr/HSV.
             chops_native_bytes_guard(input, other, channels)
         }
         RequestFacts::Unspecified => GuardAssessment::Deferred,
@@ -188,6 +185,7 @@ pub(crate) fn chops_equal_dimensions_guard(input: StrategyInputs, channels: u8) 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn chops_add_subtract_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let (other, scale_bits, offset_bits) = match input.request {
         RequestFacts::ChopsBinary {
@@ -199,11 +197,6 @@ pub(crate) fn chops_add_subtract_guard(input: StrategyInputs, channels: u8) -> G
         _ => return GuardAssessment::Ineligible,
     };
     if input.width != other.width || input.height != other.height {
-        return GuardAssessment::Ineligible;
-    }
-    // Match the serial strategy's signed LAB chroma mapping until the vector
-    // implementation supports this secondary mode natively.
-    if channels == 3 && other.mode == Mode::ImageLab8 {
         return GuardAssessment::Ineligible;
     }
     let scale = f64::from_bits(scale_bits);
@@ -754,6 +747,7 @@ pub(crate) fn rotate_vector_bytes_guard(
     layout
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn transform_byte_kernels_guard(
     input: StrategyInputs,
     channels: u8,

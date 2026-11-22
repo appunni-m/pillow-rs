@@ -12,6 +12,11 @@ use super::{
     materialization_cache,
 };
 
+type MetadataExecutionRoute = (
+    Option<crate::compute::Backend>,
+    crate::compute::ExecutionContext,
+);
+
 /// Prepared fields for Pillow's lightweight public EXIF compatibility object.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ExifCompatFields {
@@ -381,7 +386,27 @@ impl Image {
     /// # Errors
     ///
     /// Returns an error if a lazy/deferred indexed image cannot be materialized.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn apply_transparency(&mut self) -> Result<(), PilError> {
+        self.apply_transparency_with_route(None)
+    }
+
+    /// Commits palette transparency after validation using the caller's route.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn apply_transparency_with_execution_context(
+        &mut self,
+        pinned_backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.apply_transparency_with_route(Some((pinned_backend, context)))
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn apply_transparency_with_route(
+        &mut self,
+        route: Option<MetadataExecutionRoute>,
+    ) -> Result<(), PilError> {
         let Some(pending) = self.pending_palette_transparency() else {
             return Ok(());
         };
@@ -437,7 +462,14 @@ impl Image {
             data.palette_alpha = palette_alpha;
             clear_palette_info_alpha(&mut data.info);
         } else {
-            let indices = self.materialize()?.to_luma8();
+            let materialized = match route {
+                Some((pinned_backend, context)) => self
+                    .clone()
+                    .with_backend_and_execution_context(pinned_backend, context)
+                    .materialize()?,
+                None => self.materialize()?,
+            };
+            let indices = materialized.to_luma8();
             let source_format = self.source_format();
             let mut info = self.image_info();
             clear_palette_info_alpha(&mut info);
@@ -564,8 +596,9 @@ impl Image {
 
     /// Returns XMP metadata fields.
     ///
-    /// Core does not currently parse XMP packets from encoded containers, so
-    /// this returns an empty map.
+    /// TODO(pillow-rs#3ptb): parse retained XMP packets in Rust and honor the
+    /// Python adapter's `strip_namespaces` option.
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-7c21795fe4c64b9fb62b5c0f747ef248; benchmark=n/a
     pub fn getxmp(&self) -> std::collections::HashMap<String, String> {
         std::collections::HashMap::new()
     }
@@ -677,9 +710,45 @@ impl Image {
         Ok((img.width(), img.height()))
     }
 
+    /// Returns dimensions available from headers, cached pixels, or a fully
+    /// known pipeline without decoding an unknown lazy source.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+    pub(crate) fn known_size(&self) -> Option<(u32, u32)> {
+        match self {
+            Image::Loaded(data) => Some(data.image.dimensions()),
+            Image::Paletted(data) => Some(data.indices.dimensions()),
+            Image::Bytes {
+                info, materialized, ..
+            } => materialized
+                .get()
+                .and_then(|result| result.as_ref().ok())
+                .map(|image| image.dimensions())
+                .or_else(|| info.as_ref().map(|info| (info.width, info.height))),
+            Image::Pipeline {
+                source,
+                ops,
+                materialized,
+                shape,
+                ..
+            } => {
+                if let Some(image) = materialized.get().and_then(|result| result.as_ref().ok()) {
+                    return Some(image.dimensions());
+                }
+                if let Some(Ok(Some(dimensions))) = shape.get() {
+                    return Some(*dimensions);
+                }
+                let mut dimensions = source.known_size()?;
+                for op in ops.iter() {
+                    dimensions = known_pipeline_op_dimensions(op, dimensions)?;
+                }
+                Some(dimensions)
+            }
+        }
+    }
+
     /// Returns a known exact raster identity without materializing pixels.
     ///
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn known_mode_identity(&self) -> Option<Mode> {
         match self {
             Image::Loaded(data) => Some(data.image.mode()),
@@ -711,7 +780,7 @@ impl Image {
     /// pipeline can provide the identity. Host-facing Pillow spellings remain
     /// available through [`Image::mode`].
     ///
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn mode_identity(&self) -> Result<Mode, PilError> {
         if let Some(mode) = self.known_mode_identity() {
             return Ok(mode);

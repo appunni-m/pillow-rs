@@ -1,6 +1,5 @@
 """ImageFilter — convolution kernels and filter classes. Pillow-compatible module."""
 from abc import ABC, abstractmethod
-from functools import reduce
 
 from ._core import Image as RustImage
 from . import _core
@@ -11,6 +10,16 @@ class Filter(ABC):
     @abstractmethod
     def filter(self, rust_image: RustImage) -> RustImage:
         """Transform a Rust-owned image handle and return the filtered handle."""
+
+    # TODO(pillow-rs#3ptb): verify callback outputs, callback fault order, and
+    # selected/fallback receipts through the live ImagingCore carrier.
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    def _filter_with_execution_context(self, rust_image, _execution_context):
+        # Pillow passes the live ImagingCore to user filters. Keep the same
+        # PyImage object so callback mutations remain visible on Image.im;
+        # context-aware ImagingCore methods recover the route from the active
+        # Image.filter scope.
+        return self.filter(rust_image)
 
 
 class MultibandFilter(Filter):
@@ -24,6 +33,7 @@ class BuiltinFilter(MultibandFilter):
     _kernel_name = ""
     _kernel_filterargs = None
 
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
     def filter(self, rust_image):
         if rust_image.mode == "P":
             raise ValueError("cannot filter palette images")
@@ -135,20 +145,41 @@ class GaussianBlur(MultibandFilter):
 
     def __init__(self, radius=2):
         self.radius = radius
+
+    # TODO(pillow-rs#3ptb): freeze exact-zero copy and radius coercion faults
+    # against Pillow's parity receipt.
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
     def filter(self, rust_image):
-        return rust_image.gaussian_blur(self.radius)
+        xy = self.radius
+        if xy == (0, 0) or xy == 0:
+            return rust_image.copy()
+        if isinstance(xy, (int, float)):
+            xy = (xy, xy)
+        return rust_image.gaussian_blur(xy)
 
 
 class BoxBlur(MultibandFilter):
     name = "BoxBlur"
 
+    # TODO(pillow-rs#3ptb): freeze constructor rejection, exact-zero copy, and
+    # delayed malformed pair parsing against Pillow's parity receipt.
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
     def __init__(self, radius):
         xy = radius if isinstance(radius, (tuple, list)) else (radius, radius)
-        if xy[0] < 0 or xy[1] < 0:
+        if not all(value >= 0 for value in xy):
             raise ValueError("radius must be >= 0")
+        if any(value >= 2**31 for value in xy):
+            raise ValueError("radius too large")
         self.radius = radius
+
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
     def filter(self, rust_image):
-        return rust_image.box_blur(self.radius)
+        xy = self.radius
+        if xy == (0, 0) or xy == 0:
+            return rust_image.copy()
+        if isinstance(xy, (int, float)):
+            xy = (xy, xy)
+        return rust_image.box_blur(xy)
 
 
 class UnsharpMask(MultibandFilter):
@@ -158,14 +189,34 @@ class UnsharpMask(MultibandFilter):
         self.radius = radius
         self.percent = percent
         self.threshold = threshold
+
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def filter(self, rust_image):
-        return rust_image.unsharp_mask(self.radius, self.percent, self.threshold)
+        return self._filter_with_execution_context(rust_image, None)
+
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    def _filter_with_execution_context(self, rust_image, execution_context):
+        return rust_image.unsharp_mask(
+            self.radius, self.percent, self.threshold, execution_context
+        )
+
+
+# VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-7c21795fe4c64b9fb62b5c0f747ef248; benchmark=n/a
+def _validate_rank_filter(size, rank):
+    if size % 2 == 0:
+        raise ValueError("bad filter size")
+    if size * size * 4 > (2**31 - 1):
+        raise ValueError("filter size too large")
+    if rank < 0 or rank >= size * size:
+        raise ValueError("bad rank value")
 
 
 class MaxFilter(Filter):
     name = "Max"
 
+    # VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-7c21795fe4c64b9fb62b5c0f747ef248; benchmark=n/a
     def __init__(self, size=3):
+        _validate_rank_filter(size, size * size - 1)
         self.size = size
     def filter(self, rust_image):
         return rust_image.max_filter(self.size)
@@ -174,7 +225,9 @@ class MaxFilter(Filter):
 class MinFilter(Filter):
     name = "Min"
 
+    # VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-7c21795fe4c64b9fb62b5c0f747ef248; benchmark=n/a
     def __init__(self, size=3):
+        _validate_rank_filter(size, 0)
         self.size = size
     def filter(self, rust_image):
         return rust_image.min_filter(self.size)
@@ -183,7 +236,9 @@ class MinFilter(Filter):
 class MedianFilter(Filter):
     name = "Median"
 
+    # VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-7c21795fe4c64b9fb62b5c0f747ef248; benchmark=n/a
     def __init__(self, size=3):
+        _validate_rank_filter(size, size * size // 2)
         self.size = size
     def filter(self, rust_image):
         return rust_image.median_filter(self.size)
@@ -194,14 +249,22 @@ class ModeFilter(Filter):
 
     def __init__(self, size=3):
         self.size = size
+
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def filter(self, rust_image):
-        return rust_image.modefilter(self.size)
+        return self._filter_with_execution_context(rust_image, None)
+
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    def _filter_with_execution_context(self, rust_image, execution_context):
+        return rust_image.modefilter(self.size, execution_context)
 
 
 class RankFilter(Filter):
     name = "Rank"
 
+    # VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-7c21795fe4c64b9fb62b5c0f747ef248; benchmark=n/a
     def __init__(self, size, rank):
+        _validate_rank_filter(size, rank)
         self.size = size
         self.rank = rank
     def filter(self, rust_image):
@@ -211,10 +274,13 @@ class RankFilter(Filter):
 class Kernel(BuiltinFilter):
     name = "Kernel"
 
+    # TODO(pillow-rs#3ptb): freeze empty/default-scale and custom numeric
+    # coefficient conversion faults against Pillow's parity receipt.
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
     def __init__(self, size, kernel, scale=None, offset=0):
         # Pillow computes the default scale before validating coefficient count.
         if scale is None:
-            scale = reduce(lambda a, b: a + b, kernel)
+            scale = sum(kernel)
         if size[0] * size[1] != len(kernel):
             raise ValueError("not enough coefficients in kernel")
         self.size = size
@@ -325,6 +391,7 @@ class Color3DLUT(MultibandFilter):
             target_mode=result_mode,
         )
 
+    # VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     def filter(self, rust_image):
         """Apply 3D LUT to image using Rust trilinear interpolation."""
         return rust_image.color_lut_3d(

@@ -17,6 +17,7 @@ pub(crate) struct CropRegion {
 }
 
 impl CropRegion {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn new(
         image_width: u32,
         image_height: u32,
@@ -56,10 +57,12 @@ pub(crate) struct ByteCrop<'a, P: Pixel<Subpixel = u8>> {
 }
 
 impl<'a, P: Pixel<Subpixel = u8>> ByteCrop<'a, P> {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn dimensions(region: CropRegion) -> Result<CheckedDims, PilError> {
         CheckedDims::new(region.width, region.height, P::CHANNEL_COUNT)
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn new(
         image: &'a ImageBuffer<P, Vec<u8>>,
         region: CropRegion,
@@ -74,6 +77,7 @@ impl<'a, P: Pixel<Subpixel = u8>> ByteCrop<'a, P> {
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {
         let channels = usize::from(P::CHANNEL_COUNT);
         let source_stride = self.image.width() as usize * channels;
@@ -114,10 +118,12 @@ pub(crate) struct SampleCrop<'a, P: Pixel> {
 }
 
 impl<'a, P: Pixel> SampleCrop<'a, P> {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn new(image: &'a ImageBuffer<P, Vec<P::Subpixel>>, region: CropRegion) -> Self {
         Self { image, region }
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> ImageBuffer<P, Vec<P::Subpixel>> {
         crate::raster::dynamic::crop_buffer(
             self.image,

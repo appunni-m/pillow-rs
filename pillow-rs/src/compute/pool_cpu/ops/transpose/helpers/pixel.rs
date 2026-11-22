@@ -68,9 +68,9 @@ pub(crate) fn remap_hidden_lanes(
     Ok(())
 }
 
-const TRANSPOSE_TILE_SIZE: usize = 32;
+pub(crate) const TRANSPOSE_TILE_SIZE: usize = 32;
 const TRANSPOSE_RGBA_TILE_SIZE: usize = 16;
-const TRANSPOSE_TILE_THRESHOLD_PIXELS: usize = 256 * 1024;
+pub(crate) const TRANSPOSE_TILE_THRESHOLD_PIXELS: usize = 256 * 1024;
 
 /// Reverses complete source rows using the same row-span algorithm as the
 /// mode-preserving `DynamicImage::flipv` fallback.

@@ -3,7 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{GrayImage, RgbaImage};
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn affine(image: &mut RgbaImage, scale: f64, offset: f64) {
     for pixel in image.pixels_mut() {
         let value = i32::from_le_bytes(pixel.0);
@@ -11,7 +11,7 @@ pub(crate) fn affine(image: &mut RgbaImage, scale: f64, offset: f64) {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn callable<F>(image: &mut RgbaImage, callback: &mut F) -> Result<(), PilError>
 where
     F: FnMut(f64) -> Result<f64, PilError>,
@@ -24,7 +24,7 @@ where
 }
 
 /// Maps each signed I sample through Pillow's clamped I-to-L byte table.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn to_luma(input: &RgbaImage, lut: &[u8]) -> Result<GrayImage, PilError> {
     let pixel_count = (input.width() as usize)
         .checked_mul(input.height() as usize)

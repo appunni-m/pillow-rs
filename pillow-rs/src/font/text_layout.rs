@@ -402,14 +402,16 @@ fn resolve_multiline_anchor(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// TODO(pillow-rs#3ptb): freeze embedded-color mode precedence for ImageText.Text.
 pub(crate) fn text_layout_font_mode(mode: Mode, embedded_color: bool) -> Mode {
-    if embedded_color {
-        Mode::ImageRgba8
-    } else if matches!(
+    if matches!(
         mode,
         Mode::One | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32
     ) {
         Mode::One
+    } else if embedded_color {
+        Mode::ImageRgba8
     } else {
         Mode::ImageLuma8
     }
@@ -452,6 +454,8 @@ fn vertical_text_positions<'a>(
         .collect()
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// TODO(pillow-rs#3ptb): add long-advance, fractional-anchor, and RGBA-font receipts.
 fn horizontal_text_positions<'a>(
     x: f64,
     y: f64,
@@ -473,7 +477,7 @@ fn horizontal_text_positions<'a>(
         .iter()
         .map(|line| font.getlength_text_with_options(*line, &width_options))
         .collect::<Result<Vec<_>, _>>()?;
-    let max_width = widths.iter().copied().fold(0.0_f32, f32::max) as f64;
+    let max_width = widths.iter().copied().fold(0.0_f64, f64::max);
     let align = options.align.as_deref().unwrap_or("left");
     if !matches!(align, "left" | "center" | "right" | "justify") {
         return Err(PilError::ValueError(
@@ -489,7 +493,7 @@ fn horizontal_text_positions<'a>(
     }
     let mut positioned = Vec::new();
     for (index, &line) in lines.iter().enumerate() {
-        let width_difference = max_width - f64::from(widths[index]);
+        let width_difference = max_width - widths[index];
         let mut left = match align {
             "center" => x + width_difference / 2.0,
             "right" => x + width_difference,
@@ -507,12 +511,8 @@ fn horizontal_text_positions<'a>(
                     .iter()
                     .map(|word| font.getlength_text_with_options(*word, &width_options))
                     .collect::<Result<Vec<_>, _>>()?;
-                let extra = (max_width
-                    - word_widths
-                        .iter()
-                        .map(|width| f64::from(*width))
-                        .sum::<f64>())
-                    / (words.len() - 1) as f64;
+                let extra =
+                    (max_width - word_widths.iter().sum::<f64>()) / (words.len() - 1) as f64;
                 let word_anchor = format!("l{}", anchor.vertical);
                 for (word, width) in words.into_iter().zip(word_widths) {
                     positioned.push(PositionedTextLine {
@@ -521,7 +521,7 @@ fn horizontal_text_positions<'a>(
                         text: word,
                         anchor: word_anchor.clone(),
                     });
-                    left += f64::from(width) + extra;
+                    left += width + extra;
                 }
                 top += line_spacing;
                 continue;

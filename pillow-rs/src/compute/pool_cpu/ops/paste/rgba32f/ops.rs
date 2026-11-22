@@ -30,6 +30,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     "Paste on internal multichannel f32 storage has no Pillow mode contract",
 );
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     destination: &'a Rgba32FImage,
     source: Arc<DynamicImage>,
@@ -53,6 +54,7 @@ pub(crate) fn prepare<'a>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     super::default::paste_impl::execute(strategy)
 }

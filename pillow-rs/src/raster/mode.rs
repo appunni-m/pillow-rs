@@ -79,7 +79,7 @@ impl Mode {
     /// Internal storage identities have no Pillow spelling and therefore
     /// cannot be constructed from this input. Core operation APIs should take
     /// the resulting enum directly instead of accepting mode strings.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     #[must_use]
     pub fn from_pillow_name(name: &str) -> Option<Self> {
         match name {
@@ -329,7 +329,7 @@ impl Mode {
     }
 
     /// Returns the number of Pillow physical byte lanes omitted by the carrier.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     #[must_use]
     pub(crate) const fn hidden_pixel_lane_count(self) -> Option<usize> {
         match self {
@@ -357,7 +357,7 @@ impl Mode {
     }
 
     /// Returns the physical byte offset of one omitted lane in the Pillow pixel.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     #[must_use]
     pub(crate) const fn hidden_pixel_lane_offset(self, lane: usize) -> Option<usize> {
         match (self.hidden_pixel_lane_count(), lane) {
@@ -369,7 +369,7 @@ impl Mode {
     }
 
     /// Returns a byte-carrier byte's position in the Pillow physical pixel.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     #[must_use]
     pub(crate) const fn byte_carrier_physical_offset(self, byte: usize) -> Option<usize> {
         match (

@@ -10,6 +10,7 @@ use crate::raster::buffer::HiddenPixelLanes;
 use super::super::ops::FilterRequest;
 
 /// Applies mode-specific Pillow padding behavior after the selected filter.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(crate) fn finish(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -28,7 +29,12 @@ pub(crate) fn finish(
     let lanes = match request {
         FilterRequest::Filter3x3 { .. } => filter_border_lanes(source_lanes, source, 1)?,
         FilterRequest::Filter5x5 { .. } => filter_border_lanes(source_lanes, source, 2)?,
-        _ => execute_independent_lanes(source_lanes, source, request)?,
+        _ => execute_independent_lanes(
+            source_lanes,
+            source,
+            request,
+            super::super::ops::default_blur_uses_three_pass_fusion(mode),
+        )?,
     };
     replace_lanes(output, Some(lanes))
 }
@@ -59,6 +65,7 @@ fn finish_missing_source_lanes(
 }
 
 /// Applies the same per-byte UnsharpMask blend to retained Pillow lanes.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn finish_unsharp(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -114,6 +121,7 @@ pub(crate) fn finish_unsharp(
 }
 
 /// Applies the core ModeFilter extension independently to compact padding bytes.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn finish_mode_filter(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -143,6 +151,7 @@ pub(crate) fn finish_mode_filter(
 }
 
 /// Applies Pillow's Filter.c border copy and zeroed compact-mode padding.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn filter_border_lanes(
     source_lanes: &HiddenPixelLanes,
     source: &DynamicImage,
@@ -182,13 +191,21 @@ fn filter_border_lanes(
 }
 
 /// Filters each omitted byte as an independent physical Pillow channel.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn execute_independent_lanes(
     source_lanes: &HiddenPixelLanes,
     source: &DynamicImage,
     request: FilterRequest,
+    fuse_three_passes: bool,
 ) -> Result<HiddenPixelLanes, PilError> {
     execute_independent_lanes_with(source_lanes, source, |input| {
-        execute_lane(input, source.width(), source.height(), request)
+        execute_lane(
+            input,
+            source.width(),
+            source.height(),
+            request,
+            fuse_three_passes,
+        )
     })
 }
 
@@ -220,16 +237,23 @@ where
     compact_lanes(lane_count, pixels, values)
 }
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn execute_lane(
     input: &[u8],
     width: u32,
     height: u32,
     request: FilterRequest,
+    fuse_three_passes: bool,
 ) -> Result<Vec<u8>, PilError> {
     let output = match request {
-        FilterRequest::GaussianBlur { sigma } => {
-            super::blur::execute_gaussian_blur_native_bytes(input, width, height, 1, sigma)?
-        }
+        FilterRequest::GaussianBlur { sigma } => super::blur::execute_gaussian_blur_native_bytes(
+            input,
+            width,
+            height,
+            1,
+            sigma,
+            fuse_three_passes,
+        )?,
         FilterRequest::BoxBlur { radius } => {
             super::blur::execute_box_blur_native_bytes(input, width, height, 1, radius)?
         }
@@ -238,7 +262,14 @@ fn execute_lane(
             radius_y,
             passes,
         } => super::blur::execute_box_blur_xy_native_bytes(
-            input, width, height, 1, radius_x, radius_y, passes,
+            input,
+            width,
+            height,
+            1,
+            radius_x,
+            radius_y,
+            passes,
+            fuse_three_passes,
         )?,
         FilterRequest::MedianFilter { size } => {
             super::rank::execute_native_bytes(input, width, height, 1, size, size * size / 2)?

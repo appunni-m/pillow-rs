@@ -4,6 +4,7 @@ use super::{GuardAssessment, StrategyGuard, StrategyInputs, guards};
 use crate::raster::Mode;
 
 impl StrategyGuard {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(in crate::compute::registry::support) fn assess(
         self,
         input: StrategyInputs,
@@ -12,6 +13,7 @@ impl StrategyGuard {
             Self::Always => GuardAssessment::Satisfied,
             Self::DrawNativeSpans => guards::draw_native_spans_guard(input),
             Self::ResizeFilteredFma
+            | Self::ResizeF32Vector
             | Self::ThumbnailI32Stream2x2
             | Self::ResizeLuma16Vector
             | Self::ResizeByteNearestVector { .. }
@@ -51,6 +53,7 @@ impl StrategyGuard {
             | Self::PutPixelSpan { .. }
             | Self::RgbaPixelWriteRun
             | Self::TransposeRgbaAvx2
+            | Self::TransposeRgbaX86_64Tiled { .. }
             | Self::TransposeNativeBytes { .. } => self.assess_mode_and_geometry(input),
             Self::ReduceNativeByteVector { .. }
             | Self::ReduceF32Vector
@@ -81,6 +84,7 @@ impl StrategyGuard {
     fn assess_resize(self, input: StrategyInputs) -> GuardAssessment {
         match self {
             Self::ResizeFilteredFma => guards::resize_filtered_fma_guard(input),
+            Self::ResizeF32Vector => guards::resize_f32_vector_guard(input),
             Self::ThumbnailI32Stream2x2 => guards::thumbnail_i32_stream_guard(input),
             Self::ResizeLuma16Vector => guards::resize_luma16_vector_guard(input),
             Self::ResizeByteNearestVector { channels } => {
@@ -164,6 +168,7 @@ impl StrategyGuard {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn assess_mode_and_geometry(self, input: StrategyInputs) -> GuardAssessment {
         match self {
             Self::ConvertTargetMode(target) => guards::convert_target_guard(input, target, false),
@@ -204,6 +209,16 @@ impl StrategyGuard {
             Self::PutPixelSpan { channels } => guards::pixel_span_guard(input, channels),
             Self::RgbaPixelWriteRun => guards::pixel_write_run_guard(input),
             Self::TransposeRgbaAvx2 => guards::rgba_transpose_avx2_guard(input),
+            Self::TransposeRgbaX86_64Tiled {
+                tile_min_dimension,
+                minimum_pixels,
+                block_size,
+            } => guards::rgba_transpose_x86_64_tiled_guard(
+                input,
+                tile_min_dimension,
+                minimum_pixels,
+                block_size,
+            ),
             Self::TransposeNativeBytes {
                 channels,
                 allow_empty,

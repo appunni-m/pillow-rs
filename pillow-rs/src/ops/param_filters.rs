@@ -9,12 +9,24 @@ use crate::image::{Image, PalettedData};
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn cpu_only_filter_route(
     image: &Image,
     operation: &'static str,
 ) -> Result<(Backend, ExecutionContext, Option<String>), PilError> {
-    let (requested_backend, context) = image.cpu_arch_execution_route()?;
+    cpu_only_filter_route_with_execution_route(image, operation, None)
+}
+
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn cpu_only_filter_route_with_execution_route(
+    image: &Image,
+    operation: &'static str,
+    execution_route: Option<(Option<Backend>, ExecutionContext)>,
+) -> Result<(Backend, ExecutionContext, Option<String>), PilError> {
+    let (requested_backend, context) = match execution_route {
+        Some(route) => route,
+        None => image.cpu_arch_execution_route()?,
+    };
     let routed_backend = requested_backend.unwrap_or(Backend::Cpu);
     let fallback_reason = (requested_backend == Some(Backend::Gpu))
         .then(|| format!("{operation} has no GPU strategy"));
@@ -109,19 +121,58 @@ fn validate_rank_filter_size(size: u32) -> Result<(), PilError> {
     Ok(())
 }
 
-fn gaussian_box_radius(sigma: f32) -> f32 {
-    let sigma = sigma.abs();
-    if sigma == 0.0 {
-        return 0.0;
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+fn validate_box_blur_radii(radius_x: f32, radius_y: f32) -> Result<(), PilError> {
+    if !(radius_x >= 0.0) || !(radius_y >= 0.0) {
+        return Err(PilError::ValueError("radius must be >= 0".into()));
     }
-    let passes = 3.0f64;
-    let sigma2 = f64::from(sigma) * f64::from(sigma) / passes;
-    let l_val = ((12.0 * sigma2 + 1.0).sqrt() - 1.0) / 2.0;
-    let l = l_val.floor();
-    let l1 = l + 1.0;
-    let a_num = (2.0 * l + 1.0) * (l * l1 - 3.0 * sigma2);
-    let a_den = 6.0 * (sigma2 - l1 * l1);
-    (l + a_num / a_den) as f32
+    if radius_x >= 2_147_483_648.0 || radius_y >= 2_147_483_648.0 {
+        return Err(PilError::ValueError("radius too large".into()));
+    }
+    Ok(())
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+fn push_gaussian_blur_operation(
+    image: &Image,
+    sigma_x: f32,
+    sigma_y: f32,
+    radius_x: f32,
+    radius_y: f32,
+    passes: u32,
+) -> Image {
+    if passes == 3 && sigma_x == sigma_y {
+        return Image::push_op(image, PipelineOp::GaussianBlur { sigma: sigma_x });
+    }
+    Image::push_op(
+        image,
+        PipelineOp::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        },
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+fn push_box_blur_operation(image: &Image, radius_x: f32, radius_y: f32, passes: u32) -> Image {
+    if passes == 1 && radius_x == radius_y && radius_x.fract() == 0.0 && radius_x <= u32::MAX as f32
+    {
+        return Image::push_op(
+            image,
+            PipelineOp::BoxBlur {
+                radius: radius_x as u32,
+            },
+        );
+    }
+    Image::push_op(
+        image,
+        PipelineOp::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        },
+    )
 }
 
 /// Apply the slice-assignment semantics used by Pillow's Python callbacks.
@@ -373,7 +424,7 @@ impl Image {
     ///
     /// This entry point preserves the exact raster mode and native samples;
     /// ordinary [`Image::expand`] continues to add a caller-selected fill.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn imaging_core_expand(&self, xmargin: i32, ymargin: i32) -> Result<Image, PilError> {
         // TODO(pillow-rs#3ptb): freeze callback outcomes for negative margins
@@ -489,29 +540,53 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns [`PilError`] for unsupported modes; deferred execution can
+    /// report radius and materialization failures.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn gaussian_blur(&self, radius: f32) -> Result<Image, PilError> {
-        self.validate_filter("GaussianBlur")?;
-        Ok(Image::push_op(
-            self,
-            PipelineOp::GaussianBlur { sigma: radius },
-        ))
+        self.gaussian_blur_xy_with_passes(radius, radius, 3)
     }
 
     /// Applies Gaussian blur with independent horizontal and vertical radii.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn gaussian_blur_xy(&self, radius_x: f32, radius_y: f32) -> Result<Image, PilError> {
-        self.validate_filter("GaussianBlur")?;
-        if radius_x == radius_y {
-            return self.gaussian_blur(radius_x);
+        self.gaussian_blur_xy_with_passes(radius_x, radius_y, 3)
+    }
+
+    /// Applies Pillow's Gaussian approximation using the requested box-pass count.
+    ///
+    /// Known-empty inputs copy before pass, radius, and mode validation.
+    /// Nonempty inputs reject invalid pass counts and radii before mode checks.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] for invalid pass counts, radii, or modes.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    pub fn gaussian_blur_xy_with_passes(
+        &self,
+        sigma_x: f32,
+        sigma_y: f32,
+        passes: i32,
+    ) -> Result<Image, PilError> {
+        if self
+            .known_size()
+            .is_some_and(|(width, height)| width == 0 || height == 0)
+        {
+            return Ok(self.copy());
         }
-        Ok(Image::push_op(
-            self,
-            PipelineOp::BoxBlurXY {
-                radius_x: gaussian_box_radius(radius_x),
-                radius_y: gaussian_box_radius(radius_y),
-                passes: 3,
-            },
+        if passes < 1 {
+            return Err(PilError::ValueError(
+                "number of passes must be greater than zero".into(),
+            ));
+        }
+        let passes_u32 = passes as u32;
+        let radius_x = crate::compute::helpers::filters::gaussian_blur_radius(sigma_x, passes_u32);
+        let radius_y = crate::compute::helpers::filters::gaussian_blur_radius(sigma_y, passes_u32);
+        validate_box_blur_radii(radius_x, radius_y)?;
+        self.validate_filter("GaussianBlur")?;
+
+        Ok(push_gaussian_blur_operation(
+            self, sigma_x, sigma_y, radius_x, radius_y, passes_u32,
         ))
     }
 
@@ -519,38 +594,52 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns [`PilError`] for unsupported modes or invalid radii; deferred
+    /// pipeline execution can report later materialization failures.
     pub fn box_blur(&self, radius: f32) -> Result<Image, PilError> {
-        self.validate_filter("BoxBlur")?;
         self.box_blur_xy(radius, radius)
     }
 
     /// Applies box blur with independent horizontal and vertical radii.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn box_blur_xy(&self, radius_x: f32, radius_y: f32) -> Result<Image, PilError> {
-        self.validate_filter("BoxBlur")?;
-        if !radius_x.is_finite() || !radius_y.is_finite() || radius_x < 0.0 || radius_y < 0.0 {
-            return Err(PilError::ValueError("radius must be >= 0".into()));
-        }
+        self.box_blur_xy_with_passes(radius_x, radius_y, 1)
+    }
 
-        // Keep the long-standing uniform integer descriptor on the existing
-        // backend path. Fractional and anisotropic forms need the exact
-        // two-radius CPU implementation below.
-        if radius_x == radius_y && radius_x.fract() == 0.0 && radius_x <= u32::MAX as f32 {
-            return Ok(Image::push_op(
-                self,
-                PipelineOp::BoxBlur {
-                    radius: radius_x as u32,
-                },
+    /// Applies box blur with independent radii and the requested pass count.
+    ///
+    /// Known-empty inputs copy before pass, radius, and mode validation.
+    /// Nonempty inputs reject invalid pass counts and radii before mode checks.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] for invalid pass counts, radii, or modes.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    pub fn box_blur_xy_with_passes(
+        &self,
+        radius_x: f32,
+        radius_y: f32,
+        passes: i32,
+    ) -> Result<Image, PilError> {
+        if self
+            .known_size()
+            .is_some_and(|(width, height)| width == 0 || height == 0)
+        {
+            return Ok(self.copy());
+        }
+        if passes < 1 {
+            return Err(PilError::ValueError(
+                "number of passes must be greater than zero".into(),
             ));
         }
-        Ok(Image::push_op(
+        validate_box_blur_radii(radius_x, radius_y)?;
+        self.validate_filter("BoxBlur")?;
+
+        Ok(push_box_blur_operation(
             self,
-            PipelineOp::BoxBlurXY {
-                radius_x,
-                radius_y,
-                passes: 1,
-            },
+            radius_x,
+            radius_y,
+            passes as u32,
         ))
     }
 
@@ -566,16 +655,48 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization, blur execution, allocation
     /// checks, or raw image reconstruction fails.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn unsharp_mask(
         &self,
         radius: f32,
         percent: i32,
         threshold: i32,
     ) -> Result<Image, PilError> {
+        self.unsharp_mask_with_optional_execution_route(radius, percent, threshold, None)
+    }
+
+    /// Applies unsharp masking with a route captured by a composed caller.
+    // TODO(pillow-rs#3ptb): verify nested ImageFilter route receipts and
+    // fallback behavior across the frozen CPU mode/architecture matrix.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn unsharp_mask_with_execution_route(
+        &self,
+        radius: f32,
+        percent: i32,
+        threshold: i32,
+        requested_backend: Option<Backend>,
+        context: ExecutionContext,
+    ) -> Result<Image, PilError> {
+        self.unsharp_mask_with_optional_execution_route(
+            radius,
+            percent,
+            threshold,
+            Some((requested_backend, context)),
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn unsharp_mask_with_optional_execution_route(
+        &self,
+        radius: f32,
+        percent: i32,
+        threshold: i32,
+        execution_route: Option<(Option<Backend>, ExecutionContext)>,
+    ) -> Result<Image, PilError> {
         self.validate_filter("UnsharpMask")?;
         let (routed_backend, context, fallback_reason) =
-            cpu_only_filter_route(self, "UnsharpMask")?;
+            cpu_only_filter_route_with_execution_route(self, "UnsharpMask", execution_route)?;
         let (img, mut operation_receipts) = self.materialized_shared_for_ops_with_receipts()?;
         let mode = img.mode();
         let result =
@@ -607,8 +728,8 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns [`PilError`] for invalid radii or unsupported modes; deferred
+    /// pipeline execution can report later materialization failures.
     pub fn max_filter(&self, size: u32) -> Result<Image, PilError> {
         self.validate_filter("MaxFilter")?;
         validate_rank_filter_size(size)?;
@@ -657,8 +778,31 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization, allocation checks, or raw image
     /// reconstruction fails.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn mode_filter(&self, size: u32) -> Result<Image, PilError> {
+        self.mode_filter_with_optional_execution_route(size, None)
+    }
+
+    /// Applies the mode filter with a route captured by a composed caller.
+    // TODO(pillow-rs#3ptb): verify nested ImageFilter route receipts and
+    // fallback behavior across the frozen CPU mode/architecture matrix.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn mode_filter_with_execution_route(
+        &self,
+        size: u32,
+        requested_backend: Option<Backend>,
+        context: ExecutionContext,
+    ) -> Result<Image, PilError> {
+        self.mode_filter_with_optional_execution_route(size, Some((requested_backend, context)))
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn mode_filter_with_optional_execution_route(
+        &self,
+        size: u32,
+        execution_route: Option<(Option<Backend>, ExecutionContext)>,
+    ) -> Result<Image, PilError> {
         self.validate_filter("Mode")?;
         // Pillow's modefilter uses `size / 2` as its radius.  Positive even
         // sizes therefore have the same neighborhood as the next odd size,
@@ -670,7 +814,8 @@ impl Image {
         let palette = self.palette();
         let palette_alpha = self.palette_alpha();
         let (image, mut operation_receipts) = self.materialized_shared_for_ops_with_receipts()?;
-        let (routed_backend, context, fallback_reason) = cpu_only_filter_route(self, "ModeFilter")?;
+        let (routed_backend, context, fallback_reason) =
+            cpu_only_filter_route_with_execution_route(self, "ModeFilter", execution_route)?;
         let result =
             crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
                 "ModeFilter",
@@ -746,7 +891,7 @@ impl Image {
     ///
     /// Currently returns `Ok(Image)`; LUT validation is handled during pipeline
     /// execution.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn color3dlut(
         &self,
         input: PreparedColor3DLut,

@@ -1,5 +1,8 @@
 """Internal Python Image class that wraps the Rust implementation."""
 import math as _math
+import warnings as _warnings
+from contextlib import contextmanager as _contextmanager
+from contextvars import ContextVar as _ContextVar
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from math import floor as _floor
@@ -13,6 +16,86 @@ from typing import Any, Optional, Protocol, Sequence, Tuple, Union
 from . import _core
 from ._core import Image as RustImage
 from .enums import Palette, Resampling, Transform, Transpose
+
+ImagePointTransform = _core.ImagePointTransform
+DecompressionBombError = _core.DecompressionBombError
+MAX_IMAGE_PIXELS = 1024 * 1024 * 1024 // 4 // 3
+_IMAGE_EXECUTION_CONTEXT = _ContextVar("pillow_rs_image_execution_context", default=None)
+
+
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+class DecompressionBombWarning(RuntimeWarning):
+    """Warning raised when a crop's output area exceeds Pillow's pixel limit."""
+
+
+# VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+def _crop_max_image_pixels():
+    """Read Pillow's mutable public setting when its module is loaded."""
+    pil_image = _modules.get("PIL.Image")
+    if pil_image is not None:
+        return getattr(pil_image, "MAX_IMAGE_PIXELS", MAX_IMAGE_PIXELS)
+    return MAX_IMAGE_PIXELS
+
+
+# Pillow 13 calls this for decoded open headers and for arbitrary-precision
+# crop extents before its native C-int parse.
+# TODO(pillow-rs#3ptb): verify configurable limits and warning escalation for
+# open/crop, plus C-int overflow after preflight in the frozen fault matrix.
+# VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+def _decompression_bomb_check(size):
+    """Apply Pillow's image-area warning and fatal threshold."""
+    max_image_pixels = _crop_max_image_pixels()
+    if max_image_pixels is None:
+        return None
+
+    pixels = max(1, size[0]) * max(1, size[1])
+    if pixels > 2 * max_image_pixels:
+        limit = 2 * max_image_pixels
+        raise DecompressionBombError(
+            f"Image size ({pixels} pixels) exceeds limit of {limit} pixels, "
+            "could be decompression bomb DOS attack."
+        )
+    if pixels > max_image_pixels:
+        _warnings.warn(
+            f"Image size ({pixels} pixels) exceeds limit of {max_image_pixels} "
+            "pixels, could be decompression bomb DOS attack.",
+            DecompressionBombWarning,
+        )
+    return max_image_pixels
+
+
+# VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+def _crop_core_max_pixels(max_image_pixels):
+    """Narrow the checked built-in setting for the Rust crop extent guard."""
+    if type(max_image_pixels) is int and 0 <= max_image_pixels <= (1 << 64) - 1:
+        return max_image_pixels
+    return None
+
+
+# VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+@_contextmanager
+def _execution_context_scope(image, execution_context=None, *, override=False):
+    """Share a supplied or lazily captured Rust route across public calls.
+
+    Retained execution owners may request their supplied route over an active
+    scope so nested host callbacks stay aligned with that owner's Rust context.
+    """
+    if not isinstance(image, Image):
+        yield
+        return
+    active_scope = _IMAGE_EXECUTION_CONTEXT.get()
+    if active_scope is not None:
+        if not override or (
+            execution_context is not None and active_scope[1] is execution_context
+        ):
+            yield
+            return
+    scope = [image, execution_context]
+    token = _IMAGE_EXECUTION_CONTEXT.set(scope)
+    try:
+        yield
+    finally:
+        _IMAGE_EXECUTION_CONTEXT.reset(token)
 
 
 # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
@@ -156,21 +239,22 @@ class _CompactImageDataSequence:
 class _ImageDataSequence:
     """Pillow-style live sequence over one image's current pixel storage."""
 
-    __slots__ = ("_image", "_bands", "_size", "_band")
+    __slots__ = ("_image", "_bands", "_size", "_band", "_execution_context")
 
-    # VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=pending
-    def __init__(self, image, size, band=None):
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    def __init__(self, image, size, band=None, execution_context=None):
         self._image = image
         self._bands = image.bands
         self._size = size
         self._band = band
+        self._execution_context = execution_context
 
     def __len__(self):
         return self._size[0] * self._size[1]
 
-    # VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def _materialized_values(self):
-        values = self._image.getdata_formatted(self._band)
+        values = self._image.getdata_formatted(self._band, self._execution_context)
         if isinstance(values, bytes) and self._bands > 1:
             return _CompactImageDataSequence(values, self._bands)
         return values
@@ -178,6 +262,7 @@ class _ImageDataSequence:
     def __iter__(self):
         return iter(self._materialized_values())
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def __getitem__(self, index):
         if isinstance(index, slice):
             raise TypeError("sequence index must be integer, not 'slice'")
@@ -195,7 +280,7 @@ class _ImageDataSequence:
             raise IndexError("image index out of range")
         x = index % self._size[0]
         y = index // self._size[0]
-        value = self._image.getpixel_formatted((x, y))
+        value = self._image.getpixel_formatted((x, y), self._execution_context)
         if self._band is not None and isinstance(value, (tuple, list)):
             return value[self._band]
         return value
@@ -307,6 +392,15 @@ class ImageTransformHandler(ABC):
         raise NotImplementedError
 
 
+class ImagePointHandler(ABC):
+    """Base class for custom handlers passed to :meth:`Image.point`."""
+
+    @abstractmethod
+    def point(self, image: "Image") -> "Image":
+        """Return the image produced by this custom point operation."""
+        raise NotImplementedError
+
+
 class _ClosedImage:
     """Released image storage that preserves Pillow's closed-image error."""
 
@@ -404,15 +498,51 @@ class Image:
         self._native_info_rebaseline = True
         self._native_info_omitted = snapshot[2]
 
-    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def _new(self, rust_image):
         """Wrap a derived image with Pillow's shallow metadata-copy semantics."""
+        if (
+            isinstance(rust_image, RustImage)
+            and _IMAGE_EXECUTION_CONTEXT.get() is None
+        ):
+            with _execution_context_scope(self):
+                return Image._new(self, rust_image)
         if self._transpose_loads_info:
             self.load()
             self.info
+        if isinstance(rust_image, RustImage):
+            rust_image = self._bind_current_execution_context(rust_image)
         result = Image(rust_image)
         result._copy_info_state_from(self)
         return result
+
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    def _capture_execution_context(self):
+        """Capture the Rust route for composed public image callbacks."""
+        return self._rust_image._capture_execution_context()
+
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    def _current_execution_context(self):
+        """Lazily capture one route for nested public image callbacks."""
+        scope = _IMAGE_EXECUTION_CONTEXT.get()
+        if scope is None:
+            return None
+        if scope[1] is None:
+            try:
+                scope[1] = scope[0]._capture_execution_context()
+            except Exception:
+                # Route capture is advisory. Let the operation's original Rust
+                # entry point resolve the route at its usual fault boundary.
+                return None
+        return scope[1]
+
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    def _bind_current_execution_context(self, rust_image):
+        """Bind a lazy Rust result to this composed call's selected route."""
+        execution_context = self._current_execution_context()
+        if execution_context is None:
+            return rust_image
+        return rust_image._with_execution_context(execution_context)
 
     def _ensure_materialized(self):
         """Ensure the underlying Rust image is materialized (not Paletted/Path)."""
@@ -420,7 +550,9 @@ class Image:
             self._native_info_known_empty = False
             self._rust_image = self._rust_image.materialize()
 
-    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    # TODO(pillow-rs#3ptb): verify configurable bomb limits and warnings while
+    # preserving Pillow's lazy pixel load in the frozen open fault matrix.
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     @classmethod
     def open(
         cls,
@@ -440,6 +572,9 @@ class Image:
             raise
         except Exception as exc:
             raise UnidentifiedImageError(f"cannot identify image file '{fp}'") from exc
+        # Pillow applies its configurable bomb policy to the decoded header
+        # before returning the image; this size read does not materialize pixels.
+        _decompression_bomb_check(rust_image.size)
         result = cls(rust_image)
         result._verify_encoded_source = True
         # WebP frame timing becomes public metadata during Pillow's load in
@@ -498,9 +633,20 @@ class Image:
     ) -> None:
         # This Image owns one still frame, so save_all has no sequence to add.
         # Preserve PNG's public compression override used by ImageShow viewers.
-        self._rust_image.save(
-            fp, format, options.get("compress_level"), self.load
-        )
+        # TODO(pillow-rs#3ptb): verify host path/format callback faults and the
+        # route used by the before-encode load and terminal route provider in
+        # the frozen CPU matrix.
+        # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+        with _execution_context_scope(self):
+            # PyO3 calls this provider only at the encode boundary, after save
+            # callbacks and preflight have retained their original ordering.
+            self._rust_image.save(
+                fp,
+                format,
+                options.get("compress_level"),
+                self.load,
+                lambda: Image._current_execution_context(self),
+            )
 
     # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     def _get_safe_box(self, size, resample, box):
@@ -517,8 +663,21 @@ class Image:
             min(self.size[1], _math.ceil(box[3] + support_y)),
         )
 
-    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def resize(
+        self,
+        size: Tuple[int, int],
+        resample: Union[int, str] = Resampling.BICUBIC,
+        box=None,
+        reducing_gap=None,
+    ) -> "Image":
+        with _execution_context_scope(self):
+            return self._resize_with_execution_context(
+                size, resample, box, reducing_gap
+            )
+
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    def _resize_with_execution_context(
         self,
         size: Tuple[int, int],
         resample: Union[int, str] = Resampling.BICUBIC,
@@ -672,17 +831,53 @@ class Image:
             return reduced._new(reduced.im.resize(size, resample, translated_box))
         return self._new(result)
 
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def crop(self, box: Optional[Tuple[float, float, float, float]] = None) -> "Image":
-        # Pillow rejects reversed coordinates before loading the source.
-        if box is not None:
+        with _execution_context_scope(self):
+            # Pillow copies None and an exact full-image box before comparing
+            # coordinate pairs. Keep host equality and its possible user hooks.
+            if box is None or box == (0, 0, *self.size):
+                return self.copy()
+            # Pillow rejects reversed coordinates before loading the source.
             if box[2] < box[0]:
                 raise ValueError("Coordinate 'right' is less than 'left'")
             if box[3] < box[1]:
                 raise ValueError("Coordinate 'lower' is less than 'upper'")
-        self._realize_dirty_palette()
-        return self._new(self._rust_image.crop(box))
+            # Pillow loads before calling round() and int() on each source
+            # value. Keep those Python protocols here, then send exact C-int
+            # coordinates without first projecting integers through f64.
+            self.load()
+            left, top, right, bottom = map(int, map(round, box))
+            # Pillow checks arbitrary-precision output extents and applies the
+            # mutable module policy before its native C-int coordinate parser.
+            max_image_pixels = _decompression_bomb_check(
+                (abs(right - left), abs(bottom - top))
+            )
+            box = (left, top, right, bottom)
+            return self._new(
+                self._rust_image._crop_with_max_pixels(
+                    box,
+                    _crop_core_max_pixels(max_image_pixels),
+                    self._current_execution_context(),
+                )
+            )
 
     def rotate(
+        self,
+        angle: float,
+        resample: Union[int, str] = Resampling.NEAREST_INT,
+        expand: bool = False,
+        center: Optional[Tuple[float, float]] = None,
+        translate: Optional[Tuple[float, float]] = None,
+        fillcolor: Optional[Any] = None,
+    ) -> "Image":
+        with _execution_context_scope(self):
+            return self._rotate_with_execution_context(
+                angle, resample, expand, center, translate, fillcolor
+            )
+
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    def _rotate_with_execution_context(
         self,
         angle: float,
         resample: Union[int, str] = Resampling.NEAREST_INT,
@@ -762,18 +957,19 @@ class Image:
         return self._new(rust_image)
 
     def transpose(self, method: Union[int, str]) -> "Image":
-        # Pillow loads before the core transpose validates its method.
-        self._realize_dirty_palette()
-        if self._transpose_loads_info:
-            self.load()
-            self.info
-        rust_image = self._rust_image.transpose(method)
-        # Pillow's _new copies the mapping, while nested metadata values stay
-        # shared. Native metadata remains lazy for images whose info was never
-        # observed; the Rust transpose already retains that provenance.
-        return self._new(rust_image)
+        with _execution_context_scope(self):
+            # Pillow loads before the core transpose validates its method.
+            self._realize_dirty_palette()
+            if self._transpose_loads_info:
+                self.load()
+                self.info
+            rust_image = self._rust_image.transpose(method)
+            # Pillow's _new copies the mapping, while nested metadata values stay
+            # shared. Native metadata remains lazy for images whose info was never
+            # observed; the Rust transpose already retains that provenance.
+            return self._new(rust_image)
 
-    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def convert(
         self,
         mode: Optional[str] = None,
@@ -782,18 +978,58 @@ class Image:
         palette: str = Palette.WEB,
         colors: int = 256,
     ) -> "Image":
+        with _execution_context_scope(self):
+            return self._convert_with_execution_context(
+                mode, matrix, dither, palette, colors
+            )
+
+    # TODO(pillow-rs#3ptb): verify conversion argument protocol/fault order,
+    # lazy decode precedence, and the selected route in CPU parity.
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    def _convert_with_execution_context(
+        self,
+        mode: Optional[str],
+        matrix: Optional[Tuple[float, ...]],
+        dither: Optional[str],
+        palette: str,
+        colors: int,
+    ) -> "Image":
         # Pillow's convert loads before resolving or validating the target.
-        self._realize_dirty_palette()
-        rust_image = self._rust_image.convert(
-            mode, matrix=matrix, dither=dither, palette=palette, colors=colors
-        )
+        self.load()
+        execution_context = self._current_execution_context()
+        if execution_context is None:
+            rust_image = self._rust_image.convert(
+                mode, matrix=matrix, dither=dither, palette=palette, colors=colors
+            )
+        else:
+            rust_image = self._rust_image.convert(
+                mode,
+                matrix=matrix,
+                dither=dither,
+                palette=palette,
+                colors=colors,
+                execution_context=execution_context,
+            )
         img = self._new(rust_image)
         img._info.update(
             self._rust_image.converted_compatibility_info(img.mode)
         )
         return img
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def paste(
+        self,
+        im: Union["Image", Tuple[int, ...], int],
+        box: Union[
+            "Image", Tuple[int, int], Tuple[int, int, int, int], None
+        ] = None,
+        mask: Optional["Image"] = None,
+    ) -> None:
+        with _execution_context_scope(self):
+            return self._paste_with_execution_context(im, box, mask)
+
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    def _paste_with_execution_context(
         self,
         im: Union["Image", Tuple[int, ...], int],
         box: Union[
@@ -877,12 +1113,14 @@ class Image:
             box_plan,
             source_plan,
             mask if mask_is_active else None,
+            self._current_execution_context(),
         )
 
     def split(self) -> Tuple["Image", ...]:
         # Pillow loads pixel storage before splitting the bands.
-        self.load()
-        return tuple(self._new(image) for image in self._rust_image.split())
+        with _execution_context_scope(self):
+            self.load()
+            return tuple(self._new(image) for image in self._rust_image.split())
 
     def getbands(self) -> Tuple[str, ...]:
         return self._rust_image.getbands()
@@ -894,6 +1132,21 @@ class Image:
         return self._new(self._rust_image.copy())
 
     def filter(self, filter_type) -> "Image":
+        with _execution_context_scope(self):
+            return self._filter_with_execution_context(filter_type)
+
+    # TODO(pillow-rs#3ptb): finish custom-filter ImagingCore compatibility and
+    # injected-route handoff for callback-created operations, including
+    # convert_into, transform, Arrow methods, and invalid-return fault order.
+    # PyImage.convert_transparent now carries a direct, mode-specific native
+    # route; its output and argument fault order remain in the parity TODO.
+    # Raw C pointer access stays outside the behavior contract. PyImage.point
+    # already carries the active filter route through ImagePointTransform;
+    # output and fault-order parity for that callback remains pending.
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    def _filter_with_execution_context(self, filter_type) -> "Image":
+        from . import imagefilter
+
         # Pillow loads before validating the filter argument.
         self.load()
         if callable(filter_type):
@@ -904,30 +1157,44 @@ class Image:
                 "filter argument should be ImageFilter.Filter instance or class"
             )
 
-        from . import imagefilter
+        # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+        def apply_filter(rust_image):
+            execution_context = self._current_execution_context()
+            if isinstance(filter_type, imagefilter.Filter):
+                return filter_type._filter_with_execution_context(
+                    rust_image, execution_context
+                )
+            # Duck-typed filters receive the live ImagingCore carrier too;
+            # context-aware PyImage methods resolve this active route.
+            return filter_type.filter(rust_image)
 
         # Pass the native Rust image handle, not the public Image wrapper. The
         # built-in filters in this package use typed Rust operations directly.
         # Pillow's callback receives its private ImagingCore. PyImage mirrors
         # its mode, size, bands, readonly, flat sequence access, get/put pixel
-        # and data, analysis methods, band extraction and mutation, nearest-edge
-        # `expand`, and cropped native `rankfilter` behavior. PixelAccess keeps
-        # the loaded PyImage handle and uses dedicated mapping callbacks. Float
+        # and data, analysis and palette methods, band extraction and mutation,
+        # direct paste, nearest-edge single-margin `expand`, and cropped native
+        # `rankfilter`.
+        # PixelAccess keeps the loaded PyImage handle and uses dedicated mapping
+        # callbacks. Direct paste writes through the same live handle. Float
         # coordinates truncate in range, saturate at i32 bounds, and map NaN to
         # zero; freeze these adapter-defined edge results in parity. The raw C
         # pointer is outside the behavior target.
         if len(self._rust_image.getbands()) == 1 or isinstance(
             filter_type, imagefilter.MultibandFilter
         ):
-            return self._new(filter_type.filter(self._rust_image))
+            return self._new(apply_filter(self._rust_image))
 
         filtered_bands = []
         for band_index in range(self._rust_image.bands):
             # Pillow extracts each band immediately before invoking the
             # callback. A callback may mutate the source before the next band
             # is read, so do not snapshot all bands with split() up front.
-            band = self._rust_image.getband(band_index)
-            filtered_bands.append(self._new(filter_type.filter(band)))
+            execution_context = self._current_execution_context()
+            band = self._bind_current_execution_context(
+                self._rust_image.getband(band_index, execution_context)
+            )
+            filtered_bands.append(self._new(apply_filter(band)))
 
         # Pillow wraps each callback result immediately and module-level merge
         # copies info state from the first wrapped band. Preserve that timing
@@ -941,6 +1208,18 @@ class Image:
         size: Tuple[int, int],
         resample: Union[int, str] = Resampling.BICUBIC,
         reducing_gap=2.0,
+    ) -> None:
+        with _execution_context_scope(self):
+            return self._thumbnail_with_execution_context(
+                size, resample, reducing_gap
+            )
+
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    def _thumbnail_with_execution_context(
+        self,
+        size: Tuple[int, int],
+        resample: Union[int, str],
+        reducing_gap,
     ) -> None:
         """Scale image to fit within size. Aspect ratio handled in Rust."""
         provided_size = tuple(map(_floor, size))
@@ -1002,17 +1281,29 @@ class Image:
             self._rust_image = replacement
         else:
             self._rust_image._thumbnail_apply_prepared(plan, filter_code, reducing_gap)
+        self._rust_image = self._bind_current_execution_context(self._rust_image)
 
+    # TODO(pillow-rs#3ptb): verify nested format callbacks, pending-pipeline
+    # receipts, and raw encoder fault order in the frozen CPU matrix.
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
-        self._realize_dirty_palette()
-        return self._rust_image.tobytes_encoded(encoder_name, args)
+        with _execution_context_scope(self):
+            self._realize_dirty_palette()
+            return self._rust_image.tobytes_encoded(
+                encoder_name, args, self._current_execution_context()
+            )
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def getpixel(self, xy: Tuple[int, int]):
         """Get pixel value at (x, y). Mode dispatch done in Rust."""
         # Pillow loads before converting the coordinate iterable to a tuple.
-        self.load()
-        return self._rust_image.getpixel_formatted(tuple(xy))
+        with _execution_context_scope(self):
+            self.load()
+            return self._rust_image.getpixel_formatted(
+                tuple(xy), self._current_execution_context()
+            )
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def putpixel(self, xy: Tuple[int, int], value):
         """Set pixel value at (x, y). Accepts int, tuple, or list.
 
@@ -1020,6 +1311,9 @@ class Image:
         accepted for palette colors; ordinary component values use tuples.
         Negative coordinates count from the right or bottom edge.
         """
+        if _IMAGE_EXECUTION_CONTEXT.get() is None:
+            with _execution_context_scope(self):
+                return self.putpixel(xy, value)
         # Pillow's _ensure_mutable() loads before parsing coordinates or the
         # pixel value. This also materializes any pending Rust pipeline before
         # the in-place write becomes visible.
@@ -1045,7 +1339,9 @@ class Image:
             value = (palette_index, alpha) if self.mode == "PA" else palette_index
             python_palette_resolved = True
         try:
-            self._rust_image.putpixel_mode(xy, value, self._info)
+            self._rust_image.putpixel_mode(
+                xy, value, self._info, self._current_execution_context()
+            )
         finally:
             # Low-level Rust calls can still allocate a palette color. Mirror
             # that core mutation for an already-retained Python palette; the
@@ -1059,9 +1355,18 @@ class Image:
             ):
                 palette.palette = bytearray(self.getpalette(palette.mode) or [])
 
-    # VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
+        with _execution_context_scope(self):
+            return self._quantize_with_execution_context(
+                colors, method, kmeans, palette, dither
+            )
+
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    def _quantize_with_execution_context(
+        self, colors: int, method, kmeans: int, palette, dither: int
+    ):
         """Reduce colors using median cut algorithm."""
         # Pillow loads the source before defaulting or validating the method.
         self.load()
@@ -1091,7 +1396,13 @@ class Image:
             # The native boundary accepts this binding's typed carrier and
             # adapts foreign Pillow-compatible ImagingCore palette metadata.
             quantized = self._rust_image.quantize(
-                256, native_method, 0, dither, palette.im, self.mode
+                256,
+                native_method,
+                0,
+                dither,
+                palette.im,
+                self.mode,
+                self._current_execution_context(),
             )
             result = self._new(quantized)
             assert palette.palette is not None
@@ -1106,49 +1417,85 @@ class Image:
             native_method = None
         # Pillow does not consume dither on its no-palette quantize path.
         return self._new(
-            self._rust_image.quantize(colors, native_method, kmeans, None, None)
+            self._rust_image.quantize(
+                colors,
+                native_method,
+                kmeans,
+                None,
+                None,
+                self._current_execution_context(),
+            )
         )
 
+    # VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     def getbbox(self, *, alpha_only: bool = True):
         """Bounding box of non-zero regions."""
         # Pillow loads before coercing the native alpha_only argument.
-        self.load()
-        return self._rust_image.getbbox(alpha_only)
+        with _execution_context_scope(self):
+            self.load()
+            return self._rust_image.getbbox(
+                alpha_only, self._current_execution_context()
+            )
 
+    # VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     def getextrema(self):
         """Min/max pixel values per band. Returns tuple matching PIL format."""
         # Pillow loads before querying sample extrema.
-        self.load()
-        return self._rust_image.getextrema_formatted()
+        with _execution_context_scope(self):
+            self.load()
+            return self._rust_image.getextrema_formatted(
+                self._current_execution_context()
+            )
 
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def histogram(self, mask=None, extrema=None):
         """Image histogram per band, optionally ranged for I/F samples."""
         # Pillow loads the source before checking mask truthiness, then loads
         # a truthy mask before handing both cores to the histogram operation.
-        self.load()
-        if mask:
-            mask.load()
-        else:
-            mask = None
-        return self._rust_image.histogram_with_input(mask, extrema)
+        with _execution_context_scope(self):
+            self.load()
+            if mask:
+                mask.load()
+            else:
+                mask = None
+            execution_context = self._current_execution_context()
+            if execution_context is None:
+                return self._rust_image.histogram_with_input(mask, extrema)
+            return self._rust_image.histogram_with_input(
+                mask, extrema, execution_context
+            )
 
     def getchannel(self, channel):
         """Extract a channel, preserving native single-band and scalar modes."""
         # Pillow loads before parsing or resolving the selector.
-        self.load()
-        # Keep Pillow's Python tuple.index behavior for str subclasses and
-        # their equality hooks; only integer parsing belongs in the binding.
-        if isinstance(channel, str):
-            try:
-                channel = self.getbands().index(channel)
-            except ValueError as error:
-                raise ValueError(f'The image has no channel "{channel}"') from error
-        return self._new(self._rust_image.getchannel(channel))
+        with _execution_context_scope(self):
+            self.load()
+            # Keep Pillow's Python tuple.index behavior for str subclasses and
+            # their equality hooks; only integer parsing belongs in the binding.
+            if isinstance(channel, str):
+                try:
+                    channel = self.getbands().index(channel)
+                except ValueError as error:
+                    raise ValueError(f'The image has no channel "{channel}"') from error
+            execution_context = self._current_execution_context()
+            if execution_context is None:
+                extracted = self._rust_image.getchannel(channel)
+            else:
+                extracted = self._rust_image.getchannel(channel, execution_context)
+            return self._new(extracted)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""
+        with _execution_context_scope(self):
+            return self._putalpha_with_execution_context(alpha)
+
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    def _putalpha_with_execution_context(self, alpha):
+        """Apply Pillow's alpha contract under the destination's CPU route."""
         # Pillow's _ensure_mutable() loads the image before coercing alpha.
         self.load()
+        execution_context = self._current_execution_context()
         self._native_info_known_empty = False
         self._sync_observed_info()
         try:
@@ -1157,8 +1504,10 @@ class Image:
                     # Pillow promotes the destination before inspecting the
                     # mask mode. Aliasing makes that promotion change alpha's
                     # mode too, so preserve it before the core mask check.
-                    self._rust_image.prepare_putalpha_data_input()
-                    self._rust_image.putalpha_image_input(alpha._rust_image)
+                    self._rust_image.prepare_putalpha_data_input(execution_context)
+                    self._rust_image.putalpha_image_input(
+                        alpha._rust_image, execution_context
+                    )
                     return
                 # Pillow rejects unsupported destinations before loading the
                 # mask. For supported 1/L masks, load the actual wrapper so its
@@ -1167,27 +1516,33 @@ class Image:
                 # Pillow promotes before reading the mask mode or calling its
                 # load method. Make the target mode visible to those callbacks;
                 # PutAlphaData later replaces this provisional alpha.
-                self._rust_image.prepare_putalpha_data_input()
+                self._rust_image.prepare_putalpha_data_input(execution_context)
                 if alpha.mode in ("1", "L"):
                     alpha.load()
-                self._rust_image.putalpha_image_input(alpha._rust_image)
+                self._rust_image.putalpha_image_input(
+                    alpha._rust_image, execution_context
+                )
             else:
                 is_builtin_integer = type(alpha) is int or type(alpha) is bool
                 if not is_builtin_integer:
                     # Pillow changes the destination mode before checking
                     # whether a non-scalar argument is an Image or coercing it.
-                    self._rust_image.prepare_putalpha_input()
+                    self._rust_image.prepare_putalpha_input(execution_context)
                 if isinstance(alpha, Image):
                     if alpha.mode not in ("1", "L"):
                         raise ValueError("illegal image mode")
                     alpha.load()
                     if alpha.mode == "1":
                         alpha = alpha.convert("L")
-                    self._rust_image.putalpha_image_input(alpha._rust_image)
+                    self._rust_image.putalpha_image_input(
+                        alpha._rust_image, execution_context
+                    )
                     return
                 if is_builtin_integer:
-                    self._rust_image.putalpha_input(alpha)
-                elif not self._rust_image.putalpha_input_prepared(alpha):
+                    self._rust_image.putalpha_input(alpha, execution_context)
+                elif not self._rust_image.putalpha_input_prepared(
+                    alpha, execution_context
+                ):
                     # Pillow resolves the module-level public ``new`` at this
                     # fallback point, then routes its result through putalpha.
                     pil_image = _modules.get("PIL.Image")
@@ -1203,92 +1558,167 @@ class Image:
             # when the core reports that later validation error.
             self._sync_observed_info()
 
-    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def reduce(
         self,
         factor: int | tuple[int, int],
         box: tuple[int, int, int, int] | None = None,
     ) -> "Image":
         """Reduce image by integer factor through the Rust core."""
-        # Pillow normalizes scalar factors, then delegates exact (1, 1) to
-        # the current public crop before its non-identity reducer load.
-        if not isinstance(factor, (list, tuple)):
-            factor = (factor, factor)
-        if factor == (1, 1):
-            return self.crop(box)
-        if box is None:
-            box = (0, 0) + self.size
-        # Pillow loads before its core parser converts factor and box items.
-        self.load()
-        return self._new(self._rust_image.reduce(factor, box))
+        with _execution_context_scope(self):
+            # Pillow normalizes scalar factors, then delegates exact (1, 1) to
+            # the current public crop before its non-identity reducer load.
+            if not isinstance(factor, (list, tuple)):
+                factor = (factor, factor)
+            if factor == (1, 1):
+                return self.crop(box)
+            if box is None:
+                box = (0, 0) + self.size
+            # Pillow loads before its core parser converts factor and box items.
+            self.load()
+            return self._new(self._rust_image.reduce(factor, box))
 
-    # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def load(self):
         """Load pixel data and return a mutable Pillow-style pixel view."""
+        if _IMAGE_EXECUTION_CONTEXT.get() is None:
+            with _execution_context_scope(self):
+                return self._load_with_execution_context()
+        return self._load_with_execution_context()
+
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    def _load_with_execution_context(self):
+        """Load the image and retain its selected route for PixelAccess."""
         self._native_info_known_empty = False
         self._sync_observed_info()
         self._realize_dirty_palette()
-        self._rust_image.load()
+        execution_context = self._current_execution_context()
+        self._rust_image.load(execution_context)
         self._sync_observed_info()
-        return PixelAccess(self._rust_image)
+        return PixelAccess(self._rust_image, execution_context)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
-        """Alpha composite im over self in-place through the Rust core."""
-        self._native_info_known_empty = False
-        self._rust_image.alpha_composite(im._rust_image, dest, source)
+        with _execution_context_scope(self):
+            return self._alpha_composite_with_execution_context(im, dest, source)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    def _alpha_composite_with_execution_context(self, im, dest, source):
+        """Composite through Pillow-compatible crop callbacks and Rust pixels."""
+        # TODO(pillow-rs#3ptb): verify output, callback/fault order, and route
+        # receipts for full, cropped, padded, and subclass-overridden paths.
+        self._native_info_known_empty = False
+        # Pillow's host method validates Sequence types and performs coordinate
+        # arithmetic before dispatching to public crop/paste. Keep those host
+        # protocols here; Rust owns only the alpha-composite pixel operation.
+        if not isinstance(source, (list, tuple)):
+            raise ValueError("Source must be a list or tuple")
+        if not isinstance(dest, (list, tuple)):
+            raise ValueError("Destination must be a list or tuple")
+        if len(source) == 4:
+            overlay_crop_box = tuple(source)
+        elif len(source) == 2:
+            overlay_crop_box = tuple(source) + im.size
+        else:
+            raise ValueError("Source must be a sequence of length 2 or 4")
+        if len(dest) != 2:
+            raise ValueError("Destination must be a sequence of length 2")
+        if min(source) < 0:
+            raise ValueError("Source must be non-negative")
+
+        if overlay_crop_box == (0, 0, *im.size):
+            overlay = im
+        else:
+            overlay = im.crop(overlay_crop_box)
+
+        box = tuple(dest) + (dest[0] + overlay.width, dest[1] + overlay.height)
+        if box == (0, 0, *self.size):
+            background = self
+        else:
+            background = self.crop(box)
+        from .operations import alpha_composite as _alpha_composite
+
+        self.paste(_alpha_composite(background, overlay), box)
+
+    # TODO(pillow-rs#3ptb): freeze GetColors outputs, mode-property override
+    # faults, maxcolors comparison faults, and route receipts in CPU parity.
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def getcolors(self, maxcolors=256):
         """Return list of [count, color] pairs or None if too many colors."""
         # Pillow loads before mode-specific maxcolors handling.
-        self.load()
-        # The public mode selects Pillow's route; core owns its image work,
-        # while the adapter preserves Python maxcolors conversion/comparison.
-        histogram_mode = self.mode in ("1", "L", "P")
-        return self._rust_image.getcolors_formatted(maxcolors, histogram_mode)
+        with _execution_context_scope(self):
+            self.load()
+            # Pillow selects its histogram branch from the public, overridable
+            # mode property. The bool preserves that decision; Rust selects its
+            # pixel strategy from the actual DynamicImage identity.
+            histogram_mode = self.mode in ("1", "L", "P")
+            return self._rust_image.getcolors_formatted(
+                maxcolors,
+                histogram_mode,
+                self._current_execution_context(),
+            )
 
-    # VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-dee7a1fa052b47138d0e3c735ad78c01; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def getdata(self, band=None):
         """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
         # TODO(pillow-rs#3ptb): Run the full CPU architecture receipt matrix
         # for these modes after Stage 5 source closure. The focused 20-case
         # CPU-default output matrix has passed.
         # Pillow loads before validating an explicit band index.
-        self.load()
-        if band is not None:
-            values = self._rust_image.getdata_formatted(band)
-            # Pillow keeps the original mode for single-band 1/L/P images;
-            # selecting a channel from a multiband image produces an L core.
-            result_mode = self.mode if self.mode in ("1", "L", "P") else "L"
-            return ImagingCore(values, result_mode, self.size)
-        mode, size = self.mode, self.size
-        self._has_getdata_views = True
-        values = _ImageDataSequence(self._rust_image, size)
-        return ImagingCore(values, mode, size)
+        with _execution_context_scope(self):
+            self.load()
+            execution_context = self._current_execution_context()
+            if band is not None:
+                values = self._rust_image.getdata_formatted(band, execution_context)
+                # Pillow keeps the original mode for single-band 1/L/P images;
+                # selecting a channel from a multiband image produces an L core.
+                result_mode = self.mode if self.mode in ("1", "L", "P") else "L"
+                return ImagingCore(values, result_mode, self.size)
+            mode, size = self.mode, self.size
+            self._has_getdata_views = True
+            values = _ImageDataSequence(
+                self._rust_image, size, execution_context=execution_context
+            )
+            return ImagingCore(values, mode, size)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def putdata(self, data, scale=1.0, offset=0.0):
         """Replace pixels from scalar samples or multiband color tuples."""
+        if _IMAGE_EXECUTION_CONTEXT.get() is None:
+            with _execution_context_scope(self):
+                return self.putdata(data, scale, offset)
         # Pillow's _ensure_mutable() loads before checking/coercing `data`.
         self.load()
         self._native_info_known_empty = False
-        self._rust_image.putdata_formatted(data, scale, offset)
+        self._rust_image.putdata_formatted(
+            data, scale, offset, self._current_execution_context()
+        )
 
+    # VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     def getprojection(self):
         """Return horizontal and vertical projections."""
         # Pillow loads before scanning projections.
-        self.load()
-        return self._rust_image.getprojection()
+        with _execution_context_scope(self):
+            self.load()
+            return self._rust_image.getprojection(
+                self._current_execution_context()
+            )
 
+    # VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     def entropy(self, mask=None, extrema=None):
         """Calculate image entropy, optionally ranging native I/F samples."""
         # NO_PILLOW_SUPPORT: Pillow's Image.entropy accepts only a mask.
         # Pillow loads the source before checking mask truthiness, then loads
         # a truthy mask before handing both cores to the entropy operation.
-        self.load()
-        if mask:
-            mask.load()
-        else:
-            mask = None
-        return self._rust_image.entropy_with_input(mask, extrema)
+        with _execution_context_scope(self):
+            self.load()
+            if mask:
+                mask.load()
+            else:
+                mask = None
+            return self._rust_image.entropy_with_input(
+                mask, extrema, self._current_execution_context()
+            )
 
     def seek(self, frame):
         """Seek to frame in multi-frame image."""
@@ -1307,26 +1737,42 @@ class Image:
         self._rust_image.close()
         self._rust_image = _ClosedImage()
 
-    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    # TODO(pillow-rs#3ptb): verify handler load/callback order, returned-object
+    # identity, and exception propagation against Pillow 13.0.
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def point(self, lut, mode=None):
         """Apply lookup table or function to each pixel."""
-        self._realize_dirty_palette()
-        return self._new(self._rust_image.point(lut, mode))
+        with _execution_context_scope(self):
+            self.load()
+            if isinstance(lut, ImagePointHandler):
+                return lut.point(self)
+            execution_context = self._current_execution_context()
+            if execution_context is None:
+                result = self._rust_image.point(lut, mode)
+            else:
+                result = self._rust_image.point(lut, mode, execution_context)
+            return self._new(result)
 
+    # TODO(pillow-rs#3ptb): freeze nested numeric-protocol callbacks and
+    # selected/fallback receipts for EffectSpread in the CPU matrix.
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def effect_spread(self, distance):
         """Simple spread/blur effect."""
-        return self._new(self._rust_image.effect_spread(distance))
+        with _execution_context_scope(self):
+            return self._new(self._rust_image.effect_spread(distance))
 
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def apply_transparency(self):
         """Commit P-mode transparency to its palette without changing pixels."""
-        if self.mode == "P" and "transparency" in self.info:
-            self._realize_dirty_palette()
-        self._native_info_known_empty = False
-        self._sync_observed_info()
-        result = self._rust_image.apply_transparency()
-        self._sync_observed_info()
-        self.__dict__.pop("_palette_object", None)
-        return result
+        with _execution_context_scope(self):
+            if self.mode == "P" and "transparency" in self.info:
+                self._realize_dirty_palette()
+            self._native_info_known_empty = False
+            self._sync_observed_info()
+            result = self._rust_image.apply_transparency()
+            self._sync_observed_info()
+            self.__dict__.pop("_palette_object", None)
+            return result
 
     def get_child_images(self):
         """Return list of child images (multi-frame)."""
@@ -1337,18 +1783,21 @@ class Image:
         """Return flattened pixel data matching PIL format."""
         if band is not None:
             return tuple(self.getdata(band))
-        self.load()
-        # Match getdata's existing view bookkeeping and eager load boundary,
-        # but avoid routing an eager tuple result through ImagingCore and its
-        # Python per-pixel slicing iterator.
-        self._has_getdata_views = True
-        values = self._rust_image.getdata_formatted(None)
-        if not isinstance(values, bytes):
-            return tuple(values)
-        bands = self._rust_image.bands
-        if bands == 1:
-            return tuple(values)
-        return tuple(_iter_unpack(f"{bands}B", values))
+        with _execution_context_scope(self):
+            self.load()
+            # Match getdata's existing view bookkeeping and eager load boundary,
+            # but avoid routing an eager tuple result through ImagingCore and its
+            # Python per-pixel slicing iterator.
+            self._has_getdata_views = True
+            values = self._rust_image.getdata_formatted(
+                None, self._current_execution_context()
+            )
+            if not isinstance(values, bytes):
+                return tuple(values)
+            bands = self._rust_image.bands
+            if bands == 1:
+                return tuple(values)
+            return tuple(_iter_unpack(f"{bands}B", values))
 
     def getexif(self):
         """Return EXIF data as dict, matching PIL's Image.Exif."""
@@ -1416,18 +1865,21 @@ class Image:
                 self._rust_image.getpalette_with_input(palette.mode) or []
             )
 
-    def getxmp(self):
+    # VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-7c21795fe4c64b9fb62b5c0f747ef248; benchmark=n/a
+    def getxmp(self, *, strip_namespaces=True):
         """Return XMP metadata. Returns empty dict."""
         return dict(self._rust_image.getxmp())
 
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     def putpalette(self, data, rawmode="RGB"):
         """Attach a palette to the image."""
-        self._native_info_known_empty = False
-        self._sync_observed_info()
-        result = self._rust_image.putpalette(data, rawmode)
-        self._sync_observed_info()
-        self.__dict__.pop("_palette_object", None)
-        return result
+        with _execution_context_scope(self):
+            self._native_info_known_empty = False
+            self._sync_observed_info()
+            result = self._rust_image.putpalette(data, rawmode)
+            self._sync_observed_info()
+            self.__dict__.pop("_palette_object", None)
+            return result
 
     def show(self, title=None):
         """Display the image using the registered :mod:`PIL.ImageShow` viewers."""
@@ -1613,28 +2065,50 @@ class Image:
         """Apply a function to each pixel through Image.point."""
         return image.point(args[0])
 
+    # TODO(pillow-rs#3ptb): verify pending-pipeline route receipts and mode
+    # rejection order for XBM export in the frozen CPU matrix.
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def tobitmap(self, name="image"):
         """Convert to X11 bitmap format."""
-        self._realize_dirty_palette()
-        return self._rust_image.tobitmap()
+        with _execution_context_scope(self):
+            self._realize_dirty_palette()
+            return self._rust_image.tobitmap(self._current_execution_context())
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def remap_palette(self, dest_map, source_palette=None):
         """Remap image palette using destination map."""
-        if self.mode not in ("L", "P"):
-            raise ValueError("illegal image mode")
-        # Pillow loads P before reading the source palette, but delays its
-        # load for an explicit source_palette until after dest_map processing.
-        if self.mode == "P" and source_palette is None:
-            self._realize_dirty_palette()
-        return self._new(
-            self._rust_image.remap_palette(list(dest_map), source_palette)
-        )
+        with _execution_context_scope(self):
+            if self.mode not in ("L", "P"):
+                raise ValueError("illegal image mode")
+            # Pillow loads P before reading the source palette, but delays its
+            # load for an explicit source_palette until after dest_map processing.
+            if self.mode == "P" and source_palette is None:
+                self._realize_dirty_palette()
+            return self._new(
+                self._rust_image.remap_palette(list(dest_map), source_palette)
+            )
 
     def draft(self, mode, size):
         """Configure decoder for draft mode. Returns None matching PIL."""
         return None
 
+    # VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     def transform(
+        self,
+        size: tuple[int, int],
+        method: Transform | ImageTransformHandler | SupportsGetData,
+        data: Sequence[Any] | None = None,
+        resample: int = Resampling.NEAREST,
+        fill: int = 1,
+        fillcolor: float | tuple[float, ...] | str | None = None,
+    ) -> "Image":
+        with _execution_context_scope(self):
+            return self._transform_with_execution_context(
+                size, method, data, resample, fill, fillcolor
+            )
+
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    def _transform_with_execution_context(
         self,
         size: tuple[int, int],
         method: Transform | ImageTransformHandler | SupportsGetData,
@@ -1664,9 +2138,12 @@ class Image:
         mode = source.mode
         # The native plan allocates an exact-mode destination and captures the
         # backend/architecture context before built-in method-data callbacks.
-        plan = source._transform_prepare(size, fillcolor)
-        # TODO(pillow-rs#3ptb): verify overridden mode/palette properties and
-        # reentrant palette mutation against Pillow's pre-callback snapshot.
+        plan = source._transform_prepare(
+            size, fillcolor, self._current_execution_context()
+        )
+        # TODO(pillow-rs#3ptb): verify overridden mode/palette properties,
+        # reentrant palette mutation, callback-created outputs, and route
+        # receipts for custom handlers, getdata, MESH, and premultiplied paths.
         palette_copy = None
         palette_copy_attempted = False
         if mode == "P":
@@ -1768,6 +2245,14 @@ class Image:
     def mode(self) -> str:
         return self._rust_image.mode
 
+    # TODO(pillow-rs#3ptb): verify direct ImagingCore callback outputs, fault
+    # order, and route receipts. Transform paths pass the active route through
+    # custom callbacks and prepared mesh/apply calls; Contrast/Color one-shot
+    # fallbacks use context-taking core entries but remain unverified.
+    # Direct ImagingCore setmode, band writes, palette edits, Chops, Crop, load,
+    # Paste, pixel/data access, Split, analysis reads, Point, and ToBitmap now
+    # resolve the active route without replacing this mutable PyImage handle.
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     @property
     def im(self):
         """Expose the native raster carrier used by Pillow's image methods."""
@@ -1853,18 +2338,22 @@ _BASE_IMAGE_TRANSFORM_METHOD = Image.transform
 class PixelAccess:
     """Mutable pixel view matching Pillow's ``PixelAccess`` behavior."""
 
-    __slots__ = ("_image",)
+    __slots__ = ("_image", "_execution_context")
 
-    def __init__(self, rust_image):
+    def __init__(self, rust_image, execution_context=None):
         self._image = rust_image
+        self._execution_context = execution_context
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def __getitem__(self, xy):
         # PixelAccess uses the low-level core path, not public getpixel logic.
-        return self._image.pixel_access_getpixel(xy)
+        return self._image.pixel_access_getpixel(xy, self._execution_context)
 
+    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     def __setitem__(self, xy, value):
-        self._image.pixel_access_putpixel(xy, value)
+        self._image.pixel_access_putpixel(xy, value, self._execution_context)
 
+    # VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     def __delitem__(self, xy):
         self._image.pixel_access_delete(xy)
 

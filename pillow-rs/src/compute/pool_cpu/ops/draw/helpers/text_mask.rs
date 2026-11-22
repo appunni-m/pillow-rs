@@ -1,6 +1,7 @@
 //! Native FreeType mask reads shared by direct Draw Text owners.
 
 /// Read coverage from a mask whose layout was selected before entering the loop.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn coverage<const RGBA_MASK: bool>(mask: &[u8], pixel_index: usize) -> u8 {
     if RGBA_MASK {

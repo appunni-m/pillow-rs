@@ -12,7 +12,7 @@ pub(crate) fn execute(
     if x_factor < 2 && y_factor < 2 {
         return Ok(DynamicImage::ImageLab8(input.clone()));
     }
-    let bytes = super::super::super::helpers::native_bytes::reduce_bytes::<3, false>(
+    let bytes = super::super::super::helpers::native_bytes::reduce_lab_bytes(
         input.as_raw(),
         input.width(),
         input.height(),

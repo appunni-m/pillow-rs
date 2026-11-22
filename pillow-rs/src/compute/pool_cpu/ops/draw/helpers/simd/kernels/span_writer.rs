@@ -17,6 +17,7 @@ pub(super) struct SimdDrawSpanWriter {
 }
 
 impl SimdDrawSpanWriter {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(super) fn new(image: &DynamicImage, layout: DrawLayout, alpha_blend_rgb: bool) -> Self {
         let (image_width, image_height) = image.dimensions();
         Self {
@@ -42,6 +43,7 @@ impl SimdDrawSpanWriter {
         self.write_span(i64::from(x0), i64::from(x1), i64::from(y), color)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(super) fn write_span(
         &mut self,
         x0: i64,
@@ -66,6 +68,7 @@ impl SimdDrawSpanWriter {
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(super) fn into_image(self) -> Result<DynamicImage, PilError> {
         let mut image = crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
             self.mode,
@@ -84,6 +87,7 @@ impl SimdDrawSpanWriter {
         Ok(image)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn update_hidden_lanes(
         &mut self,
         x0: i64,
@@ -147,6 +151,7 @@ impl SimdDrawSpanWriter {
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn default_hidden_lanes(&self, lane_count: usize) -> Result<HiddenPixelLanes, PilError> {
         let pixel_count = usize::try_from(self.image_width)
             .ok()

@@ -239,7 +239,7 @@ impl ImplementationSupport {
 /// specialized siblings and permitted lower-architecture fallbacks.
 // TODO(pillow-rs#3ptb): verify exact/lower architecture selection and fallback
 // reasons across each operation's declared strategy set in the frozen parity.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn prioritized_implementations<'a>(
     architectures: &'a [ImplementationSupport],
     requested: Architecture,
@@ -445,6 +445,7 @@ impl OperationSupport {
     }
 
     /// Selects the first conditional pipeline child whose wrapper guards pass.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[must_use]
     pub fn conditional_pipeline_child(
         &self,
@@ -454,6 +455,19 @@ impl OperationSupport {
         self.route_paths_for_mode(mode)
             .iter()
             .find_map(|path| path.conditional_pipeline_child(mode, inputs))
+    }
+
+    /// Selects a conditional child and its request-specific support contract.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    #[must_use]
+    pub fn conditional_pipeline_child_contract(
+        &self,
+        mode: Mode,
+        inputs: OperationRouteInputs,
+    ) -> Option<(OperationId, Option<ModeSupport>)> {
+        self.route_paths_for_mode(mode)
+            .iter()
+            .find_map(|path| path.conditional_pipeline_child_contract(mode, inputs))
     }
 
     /// Adds exact source/target wrapper compositions to the operation view.

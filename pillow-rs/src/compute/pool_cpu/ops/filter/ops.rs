@@ -56,6 +56,15 @@ const RANK_WINDOW_VALUE: &[InputContract] = &[InputContract::OddRankWindow {
 }];
 const MODE_FILTER_INPUTS: &[InputContract] = &[InputContract::ModeFilterWindow];
 
+/// Select the archived three-pass Default blur fusion only for its exact modes.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(super) const fn default_blur_uses_three_pass_fusion(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::ImageLuma8 | Mode::ImageLumaA8 | Mode::ImageRgb8 | Mode::ImageRgba8
+    )
+}
+
 // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(super) const fn inputs_for(operation: OperationId) -> &'static [InputContract] {
     match operation {
@@ -111,7 +120,7 @@ pub(super) fn core_only_serial(operation: OperationId, mode: Mode) -> ModeSuppor
     core_only(operation, mode, &[])
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn serial_mode_filter(mode: Mode) -> ModeSupport {
     ModeSupport::serial(OperationId::ModeFilter, mode, MODE_FILTER_INPUTS)
 }
@@ -194,7 +203,7 @@ enum ModeFilterStrategy {
 }
 
 impl ModeFilterStrategy {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn execute(self, image: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
         match self {
             Self::One => super::one::ops::execute_mode_filter(image, size),
@@ -219,7 +228,7 @@ impl ModeFilterStrategy {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn mode_filter_route(mode: Mode) -> (ModeSupport, Option<ModeFilterStrategy>) {
     match mode {
         Mode::One => (
@@ -292,7 +301,7 @@ fn mode_filter_route(mode: Mode) -> (ModeSupport, Option<ModeFilterStrategy>) {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn mode_filter_support_for_mode(mode: Mode) -> ModeSupport {
     mode_filter_route(mode).0
 }
@@ -444,7 +453,7 @@ impl PreparedUnsharpMask<'_> {
         self.blend.selection()
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let Self {
             original,
@@ -485,12 +494,12 @@ pub(crate) struct PreparedModeFilter<'a> {
 }
 
 impl PreparedModeFilter<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let mut output = self.strategy.execute(self.image, self.size)?;
         super::helpers::hidden_lanes::finish_mode_filter(self.image, &mut output, self.size)?;
@@ -499,7 +508,7 @@ impl PreparedModeFilter<'_> {
 }
 
 /// Selects the direct ModeFilter mode strategy before applying its native-byte helper.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_mode_filter<'a>(
     image: &'a DynamicImage,
     size: u32,
@@ -564,7 +573,7 @@ fn prepare_unsharp_blend(
 }
 
 /// Selects and composes the mode-specific blend with its GaussianBlur input.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn prepare_unsharp_mask<'a>(
     image: &'a DynamicImage,
     sigma: f32,
@@ -677,7 +686,7 @@ impl PreparedFilter<'_> {
         })
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let image = self.image;
         let request = self.request;
@@ -730,7 +739,7 @@ impl PreparedFilter<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn execute_architecture_blur(
     image: &DynamicImage,
     mode: Mode,
@@ -763,7 +772,7 @@ fn execute_architecture_blur(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn request(op: &PipelineOp) -> Result<FilterRequest, PilError> {
     match op {
         PipelineOp::Filter3x3 {
@@ -806,7 +815,7 @@ fn request(op: &PipelineOp) -> Result<FilterRequest, PilError> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &PipelineOp,

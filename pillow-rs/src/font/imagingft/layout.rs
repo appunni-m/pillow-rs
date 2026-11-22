@@ -7,18 +7,20 @@ pub(crate) fn getmetrics(font: &FreeTypeFont) -> (u32, u32) {
     )
 }
 
-pub(crate) fn getlength_text(font: &FreeTypeFont, text: FontTextRef<'_>) -> Result<f32, PilError> {
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(crate) fn getlength_text(font: &FreeTypeFont, text: FontTextRef<'_>) -> Result<f64, PilError> {
     validate_text_length(text)?;
-    Ok(length_from_basic_layout_with_flags(font, text, 0)? as f32 / 64.0)
+    Ok(f64::from(length_from_basic_layout_with_flags(font, text, 0)?) / 64.0)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn getlength_and_bbox_text(
     font: &FreeTypeFont,
     text: FontTextRef<'_>,
 ) -> Result<FontLengthAndBounds, PilError> {
     validate_text_length(text)?;
     let run = glyph_run_text(font, text, TGT_NORM)?;
-    let length = run.final_pen as f32 / 64.0;
+    let length = run.final_pen as f64 / 64.0;
     let bbox = bbox_from_glyph_run(font, &run)?;
     Ok((length, bbox))
 }
@@ -67,17 +69,20 @@ pub(crate) fn native_face_info(font: &FreeTypeFont) -> ImageFontFaceInfo<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// TODO(pillow-rs#3ptb): verify maximum-length and signed 26.6 overflow behavior.
 pub(crate) fn getlength_text_with_options(
     font: &FreeTypeFont,
     text: FontTextRef<'_>,
     options: &ImageFontTextOptions,
-) -> Result<f32, PilError> {
+) -> Result<f64, PilError> {
     validate_text_length(text)?;
     validate_basic_layout_options(options)?;
-    if options.mode != Some(crate::raster::Mode::One) {
-        return getlength_text(font, text);
-    }
-    Ok(length_from_basic_layout_with_flags(font, text, text_load_flags(options))? as f32 / 64.0)
+    Ok(f64::from(length_from_basic_layout_with_flags(
+        font,
+        text,
+        text_load_flags(options),
+    )?) / 64.0)
 }
 
 pub(crate) fn getbbox(font: &FreeTypeFont, text: &str) -> Result<(i32, i32, i32, i32), PilError> {

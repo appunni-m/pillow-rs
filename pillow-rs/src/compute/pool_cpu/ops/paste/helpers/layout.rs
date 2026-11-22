@@ -20,6 +20,7 @@ pub(crate) struct MaskLayout {
     pub(crate) premultiplied: bool,
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn source_layout(destination: Mode, source: Mode) -> Option<SourceLayout> {
     if destination == source {
         return Some(SourceLayout::Native);
@@ -41,6 +42,7 @@ pub(crate) fn source_layout(destination: Mode, source: Mode) -> Option<SourceLay
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn physical_four_byte_source(image: &DynamicImage) -> Option<Vec<u8>> {
     let mode = image.mode();
     if mode.pillow_pixel_size() != Some(4) {
@@ -78,6 +80,7 @@ pub(crate) fn physical_four_byte_source(image: &DynamicImage) -> Option<Vec<u8>>
     Some(physical)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn hidden_lanes(image: &DynamicImage, mode: Mode) -> Option<&HiddenPixelLanes> {
     match (mode, image) {
         (Mode::ImageLumaA8, DynamicImage::ImageLumaA8(image)) => image.hidden_pixel_lanes(),
@@ -95,14 +98,17 @@ pub(crate) fn hidden_lanes(image: &DynamicImage, mode: Mode) -> Option<&HiddenPi
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn hidden_lane_count(mode: Mode) -> Option<usize> {
     mode.hidden_pixel_lane_count()
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn hidden_lane_offset(mode: Mode, lane: usize) -> Option<usize> {
     mode.hidden_pixel_lane_offset(lane)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn mask_layout(mode: Mode, alpha: bool) -> Option<MaskLayout> {
     match (mode, alpha) {
         (Mode::One, false) => Some(MaskLayout {
@@ -139,6 +145,7 @@ pub(crate) fn mask_layout(mode: Mode, alpha: bool) -> Option<MaskLayout> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn byte_carrier_pixel_width(mode: Mode) -> Option<usize> {
     mode.byte_carrier_pixel_width()
 }

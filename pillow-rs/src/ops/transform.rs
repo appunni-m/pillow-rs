@@ -246,7 +246,7 @@ impl Image {
     /// Bindings preserve sequence arity and convert integer items through their
     /// host protocol. The core owns scale positivity, box bounds, mode support,
     /// and the optional crop.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     pub fn reduce_public(
         &self,
         factor: ReduceFactor,
@@ -278,7 +278,7 @@ impl Image {
 
     /// Applies Resize's fixed-arity reduction request without allocating host
     /// sequences.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub(crate) fn reduce_for_resize(
         &self,
         factors: (i64, i64),
@@ -303,7 +303,7 @@ impl Image {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn reduce_validated(
         &self,
         x_factor: u32,

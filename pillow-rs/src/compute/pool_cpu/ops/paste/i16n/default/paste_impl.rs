@@ -2,6 +2,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::{i16, plan::Luma16Plan};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, ImageBuffer, Luma};
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: Luma16Plan<'_>) -> Result<DynamicImage, PilError> {
     let (width, height) = strategy.destination_size;
     let source = std::sync::Arc::clone(&strategy.source);

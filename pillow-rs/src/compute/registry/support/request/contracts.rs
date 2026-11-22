@@ -273,6 +273,7 @@ fn assess_merge_band_layout(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn assess_paste_inputs(
     input: StrategyInputs,
     rules: &'static PasteInputRules,

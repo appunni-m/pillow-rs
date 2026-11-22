@@ -38,6 +38,7 @@ pub(crate) fn native_mask<'a, P: Pixel<Subpixel = u8>>(
     .then_some(input.mask)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn luma_mask(luma: &GrayImage, mask: MaskStrategy<'_>) -> GrayAlphaImage {
     mask.with_samples(
         |samples| luma_mask_samples::<true>(luma, samples),
@@ -45,6 +46,7 @@ pub(crate) fn luma_mask(luma: &GrayImage, mask: MaskStrategy<'_>) -> GrayAlphaIm
     )
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn luma_mask_samples<const ONE: bool>(luma: &GrayImage, mask: &[u8]) -> GrayAlphaImage {
     let mut output = GrayAlphaImage::new(luma.width(), luma.height());
     for ((destination, source), alpha) in output.pixels_mut().zip(luma.pixels()).zip(mask) {

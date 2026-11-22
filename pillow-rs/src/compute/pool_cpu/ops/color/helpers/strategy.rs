@@ -8,6 +8,7 @@ use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) const fn palette_remap_architectures(mode: Mode) -> [ImplementationSupport; 3] {
     let operation = OperationId::RemapPalette;
     let guard = StrategyGuard::NativePointwiseBytesIncludingEmpty { channels: 1 };

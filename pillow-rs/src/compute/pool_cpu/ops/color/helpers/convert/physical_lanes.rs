@@ -6,6 +6,7 @@ use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, GrayAlphaImage, Mode, RgbImage};
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn preserve_compact_rgb_lane(
     source: &RgbImage,
     target: Mode,
@@ -17,6 +18,7 @@ pub(crate) fn preserve_compact_rgb_lane(
     replace_target_lanes(target, output, source.hidden_pixel_lanes().cloned())
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn preserve_luma_alpha_lane(
     source: &GrayAlphaImage,
     target: Mode,
@@ -37,6 +39,7 @@ pub(crate) fn preserve_luma_alpha_lane(
 }
 
 /// Carries the input X/A byte through Pillow's LAB, YCbCr, and HSV conversions.
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn preserve_fourth_byte(
     source: &[u8],
     width: u32,
@@ -62,6 +65,7 @@ pub(crate) fn preserve_fourth_byte(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn preserve_target_lane_values(
     target: Mode,
     width: u32,
@@ -144,6 +148,7 @@ fn carries_luma_alpha_lane(target: Mode) -> bool {
     matches!(target, Mode::ImageRgb8 | Mode::ImageHsv8)
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn replace_target_lanes(
     target: Mode,
     output: &mut DynamicImage,

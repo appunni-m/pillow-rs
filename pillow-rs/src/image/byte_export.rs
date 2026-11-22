@@ -139,7 +139,25 @@ impl Image {
         self.tobytes_mode(self.mode_identity()?)
     }
 
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
     fn tobytes_mode(&self, mode: Mode) -> Result<Vec<u8>, PilError> {
+        let palette_bytes = match self {
+            Image::Loaded(data) => data.palette.as_deref().map(<[u8]>::len),
+            Image::Paletted(data) => Some(data.palette.len()),
+            Image::Bytes { info, .. } => info
+                .as_ref()
+                .and_then(|info| info.palette.as_ref())
+                .map(|palette| palette.rgb.len()),
+            Image::Pipeline { palette, ops, .. } => {
+                palette.as_deref().map(<[u8]>::len).or_else(|| {
+                    ops.palette_output()
+                        .and_then(|output| output.palette.as_ref().map(Vec::len))
+                })
+            }
+        };
+        if palette_bytes.is_some_and(|length| length > 768) {
+            return Err(PilError::ValueError("invalid palette size".to_owned()));
+        }
         if let Image::Paletted(data) = self {
             return Ok(data.indices.as_bytes().to_vec());
         }
@@ -189,11 +207,8 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization or mode-specific byte packing
     /// fails.
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     pub fn tobytes_formatted(&self, mode: Mode) -> Result<Vec<u8>, PilError> {
-        // Fast path for Paletted: return raw index bytes.
-        if let Image::Paletted(data) = self {
-            return Ok(data.indices.as_bytes().to_vec());
-        }
         self.tobytes_mode(mode)
     }
 

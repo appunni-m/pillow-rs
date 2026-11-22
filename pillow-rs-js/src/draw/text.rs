@@ -155,6 +155,7 @@ impl ImageDraw {
     #[wasm_bindgen(js_name = "textlengthWithInput")]
     /// Measures text advance using the supplied font and shaping options.
     #[allow(clippy::too_many_arguments)]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn textlength_with_input(
         &mut self,
         text: JsValue,
@@ -179,7 +180,6 @@ impl ImageDraw {
             js_font_text_input(&text),
             &options,
         )
-        .map(|value| value as f64)
         .map_err(err)
     }
     #[wasm_bindgen(js_name = "multilineTextbboxWithInput")]

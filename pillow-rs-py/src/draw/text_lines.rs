@@ -1,19 +1,21 @@
 use crate::draw::{
-    PyDraw, custom_font_mask, draw_color_input_from_python, draw_features_presence_from_python,
-    draw_text_input_from_python, text_layout,
+    PyDraw, custom_font_mask, draw_features_presence_from_python, draw_text_input_from_python,
+    text_layout,
 };
 use crate::font::PyFont;
 use crate::map_error;
-use pillow_rs::{DrawTextLine, DrawTextLinesCallbacks, Mode, PilError};
+use pillow_rs::{Backend, DrawTextLine, DrawTextLinesCallbacks, ExecutionContext, Mode, PilError};
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyResult, Python};
 use pyo3::types::{PyAnyMethods, PyIterator, PyString};
 
 #[allow(clippy::too_many_arguments)]
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn draw_multiline_text_impl<'py>(
     draw: &mut pillow_rs::Draw,
     xy: (f64, f64),
     text: &Bound<'py, PyAny>,
-    fill: Option<&Bound<'py, PyAny>>,
+    fill_ink: i64,
+    stroke_ink: Option<i64>,
     font: Option<&Bound<'py, PyFont>>,
     spacing: Option<i32>,
     direction: Option<String>,
@@ -24,7 +26,8 @@ pub(super) fn draw_multiline_text_impl<'py>(
     embedded_color: bool,
     font_size: Option<f32>,
     align: Option<String>,
-    stroke_fill: Option<&Bound<'py, PyAny>>,
+    requested_backend: Option<Backend>,
+    context: &ExecutionContext,
 ) -> PyResult<()> {
     let default_font = if font.is_none() {
         Some(pillow_rs::FreeTypeFont::load_default(font_size.unwrap_or(10.0)).map_err(map_error)?)
@@ -36,19 +39,10 @@ pub(super) fn draw_multiline_text_impl<'py>(
         ..pillow_rs::ImageFontTextOptions::default()
     })
     .map_err(map_error)?;
-    let color = draw
-        .resolve_text_color_with_input(draw_color_input_from_python(fill)?)
-        .map_err(map_error)?;
-    let stroke_fill = if stroke_width != 0.0 {
-        stroke_fill
-            .map(|value| {
-                draw.resolve_text_color_with_input(draw_color_input_from_python(Some(value))?)
-                    .map_err(map_error)
-            })
-            .transpose()?
-    } else {
-        None
-    };
+    let color = color_from_draw_ink(draw, fill_ink)?;
+    let stroke_fill = stroke_ink
+        .map(|ink| color_from_draw_ink(draw, ink))
+        .transpose()?;
     let text = draw_text_input_from_python(text)?;
     let features_invalid = draw_features_presence_from_python(features);
     let options = pillow_rs::ImageFontTextOptions {
@@ -74,7 +68,7 @@ pub(super) fn draw_multiline_text_impl<'py>(
                 "draw text font was not prepared".into(),
             ))
         })?;
-    draw.multiline_text_with_optional_font_input(
+    draw.multiline_text_with_optional_font_input_with_context(
         xy.0,
         xy.1,
         text,
@@ -83,6 +77,8 @@ pub(super) fn draw_multiline_text_impl<'py>(
         f64::from(spacing.unwrap_or(4)),
         None,
         &options,
+        requested_backend,
+        context,
     )
     .map_err(map_error)
 }
@@ -121,6 +117,7 @@ struct PythonLineIterator<'py> {
 }
 
 impl<'py> PythonDrawTextLinesCallbacks<'py> {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn custom_mask(
         &mut self,
         line: &DrawTextLine<Bound<'py, PyAny>>,
@@ -128,6 +125,8 @@ impl<'py> PythonDrawTextLinesCallbacks<'py> {
         mode: &Bound<'py, PyAny>,
         fill: &Bound<'_, PyAny>,
         ink: i64,
+        requested_backend: Option<Backend>,
+        context: &ExecutionContext,
     ) -> PyResult<()> {
         let host_helpers = self.host_helpers_fn.call0()?;
         let image_class = host_helpers.get_item(0)?;
@@ -155,6 +154,8 @@ impl<'py> PythonDrawTextLinesCallbacks<'py> {
             ink,
             &self.args,
             &self.mask_kwargs,
+            requested_backend,
+            *context,
         )
     }
 }
@@ -185,7 +186,12 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         )
     }
 
-    fn draw_direct(&mut self) -> PyResult<()> {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn draw_direct(
+        &mut self,
+        requested_backend: Option<Backend>,
+        context: &ExecutionContext,
+    ) -> PyResult<()> {
         let rust_font = self.font.getattr("_rust_font")?;
         let spacing = self.image_text.getattr("spacing")?;
         let stroke_width = self.float_fn.call1((self.stroke_width.clone(),))?;
@@ -199,13 +205,13 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         let anchor = optional_string(&self.anchor)?;
         let embedded_color = self.embedded_color.extract::<bool>()?;
         let align = optional_string(&self.align)?;
-        let stroke_fill = optional_value(&self.stroke_fill);
         let mut draw = self.py_draw.borrow_mut(self.py);
         draw_multiline_text_impl(
             &mut draw.draw,
             xy,
             &self.text,
-            optional_value(&self.fill),
+            self.fill_ink,
+            self.stroke_ink,
             Some(font),
             spacing,
             direction,
@@ -216,7 +222,8 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
             embedded_color,
             None,
             align,
-            stroke_fill,
+            requested_backend,
+            context,
         )
     }
 
@@ -251,7 +258,14 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         self.embedded_color.is_truthy()
     }
 
-    fn draw_custom_stroke(&mut self, line: &DrawTextLine<Self::Value>, mode: Mode) -> PyResult<()> {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn draw_custom_stroke(
+        &mut self,
+        line: &DrawTextLine<Self::Value>,
+        mode: Mode,
+        requested_backend: Option<Backend>,
+        context: &ExecutionContext,
+    ) -> PyResult<()> {
         let fill = if self.stroke_fill.is_none() {
             self.fill.clone()
         } else {
@@ -259,14 +273,25 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         };
         let fontmode = self.owner.getattr("fontmode")?;
         let stroke_ink = self.stroke_ink.unwrap_or(self.fill_ink);
-        self.custom_mask(line, mode, &fontmode, &fill, stroke_ink)
+        self.custom_mask(
+            line,
+            mode,
+            &fontmode,
+            &fill,
+            stroke_ink,
+            requested_backend,
+            context,
+        )
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn draw_custom_fill(
         &mut self,
         line: &DrawTextLine<Self::Value>,
         _mode: Mode,
         embedded_color: bool,
+        requested_backend: Option<Backend>,
+        context: &ExecutionContext,
     ) -> PyResult<()> {
         let fontmode = self.fill_fontmode.take().ok_or_else(|| {
             pyo3::exceptions::PyRuntimeError::new_err(
@@ -280,15 +305,26 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         };
         let fill = self.fill.clone();
         let fill_ink = self.fill_ink;
-        self.custom_mask(line, _mode, &mode, &fill, fill_ink)
+        self.custom_mask(
+            line,
+            _mode,
+            &mode,
+            &fill,
+            fill_ink,
+            requested_backend,
+            context,
+        )
     }
 }
 
 #[allow(clippy::too_many_arguments)]
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn draw_text_lines<'py>(
     py: Python<'py>,
     py_draw: Py<PyDraw>,
     mode: Mode,
+    requested_backend: Option<Backend>,
+    context: ExecutionContext,
     owner: &Bound<'py, PyAny>,
     host_helpers_fn: &Bound<'py, PyAny>,
     float_fn: &Bound<'py, PyAny>,
@@ -338,7 +374,24 @@ pub(super) fn draw_text_lines<'py>(
         mask_kwargs: mask_kwargs.clone(),
         native_text_input,
     };
-    pillow_rs::draw_text_lines_with_callbacks(mode, stroke_ink, fill_ink, &mut callbacks)
+    pillow_rs::draw_text_lines_with_callbacks(
+        mode,
+        stroke_ink,
+        fill_ink,
+        requested_backend,
+        &context,
+        &mut callbacks,
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn color_from_draw_ink(draw: &pillow_rs::Draw, ink: i64) -> PyResult<(u8, u8, u8, u8)> {
+    let ink = i32::try_from(ink).map_err(|_| {
+        map_error(PilError::InternalError(
+            "draw text ink did not fit its packed i32 carrier".into(),
+        ))
+    })?;
+    draw.color_from_draw_ink(ink).map_err(map_error)
 }
 
 fn optional_value<'a, 'py>(value: &'a Bound<'py, PyAny>) -> Option<&'a Bound<'py, PyAny>> {

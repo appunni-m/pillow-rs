@@ -111,7 +111,7 @@ fn imageops_lut_wrapper_rejection(mode: Mode) -> Option<(&'static str, Rejection
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn classify_imageops_lut_route(mode: Mode) -> OperationModeRoute {
     let support_scope = scope_for_wrapper_mode(mode);
     let (support, operations, scope, outcome) =
@@ -172,7 +172,7 @@ fn classify_imageops_lut_route(mode: Mode) -> OperationModeRoute {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
 fn classify_imageops_palette_lut_route(
     mode: Mode,
     operation: OperationId,
@@ -265,13 +265,13 @@ pub(crate) fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
 pub(crate) fn classify_imageops_posterize_route(mode: Mode) -> OperationModeRoute {
     classify_imageops_palette_lut_route(mode, OperationId::ImageOpsPosterize)
         .unwrap_or_else(|| classify_imageops_lut_route(mode))
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
 pub(crate) fn classify_imageops_solarize_route(mode: Mode) -> OperationModeRoute {
     classify_imageops_palette_lut_route(mode, OperationId::ImageOpsSolarize)
         .unwrap_or_else(|| classify_imageops_lut_route(mode))

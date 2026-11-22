@@ -1,5 +1,6 @@
 //! Completion metrics for architecture-specific Paste kernels.
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 pub(crate) fn record_l_mask_neon(
     width: u32,

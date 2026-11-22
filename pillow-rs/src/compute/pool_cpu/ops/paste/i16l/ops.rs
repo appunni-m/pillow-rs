@@ -33,6 +33,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     destination: &'a ImageBuffer<Luma<u16>, Vec<u16>>,
     source: Arc<DynamicImage>,
@@ -55,6 +56,7 @@ pub(crate) fn prepare<'a>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.selection.implementation.architecture {
         Architecture::Default => super::default::paste_impl::execute(strategy),

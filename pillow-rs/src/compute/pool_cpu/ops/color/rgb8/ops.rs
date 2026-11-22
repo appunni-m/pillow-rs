@@ -20,6 +20,14 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &[],
 );
 
+pub(crate) const CONVERT_TRANSPARENT_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::ConvertTransparent,
+    Mode::ImageRgb8,
+    OutputModeRule::ByTargetMode,
+    super::super::ops::TRANSPARENT_RGB_INPUTS,
+    &[],
+);
+
 pub(crate) fn execute(
     source: &RgbImage,
     selection: StrategySelection,
@@ -28,6 +36,23 @@ pub(crate) fn execute(
         Architecture::Default => super::default::convert_lab_impl::execute(source),
         _ => Err(PilError::InternalError(
             "ConvertLab selected an undeclared RGB architecture".into(),
+        )),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn execute_transparent(
+    source: &RgbImage,
+    target: Mode,
+    key: [u8; 3],
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::default::convert_transparent_impl::execute(source, target, key)
+        }
+        _ => Err(PilError::InternalError(
+            "ConvertTransparent selected an undeclared RGB architecture".into(),
         )),
     }
 }

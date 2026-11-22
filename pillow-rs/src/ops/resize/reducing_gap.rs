@@ -244,21 +244,11 @@ fn python_ceiling_integer(value: f64) -> Result<f64, PilError> {
     Ok(value.ceil())
 }
 
-// TODO(pillow-rs#3ptb): parity-check signed factors, zero/negative output sizes,
-// typed I;16 reduction, non-finite safe-box intermediates, C-int bounds, and
-// final-bound error precedence.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-pub(super) fn apply_reducing_gap(
-    source: Image,
-    bounds: ResizeBounds,
-    gap: f64,
-    filter: ResampleFilter,
-    output_size: (u32, u32),
-    source_size: (u32, u32),
-) -> ReducingGapResult {
-    let Some(plan) = prepare(bounds, gap, filter, output_size, source_size)? else {
-        return Ok((source, bounds));
-    };
+// TODO(pillow-rs#3ptb): verify signed factors, zero/negative output sizes,
+// non-finite safe-box intermediates, C-int bounds, and final-bound error
+// precedence.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(super) fn apply_reducing_gap(source: Image, plan: ReducingGapPlan) -> ReducingGapResult {
     let safe = plan.safe_box;
     // NO_PILLOW_SUPPORT: Pillow rejects I;16 Reduce; this path uses native u16.
     let source = source.reduce_for_resize(

@@ -10,8 +10,11 @@ use wide::{f64x8, u16x8};
 const LANES: usize = 8;
 
 /// Resizes the native u16 carrier using the byte interpretation owned by its mode.
-// TODO(pillow-rs#3ptb): verify empty I;16 requests select the Default fallback.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// Empty source extents produce a zero-filled destination here; zero-sized
+// destinations are rejected by the strategy guard and use exact-mode Default.
+// TODO(pillow-rs#3ptb): verify empty-source output and zero-axis Default
+// fallback receipts across CPU architecture selectors.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn resize<const BIG_ENDIAN: bool>(
     input: &ImageBuffer<Luma<u16>, Vec<u16>>,
     output_width: u32,

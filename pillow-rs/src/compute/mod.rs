@@ -62,8 +62,8 @@ pub(crate) use telemetry::{
     record_pipeline_operation_unsupported, record_pipeline_operation_vector_blocks,
     record_pipeline_resize_coeff_cache_hit, record_pipeline_resize_coeff_cache_miss,
     record_pipeline_resource_telemetry, reset_pipeline_allocation_telemetry,
-    reset_pipeline_operation_telemetry, take_pipeline_allocation_telemetry,
-    take_pipeline_operation_telemetry,
+    reset_pipeline_operation_telemetry, restore_pipeline_operation_telemetry_order,
+    take_pipeline_allocation_telemetry, take_pipeline_operation_telemetry,
 };
 use telemetry::{
     PipelineTelemetry, elapsed_ns, pipeline_telemetry_enabled, pipeline_timestamp,
@@ -103,7 +103,7 @@ pub(crate) use execution::{
     PreparedExecution, execute_prepared, execute_prepared_cpu_arch_convert_output,
     execute_prepared_cpu_arch_operation, execute_prepared_cpu_arch_terminal,
     execute_prepared_cpu_terminal, execute_prepared_shared_with_palette,
-    execute_prepared_with_palette, prepare_execution,
+    execute_prepared_with_palette, prepare_execution_with_context,
 };
 #[cfg(feature = "gpu")]
 pub(crate) use execution::{
@@ -332,7 +332,7 @@ pub(crate) trait BackendImpl: Send + Sync {
     /// Backends that have not adopted context-driven strategy selection keep
     /// their existing executor through this default. CPU overrides it so each
     /// operation consumes the same injected backend and architecture choice.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn execute_batch_with_context(
         &self,
         ops: &[PipelineOp],
@@ -347,7 +347,7 @@ pub(crate) trait BackendImpl: Send + Sync {
     /// Most backends do not consume palette metadata and retain their current
     /// executor. CPU overrides this boundary so exact P/PA strategies receive
     /// the palette resolved by the image wrapper.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn execute_batch_with_context_and_palette(
         &self,
         ops: &[PipelineOp],

@@ -110,6 +110,18 @@ pub enum AlphaCompositeBox {
     Invalid,
 }
 
+/// Crop geometry normalized for Rust's integer in-place alpha-composite API.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AlphaCompositeCropPlan {
+    /// Normalized source `(left, upper, right, lower)` box.
+    pub source_box: (i64, i64, i64, i64),
+    /// Destination `(x, y)` before adding the cropped source dimensions.
+    pub destination: (i64, i64),
+    /// Source dimensions observed while the plan was prepared.
+    pub source_size: (u32, u32),
+}
+
 impl PasteSource {
     /// Builds a paste source from binding-normalized values.
     ///

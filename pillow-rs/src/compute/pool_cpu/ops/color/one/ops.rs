@@ -78,6 +78,14 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &ARCHITECTURES,
 );
 
+pub(crate) const CONVERT_TRANSPARENT_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::ConvertTransparent,
+    Mode::One,
+    OutputModeRule::ByTargetMode,
+    super::super::ops::TRANSPARENT_GRAY_BYTE_INPUTS,
+    &[],
+);
+
 pub(crate) fn execute(
     source: &GrayImage,
     target: Mode,
@@ -102,6 +110,23 @@ pub(crate) fn execute(
         }
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared One architecture".into(),
+        )),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn execute_transparent(
+    source: &GrayImage,
+    target: Mode,
+    key: [u8; 3],
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::default::convert_transparent_impl::execute(source, target, key)
+        }
+        _ => Err(PilError::InternalError(
+            "ConvertTransparent selected an undeclared One architecture".into(),
         )),
     }
 }

@@ -238,6 +238,21 @@ impl Image {
         self.paste_prepared_with_box_mask(box_plan, source_plan, mask_input, None, true)
     }
 
+    /// Queues Paste while retaining a composed caller's execution context.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn paste_prepared_with_execution_context(
+        &mut self,
+        box_plan: PasteBoxPlan,
+        source_plan: PasteSourcePlan,
+        mask_input: PasteMaskInput,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.paste_prepared(box_plan, source_plan, mask_input)?;
+        *self = self.clone().with_execution_context(context);
+        Ok(())
+    }
+
     /// Applies a staged Paste with the already-loaded abbreviated box mask.
     #[doc(hidden)]
     pub fn paste_prepared_with_box_mask(
@@ -307,6 +322,7 @@ impl Image {
         self.paste_prepared_source(source_plan, placement, mask.as_ref())
     }
 
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
     fn paste_prepared_source(
         &mut self,
         plan: PasteSourcePlan,
@@ -384,19 +400,17 @@ impl Image {
         Ok(())
     }
 
-    /// Performs Pillow's high-level in-place alpha composite workflow.
+    /// Prepares integer source and destination crop geometry for Rust callers.
     ///
-    /// The low-level [`Image::alpha_composite`] primitive requires equal-sized
-    /// images. Pillow's public method first crops the source, crops or creates
-    /// the destination background, composites the matching regions, and pastes
-    /// the result back. Keeping that geometry here prevents Python/FFI copies
-    /// of the same validation and clipping rules.
-    pub fn alpha_composite_public(
-        &mut self,
+    /// Python's public wrapper owns its sequence protocols and arithmetic so
+    /// Crop keeps Pillow's host conversion order and subclass callbacks.
+    #[doc(hidden)]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub fn alpha_composite_crop_plan(
         source: &Image,
         dest: AlphaCompositeBox,
         source_box: AlphaCompositeBox,
-    ) -> Result<(), PilError> {
+    ) -> Result<super::types::AlphaCompositeCropPlan, PilError> {
         let source_box = match source_box {
             AlphaCompositeBox::Values(values) if matches!(values.len(), 2 | 4) => values,
             AlphaCompositeBox::Values(_) => {
@@ -410,7 +424,7 @@ impl Image {
                 ));
             }
         };
-        let dest = match dest {
+        let destination = match dest {
             AlphaCompositeBox::Values(values) if values.len() == 2 => values,
             AlphaCompositeBox::Values(_) => {
                 return Err(PilError::ValueError(
@@ -427,30 +441,60 @@ impl Image {
             return Err(PilError::ValueError("Source must be non-negative".into()));
         }
 
-        let (source_width, source_height) = source.size()?;
-        let source_width = i64::from(source_width);
-        let source_height = i64::from(source_height);
+        let source_size = source.size()?;
         let source_box = if source_box.len() == 2 {
-            [source_box[0], source_box[1], source_width, source_height]
+            (
+                source_box[0],
+                source_box[1],
+                i64::from(source_size.0),
+                i64::from(source_size.1),
+            )
         } else {
-            [source_box[0], source_box[1], source_box[2], source_box[3]]
+            (source_box[0], source_box[1], source_box[2], source_box[3])
         };
-        if source_box[2] < source_box[0] {
+        if source_box.2 < source_box.0 {
             return Err(PilError::ValueError(
                 "Coordinate 'right' is less than 'left'".into(),
             ));
         }
-        if source_box[3] < source_box[1] {
+        if source_box.3 < source_box.1 {
             return Err(PilError::ValueError(
                 "Coordinate 'lower' is less than 'upper'".into(),
             ));
         }
-        check_crop_extent(source_box[2] - source_box[0], source_box[3] - source_box[1])?;
+        Ok(super::types::AlphaCompositeCropPlan {
+            source_box,
+            destination: (destination[0], destination[1]),
+            source_size,
+        })
+    }
+
+    /// Performs Pillow's high-level in-place alpha composite workflow.
+    ///
+    /// The low-level [`Image::alpha_composite`] primitive requires equal-sized
+    /// images. Rust callers can use this method to normalize geometry, crop
+    /// both regions, composite them, and paste the result back. The Python
+    /// facade keeps host sequence arithmetic and public crop/paste callbacks
+    /// at its boundary; this Rust entry is for integer-only callers.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub fn alpha_composite_public(
+        &mut self,
+        source: &Image,
+        dest: AlphaCompositeBox,
+        source_box: AlphaCompositeBox,
+    ) -> Result<(), PilError> {
+        let plan = Self::alpha_composite_crop_plan(source, dest, source_box)?;
+        let source_box = plan.source_box;
+        let (source_width, source_height) =
+            (i64::from(plan.source_size.0), i64::from(plan.source_size.1));
+        // Direct Rust callers use the fixed native extent guard. The public
+        // Python wrapper executes both crop checks through Image.crop itself.
+        check_crop_extent(source_box.2 - source_box.0, source_box.3 - source_box.1)?;
         let source_box = (
-            i32::try_from(source_box[0]).map_err(|_| coordinate_overflow())?,
-            i32::try_from(source_box[1]).map_err(|_| coordinate_overflow())?,
-            i32::try_from(source_box[2]).map_err(|_| coordinate_overflow())?,
-            i32::try_from(source_box[3]).map_err(|_| coordinate_overflow())?,
+            i32::try_from(source_box.0).map_err(|_| coordinate_overflow())?,
+            i32::try_from(source_box.1).map_err(|_| coordinate_overflow())?,
+            i32::try_from(source_box.2).map_err(|_| coordinate_overflow())?,
+            i32::try_from(source_box.3).map_err(|_| coordinate_overflow())?,
         );
         let overlay = if source_box == (0, 0, source_width as i32, source_height as i32) {
             source.clone()
@@ -458,8 +502,8 @@ impl Image {
             source.crop(Some(source_box))?
         };
 
-        let dest_x = i32::try_from(dest[0]).map_err(|_| coordinate_overflow())?;
-        let dest_y = i32::try_from(dest[1]).map_err(|_| coordinate_overflow())?;
+        let dest_x = i32::try_from(plan.destination.0).map_err(|_| coordinate_overflow())?;
+        let dest_y = i32::try_from(plan.destination.1).map_err(|_| coordinate_overflow())?;
         let (overlay_width, overlay_height) = overlay.size()?;
         let right = dest_x
             .checked_add(i32::try_from(overlay_width).map_err(|_| coordinate_overflow())?)
@@ -540,6 +584,7 @@ impl Image {
         self.paste_impl(source, PastePlacement::Position(x, y), mask, false)
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     /// Queues a bitmap solid-color source as one pixel for native masked-Paste
     /// backends. The mask defines the full region; CPU fallback expands the
     /// sample before applying the ordinary Paste semantics.
@@ -560,6 +605,7 @@ impl Image {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn paste_impl(
         &mut self,
         source: PasteSource,
@@ -769,6 +815,7 @@ fn resolve_paste_placement(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn paste_mask_uses_alpha(destination_mode: Mode, mask: Option<&Image>) -> Result<bool, PilError> {
     let Some(mask_image) = mask else {
         return Ok(false);
@@ -877,6 +924,7 @@ fn resolve_image_source(image: Box<Image>, destination_mode: Mode) -> Result<Ima
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn resolve_solid_source(
     color: ResolvedPasteColor,
     destination_mode: Mode,

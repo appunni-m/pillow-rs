@@ -1,7 +1,10 @@
-//! RGBA mode strategies, including the guarded AVX2 transpose kernel.
+//! RGBA mode strategies, including x86_64 baseline and AVX2 transpose kernels.
 
 pub(crate) type Input = crate::raster::RgbaImage;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
+use crate::compute::pool_cpu::ops::transpose::helpers::pixel::{
+    TRANSPOSE_TILE_SIZE, TRANSPOSE_TILE_THRESHOLD_PIXELS,
+};
 use crate::compute::{
     Architecture, ExecutionContext,
     registry::support::{
@@ -95,6 +98,18 @@ const TRANSPOSE_ARCHITECTURES: &[ImplementationSupport] = &[
             allow_empty: true,
         },
     ),
+    ImplementationSupport::cpu(
+        OperationId::Transpose,
+        Mode::ImageRgba8,
+        Architecture::X86_64,
+        cfg!(target_arch = "x86_64"),
+        &[],
+        StrategyGuard::TransposeRgbaX86_64Tiled {
+            tile_min_dimension: TRANSPOSE_TILE_SIZE as u32,
+            minimum_pixels: TRANSPOSE_TILE_THRESHOLD_PIXELS,
+            block_size: 4,
+        },
+    ),
 ];
 
 pub(crate) const FLIP_SUPPORT: ModeSupport =
@@ -131,6 +146,8 @@ enum MirrorArchitecture<'a> {
 }
 enum TransposeArchitecture<'a> {
     Default(&'a Input, TransposeMethod),
+    #[cfg(target_arch = "x86_64")]
+    X86_64(&'a Input, TransposeMethod),
     #[cfg(target_arch = "x86_64")]
     Avx2(&'a Input, TransposeMethod),
     #[cfg(all(
@@ -198,6 +215,7 @@ pub(crate) fn prepare_mirror<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_transpose<'a>(
     image: &'a Input,
     method: &TransposeMethod,
@@ -215,6 +233,8 @@ pub(crate) fn prepare_transpose<'a>(
     let selection = TRANSPOSE_SUPPORT.select(ctx, facts)?;
     let method = *method;
     let implementation = match selection.implementation.architecture {
+        #[cfg(target_arch = "x86_64")]
+        Architecture::X86_64 => TransposeArchitecture::X86_64(image, method),
         #[cfg(target_arch = "x86_64")]
         Architecture::Avx2 => TransposeArchitecture::Avx2(image, method),
         #[cfg(all(
@@ -310,6 +330,7 @@ impl TransposeStrategy<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[allow(
         unsafe_code,
         reason = "the prepared AVX2 strategy validates host capability and transpose inputs"
@@ -318,6 +339,10 @@ impl TransposeStrategy<'_> {
         match self.prepared.implementation {
             TransposeArchitecture::Default(image, method) => {
                 super::default::transpose_impl::execute(image, &method)
+            }
+            #[cfg(target_arch = "x86_64")]
+            TransposeArchitecture::X86_64(image, method) => {
+                super::x86_64::transpose_impl::execute(image, &method)
             }
             #[cfg(target_arch = "x86_64")]
             TransposeArchitecture::Avx2(image, method) => {

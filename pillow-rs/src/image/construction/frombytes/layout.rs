@@ -44,7 +44,6 @@ pub(super) enum RawDecoderTransform {
     },
     /// Raw YCCA pixels convert their first three lanes and preserve alpha.
     YccaToRgba,
-    LabBias,
     PackBilevelBytes,
     PackedLuma {
         bits: u8,
@@ -171,7 +170,7 @@ pub(super) fn raw_layout(
     rawmode: &str,
     native_rawmode: &str,
 ) -> Result<RawDecoderLayout, PilError> {
-    if rawmode == native_rawmode && mode != Mode::ImageLab8 {
+    if rawmode == native_rawmode {
         return Ok(RawDecoderLayout::new(
             super::native_input_bits(mode),
             1,
@@ -430,7 +429,6 @@ fn ycbcr_raw_layout(rawmode: &str) -> Option<RawDecoderLayout> {
 
 fn lab_raw_layout(rawmode: &str) -> Option<RawDecoderLayout> {
     match rawmode {
-        "LAB" => Some(RawDecoderLayout::new(24, 1, RawDecoderTransform::LabBias)),
         "L" => Some(channel_band_layout(8, 0, 3, false, 0)),
         "A" => Some(channel_band_layout(8, 0, 3, false, 1)),
         "B" => Some(channel_band_layout(8, 0, 3, false, 2)),

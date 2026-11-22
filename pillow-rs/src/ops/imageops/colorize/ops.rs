@@ -86,11 +86,13 @@ pub trait ImageOpsColorizeCallbacks: crate::ops::imageops::ImageOpsLutCallbacks 
 }
 
 /// Runs ImageOps Colorize with wrapper mode admission and ordered callbacks.
+/// The Python facade scopes this sequence so public Convert and Point
+/// callbacks retain the same CPU route while preserving subclass dispatch.
 // TODO(pillow-rs#3ptb): freeze wrapper mode-comparison, `isinstance`/`str`
 // lookup and truthiness, ImageColor resolver, color-index, arithmetic,
 // Convert/Point faults, subclass Convert mode overrides, and final
-// mode/output/selection receipts.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// mode/output/selection receipts in the CPU parity matrix.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn colorize_with_callbacks<C: ImageOpsColorizeCallbacks>(
     callbacks: &mut C,
@@ -285,6 +287,7 @@ fn validate_colorize_mode_for_mode(mode: Mode) -> Result<(), PilError> {
 /// Colorizes an `L` image by mapping black and white endpoints.
 // TODO(pillow-rs#3ptb): Verify native output and mode/architecture receipts
 // separately from the Python wrapper callback route.
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub fn colorize(
     image: &Image,
     black: (u8, u8, u8),

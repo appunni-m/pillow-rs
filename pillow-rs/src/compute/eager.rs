@@ -41,6 +41,7 @@ fn discard_eager_image_operation_telemetry() {
     let _ = take_pipeline_telemetry();
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_getprojection(
     input: &DynamicImage,
     context: &ExecutionContext,
@@ -50,6 +51,7 @@ pub(crate) fn execute_eager_cpu_getprojection(
     execute_eager_cpu_getprojection_inner(input, context, requested_backend, fallback_reason, None)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_getprojection_with_receipts(
     input: &DynamicImage,
     context: &ExecutionContext,
@@ -66,6 +68,7 @@ pub(crate) fn execute_eager_cpu_getprojection_with_receipts(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_eager_cpu_getprojection_inner(
     input: &DynamicImage,
     context: &ExecutionContext,
@@ -203,6 +206,7 @@ pub(crate) fn execute_eager_gpu_rgb_getprojection(
 /// retaining the same backend and host-buffer evidence as pipeline dispatch.
 /// Set `manual_output_allocation` when the closure does not record its result
 /// buffer through the normal allocation telemetry hook.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_arch_image_operation_with_context(
     operation: &'static str,
     input: &DynamicImage,
@@ -233,6 +237,7 @@ pub(crate) fn execute_eager_cpu_arch_image_operation_with_context(
 
 /// Executes a prepared CPU architecture child after restoring receipts from
 /// the lazy source graph that was materialized for this eager route.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_arch_image_operation_with_context_and_receipts(
     operation: &'static str,
     input: &DynamicImage,
@@ -264,6 +269,7 @@ pub(crate) fn execute_eager_cpu_arch_image_operation_with_context_and_receipts(
 }
 
 /// Executes a prepared CPU architecture strategy into a caller-owned byte slice.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_arch_bytes_with_context(
     operation: &'static str,
     input: &DynamicImage,
@@ -292,6 +298,7 @@ pub(crate) fn execute_eager_cpu_arch_bytes_with_context(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_eager_cpu_arch_bytes_with_route(
     operation: &'static str,
     input: &DynamicImage,
@@ -398,7 +405,7 @@ fn execute_eager_cpu_arch_bytes_with_route(
 }
 
 /// Executes one CPU architecture strategy with caller-routed context and phase timings.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_cpu_arch_operation(
     operation: &'static str,
     input: &DynamicImage,
@@ -430,7 +437,7 @@ pub(crate) fn execute_cpu_arch_operation(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_cpu_arch_operation_with_receipts(
     operation: &'static str,
     input: &DynamicImage,

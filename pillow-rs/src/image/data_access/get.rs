@@ -6,6 +6,9 @@ use crate::compute::registry::support::StrategySelection;
 use crate::compute::{Backend, PipelineOperationTelemetryCapture};
 use crate::raster::Mode;
 
+type GetDataExecutionRoute = (Option<Backend>, crate::compute::ExecutionContext);
+
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn with_getdata_receipt<T>(
     requested_backend: Option<Backend>,
     selection: StrategySelection,
@@ -36,11 +39,14 @@ fn with_getdata_receipt<T>(
 }
 
 impl Image {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn getdata_band(
         &self,
         image: &DynamicImage,
         band: i32,
         operation_receipts: &mut PipelineOperationTelemetryCapture,
+        execution_route: Option<GetDataExecutionRoute>,
+        context_override: Option<crate::compute::ExecutionContext>,
     ) -> Result<Vec<u8>, PilError> {
         // Pillow validates the requested logical band before extracting it.
         // Keep this check in the core so every binding observes the same
@@ -71,6 +77,8 @@ impl Image {
                 backend_band,
                 &mut output,
                 operation_receipts,
+                execution_route,
+                context_override,
             )?;
             return Ok(output);
         }
@@ -78,7 +86,8 @@ impl Image {
         // Scalar modes intentionally have no caller-owned band buffer API.
         // Select only their direct byte-conversion strategy; byte modes select
         // GetDataBandInto exactly once in the caller-owned path above.
-        let (requested_backend, context) = self.selected_getdata_route()?;
+        let (requested_backend, context) =
+            self.selected_getdata_route(execution_route, context_override)?;
         let selection =
             crate::compute::pool_cpu::ops::analysis::ops::select_get_data_band(mode, &context)?;
         if selection.implementation.operation
@@ -111,14 +120,54 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization fails.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn getdata(&self, band: Option<i32>) -> Result<Vec<u8>, PilError> {
+        self.getdata_with_context(band, None)
+    }
+
+    /// Returns flat pixel bytes using a host-captured CPU architecture route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getdata_with_context(
+        &self,
+        band: Option<i32>,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Vec<u8>, PilError> {
+        self.getdata_with_routes(band, None, execution_context)
+    }
+
+    /// Returns flat pixel bytes with the backend and architecture captured by a wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getdata_with_execution_route(
+        &self,
+        band: Option<i32>,
+        execution_route: Option<(Option<Backend>, crate::compute::ExecutionContext)>,
+    ) -> Result<Vec<u8>, PilError> {
+        self.getdata_with_routes(band, execution_route, None)
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn getdata_with_routes(
+        &self,
+        band: Option<i32>,
+        execution_route: Option<GetDataExecutionRoute>,
+        context_override: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Vec<u8>, PilError> {
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let img = self.materialized_shared()?;
         operation_receipts.capture();
         if let Some(band) = band {
-            return self.getdata_band(&img, band, &mut operation_receipts);
+            return self.getdata_band(
+                &img,
+                band,
+                &mut operation_receipts,
+                execution_route,
+                context_override,
+            );
         }
-        let (requested_backend, context) = self.selected_getdata_route()?;
+        let (requested_backend, context) =
+            self.selected_getdata_route(execution_route, context_override)?;
         let selection =
             crate::compute::pool_cpu::ops::analysis::ops::select_get_data(img.mode(), &context)?;
         with_getdata_receipt(
@@ -143,10 +192,12 @@ impl Image {
     /// Returns [`PilError::ValueError`] when band selection is unsupported for
     /// the mode or the requested band is out of range. Other errors can occur
     /// while loading or materializing the image.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn getdata_band_len(&self, band: i32) -> Result<usize, PilError> {
         self.getdata_band_len_for_mode(self.mode_identity()?, band)
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn getdata_band_len_for_mode(&self, mode: Mode, band: i32) -> Result<usize, PilError> {
         let band_count =
             crate::compute::pool_cpu::ops::analysis::ops::get_data_band_into_count(mode)?;
@@ -162,12 +213,45 @@ impl Image {
     /// images. The returned slice is a view of the image; bindings must copy
     /// it before returning so later image mutation cannot change a GetData
     /// snapshot.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn getdata_band_view(&self, band: i32) -> Result<Option<&[u8]>, PilError> {
+        self.getdata_band_view_with_context(band, None)
+    }
+
+    /// Borrows a stored one-band byte plane under a wrapper-captured route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getdata_band_view_with_context(
+        &self,
+        band: i32,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Option<&[u8]>, PilError> {
+        self.getdata_band_view_with_routes(band, None, execution_context)
+    }
+
+    /// Borrows stored bytes under a captured backend/architecture route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getdata_band_view_with_execution_route(
+        &self,
+        band: i32,
+        execution_route: Option<(Option<Backend>, crate::compute::ExecutionContext)>,
+    ) -> Result<Option<&[u8]>, PilError> {
+        self.getdata_band_view_with_routes(band, execution_route, None)
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn getdata_band_view_with_routes(
+        &self,
+        band: i32,
+        execution_route: Option<GetDataExecutionRoute>,
+        context_override: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Option<&[u8]>, PilError> {
         if band != 0 {
             return Ok(None);
         }
-        let (requested_backend, context) = self.cpu_arch_execution_route()?;
+        let (requested_backend, context) =
+            self.selected_getdata_route(execution_route, context_override)?;
         if requested_backend.is_some_and(|backend| backend != crate::compute::Backend::Cpu) {
             return Ok(None);
         }
@@ -220,8 +304,43 @@ impl Image {
     /// the mode or the requested band is out of range, and
     /// [`PilError::InternalError`] when the output length is incorrect. Other
     /// errors can occur while loading or materializing the image.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn getdata_band_into(&self, band: i32, output: &mut [u8]) -> Result<(), PilError> {
+        self.getdata_band_into_with_context(band, output, None)
+    }
+
+    /// Fills a host buffer using a wrapper-captured CPU architecture route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getdata_band_into_with_context(
+        &self,
+        band: i32,
+        output: &mut [u8],
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<(), PilError> {
+        self.getdata_band_into_with_routes(band, output, None, execution_context)
+    }
+
+    /// Fills a host buffer under a captured backend/architecture route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getdata_band_into_with_execution_route(
+        &self,
+        band: i32,
+        output: &mut [u8],
+        execution_route: Option<(Option<Backend>, crate::compute::ExecutionContext)>,
+    ) -> Result<(), PilError> {
+        self.getdata_band_into_with_routes(band, output, execution_route, None)
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn getdata_band_into_with_routes(
+        &self,
+        band: i32,
+        output: &mut [u8],
+        execution_route: Option<GetDataExecutionRoute>,
+        context_override: Option<crate::compute::ExecutionContext>,
+    ) -> Result<(), PilError> {
         let mode = self.mode_identity()?;
         let expected = self.getdata_band_len_for_mode(mode, band)?;
         let band_index = usize::try_from(band).expect("getdata band was validated as nonnegative");
@@ -238,10 +357,12 @@ impl Image {
             backend_band,
             output,
             &mut operation_receipts,
+            execution_route,
+            context_override,
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn write_getdata_band_into(
         &self,
         mode: Mode,
@@ -249,8 +370,11 @@ impl Image {
         backend_band: u8,
         output: &mut [u8],
         operation_receipts: &mut PipelineOperationTelemetryCapture,
+        execution_route: Option<GetDataExecutionRoute>,
+        context_override: Option<crate::compute::ExecutionContext>,
     ) -> Result<(), PilError> {
-        let (selected_backend, context) = self.selected_getdata_route()?;
+        let (selected_backend, context) =
+            self.selected_getdata_route(execution_route, context_override)?;
         if self.try_getdata_band_simd_sink(backend_band, selected_backend, context, output)? {
             return Ok(());
         }
@@ -277,9 +401,11 @@ impl Image {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn selected_getdata_route(
         &self,
+        execution_route: Option<GetDataExecutionRoute>,
+        context_override: Option<crate::compute::ExecutionContext>,
     ) -> Result<
         (
             Option<crate::compute::Backend>,
@@ -287,10 +413,15 @@ impl Image {
         ),
         PilError,
     > {
-        self.cpu_arch_execution_route()
+        match execution_route {
+            Some(route) => Ok(route),
+            None => self
+                .cpu_arch_execution_route()
+                .map(|(backend, context)| (backend, context_override.unwrap_or(context))),
+        }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn try_getdata_band_simd_sink(
         &self,
         band: u8,
@@ -330,7 +461,7 @@ impl Image {
         Ok(handled.is_some())
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn try_getdata_band_backend(
         &self,
         mode: Mode,
@@ -374,7 +505,7 @@ impl Image {
         Ok(true)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn write_getdata_band_cpu(
         &self,
         band: usize,
@@ -428,8 +559,40 @@ impl Image {
     /// The byte extraction and logical band count are core behavior. Host
     /// bindings should only convert [`FormattedImageData`] into their native
     /// list/tuple representation.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn getdata_formatted(&self, band: Option<i32>) -> Result<FormattedImageData, PilError> {
+        self.getdata_formatted_with_context(band, None)
+    }
+
+    /// Returns Pillow-shaped data using a route captured by the host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getdata_formatted_with_context(
+        &self,
+        band: Option<i32>,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<FormattedImageData, PilError> {
+        self.getdata_formatted_with_routes(band, None, execution_context)
+    }
+
+    /// Returns Pillow-shaped data under a captured backend/architecture route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getdata_formatted_with_execution_route(
+        &self,
+        band: Option<i32>,
+        execution_route: Option<(Option<Backend>, crate::compute::ExecutionContext)>,
+    ) -> Result<FormattedImageData, PilError> {
+        self.getdata_formatted_with_routes(band, execution_route, None)
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn getdata_formatted_with_routes(
+        &self,
+        band: Option<i32>,
+        execution_route: Option<GetDataExecutionRoute>,
+        context_override: Option<crate::compute::ExecutionContext>,
+    ) -> Result<FormattedImageData, PilError> {
         let mode = self.mode_identity()?;
         if matches!(
             mode,
@@ -444,7 +607,8 @@ impl Image {
             let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
             let image = self.materialized_shared()?;
             operation_receipts.capture();
-            let (requested_backend, context) = self.selected_getdata_route()?;
+            let (requested_backend, context) =
+                self.selected_getdata_route(execution_route, context_override)?;
             let selection =
                 crate::compute::pool_cpu::ops::analysis::ops::select_get_data(mode, &context)?;
             let values = with_getdata_receipt(
@@ -468,7 +632,8 @@ impl Image {
             let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
             let image = self.materialized_shared()?;
             operation_receipts.capture();
-            let (requested_backend, context) = self.selected_getdata_route()?;
+            let (requested_backend, context) =
+                self.selected_getdata_route(execution_route, context_override)?;
             let selection =
                 crate::compute::pool_cpu::ops::analysis::ops::select_get_data(mode, &context)?;
             let (formatted, _) = with_getdata_receipt(
@@ -499,7 +664,7 @@ impl Image {
             )?;
             return Ok(formatted);
         }
-        let raw = self.getdata(band)?;
+        let raw = self.getdata_with_routes(band, execution_route, context_override)?;
         if band.is_some() {
             return Ok(FormattedImageData::Scalars(raw));
         }

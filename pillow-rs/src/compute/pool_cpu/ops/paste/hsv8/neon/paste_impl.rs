@@ -4,6 +4,7 @@ use crate::error::PilError;
 use crate::raster::Mode;
 use crate::raster::{DynamicImage, RgbImage};
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute<I>(strategy: BytePlan<'_, I>) -> Result<DynamicImage, PilError>
 where
     I: std::ops::Deref<Target = DynamicImage>,

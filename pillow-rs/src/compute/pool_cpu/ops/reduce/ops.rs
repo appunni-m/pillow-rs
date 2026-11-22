@@ -94,7 +94,7 @@ fn classify_mode(mode: Mode) -> crate::compute::registry::support::ModeSupport {
 pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Reduce, &[], classify_mode);
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     factors: (u32, u32),
@@ -266,7 +266,7 @@ impl PreparedReduce<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

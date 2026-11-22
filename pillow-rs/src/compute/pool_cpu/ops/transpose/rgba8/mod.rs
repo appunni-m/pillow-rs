@@ -2,6 +2,8 @@
 pub(crate) mod avx2;
 pub(crate) mod default;
 pub(crate) mod ops;
+#[cfg(target_arch = "x86_64")]
+pub(crate) mod x86_64;
 
 #[cfg(all(
     any(target_arch = "x86", target_arch = "x86_64"),

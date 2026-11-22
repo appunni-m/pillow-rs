@@ -25,6 +25,7 @@ pub(crate) struct BytePlan<'a, I = Arc<DynamicImage>> {
     pub(crate) source_size: (u32, u32),
     pub(crate) region_size: (u32, u32),
     pub(crate) source_layout: SourceLayout,
+    /// True only for a one-pixel source admitted with a matching binary mask.
     pub(crate) broadcast_source: bool,
     pub(crate) mask: Option<I>,
     pub(crate) mask_layout: Option<MaskLayout>,
@@ -44,12 +45,14 @@ impl<I> BytePlan<'_, I>
 where
     I: Deref<Target = DynamicImage>,
 {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn source_bytes(&self) -> &[u8] {
         self.source_physical
             .as_deref()
             .unwrap_or_else(|| self.source.as_bytes())
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn initialize_destination(&self) -> Result<Vec<u8>, PilError> {
         match self.destination_initialization {
             DestinationInitialization::CloneDestination => Ok(self.destination.to_vec()),
@@ -71,6 +74,7 @@ where
     }
 
     /// Computes the physical lanes omitted by a compact destination carrier.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn hidden_output_lanes(&self) -> Result<Option<HiddenPixelLanes>, PilError> {
         let Some(lane_count) = hidden_lane_count(self.destination_mode) else {
             return Ok(None);
@@ -105,6 +109,7 @@ where
             .ok_or_else(|| paste_layout_error("computed hidden lane extent"))
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn check_hidden_lane_extents(
         &self,
         pixel_count: usize,
@@ -124,6 +129,7 @@ where
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn hidden_source_bytes(&self) -> Result<Cow<'_, [u8]>, PilError> {
         if let Some(bytes) = self.source_physical.as_deref() {
             return Ok(Cow::Borrowed(bytes));
@@ -136,6 +142,7 @@ where
         Ok(Cow::Owned(bytes))
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn append_hidden_pixel(
         &self,
         output: &mut Vec<u8>,
@@ -174,6 +181,7 @@ where
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn source_position(
         &self,
         destination_x: usize,
@@ -196,6 +204,7 @@ where
         ))
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn paste_hidden_lane(
         &self,
         lane: usize,
@@ -224,6 +233,7 @@ where
         self.blend_hidden_lane(source_x, source_y, source, destination)
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn blend_hidden_lane(
         &self,
         source_x: usize,
@@ -269,6 +279,7 @@ where
 }
 
 /// Runs a selected implementation and restores the destination's full physical lanes.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute_with_hidden_lanes<'a, I>(
     strategy: BytePlan<'a, I>,
     execute: impl FnOnce(BytePlan<'a, I>) -> Result<DynamicImage, PilError>,
@@ -290,6 +301,7 @@ where
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn default_hidden_lane(mode: Mode, lane: usize, logical_first: u8) -> u8 {
     crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_pixel_lanes(
         mode,
@@ -299,6 +311,7 @@ fn default_hidden_lane(mode: Mode, lane: usize, logical_first: u8) -> u8 {
     .unwrap_or(0)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn checked_extent(size: (u32, u32), part: &str) -> Result<usize, PilError> {
     usize::try_from(size.0)
         .ok()
@@ -310,14 +323,17 @@ fn checked_extent(size: (u32, u32), part: &str) -> Result<usize, PilError> {
         .ok_or_else(|| paste_overflow(part))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn checked_product(left: usize, right: usize, part: &str) -> Result<usize, PilError> {
     left.checked_mul(right).ok_or_else(|| paste_overflow(part))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn paste_overflow(part: &str) -> PilError {
     PilError::OverflowError(format!("Paste {part} overflowed"))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn paste_layout_error(part: &str) -> PilError {
     PilError::InternalError(format!("Paste hidden pixel lane {part} was invalid"))
 }
@@ -360,6 +376,7 @@ pub(crate) struct NativeF32Plan<'a> {
     pub(crate) selection: StrategySelection,
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn byte_plan<'a, I>(
     destination: &'a ImageBuffer<impl Pixel<Subpixel = u8>, Vec<u8>>,
     destination_size: (u32, u32),
@@ -391,6 +408,7 @@ where
 }
 
 /// Prepares an exact-mode Composite plan that borrows all raster inputs.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn composite_byte_plan<'a>(
     destination: &'a DynamicImage,
     mode: Mode,
@@ -424,6 +442,7 @@ pub(crate) fn composite_byte_plan<'a>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn byte_plan_with_initialization<'a, I>(
     destination: &'a [u8],
     destination_size: (u32, u32),
@@ -533,6 +552,7 @@ where
 
 /// TODO(pillow-rs#3ptb): Verify source/destination byte-order pairs, masks, and
 /// clipped regions in CPU parity; source strategy mapping is reviewed.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn luma16_plan<'a>(
     destination: &'a [u16],
     destination_size: (u32, u32),
@@ -587,6 +607,7 @@ pub(crate) fn luma16_plan<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn native_u16_plan<'a>(
     destination: &'a [u16],
     destination_size: (u32, u32),
@@ -618,6 +639,7 @@ pub(crate) fn native_u16_plan<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn native_f32_plan<'a>(
     destination: &'a [f32],
     destination_size: (u32, u32),
@@ -649,6 +671,7 @@ pub(crate) fn native_f32_plan<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn prepare_native_mask(
     mask: Option<&DynamicImage>,
     mask_alpha: bool,
@@ -677,6 +700,7 @@ fn prepare_native_mask(
     Ok(layout)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn validate_native_source(
     source: &DynamicImage,
     mode: Mode,
@@ -697,12 +721,14 @@ fn validate_native_source(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn checked_sample_bytes(channels: usize, bytes_per_sample: usize) -> Result<usize, PilError> {
     channels
         .checked_mul(bytes_per_sample)
         .ok_or_else(|| PilError::OverflowError("Paste sample layout overflowed".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn check_byte_len(
     bytes: &[u8],
     dimensions: (u32, u32),
@@ -718,6 +744,7 @@ fn check_byte_len(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn sample_len(dimensions: (u32, u32), channels: usize) -> Result<usize, PilError> {
     usize::try_from(dimensions.0)
         .ok()

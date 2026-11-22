@@ -6,10 +6,11 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn try_convert_scalar_to_rgbx(
     image: &Image,
     source_mode: Mode,
+    context_override: Option<crate::compute::ExecutionContext>,
 ) -> Result<Option<Image>, PilError> {
     if !matches!(source_mode, Mode::ImageI32 | Mode::ImageF32) {
         return Ok(None);
@@ -22,7 +23,8 @@ pub(super) fn try_convert_scalar_to_rgbx(
     }
     // TODO(pillow-rs#3ptb): parity-check I/F→RGBX for every CPU Architecture
     // request and verify the exact output identity plus fallback receipt.
-    let (requested_backend, context) = image.cpu_arch_execution_route()?;
+    let (requested_backend, routed_context) = image.cpu_arch_execution_route()?;
+    let context = context_override.unwrap_or(routed_context);
     if requested_backend == Some(crate::compute::Backend::Gpu) {
         // TODO(pillow-rs#3ptb): route GPU-selected I/F→RGBX through a native
         // GPU strategy when the GPU Convert family is migrated.
@@ -58,11 +60,13 @@ pub(super) fn try_convert_scalar_to_rgbx(
     Image::from_dynamic_with_mode(raster, Some(Mode::ImageRgbx8)).map(Some)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn try_convert_early_modes(
     image: &Image,
     source_mode: Mode,
     target_mode: Mode,
     dither: Option<&str>,
+    context: Option<crate::compute::ExecutionContext>,
 ) -> Result<Option<Image>, PilError> {
     if source_mode == Mode::ImageRgb8
         && matches!(
@@ -82,20 +86,23 @@ pub(super) fn try_convert_early_modes(
                 dither: None,
             },
         );
-        return Ok(Some(result));
+        return Ok(Some(with_execution_context(result, context)));
     }
     if source_mode == Mode::ImageCmyk8 && target_mode == Mode::ImageRgb8 {
-        return Ok(Some(Image::push_op(
+        let result = Image::push_op(
             image,
             PipelineOp::Convert {
                 mode: Mode::ImageRgb8,
                 matrix: None,
                 dither: None,
             },
-        )));
+        );
+        return Ok(Some(with_execution_context(result, context)));
     }
     if source_mode == target_mode {
-        return Ok(Some(image.copy()));
+        // The copied graph can still contain pending child work; keep the
+        // caller's route attached even though this Convert is an identity.
+        return Ok(Some(with_execution_context(image.copy(), context)));
     }
     let native_alpha_target = match (source_mode, target_mode) {
         (Mode::ImageLumaA8, Mode::ImageLaPremultiplied8)
@@ -120,20 +127,22 @@ pub(super) fn try_convert_early_modes(
                 dither: None,
             },
         );
-        return Ok(Some(result));
+        return Ok(Some(with_execution_context(result, context)));
     }
     if let Some(composition) = crate::compute::pool_cpu::ops::color::ops::CONVERT_SUPPORT
         .target_composition_for(source_mode, target_mode)
     {
-        return execute_target_composition(image, dither, composition).map(Some);
+        return execute_target_composition(image, dither, composition, context).map(Some);
     }
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_target_composition(
     image: &Image,
     dither: Option<&str>,
     composition: OperationTargetComposition,
+    context: Option<crate::compute::ExecutionContext>,
 ) -> Result<Image, PilError> {
     if let crate::compute::registry::support::OperationRouteOutcome::Rejects {
         reason, kind, ..
@@ -155,9 +164,21 @@ fn execute_target_composition(
             composition.source_mode,
             composition.target_mode,
             dither,
+            context,
         ),
         OperationTargetCompositionKind::ConvertGuard => Err(PilError::InternalError(
             "Convert guard route unexpectedly declared a successful composition".into(),
         )),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn with_execution_context(
+    image: Image,
+    context: Option<crate::compute::ExecutionContext>,
+) -> Image {
+    match context {
+        Some(context) => image.with_execution_context(context),
+        None => image,
     }
 }

@@ -51,12 +51,9 @@ pub(crate) fn font_variant_with_options(
 pub(crate) fn get_variation_axes(
     font: &FreeTypeFont,
 ) -> Result<Vec<ImageFontVariationAxis>, PilError> {
-    if type1_mm_axis_count(font)?.is_some() {
-        // Pillow's ImageFont.get_variation_axes() unconditionally reads
-        // axis["name"] after the native getvaraxes call.  FreeType's Type 1
-        // MM records do not carry an SFNT name, so the version-matched Pillow
-        // wrapper raises KeyError('name') before returning the numeric axes.
-        return Err(PilError::KeyError("name".into()));
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@type1-mm-cpu-default-retry-20261115; benchmark=n/a
+    if let Some(axes) = type1_mm_axes(font)? {
+        return Ok(axes);
     }
     ensure_variation_metadata(font)?;
     Ok(font
@@ -125,6 +122,7 @@ fn remember_source_variation_metadata(font: &FreeTypeFont, metadata: VariationMe
 }
 
 fn build_variation_metadata(font: &FreeTypeFont) -> Result<VariationMetadata, PilError> {
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
     if type1_mm_axes(font)?.is_some() {
         return Ok(VariationMetadata::default());
     }
@@ -136,11 +134,13 @@ fn build_variation_metadata(font: &FreeTypeFont) -> Result<VariationMetadata, Pi
             minimum: fixed_16_16_to_pillow_int(axis.min_value),
             default: fixed_16_16_to_pillow_int(axis.default_value),
             maximum: fixed_16_16_to_pillow_int(axis.max_value),
-            name: name_bytes(&name_table, axis.name_id)
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|byte| *byte != 0)
-                .collect(),
+            name: Some(
+                name_bytes(&name_table, axis.name_id)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|byte| *byte != 0)
+                    .collect(),
+            ),
         })
         .collect();
     let instance_names = fvar
@@ -316,6 +316,7 @@ pub(crate) fn set_variation_by_axes(font: &mut FreeTypeFont, axes: &[f32]) -> Re
 pub(crate) fn native_getvaraxes(
     font: &FreeTypeFont,
 ) -> Result<Vec<ImageFontVariationAxis>, PilError> {
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
     if let Some(axes) = type1_mm_axes(font)? {
         return Ok(axes);
     }
@@ -327,7 +328,7 @@ pub(crate) fn native_getvaraxes(
             minimum: fixed_16_16_to_pillow_int(axis.min_value),
             default: fixed_16_16_to_pillow_int(axis.default_value),
             maximum: fixed_16_16_to_pillow_int(axis.max_value),
-            name: raw_name_bytes(&name_table, axis.name_id).unwrap_or_default(),
+            name: Some(raw_name_bytes(&name_table, axis.name_id).unwrap_or_default()),
         })
         .collect())
 }
@@ -426,6 +427,7 @@ fn type1_mm_axis_count(font: &FreeTypeFont) -> Result<Option<usize>, PilError> {
 
 /// Read numeric Type 1 Multiple Master axes through fontdone's safe facade.
 fn type1_mm_axes(font: &FreeTypeFont) -> Result<Option<Vec<ImageFontVariationAxis>>, PilError> {
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@type1-mm-cpu-default-retry-20261115; benchmark=n/a
     let Some(axis_count) = type1_mm_axis_count(font)? else {
         return Ok(None);
     };
@@ -445,10 +447,9 @@ fn type1_mm_axes(font: &FreeTypeFont) -> Result<Option<Vec<ImageFontVariationAxi
                 minimum: type1_fixed_16_16_to_pillow_int(axis.minimum)?,
                 default: type1_fixed_16_16_to_pillow_int(axis.def)?,
                 maximum: type1_fixed_16_16_to_pillow_int(axis.maximum)?,
-                // Type 1 MM axes do not have SFNT name IDs.  The native
-                // FreeType record consequently omits the name field; the
-                // core record represents that absence as an empty byte name.
-                name: Vec::new(),
+                // Type 1 MM axes do not have SFNT name IDs, so Pillow omits
+                // the name key from the returned axis dictionary.
+                name: None,
             })
         })
         .collect::<Result<Vec<_>, PilError>>()?;

@@ -79,7 +79,7 @@ pub(crate) fn resize<const CHANNELS: usize>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub(crate) fn resize_with_reducing_gap<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),

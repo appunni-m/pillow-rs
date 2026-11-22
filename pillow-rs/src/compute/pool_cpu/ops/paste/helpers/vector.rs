@@ -9,7 +9,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::bytes::{
 use crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan;
 use crate::compute::pool_cpu::ops::paste::helpers::{bytes, layout::SourceLayout};
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode};
+use crate::raster::DynamicImage;
 use wide::{u8x16, u16x8, u16x16};
 
 struct VectorRow<'a> {
@@ -24,6 +24,7 @@ struct VectorRow<'a> {
 }
 
 /// Runs the native 128-bit masked kernel selected by an exact mode strategy.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute<const DESTINATION: usize, I>(
     plan: BytePlan<'_, I>,
 ) -> Result<Vec<u8>, PilError>
@@ -44,6 +45,7 @@ where
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn execute_mapped<const SOURCE: usize, const DESTINATION: usize, M, I>(
     plan: BytePlan<'_, I>,
 ) -> Result<Vec<u8>, PilError>
@@ -122,16 +124,12 @@ where
             copy_width,
         )?;
     }
-    record_vector_work(
-        region_bytes,
-        copy_height,
-        mask_layout,
-        plan.selection.implementation.mode,
-    );
+    record_vector_work(region_bytes, copy_height, mask_layout);
     crate::compute::record_pipeline_operation_path("vector");
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn execute_unmasked_mapped<const SOURCE: usize, const DESTINATION: usize, M, I>(
     plan: BytePlan<'_, I>,
 ) -> Result<Vec<u8>, PilError>
@@ -195,12 +193,8 @@ where
     Ok(output)
 }
 
-fn record_vector_work(
-    bytes_per_row: usize,
-    rows: usize,
-    mask_layout: super::layout::MaskLayout,
-    mode: Mode,
-) {
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+fn record_vector_work(bytes_per_row: usize, rows: usize, mask_layout: super::layout::MaskLayout) {
     let blocks_per_row = if mask_layout.binary {
         bytes_per_row.div_ceil(16)
     } else {
@@ -211,35 +205,14 @@ fn record_vector_work(
             + usize::from(vector_8_bytes < bytes_per_row)
     };
     let blocks = blocks_per_row.saturating_mul(rows);
-    let luma_mask = !mask_layout.binary
-        && mask_layout.channels == 1
-        && mask_layout.value_index == 0
-        && !mask_layout.premultiplied;
-    let mode_row_has_no_short_tail_receipt = luma_mask
-        && matches!(
-            mode,
-            Mode::ImageLuma8
-                | Mode::ImageLumaA8
-                | Mode::ImagePaletteAlpha8
-                | Mode::ImageRgb8
-                | Mode::ImageHsv8
-        );
-    let scalar_tail_per_row = if mask_layout.binary {
-        bytes_per_row % 16
-    } else if mode_row_has_no_short_tail_receipt {
-        0
-    } else {
-        bytes_per_row % 8
-    };
-    let scalar_tail = scalar_tail_per_row.saturating_mul(rows);
+    // The incomplete 16-byte or 8-byte remainder is processed by a padded
+    // wide vector block in `apply_vector_row`; it is not a scalar tail.
     crate::compute::record_pipeline_operation_vector_blocks(
         u64::try_from(blocks).unwrap_or(u64::MAX),
     );
-    crate::compute::record_pipeline_operation_scalar_tail(
-        u64::try_from(scalar_tail).unwrap_or(u64::MAX),
-    );
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn apply_vector_row<const SOURCE: usize, const DESTINATION: usize, M>(
     row: VectorRow<'_>,
     copy_width: usize,
@@ -323,6 +296,7 @@ where
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn apply_vector_block8<const SOURCE: usize, const DESTINATION: usize, M>(
     row: &mut VectorRow<'_>,
     destination_start: usize,
@@ -359,6 +333,7 @@ where
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn source_block<const SOURCE: usize, const DESTINATION: usize, M>(
     source: &[u8],
     source_left: usize,
@@ -385,12 +360,14 @@ where
     block
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn load_destination_block(destination: &[u8], start: usize, active: usize) -> [u8; 16] {
     let mut block = [0u8; 16];
     block[..active].copy_from_slice(&destination[start..start + active]);
     block
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 fn blend_block8(
     source: [u8; 8],
@@ -412,6 +389,7 @@ fn blend_block8(
     values.to_array().map(|value| value as u8)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn mask_block(
     mask: &[u8],
     layout: super::layout::MaskLayout,
@@ -431,6 +409,7 @@ fn mask_block(
     block
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 fn blend_block(
     source: [u8; 16],
@@ -459,6 +438,7 @@ fn blend_block(
 }
 
 /// Blends eight stored byte samples with an already expanded L mask.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn blend_l_masked_block8(
     source: [u8; 8],
@@ -476,6 +456,7 @@ pub(crate) fn blend_l_masked_block8(
 }
 
 /// Blends sixteen stored byte samples with an already expanded L mask.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn blend_l_masked_block16(
     source: [u8; 16],
@@ -492,12 +473,14 @@ pub(crate) fn blend_l_masked_block16(
         .map(|value| value as u8)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn checked_stride(width: usize, channels: usize) -> Result<usize, PilError> {
     width
         .checked_mul(channels)
         .ok_or_else(|| overflow("row stride"))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn overflow(part: &str) -> PilError {
     PilError::OverflowError(format!("Paste vector {part} overflowed"))
 }

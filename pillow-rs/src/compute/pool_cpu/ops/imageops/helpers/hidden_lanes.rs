@@ -10,6 +10,7 @@ use crate::raster::{DynamicImage, Mode, Pixel};
 /// Pillow 12.2 allocates an initialized output in `ImagingPoint`, then its
 /// two- and three-band handlers write only their mode-defined lanes. Keep the
 /// omitted lanes at zero for later raw-byte operations such as Paste.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn initialize_point_output_lanes(output: &mut DynamicImage) -> Result<(), PilError> {
     let Some(lane_count) = output.mode().hidden_pixel_lane_count() else {
         return Ok(());
@@ -32,6 +33,7 @@ pub(crate) fn initialize_point_output_lanes(output: &mut DynamicImage) -> Result
 }
 
 /// Composes compact physical lanes for ImageOps.expand's copied and fill areas.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn compose_expand_lanes<P: Pixel<Subpixel = u8>>(
     mode: Mode,
     source: &ImageBuffer<P, Vec<u8>>,
@@ -116,6 +118,7 @@ fn pixel_count(width: u32, height: u32) -> Result<usize, PilError> {
         .ok_or_else(|| PilError::DimensionError("ImageOps pixel count overflow".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn expand_fill_lanes(mode: Mode, fill: (u8, u8, u8, u8)) -> Result<[u8; 2], PilError> {
     match mode {
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
@@ -176,6 +179,7 @@ fn uniform_source_lanes<P: Pixel<Subpixel = u8>>(
     (lane_count == 1).then_some([u8::MAX, 0])
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn append_source_lanes<P: Pixel<Subpixel = u8>>(
     source: &ImageBuffer<P, Vec<u8>>,
     index: usize,

@@ -1,6 +1,6 @@
 """ImageStat — statistical analysis of images. Pillow-compatible module."""
 from . import _core
-from .image import Image
+from .image import Image, _execution_context_scope
 
 
 class Stat:
@@ -8,7 +8,10 @@ class Stat:
 
     def __init__(self, image_or_list, mask=None):
         if isinstance(image_or_list, Image):
-            result = image_or_list._rust_image.stat_formatted(mask)
+            with _execution_context_scope(image_or_list):
+                result = image_or_list._rust_image.stat_formatted(
+                    mask, image_or_list._current_execution_context()
+                )
             self.count = result['count']
             self.sum = result['sum']
             self.sum2 = result['sum2']

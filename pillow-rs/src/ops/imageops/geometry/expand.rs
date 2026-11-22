@@ -153,6 +153,7 @@ pub fn finish_expand_fill_palette_from_host(
 }
 
 /// Runs Pillow ImageOps.expand sequencing through host callbacks and typed Rust strategies.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn expand_with_callbacks<C: ImageOpsExpandCallbacks>(
     callbacks: &mut C,
@@ -164,6 +165,7 @@ where
 {
     let (width, height, left, top) = expand_geometry_values_with_callbacks(callbacks, border)?;
 
+    // Pillow evaluates image.mode as `_color`'s argument before checking fill's type.
     let fill_mode = callbacks.image_mode()?;
     let mut fill = initial_fill.clone();
     if callbacks.value_is_string(&fill)? {
@@ -189,6 +191,8 @@ where
         None
     };
 
+    // ImageOps resolves Image.new before evaluating its image.mode argument.
+    let constructor = callbacks.capture_wrapper_constructor()?;
     let target_mode = callbacks.image_mode()?;
     let size = callbacks.size_pair(&width, &height)?;
     if callbacks.size_is_negative(&size, 0)? || callbacks.size_is_negative(&size, 1)? {
@@ -208,7 +212,6 @@ where
         let prepared = prepare_expand_fill_for_mode(mode, input)?;
         finish_expand_fill_palette_from_host(mode, prepared)
     })?;
-    let constructor = callbacks.capture_wrapper_constructor()?;
     let canvas = callbacks.run_core(move || expand_canvas_with_prepared_fill(size, &prepared))?;
     let mut output = callbacks.wrap_canvas(&constructor, canvas)?;
     if let Some((palette, palette_mode)) = palette {
@@ -216,6 +219,7 @@ where
             callbacks.put_palette(&mut output, &palette, &palette_mode)?;
         }
     }
+    callbacks.copy_transparency_info(&mut output)?;
     callbacks.paste(&mut output, &left, &top)?;
     Ok(output)
 }
@@ -355,6 +359,7 @@ fn empty_expand_canvas(mode: Mode, fill: (u8, u8, u8, u8)) -> Result<Image, PilE
 ///
 /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
 /// materialization failures.
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub fn expand(image: &Image, border: u32, fill: (u8, u8, u8, u8)) -> Result<Image, PilError> {
     expand_with_margins(image, ExpandMargins::uniform(border), fill)
 }

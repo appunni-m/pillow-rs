@@ -3,6 +3,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::{plan::NativeU16Plan, typed};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, ImageBuffer, Rgba};
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: NativeU16Plan<'_>) -> Result<DynamicImage, PilError> {
     let (width, height) = strategy.destination_size;
     let source = std::sync::Arc::clone(&strategy.source);

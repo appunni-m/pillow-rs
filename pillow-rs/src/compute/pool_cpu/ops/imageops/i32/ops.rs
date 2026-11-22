@@ -4,6 +4,7 @@ use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_quantize
 // native signed-I32 sample reduction as a Rust-only strategy.
 declare_quantize_native_mode!(u8, "ImageI32", ImageI32);
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const CROP_BORDER_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::imageops::helpers::strategy::crop_border_serial_support(
         crate::raster::Mode::ImageI32,

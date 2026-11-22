@@ -5,6 +5,9 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
+// Pillow 13.0's L-mask paste blends each byte of a 32-bit pixel, including
+// Pillow's I/F modes. Internal f32 modes use the typed kernels in numeric.rs.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn execute(
     source: &DynamicImage,
     destination: &DynamicImage,

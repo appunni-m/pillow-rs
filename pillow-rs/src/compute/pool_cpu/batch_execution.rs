@@ -15,7 +15,7 @@ use crate::raster::DynamicImage;
 
 /// Prepare and execute each operation in order, preserving the mode returned
 /// by each operation as the next operation's typed input identity.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn execute_batch(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -48,7 +48,7 @@ pub(super) fn execute_batch(
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_batch_step(
     ops: &[PipelineOp],
     index: usize,
@@ -82,7 +82,7 @@ fn execute_batch_step(
     Ok(index + 1)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_owned_special(
     op: &PipelineOp,
     context: &ExecutionContext,
@@ -116,7 +116,7 @@ fn execute_owned_special(
     Ok(false)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_prepared_operation(
     op: &PipelineOp,
     image: &DynamicImage,
@@ -163,7 +163,7 @@ fn execute_prepared_operation(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn finish_batch_output(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -196,7 +196,7 @@ enum OwnedInvertKind {
     Chops,
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_owned_chops_affine(
     image: &mut DynamicImage,
     op: &PipelineOp,
@@ -250,7 +250,7 @@ fn execute_owned_chops_affine(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn prepare_owned_invert(
     image: &DynamicImage,
     op: &PipelineOp,
@@ -307,7 +307,7 @@ fn prepare_owned_invert(
 
 // TODO(pillow-rs#3ptb): verify raw-byte Paste follow-on parity for both
 // in-place inversion lane policies before closing this source path.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn execute_owned_invert(image: &mut DynamicImage, plan: &OwnedInvertPlan) -> Result<(), PilError> {
     if image.mode() != plan.mode {
         return Err(PilError::InternalError(
@@ -363,7 +363,7 @@ struct FusedStep {
     operations: usize,
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_fused_run(
     ops: &[PipelineOp],
     start: usize,
@@ -464,7 +464,7 @@ fn execute_fused_run(
     Ok(None)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn draw_run_end(ops: &[PipelineOp], start: usize) -> usize {
     let mut end = start + 1;
     while end < ops.len() && crate::compute::pool_cpu::ops::draw::is_draw_op(&ops[end]) {
@@ -473,7 +473,7 @@ fn draw_run_end(ops: &[PipelineOp], start: usize) -> usize {
     end
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_alpha_composite_mirror_run(
     ops: &[PipelineOp],
     start: usize,
@@ -551,7 +551,7 @@ fn execute_alpha_composite_mirror_run(
     }))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn record_fused_operation_telemetry(
     op: &PipelineOp,
     selection: &StrategySelection,
@@ -567,7 +567,7 @@ fn record_fused_operation_telemetry(
     finish_pipeline_operation_telemetry();
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_chops_multiply_screen_run(
     ops: &[PipelineOp],
     start: usize,
@@ -617,7 +617,7 @@ fn execute_chops_multiply_screen_run(
     }))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_rgb_putpixel_thumbnail_run(
     ops: &[PipelineOp],
     start: usize,
@@ -628,22 +628,25 @@ fn execute_rgb_putpixel_thumbnail_run(
     let Some(thumbnail) = ops.get(putpixel_end) else {
         return Ok(None);
     };
-    let Some(plan) = super::ops::thumbnail::ops::prepare_rgb_putpixel_thumbnail(
+    let end = putpixel_end + 1;
+    let fused_ops = &ops[start..end];
+    let plan = match super::ops::thumbnail::ops::prepare_rgb_putpixel_thumbnail(
         image,
         &ops[start..putpixel_end],
         thumbnail,
         context,
-    )?
-    else {
-        return Ok(None);
+    ) {
+        Ok(Some(plan)) => plan,
+        Ok(None) => return Ok(None),
+        Err(error) => {
+            begin_cpu_operations_telemetry(fused_ops);
+            finish_cpu_operation_telemetry(fused_ops, None);
+            return Err(error);
+        }
     };
 
-    let end = putpixel_end + 1;
-    let fused_ops = &ops[start..end];
     let selection = *plan.selection();
-    for op in fused_ops {
-        begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
-    }
+    begin_cpu_operations_telemetry(fused_ops);
     let output = plan.execute();
     finish_cpu_operation_telemetry(fused_ops, Some(&selection));
     output.map(|output| {
@@ -655,7 +658,7 @@ fn execute_rgb_putpixel_thumbnail_run(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_transpose_run(
     ops: &[PipelineOp],
     start: usize,
@@ -722,7 +725,7 @@ fn execute_transpose_run(
     }))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn finish_failed_unprepared_run(ops: &[PipelineOp]) {
     for op in ops {
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
@@ -731,7 +734,7 @@ fn finish_failed_unprepared_run(ops: &[PipelineOp]) {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn finish_failed_prepared_run(ops: &[PipelineOp], selection: &StrategySelection) {
     let architecture = selection.implementation.architecture;
     for _ in ops {
@@ -743,7 +746,7 @@ fn finish_failed_prepared_run(ops: &[PipelineOp], selection: &StrategySelection)
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn finish_prepared_transpose_run(
     ops: &[PipelineOp],
     uses_default: bool,
@@ -757,7 +760,7 @@ fn finish_prepared_transpose_run(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_point_run(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -813,7 +816,7 @@ fn execute_point_run(
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn put_pixel_run_end(ops: &[PipelineOp], start: usize) -> usize {
     let mut end = start + 1;
     while end < ops.len() && matches!(&ops[end], PipelineOp::PutPixel { .. }) {
@@ -822,7 +825,7 @@ fn put_pixel_run_end(ops: &[PipelineOp], start: usize) -> usize {
     end
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn execute_put_pixel_run(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -833,9 +836,7 @@ fn execute_put_pixel_run(
     let prepared = match prepare_put_pixel_batch(image, ops, context) {
         Ok(prepared) => prepared,
         Err(error) => {
-            for op in ops {
-                begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
-            }
+            begin_cpu_operations_telemetry(ops);
             finish_cpu_operation_telemetry(ops, None);
             return Err(error);
         }
@@ -844,9 +845,7 @@ fn execute_put_pixel_run(
     let architecture = selection.implementation.architecture;
     let uses_default = architecture == Architecture::Default;
     if uses_default {
-        for op in ops {
-            begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
-        }
+        begin_cpu_operations_telemetry(ops);
     }
     let output = prepared.execute();
     if uses_default {
@@ -862,29 +861,41 @@ fn execute_put_pixel_run(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn finish_cpu_operation_telemetry(ops: &[PipelineOp], selection: Option<&StrategySelection>) {
     let architecture = selection.map(|selection| selection.implementation.architecture);
     let path = match architecture {
         Some(Architecture::Default) | None => "cpu",
         Some(_) => "vector",
     };
-    for _ in ops {
+    for _ in 0..ops.len() {
         if let Some(selection) = selection {
             crate::compute::record_pipeline_operation_selection(selection);
         }
         record_pipeline_operation_path(path);
         finish_pipeline_operation_telemetry();
     }
+    crate::compute::restore_pipeline_operation_telemetry_order(ops.len());
+}
+
+/// Start per-operation receipts in pipeline order before their LIFO completion.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn begin_cpu_operations_telemetry(ops: &[PipelineOp]) {
+    for op in ops {
+        begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
+    }
 }
 
 // TODO(pillow-rs#3ptb): verify prepared-batch outputs, fault order, fallback,
-// and selection receipts across the frozen CPU parity matrix. All 22 function
-// definitions in this file now have source VERIFY markers. Confirm failure
-// telemetry before closure: unprepared failures are currently labeled `cpu`
-// without a selected strategy, and RGB PutPixel+Thumbnail preparation errors
-// return before per-operation telemetry begins. Source review covers generic
-// registry preparation; Draw runs; guarded AlphaComposite+Mirror; same-source
-// Multiply+Screen; composed byte point LUTs; transpose runs; prepared PutPixel
-// batches; RGB PutPixel+Thumbnail with its selected Resize/ResizeBoxed child;
-// and owned Invert/Chops Add/Sub in-place guards and allocating fallbacks.
+// and selection receipts across the frozen CPU parity matrix. All 23 function
+// definitions in this file now have source VERIFY markers. Failure receipts
+// created before strategy preparation intentionally keep selected architecture
+// and strategy fallbacks absent; path=cpu records the attempted backend, not
+// a fabricated Default selection. The RGB PutPixel+Thumbnail preparation-error
+// branch opens and closes each per-operation receipt without a selection. Verify
+// those distinctions and receipt order in frozen parity. Source review covers
+// generic registry preparation; Draw runs; guarded AlphaComposite+Mirror;
+// same-source Multiply+Screen; composed byte point LUTs; transpose runs;
+// prepared PutPixel batches; RGB PutPixel+Thumbnail with its selected
+// Resize/ResizeBoxed child; and owned Invert/Chops Add/Sub in-place guards and
+// allocating fallbacks.

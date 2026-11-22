@@ -10,6 +10,7 @@ use crate::image::Image;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn crop_border_serial_support(
     mode: Mode,
     inputs: &'static [InputContract],
@@ -202,6 +203,7 @@ pub(crate) fn imageops_mask_facts(
     }))
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) const fn native_byte_point_architectures(
     operation: OperationId,
     mode: Mode,
@@ -214,6 +216,7 @@ pub(crate) const fn native_byte_point_architectures(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) const fn cpu_architectures_for(
     operation: OperationId,
     mode: Mode,

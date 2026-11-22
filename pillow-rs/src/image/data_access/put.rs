@@ -9,6 +9,7 @@ use crate::image::PutDataExecutionContext;
 use crate::raster::Mode;
 
 impl Image {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     /// Queues replacement pixel data from a flat byte sequence.
     ///
     /// `data` must match the active image mode and dimensions expected by the
@@ -19,9 +20,23 @@ impl Image {
     /// Currently returns `Ok(())`; materialization reports invalid byte length
     /// or mode mismatches.
     pub fn putdata(&mut self, data: &[u8]) -> Result<(), PilError> {
+        self.putdata_with_execution_context(data, None)
+    }
+
+    /// Queues replacement bytes under a route captured by a host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putdata_with_execution_context(
+        &mut self,
+        data: &[u8],
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
+    ) -> Result<(), PilError> {
         let payload_mode = self.mode_identity()?;
         putdata_byte_width(payload_mode).ok_or_else(|| unsupported_putdata_mode(payload_mode))?;
-        let new_self = Image::push_op(
+        let mut new_self = Image::push_op(
             self,
             PipelineOp::PutData {
                 data: Bytes::copy_from_slice(data),
@@ -29,6 +44,9 @@ impl Image {
                 payload_mode,
             },
         );
+        if let Some((_, context)) = route {
+            new_self = new_self.with_execution_context(context);
+        }
         *self = new_self;
         Ok(())
     }
@@ -42,12 +60,30 @@ impl Image {
     /// image, while retaining the immutable owner until deferred execution.
     /// Other layouts must continue through [`Image::putdata_bytes_fast_path`]
     /// so Pillow's per-entry coercion and packed-color rules remain intact.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn putdata_shared_bytes_fast_path(
         &mut self,
         data: Bytes,
         entry_count: usize,
         scale: f64,
         offset: f64,
+    ) -> Result<bool, PilError> {
+        self.putdata_shared_bytes_fast_path_with_context(data, entry_count, scale, offset, None)
+    }
+
+    /// Queues shared immutable bytes with the wrapper's captured execution route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putdata_shared_bytes_fast_path_with_context(
+        &mut self,
+        data: Bytes,
+        entry_count: usize,
+        scale: f64,
+        offset: f64,
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
     ) -> Result<bool, PilError> {
         if scale != 1.0 || offset != 0.0 || data.len() != entry_count {
             return Ok(false);
@@ -60,7 +96,7 @@ impl Image {
             return Ok(false);
         }
         self.validate_putdata_length(entry_count)?;
-        let new_self = Image::push_op(
+        let mut new_self = Image::push_op(
             self,
             PipelineOp::PutData {
                 data,
@@ -68,6 +104,9 @@ impl Image {
                 payload_mode,
             },
         );
+        if let Some((_, context)) = route {
+            new_self = new_self.with_execution_context(context);
+        }
         *self = new_self;
         Ok(true)
     }
@@ -86,18 +125,35 @@ impl Image {
     ///
     /// Returns [`PilError::TypeError`] for incompatible value shapes or too
     /// many pixels, and propagates image mode or dimension errors.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn putdata_values(
         &mut self,
         values: &[PutDataValue],
         scale: f64,
         offset: f64,
     ) -> Result<(), PilError> {
+        self.putdata_values_with_execution_context(values, scale, offset, None)
+    }
+
+    /// Normalizes values under a route captured by the host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putdata_values_with_execution_context(
+        &mut self,
+        values: &[PutDataValue],
+        scale: f64,
+        offset: f64,
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
+    ) -> Result<(), PilError> {
         self.validate_putdata_length(values.len())?;
 
         let image_mode = self.mode_identity()?;
         if uses_native_value_at_putdata(image_mode) {
             if is_l16_identity(image_mode) {
-                let mut context = self.putdata_execution_context();
+                let mut context = self.putdata_context(route);
                 for (pixel_index, value) in values.iter().enumerate() {
                     self.putdata_value_at_with_context(
                         pixel_index,
@@ -109,11 +165,11 @@ impl Image {
                 }
                 return Ok(());
             }
-            return self.putdata_core_only_native_values(image_mode, values);
+            return self.putdata_core_only_native_values(image_mode, values, route);
         }
         let data = putdata_bytes(image_mode, values, scale, offset)?;
         let hidden_lanes = putdata_hidden_lane_bytes(image_mode, values)?;
-        let new_self = Image::push_op(
+        let mut new_self = Image::push_op(
             self,
             PipelineOp::PutData {
                 data: Bytes::from(data),
@@ -121,14 +177,22 @@ impl Image {
                 payload_mode: image_mode,
             },
         );
+        if let Some((_, context)) = route {
+            new_self = new_self.with_execution_context(context);
+        }
         *self = new_self;
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn putdata_core_only_native_values(
         &mut self,
         mode: Mode,
         values: &[PutDataValue],
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
     ) -> Result<(), PilError> {
         // TODO(pillow-rs#3ptb): verify all five native bulk outputs, ordered
         // prefix writes on invalid values, and fallback receipts in the frozen
@@ -137,7 +201,7 @@ impl Image {
             return Ok(());
         }
 
-        let mut context = self.putdata_execution_context();
+        let mut context = self.putdata_context(route);
         context.operation_receipts.capture();
         let first =
             crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::native_value_at_input(
@@ -187,6 +251,7 @@ impl Image {
     /// This is the core-owned mode policy for `putdata`. A binding may still
     /// need to inspect host-language protocol behavior, but it does not need
     /// to duplicate the mode's scalar or component shape.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn putdata_value_kind(&self) -> Result<PutDataValueKind, PilError> {
         let image_mode = self.mode_identity()?;
         if matches!(
@@ -228,15 +293,36 @@ impl Image {
 
     /// Applies a callback-free bulk input through the canonical `putdata`
     /// normalization path.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn putdata_input(
         &mut self,
         input: PutDataInput<'_>,
         scale: f64,
         offset: f64,
     ) -> Result<(), PilError> {
+        self.putdata_input_with_execution_context(input, scale, offset, None)
+    }
+
+    /// Applies extracted values under the route captured by the host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putdata_input_with_execution_context(
+        &mut self,
+        input: PutDataInput<'_>,
+        scale: f64,
+        offset: f64,
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
+    ) -> Result<(), PilError> {
         match input {
-            PutDataInput::Integers(values) => self.putdata_integer_values(values, scale, offset),
-            PutDataInput::Numbers(values) => self.putdata_numeric_values(values, scale, offset),
+            PutDataInput::Integers(values) => {
+                self.putdata_integer_values_with_execution_context(values, scale, offset, route)
+            }
+            PutDataInput::Numbers(values) => {
+                self.putdata_numeric_values_with_execution_context(values, scale, offset, route)
+            }
         }
     }
 
@@ -246,18 +332,35 @@ impl Image {
     /// sequences. Keeping the conversion in core reaches the same bulk path
     /// for every binding while custom Python values can still use
     /// [`Image::putdata_value_at`] to preserve re-entrant coercion order.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn putdata_numeric_values(
         &mut self,
         values: &[f64],
         scale: f64,
         offset: f64,
     ) -> Result<(), PilError> {
+        self.putdata_numeric_values_with_execution_context(values, scale, offset, None)
+    }
+
+    /// Writes numeric samples under the route captured by the host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putdata_numeric_values_with_execution_context(
+        &mut self,
+        values: &[f64],
+        scale: f64,
+        offset: f64,
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
+    ) -> Result<(), PilError> {
         let values = values
             .iter()
             .copied()
             .map(PutDataValue::Number)
             .collect::<Vec<_>>();
-        self.putdata_values(&values, scale, offset)
+        self.putdata_values_with_execution_context(&values, scale, offset, route)
     }
 
     /// Replaces exact integer samples through Pillow's numeric-or-packed
@@ -268,11 +371,28 @@ impl Image {
     /// modes. Bindings only need to extract the host integer sequence; this
     /// mode distinction belongs here so every backend receives the same
     /// canonical operation.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn putdata_integer_values(
         &mut self,
         values: &[i64],
         scale: f64,
         offset: f64,
+    ) -> Result<(), PilError> {
+        self.putdata_integer_values_with_execution_context(values, scale, offset, None)
+    }
+
+    /// Writes integer samples under the route captured by the host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putdata_integer_values_with_execution_context(
+        &mut self,
+        values: &[i64],
+        scale: f64,
+        offset: f64,
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
     ) -> Result<(), PilError> {
         match self.putdata_value_kind()? {
             PutDataValueKind::Numeric => {
@@ -281,7 +401,7 @@ impl Image {
                     .copied()
                     .map(|value| PutDataValue::Number(value as f64))
                     .collect::<Vec<_>>();
-                self.putdata_values(&values, scale, offset)
+                self.putdata_values_with_execution_context(&values, scale, offset, route)
             }
             PutDataValueKind::Components { .. } => {
                 let values = values
@@ -289,7 +409,7 @@ impl Image {
                     .copied()
                     .map(PutDataValue::Packed)
                     .collect::<Vec<_>>();
-                self.putdata_values(&values, scale, offset)
+                self.putdata_values_with_execution_context(&values, scale, offset, route)
             }
             PutDataValueKind::NativeU16Components { .. } => {
                 let values = values
@@ -297,7 +417,7 @@ impl Image {
                     .copied()
                     .map(PutDataValue::Packed)
                     .collect::<Vec<_>>();
-                self.putdata_values(&values, scale, offset)
+                self.putdata_values_with_execution_context(&values, scale, offset, route)
             }
             PutDataValueKind::FloatComponents { .. } => Err(PilError::TypeError(
                 "floating multiband putdata requires component tuples".into(),
@@ -311,6 +431,7 @@ impl Image {
     /// element, so bindings must delegate this check before they iterate a
     /// Python sequence. Keeping it here also gives every binding the same
     /// dimension and error behavior.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn validate_putdata_length(&self, entry_count: usize) -> Result<(), PilError> {
         let (width, height) = self.size()?;
         let pixel_count = (width as usize)
@@ -327,6 +448,7 @@ impl Image {
     /// Returns `Ok(true)` when the current mode consumed the bytes. Other
     /// modes return `Ok(false)` so the binding can preserve Python's generic
     /// sequence and callback behavior.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn putdata_bytes_fast_path(
         &mut self,
         data: &[u8],
@@ -334,9 +456,26 @@ impl Image {
         scale: f64,
         offset: f64,
     ) -> Result<bool, PilError> {
+        self.putdata_bytes_fast_path_with_execution_context(data, entry_count, scale, offset, None)
+    }
+
+    /// Applies byte-oriented fast paths under the wrapper-captured route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putdata_bytes_fast_path_with_execution_context(
+        &mut self,
+        data: &[u8],
+        entry_count: usize,
+        scale: f64,
+        offset: f64,
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
+    ) -> Result<bool, PilError> {
         let image_mode = self.mode_identity()?;
         if is_l16_identity(image_mode) {
-            self.putdata_l16_bytes_with_count(data, entry_count, scale, offset)?;
+            self.putdata_l16_bytes_with_count(data, entry_count, scale, offset, route)?;
             return Ok(true);
         }
         if matches!(
@@ -347,21 +486,21 @@ impl Image {
                 // Bytes already contain the exact one-byte samples Pillow
                 // stores for these modes. Queue them directly instead of
                 // widening every byte to PutDataValue and encoding it back.
-                self.putdata(data)?;
+                self.putdata_with_execution_context(data, route)?;
                 return Ok(true);
             }
             let values = data
                 .iter()
                 .copied()
-                // Pillow reads the terminating NUL when a bytes subtype
-                // reports one more item than its physical payload. Extend
-                // that behavior safely for every missing item instead of
-                // following its unchecked C pointer read out of bounds.
+                // Rust callers may provide more logical entries than the
+                // physical byte slice. Zero-fill those missing values; the
+                // Pillow image8 wrapper always derives this count from the
+                // physical bytes payload.
                 .chain(std::iter::repeat(0))
                 .take(entry_count)
                 .map(|value| PutDataValue::Number(f64::from(value)))
                 .collect::<Vec<_>>();
-            self.putdata_values(&values, scale, offset)?;
+            self.putdata_values_with_execution_context(&values, scale, offset, route)?;
             return Ok(true);
         }
         Ok(false)
@@ -375,26 +514,34 @@ impl Image {
     /// worth of input bytes at a time. It updates only those raw bytes and
     /// preserves all other existing sample bytes. With a scale or offset it
     /// clips each input byte before placing it in that row layout.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn putdata_l16_bytes(
         &mut self,
         data: &[u8],
         scale: f64,
         offset: f64,
     ) -> Result<(), PilError> {
-        self.putdata_l16_bytes_with_count(data, data.len(), scale, offset)
+        self.putdata_l16_bytes_with_count(data, data.len(), scale, offset, None)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn putdata_l16_bytes_with_count(
         &mut self,
         data: &[u8],
         entry_count: usize,
         scale: f64,
         offset: f64,
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
     ) -> Result<(), PilError> {
         self.validate_putdata_length(entry_count)?;
         let mode = self.mode_identity()?;
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, context) = match route {
+            Some(route) => route,
+            None => self.cpu_arch_execution_route_advisory(),
+        };
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         self.load()?;
         operation_receipts.capture();
@@ -433,10 +580,21 @@ impl Image {
     /// matching strategy or report the Default fallback. A pinned GPU request
     /// uses CPU Default; an unpinned GPU preference can use an active SIMD
     /// architecture for this synchronous host-write path.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_execution_context(&self) -> PutDataExecutionContext {
         let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        self.putdata_execution_context_for_route(requested_backend, context)
+    }
+
+    /// Creates callback-write state from a route selected by the host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putdata_execution_context_for_route(
+        &self,
+        requested_backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> PutDataExecutionContext {
         PutDataExecutionContext {
             context,
             requested_backend,
@@ -445,7 +603,23 @@ impl Image {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn putdata_context(
+        &self,
+        route: Option<(
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        )>,
+    ) -> PutDataExecutionContext {
+        match route {
+            Some((requested_backend, context)) => {
+                self.putdata_execution_context_for_route(requested_backend, context)
+            }
+            None => self.putdata_execution_context(),
+        }
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn putdata_value_at_selection(
         &self,
         mode: Mode,
@@ -480,7 +654,7 @@ impl Image {
     ///
     /// Returns [`PilError::TypeError`] when `value` is incompatible with the
     /// image mode or `pixel_index` is outside the image.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn putdata_value_at(
         &mut self,
         pixel_index: usize,
@@ -497,7 +671,7 @@ impl Image {
     /// The binding creates one context per host sequence and passes it through
     /// each synchronous write after coercing that value without holding the
     /// image borrow. A changed exact mode refreshes the cached mode strategy.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_value_at_with_context(
         &mut self,
@@ -584,157 +758,6 @@ impl Image {
             selection,
         );
         context.operation_receipts.capture();
-        Ok(())
-    }
-}
-
-impl Image {
-    /// Changes the callback-visible ImagingCore mode through Pillow's native
-    /// same-mode, `1`/`L`, and RGB/RGBA/RGBX paths.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PilError::ValueError`] when the target transition is not
-    /// supported by the current mode, and propagates materialization errors.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-    pub fn imaging_core_setmode(&mut self, target: Mode) -> Result<(), PilError> {
-        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let source = self.mode_identity()?;
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
-        let selection = crate::compute::pool_cpu::ops::put::ops::select_imaging_core_set_mode(
-            source, target, &context,
-        )?;
-        if source != target {
-            self.load()?;
-            operation_receipts.capture();
-            self.mutate_materialized_pixels(|image| {
-                crate::compute::pool_cpu::ops::put::ops::execute_imaging_core_set_mode(
-                    image, target, selection,
-                )
-            })?;
-        } else {
-            operation_receipts.capture();
-        }
-        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
-            "ImagingCoreSetMode",
-            requested_backend,
-            0,
-            "ImagingCore setmode uses the serial Default strategy",
-            selection,
-            operation_receipts,
-        );
-        Ok(())
-    }
-
-    /// Replaces one native band through Pillow's callback-visible ImagingCore API.
-    ///
-    /// Multiband destinations accept a one-byte single-band source; a
-    /// single-band destination requires the same exact mode. The destination
-    /// keeps its palette and metadata.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PilError::ValueError`] when the source, band, dimensions, or
-    /// stored sample layout does not match the destination.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-    pub fn imaging_core_putband(&mut self, source: &Image, band: i32) -> Result<(), PilError> {
-        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let source_mode = source.mode_identity()?;
-        crate::compute::pool_cpu::ops::put::helpers::imaging_core_band::validate_put_band_source(
-            source_mode,
-        )?;
-        let destination_mode = self.mode_identity()?;
-        let band =
-            crate::compute::pool_cpu::ops::put::helpers::imaging_core_band::validate_band_index(
-                band,
-                destination_mode.pillow_band_count(),
-            )?;
-        crate::compute::pool_cpu::ops::put::helpers::imaging_core_band::validate_put_band_layout(
-            destination_mode,
-            source_mode,
-            self.size()?,
-            source.size()?,
-        )?;
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
-        let selection =
-            crate::compute::pool_cpu::ops::put::ops::select_put_band(destination_mode, &context)?;
-        let source_pixels = source.materialized_shared()?;
-        self.load()?;
-        operation_receipts.capture();
-        self.mutate_materialized_pixels(|destination| {
-            crate::compute::pool_cpu::ops::put::ops::execute_put_band(
-                destination,
-                source_pixels.as_ref(),
-                band,
-                selection,
-            )
-        })?;
-        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
-            "PutBand",
-            requested_backend,
-            0,
-            "ImagingCore band writes use the serial Default strategy",
-            selection,
-            operation_receipts,
-        );
-        Ok(())
-    }
-
-    /// Fills one native byte band through Pillow's callback-visible ImagingCore API.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PilError::ValueError`] when the destination mode or band is
-    /// unsupported, and propagates materialization errors.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-    pub fn imaging_core_fillband(&mut self, band: i32, value: i32) -> Result<(), PilError> {
-        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let mode = self.mode_identity()?;
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
-        let selection = crate::compute::pool_cpu::ops::put::ops::select_fill_band(mode, &context)?;
-        let band =
-            crate::compute::pool_cpu::ops::put::helpers::imaging_core_band::validate_band_index(
-                band,
-                mode.pillow_band_count(),
-            )?;
-        let value = value.clamp(0, i32::from(u8::MAX)) as u8;
-        self.load()?;
-        operation_receipts.capture();
-        self.mutate_materialized_pixels(|image| {
-            crate::compute::pool_cpu::ops::put::ops::execute_fill_band(
-                image, band, value, selection,
-            )
-        })?;
-        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
-            "FillBand",
-            requested_backend,
-            0,
-            "ImagingCore band fills use the serial Default strategy",
-            selection,
-            operation_receipts,
-        );
-        Ok(())
-    }
-
-    fn mutate_materialized_pixels(
-        &mut self,
-        operation: impl FnOnce(&mut crate::raster::DynamicImage) -> Result<(), PilError>,
-    ) -> Result<(), PilError> {
-        match self {
-            Image::Loaded(data) => {
-                operation(Arc::make_mut(&mut data.image))?;
-                data.known_zero_fill = false;
-            }
-            Image::Paletted(data) => {
-                operation(&mut data.indices)?;
-                data.materialized = materialization_cache();
-            }
-            _ => {
-                return Err(PilError::InternalError(
-                    "ImagingCore band mutation did not materialize writable pixels".into(),
-                ));
-            }
-        }
         Ok(())
     }
 }

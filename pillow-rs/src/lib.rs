@@ -91,17 +91,6 @@
 #[cfg(feature = "parallel")]
 use rayon as _;
 
-// ============================================================================
-// AS PER DESIGN — DO NOT REMOVE THESE MODULES:
-//   Each module below is a foundational piece of the systemic fix architecture
-//   (see docs/ARCHITECTURE.md). Removing any of them breaks the guarantees enforced
-//   by CI and creates entire classes of bugs.
-//
-//   - checked_dims:  Only way to allocate image buffers (no overflow, no DoS)
-//   - par:           Approved Rayon row helpers (opt-in through `parallel`)
-//   - image_utils:   Canonical buffer conversion (no duplicate copies)
-// ============================================================================
-
 /// Validated image dimensions and allocation-size helpers.
 mod checked_dims;
 /// Pillow-compatible color parsing and color-space conversion.
@@ -331,6 +320,8 @@ pub use crate::draw::outline_curve_points;
 #[doc(hidden)]
 pub use crate::draw::prepare_floodfill;
 #[doc(hidden)]
+pub use crate::draw::prepare_floodfill_with_execution_route;
+#[doc(hidden)]
 pub use crate::draw::prepare_rounded_rectangle_with_callbacks;
 #[doc(hidden)]
 pub use crate::draw::rounded_rectangle_outline_bounds_with_callbacks;
@@ -378,6 +369,8 @@ pub use crate::image::FormattedPixelValue;
 pub use crate::image::Image;
 pub use crate::image::ImageInfoValue;
 pub use crate::image::ImagingCoreBytesInput;
+#[doc(hidden)]
+pub use crate::image::ImagingCoreTransparencyKey;
 pub use crate::image::NewColorInput;
 pub use crate::image::OpenFormatsInput;
 pub use crate::image::OpenModeInput;
@@ -438,6 +431,10 @@ pub use crate::ops::chops::screen as chops_screen;
 pub use crate::ops::chops::soft_light as chops_soft_light;
 pub use crate::ops::chops::subtract as chops_subtract;
 pub use crate::ops::chops::subtract_modulo as chops_subtract_modulo;
+#[doc(hidden)]
+pub use crate::ops::convert::ConvertInputPlan;
+#[doc(hidden)]
+pub use crate::ops::convert::ConvertMatrixTruthiness;
 pub use crate::ops::convert::ConvertModeInput;
 #[doc(hidden)]
 pub use crate::ops::convert::ConvertModeInput as PythonConvertModeInput;
@@ -478,6 +475,8 @@ pub use crate::ops::imageops::ImageOpsAspectRouteCallbacks;
 pub use crate::ops::imageops::ImageOpsAspectSize;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsAutocontrastCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAutocontrastLoopIndex;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsAutocontrastResultCallbacks;
 #[doc(hidden)]
@@ -586,6 +585,8 @@ pub use crate::ops::imageops::exif_remove_xmp_orientation;
 pub use crate::ops::imageops::exif_transpose as imageops_exif_transpose;
 #[doc(hidden)]
 pub use crate::ops::imageops::exif_transpose_with_orientation as imageops_exif_transpose_with_orientation;
+#[doc(hidden)]
+pub use crate::ops::imageops::exif_transpose_with_orientation_and_context as imageops_exif_transpose_with_orientation_and_context;
 pub use crate::ops::imageops::expand as imageops_expand;
 #[doc(hidden)]
 pub use crate::ops::imageops::expand_canvas_with_prepared_fill as imageops_expand_canvas_with_prepared_fill;
@@ -665,6 +666,7 @@ pub use crate::ops::module_fns::EvalInputKind;
 pub use crate::ops::module_fns::MergeCallbackContract;
 pub use crate::ops::module_fns::MergeInput;
 pub use crate::ops::module_fns::alpha_composite as image_alpha_composite;
+pub use crate::ops::module_fns::alpha_composite_with_execution_context as image_alpha_composite_with_execution_context;
 pub use crate::ops::module_fns::blend as image_blend;
 pub use crate::ops::module_fns::composite as image_composite;
 pub use crate::ops::module_fns::effect_mandelbrot as image_effect_mandelbrot;
@@ -675,12 +677,24 @@ pub use crate::ops::module_fns::effect_spread as image_effect_spread;
 pub use crate::ops::module_fns::eval as image_eval;
 pub use crate::ops::module_fns::eval_callable as image_eval_callable;
 pub use crate::ops::module_fns::eval_float as image_eval_float;
+#[doc(hidden)]
+pub use crate::ops::module_fns::eval_float_with_execution_context as image_eval_float_with_execution_context;
 pub use crate::ops::module_fns::eval_point_callable as image_eval_point_callable;
 pub use crate::ops::module_fns::eval_point_mode as image_eval_point_mode;
 pub use crate::ops::module_fns::eval_point_mode_replicated_for_image as image_eval_point_mode_replicated_for_image;
+#[doc(hidden)]
+pub use crate::ops::module_fns::eval_point_mode_replicated_for_image_with_execution_context as image_eval_point_mode_replicated_for_image_with_execution_context;
+#[doc(hidden)]
+pub use crate::ops::module_fns::eval_point_mode_with_execution_context as image_eval_point_mode_with_execution_context;
 pub use crate::ops::module_fns::eval_point_transform as image_eval_point_transform;
+#[doc(hidden)]
+pub use crate::ops::module_fns::eval_point_transform_with_execution_context as image_eval_point_transform_with_execution_context;
 pub use crate::ops::module_fns::eval_replicated_for_image as image_eval_replicated_for_image;
+#[doc(hidden)]
+pub use crate::ops::module_fns::eval_replicated_for_image_with_execution_context as image_eval_replicated_for_image_with_execution_context;
 pub use crate::ops::module_fns::eval_validated as image_eval_validated;
+#[doc(hidden)]
+pub use crate::ops::module_fns::eval_validated_with_execution_context as image_eval_validated_with_execution_context;
 pub use crate::ops::module_fns::frombytes as image_frombytes;
 pub use crate::ops::module_fns::frombytes_owned as image_frombytes_owned;
 pub use crate::ops::module_fns::frombytes_owned_with_plan as image_frombytes_owned_with_plan;
@@ -705,6 +719,8 @@ pub use crate::ops::param_filters::color3dlut_transform_table;
 pub use crate::ops::param_filters::prepare_color3dlut;
 pub use crate::ops::param_filters::prepare_color3dlut_imaging_core;
 pub use crate::ops::paste::AlphaCompositeBox;
+#[doc(hidden)]
+pub use crate::ops::paste::AlphaCompositeCropPlan;
 pub use crate::ops::paste::PasteBoxInput;
 #[doc(hidden)]
 pub use crate::ops::paste::PasteBoxInput as PythonPasteBox;

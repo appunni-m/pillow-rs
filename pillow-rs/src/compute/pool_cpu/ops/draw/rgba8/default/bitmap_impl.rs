@@ -2,6 +2,7 @@ use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply(
     image: DynamicImage,
     x: i32,
@@ -35,6 +36,7 @@ pub(crate) fn apply(
     Ok(DynamicImage::ImageRgba8(canvas))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn blend_pixel(
     canvas: &mut crate::raster::RgbaImage,
     x: u32,

@@ -1,12 +1,12 @@
 use crate::error::PilError;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &crate::raster::GrayImage,
     mask_raw: Option<&[u8]>,
 ) -> Result<Vec<u32>, PilError> {
     Ok(
-        crate::compute::pool_cpu::ops::analysis::helpers::histogram_samples::byte_bands::<_, false>(
+        crate::compute::pool_cpu::ops::analysis::helpers::histogram_samples::byte_bands::<_>(
             image, mask_raw,
         ),
     )

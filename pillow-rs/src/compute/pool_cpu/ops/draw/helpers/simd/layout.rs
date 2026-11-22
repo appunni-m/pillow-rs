@@ -17,6 +17,7 @@ impl DrawLayout {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn layout_for_mode(mode: Mode) -> Option<DrawLayout> {
     let (channels, float_mode) = match mode {
         Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => (1, false),

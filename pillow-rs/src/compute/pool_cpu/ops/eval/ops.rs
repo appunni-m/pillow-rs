@@ -8,6 +8,8 @@
 //! `pool_parallel` owner; do not move its scheduling into this CPU family.
 //! TODO(pillow-rs#3ptb): freeze and run L/P-to-One and I-to-L Point parity and
 //! public-call benchmark cases after Stage 5 CPU source closure.
+//! Pillow 13.0 treats an unrecognized `Image.point` mode string as omitted for
+//! the output mode; the PyO3 adapter's no-target route preserves that result.
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
     ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule, RejectionKind,
@@ -23,7 +25,7 @@ pub(crate) use super::helpers::scalar_point::SUPPORT as SCALAR_POINT_SUPPORT;
 const POINT_FLOAT_ERROR: &str = "point operation not supported for this mode";
 const POINT_MODE_OUTPUT_ERROR: &str = "point operation not supported for this mode";
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn classify_float_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::FLOAT_LUT_SUPPORT,
@@ -65,7 +67,7 @@ pub(crate) static POINT_FLOAT_SUPPORT: OperationSupport = OperationSupport::new(
     classify_float_mode,
 );
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn classify_point_mode_output(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageLuma8 => super::luma8::ops::POINT_ONE_SUPPORT,
@@ -107,7 +109,7 @@ pub(crate) static POINT_MODE_OUTPUT_SUPPORT: OperationSupport = OperationSupport
     classify_point_mode_output,
 );
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn point_mode_output_lut_length(source: Mode, target: Mode) -> usize {
     if source == Mode::ImageI32 && target == Mode::ImageLuma8 {
         65_536
@@ -116,7 +118,7 @@ fn point_mode_output_lut_length(source: Mode, target: Mode) -> usize {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn execute_point_mode_output(
     image: &DynamicImage,
     target: Mode,
@@ -168,7 +170,7 @@ macro_rules! declare_eval_modes {
             $($mode(super::$module::ops::Strategy<'a>),)+
         }
 
-        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
         fn classify_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::SUPPORT,)+
@@ -179,7 +181,7 @@ macro_rules! declare_eval_modes {
         }
 
 
-        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
         fn prepare_image<'a>(
             image: &'a DynamicImage,
             lut: &'a [u8],
@@ -205,7 +207,7 @@ macro_rules! declare_eval_modes {
                 }
             }
 
-            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let mut output = match self {
                     $(Self::$mode(strategy) => super::$module::ops::execute(strategy)?,)+
@@ -263,7 +265,7 @@ pub(crate) fn prepare<'a>(
     prepare_image(image, lut, ctx)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

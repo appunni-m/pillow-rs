@@ -3,6 +3,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::{plan::NativeF32Plan, typed};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgb32FImage};
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: NativeF32Plan<'_>) -> Result<DynamicImage, PilError> {
     let (width, height) = strategy.destination_size;
     let source = std::sync::Arc::clone(&strategy.source);

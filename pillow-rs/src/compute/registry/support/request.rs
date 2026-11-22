@@ -443,6 +443,8 @@ pub enum StrategyGuard {
     /// Filtered Resize has work for the scalar x86 FMA implementation; exact
     /// boxed identity and crop paths remain on Default.
     ResizeFilteredFma,
+    /// ImageF32 Resize has nonempty, checked native storage and valid geometry.
+    ResizeF32Vector,
     /// ImageI32 Thumbnail can stream one even 2x2 reducing-gap pass.
     ThumbnailI32Stream2x2,
     /// Unboxed I;16 Resize has exact two-byte samples and safe vector dimensions.
@@ -725,6 +727,15 @@ pub enum StrategyGuard {
     RgbaPixelWriteRun,
     /// RGBA axis-swap method with a complete logical byte prefix and dimensions for AVX2 tiles.
     TransposeRgbaAvx2,
+    /// x86_64 packed-word Rotate270 request admitted by its exact tiling shape.
+    TransposeRgbaX86_64Tiled {
+        /// Minimum width and height for tiled work.
+        tile_min_dimension: u32,
+        /// Minimum pixel count for tiled work.
+        minimum_pixels: usize,
+        /// Required dimension multiple for complete packed blocks.
+        block_size: u32,
+    },
     /// Native byte transpose over the logical source prefix.
     TransposeNativeBytes {
         /// Physical bytes moved together for one source pixel.

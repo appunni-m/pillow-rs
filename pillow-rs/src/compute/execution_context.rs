@@ -5,11 +5,15 @@ use super::Backend;
 use std::cell::Cell;
 use std::sync::OnceLock;
 
-/// CPU instruction set selected for one routed operation or pipeline.
+/// CPU implementation architecture selected for one routed operation or pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Architecture {
     /// Portable scalar implementation.
     Default,
+    /// AArch64 baseline implementation for target-specific serial arithmetic.
+    Aarch64,
+    /// x86_64 baseline implementation without optional instruction requirements.
+    X86_64,
     /// AArch64 NEON implementation.
     Neon,
     /// x86 SSE2 implementation.
@@ -35,18 +39,20 @@ impl Architecture {
     ///
     /// Portable builds detect host capabilities at this boundary. Leaf
     /// implementations receive the resulting value and never probe again.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[must_use]
     pub fn detected_host() -> Self {
         CpuCapabilities::host().preferred()
     }
 
     /// Returns the directory name for the architecture-specific implementation.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[must_use]
     pub const fn folder(self) -> &'static str {
         match self {
             Self::Default => "default",
+            Self::Aarch64 => "aarch64",
+            Self::X86_64 => "x86_64",
             Self::Neon => "neon",
             Self::Sse2 => "sse2",
             Self::Sse3 => "sse3",
@@ -58,11 +64,13 @@ impl Architecture {
     }
 
     /// Returns a stable diagnostic name for the selected CPU architecture.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Default => "default",
+            Self::Aarch64 => "aarch64",
+            Self::X86_64 => "x86_64",
             Self::Neon => "neon",
             Self::Sse2 => "sse2",
             Self::Sse3 => "sse3",
@@ -76,7 +84,7 @@ impl Architecture {
     }
 
     /// Whether this selected architecture includes FMA3.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[must_use]
     pub const fn has_fma(self) -> bool {
         matches!(self, Self::AvxFma | Self::Avx2Fma)
@@ -134,10 +142,12 @@ impl CpuCapabilities {
         *HOST.get_or_init(Self::detect)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     const fn supports(self, architecture: Architecture) -> bool {
         match architecture {
             Architecture::Default => true,
+            Architecture::Aarch64 => cfg!(target_arch = "aarch64"),
+            Architecture::X86_64 => cfg!(target_arch = "x86_64"),
             Architecture::Neon => self.neon,
             Architecture::Sse2 => self.sse2,
             Architecture::Sse3 => self.sse3,
@@ -150,7 +160,7 @@ impl CpuCapabilities {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn preferred(self) -> Architecture {
         if self.avx2 {
             if self.fma {
@@ -179,7 +189,7 @@ impl CpuCapabilities {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn detect() -> Self {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
@@ -230,9 +240,11 @@ pub struct ExecutionContext {
 impl ExecutionContext {
     /// Resolves the existing public routing choice once at an execution boundary.
     ///
-    /// The compatibility SIMD request denotes CPU execution with the centrally
-    /// selected host architecture. Ordinary CPU remains explicitly serial Default.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    /// Compatibility SIMD denotes CPU execution with the centrally selected host
+    /// architecture. Ordinary CPU injects serial Default policy; an operation may
+    /// still select its declared target-baseline strategy without changing that
+    /// requested policy.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn for_routed_backend(backend: Backend) -> Self {
         let requested_architecture = test_architecture();
         let (backend, architecture) = match backend {
@@ -254,7 +266,7 @@ impl ExecutionContext {
     /// Strategy admission checks [`Self::supports_architecture`] before optional
     /// instructions execute. An unavailable requested architecture is retained
     /// so the prepared plan can explain its explicit Default fallback.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[must_use]
     pub fn new(backend: Backend, architecture: Architecture) -> Self {
         Self {
@@ -282,28 +294,52 @@ impl ExecutionContext {
     ///
     /// Required instruction sets are checked independently after this policy
     /// relation; AVX2 alone does not establish SSSE3 or FMA availability.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[must_use]
     pub const fn permits_architecture(self, implementation: Architecture) -> bool {
         match self.architecture {
-            Architecture::Default => matches!(implementation, Architecture::Default),
+            Architecture::Default => match implementation {
+                Architecture::Default => true,
+                Architecture::Aarch64 => cfg!(target_arch = "aarch64"),
+                Architecture::X86_64 => cfg!(target_arch = "x86_64"),
+                _ => false,
+            },
+            Architecture::Aarch64 => {
+                matches!(
+                    implementation,
+                    Architecture::Default | Architecture::Aarch64
+                )
+            }
+            Architecture::X86_64 => {
+                matches!(implementation, Architecture::Default | Architecture::X86_64)
+            }
             Architecture::Neon => {
-                matches!(implementation, Architecture::Default | Architecture::Neon)
+                matches!(
+                    implementation,
+                    Architecture::Default | Architecture::Aarch64 | Architecture::Neon
+                )
             }
             Architecture::WasmSimd128 => matches!(
                 implementation,
                 Architecture::Default | Architecture::WasmSimd128
             ),
             Architecture::Sse2 => {
-                matches!(implementation, Architecture::Default | Architecture::Sse2)
+                matches!(
+                    implementation,
+                    Architecture::Default | Architecture::X86_64 | Architecture::Sse2
+                )
             }
             Architecture::Sse3 => matches!(
                 implementation,
-                Architecture::Default | Architecture::Sse2 | Architecture::Sse3
+                Architecture::Default
+                    | Architecture::X86_64
+                    | Architecture::Sse2
+                    | Architecture::Sse3
             ),
             Architecture::Ssse3 => matches!(
                 implementation,
                 Architecture::Default
+                    | Architecture::X86_64
                     | Architecture::Sse2
                     | Architecture::Sse3
                     | Architecture::Ssse3
@@ -311,6 +347,7 @@ impl ExecutionContext {
             Architecture::Avx => matches!(
                 implementation,
                 Architecture::Default
+                    | Architecture::X86_64
                     | Architecture::Sse2
                     | Architecture::Sse3
                     | Architecture::Ssse3
@@ -319,6 +356,7 @@ impl ExecutionContext {
             Architecture::AvxFma => matches!(
                 implementation,
                 Architecture::Default
+                    | Architecture::X86_64
                     | Architecture::Sse2
                     | Architecture::Sse3
                     | Architecture::Ssse3
@@ -328,6 +366,7 @@ impl ExecutionContext {
             Architecture::Avx2 => matches!(
                 implementation,
                 Architecture::Default
+                    | Architecture::X86_64
                     | Architecture::Sse2
                     | Architecture::Sse3
                     | Architecture::Ssse3
@@ -337,6 +376,7 @@ impl ExecutionContext {
             Architecture::Avx2Fma => matches!(
                 implementation,
                 Architecture::Default
+                    | Architecture::X86_64
                     | Architecture::Sse2
                     | Architecture::Sse3
                     | Architecture::Ssse3
@@ -349,7 +389,7 @@ impl ExecutionContext {
     }
 
     /// Whether the captured host supports the exact required instructions.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[must_use]
     pub const fn supports_architecture(self, architecture: Architecture) -> bool {
         self.capabilities.supports(architecture)

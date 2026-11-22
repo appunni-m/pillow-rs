@@ -67,12 +67,19 @@ pub enum PutAlphaInput {
     Invalid(String),
 }
 
+type PutAlphaExecutionRoute = (
+    Option<crate::compute::Backend>,
+    crate::compute::ExecutionContext,
+);
+
 // NO_PILLOW_SUPPORT: the operation declaration includes native high-depth
 // alpha routes that extend Pillow's operation contract.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn validate_putalpha_mode(operation: OperationId, mode: Mode) -> Result<(), PilError> {
     operation.support().for_mode(mode).validate_mode()
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn promote_putalpha_destination(image: &mut Image, mode: Mode) -> Result<(), PilError> {
     if !matches!(
         mode,
@@ -83,6 +90,7 @@ fn promote_putalpha_destination(image: &mut Image, mode: Mode) -> Result<(), Pil
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn validated_putalpha_mask(image: &Image, mask: &Image) -> Result<DynamicImage, PilError> {
     let mask_mode = mask.mode_identity()?;
     if !crate::compute::registry::support::PUT_ALPHA_DATA_MASK_MODES.contains(&mask_mode) {
@@ -98,6 +106,7 @@ fn validated_putalpha_mask(image: &Image, mask: &Image) -> Result<DynamicImage, 
     Ok(mask_image)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn getchannel_band_count(support: ModeSupport) -> usize {
     let ModeSupport::Supported { inputs, .. } = support else {
         unreachable!("GetChannel mode is validated before reading its band contract")
@@ -111,7 +120,7 @@ fn getchannel_band_count(support: ModeSupport) -> usize {
         .expect("GetChannel support must declare the exact source-mode band count")
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[inline(always)]
 fn eager_getchannel_tiny_rgb(
     image: &DynamicImage,
@@ -149,7 +158,7 @@ fn eager_getchannel_tiny_rgb(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn eager_getchannel_identity_copy(
     image: &Image,
     channel: i32,
@@ -179,7 +188,7 @@ fn checked_channel_index(channel: i32, bands: usize) -> Result<usize, PilError> 
         .ok_or_else(|| PilError::ValueError("band index out of range".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn eager_getchannel_shared_buffer_identity(
     image: &Image,
     route: OperationModeRoute,
@@ -217,12 +226,13 @@ fn eager_getchannel_shared_buffer_identity(
     .map(Some)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn eager_getchannel_tiny_rgb_child(
     image: &Image,
     route: OperationModeRoute,
     pixels: &DynamicImage,
     channel: u8,
+    context_override: Option<crate::compute::ExecutionContext>,
     operation_receipts: &mut crate::compute::PipelineOperationTelemetryCapture,
 ) -> Result<Option<Image>, PilError> {
     let Some(guards) = route.eager_child_guards(OperationId::ExtractBand) else {
@@ -238,9 +248,12 @@ fn eager_getchannel_tiny_rgb_child(
         pixels.as_bytes().len(),
         false,
     ) {
-        return image.queue_getchannel_child(route, channel).map(Some);
+        return image
+            .queue_getchannel_child(route, channel, context_override)
+            .map(Some);
     }
-    let (requested_backend, context) = image.cpu_arch_execution_route()?;
+    let (requested_backend, routed_context) = image.cpu_arch_execution_route()?;
+    let context = context_override.unwrap_or(routed_context);
     if !eager_route_guards_pass(
         guards,
         loaded_image,
@@ -265,7 +278,7 @@ fn eager_getchannel_tiny_rgb_child(
     Ok(Some(result))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn concrete_identity_source(image: &Image, cached_at_entry: bool) -> Option<(&DynamicImage, bool)> {
     match image {
         Image::Loaded(data) => Some((data.image.as_ref(), true)),
@@ -280,7 +293,7 @@ fn concrete_identity_source(image: &Image, cached_at_entry: bool) -> Option<(&Dy
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn eager_route_guards_pass(
     guards: &[OperationRouteGuard],
     loaded_image: bool,
@@ -299,7 +312,10 @@ fn eager_route_guards_pass(
         // Channel extraction never has Draw context/mask facts, so it cannot
         // take a Draw-only wrapper route.
         OperationRouteGuard::DrawBitmapRouteIn(_) => false,
+        OperationRouteGuard::DrawEmbeddedColorTextPaste => false,
         OperationRouteGuard::PixelCountAtMost(limit) => pixel_count <= *limit,
+        OperationRouteGuard::ReducingGapPreReductionSelected => false,
+        OperationRouteGuard::ReducingGapFusedResizeSelected => false,
         OperationRouteGuard::ByteStorageLengthMatchesPixelCount => {
             usize::try_from(pixel_count).ok() == Some(byte_length)
         }
@@ -313,8 +329,34 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when `channel` is out of range, or
     /// another [`PilError`] when materialization fails.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn getchannel(&self, channel: i32) -> Result<Image, PilError> {
+        self.getchannel_with_context_inner(channel, None)
+    }
+
+    /// Extracts a channel using a context captured by a composed operation.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub(crate) fn getchannel_with_context(
+        &self,
+        channel: i32,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<Image, PilError> {
+        // Bind pending parent work to the same route as extraction, but reuse
+        // any successful materialization already visible at call entry.
+        let source = if self.is_materialized() {
+            self.clone()
+        } else {
+            self.clone().with_execution_context(context)
+        };
+        source.getchannel_with_context_inner(channel, Some(context))
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn getchannel_with_context_inner(
+        &self,
+        channel: i32,
+        context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Image, PilError> {
         let cached_at_entry = self.is_materialized();
         let mode = self.mode_identity()?;
         let route = OperationId::GetChannel.support().route_for_mode(mode);
@@ -330,10 +372,10 @@ impl Image {
         if route.has_copy_path() {
             return self.getchannel_identity_copy(channel, bands, cached_at_entry);
         }
-        self.getchannel_materialized_child(route, channel, bands)
+        self.getchannel_materialized_child(route, channel, bands, context)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn getchannel_identity_copy(
         &self,
         channel: i32,
@@ -365,12 +407,13 @@ impl Image {
         eager_getchannel_identity_copy(self, channel, bands)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn getchannel_materialized_child(
         &self,
         route: OperationModeRoute,
         channel: i32,
         bands: usize,
+        context: Option<crate::compute::ExecutionContext>,
     ) -> Result<Image, PilError> {
         // Keep lazy decode and pipeline errors ahead of index validation for
         // sources without a successful cached materialization.
@@ -395,6 +438,7 @@ impl Image {
             route,
             img.as_ref(),
             backend_channel,
+            context,
             &mut operation_receipts,
         )? {
             return Ok(result);
@@ -402,14 +446,15 @@ impl Image {
         // The validation above has already materialized a pending pipeline.
         // Branch from those resolved pixels so extracting multiple channels
         // does not replay a mode-changing parent pipeline for every band.
-        self.queue_getchannel_child(route, backend_channel)
+        self.queue_getchannel_child(route, backend_channel, context)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn queue_getchannel_child(
         &self,
         route: OperationModeRoute,
         channel: u8,
+        context: Option<crate::compute::ExecutionContext>,
     ) -> Result<Image, PilError> {
         let child = route.pipeline_child().ok_or_else(|| {
             PilError::InternalError("GetChannel route omitted its pipeline child".into())
@@ -429,16 +474,37 @@ impl Image {
                 self.clone()
             };
         let extracted = Image::push_op(&extraction_source, operation);
-        Ok(match self.backend() {
+        let extracted = match self.backend() {
             Some(backend) => extracted.use_backend(backend),
+            None => extracted,
+        };
+        Ok(match context {
+            Some(context) => extracted.with_execution_context(context),
             None => extracted,
         })
     }
 
     /// Resolves a numeric or named public channel selector before extraction.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn getchannel_selector(&self, selector: ChannelSelector) -> Result<Image, PilError> {
-        let channel = match selector {
-            ChannelSelector::Index(channel) => channel,
+        self.getchannel(self.getchannel_selector_index(selector)?)
+    }
+
+    /// Resolves a channel selector and retains a composed caller's CPU route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getchannel_selector_with_context(
+        &self,
+        selector: ChannelSelector,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<Image, PilError> {
+        self.getchannel_with_context(self.getchannel_selector_index(selector)?, context)
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn getchannel_selector_index(&self, selector: ChannelSelector) -> Result<i32, PilError> {
+        match selector {
+            ChannelSelector::Index(channel) => Ok(channel),
             ChannelSelector::Name(name) => {
                 let bands = self.getbands()?;
                 bands.iter().position(|band| band == &name).map_or_else(
@@ -448,15 +514,14 @@ impl Image {
                         )))
                     },
                     |index| Ok(index as i32),
-                )?
+                )
             }
             ChannelSelector::Invalid(type_name) => {
                 return Err(PilError::TypeError(format!(
                     "'{type_name}' object cannot be interpreted as an integer"
                 )));
             }
-        };
-        self.getchannel(channel)
+        }
     }
 
     /// Queues replacement of the alpha channel.
@@ -471,6 +536,7 @@ impl Image {
     ///
     /// Returns an error when the source mode has no declared PutAlpha
     /// strategy. Deferred pixel-execution errors are reported on materialize.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
         let image_mode = self.mode_identity()?;
         validate_putalpha_mode(OperationId::PutAlpha, image_mode)?;
@@ -495,6 +561,7 @@ impl Image {
     ///
     /// Returns the operation's declared mode rejection for unsupported images.
     #[doc(hidden)]
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn validate_putalpha_data_destination(&self) -> Result<(), PilError> {
         let mode = self.mode_identity()?;
         validate_putalpha_mode(OperationId::PutAlphaData, mode)
@@ -509,10 +576,42 @@ impl Image {
     ///
     /// Returns the operation's declared mode rejection or promotion error.
     #[doc(hidden)]
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn prepare_putalpha_data_input(&mut self) -> Result<(), PilError> {
+        self.prepare_putalpha_data_input_with_route(None)
+    }
+
+    /// Prepares PutAlphaData after mode validation under the caller's route.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn prepare_putalpha_data_input_with_execution_route(
+        &mut self,
+        pinned_backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.prepare_putalpha_data_input_with_route(Some((pinned_backend, context)))
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn prepare_putalpha_data_input_with_route(
+        &mut self,
+        route: Option<PutAlphaExecutionRoute>,
+    ) -> Result<(), PilError> {
         let mode = self.mode_identity()?;
         validate_putalpha_mode(OperationId::PutAlphaData, mode)?;
-        promote_putalpha_destination(self, mode)
+        promote_putalpha_destination(self, mode)?;
+        self.apply_putalpha_execution_route(route);
+        Ok(())
+    }
+
+    /// Prepares PutAlphaData while retaining a host-captured CPU route.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn prepare_putalpha_data_input_with_context(
+        &mut self,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.prepare_putalpha_data_input_with_execution_route(None, context)
     }
 
     /// Prepares Pillow's destination mode before a host callback converts an
@@ -525,21 +624,82 @@ impl Image {
     /// Returns an error when the current mode has no declared PutAlpha
     /// strategy or its promotion cannot be planned.
     #[doc(hidden)]
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn prepare_putalpha_input(&mut self) -> Result<(), PilError> {
+        self.prepare_putalpha_input_with_route(None)
+    }
+
+    /// Prepares PutAlpha after mode validation under the caller's route.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn prepare_putalpha_input_with_execution_route(
+        &mut self,
+        pinned_backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.prepare_putalpha_input_with_route(Some((pinned_backend, context)))
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn prepare_putalpha_input_with_route(
+        &mut self,
+        route: Option<PutAlphaExecutionRoute>,
+    ) -> Result<(), PilError> {
         let mode = self.mode_identity()?;
         validate_putalpha_mode(OperationId::PutAlpha, mode)?;
-        promote_putalpha_destination(self, mode)
+        promote_putalpha_destination(self, mode)?;
+        self.apply_putalpha_execution_route(route);
+        Ok(())
+    }
+
+    /// Prepares PutAlpha while retaining a host-captured CPU route.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn prepare_putalpha_input_with_context(
+        &mut self,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.prepare_putalpha_input_with_execution_route(None, context)
     }
 
     /// Applies the Python-facing scalar-or-mask `putalpha` contract.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn putalpha_with_input(&mut self, input: PutAlphaInput) -> Result<(), PilError> {
+        self.putalpha_with_input_and_route(input, None)
+    }
+
+    /// Applies PutAlpha under a host-captured backend and architecture route.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putalpha_with_input_and_execution_route(
+        &mut self,
+        input: PutAlphaInput,
+        pinned_backend: Option<crate::compute::Backend>,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.putalpha_with_input_and_route(input, Some((pinned_backend, context)))
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn putalpha_with_input_and_route(
+        &mut self,
+        input: PutAlphaInput,
+        route: Option<PutAlphaExecutionRoute>,
+    ) -> Result<(), PilError> {
         match input {
-            PutAlphaInput::Integer(value) => self.putalpha(value.clamp(0, 255) as u8),
-            PutAlphaInput::Image(mask) => self.putalpha_data(&mask),
+            PutAlphaInput::Integer(value) => {
+                let mode = self.mode_identity()?;
+                validate_putalpha_mode(OperationId::PutAlpha, mode)?;
+                self.putalpha(value.clamp(0, 255) as u8)?;
+                self.apply_putalpha_execution_route(route);
+                Ok(())
+            }
+            PutAlphaInput::Image(mask) => self.putalpha_data_with_route(&mask, route),
             PutAlphaInput::Invalid(type_name) => {
                 let mode = self.mode_identity()?;
                 validate_putalpha_mode(OperationId::PutAlpha, mode)?;
                 promote_putalpha_destination(self, mode)?;
+                self.apply_putalpha_execution_route(route);
                 Err(PilError::TypeError(format!(
                     "'{type_name}' object cannot be interpreted as an integer"
                 )))
@@ -547,22 +707,50 @@ impl Image {
         }
     }
 
+    /// Applies PutAlpha under a route captured by a host wrapper.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn putalpha_with_input_and_context(
+        &mut self,
+        input: PutAlphaInput,
+        context: crate::compute::ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.putalpha_with_input_and_execution_route(input, None, context)
+    }
+
     /// Replaces the alpha channel from a `1` or `L` mask image, matching Pillow's
     /// image-backed ``Image.putalpha``. Native-width Rust modes use their
     /// declared CoreOnly strategies without a Pillow parity claim.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn putalpha_data(&mut self, mask: &Image) -> Result<(), PilError> {
+        self.putalpha_data_with_route(mask, None)
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn putalpha_data_with_route(
+        &mut self,
+        mask: &Image,
+        route: Option<PutAlphaExecutionRoute>,
+    ) -> Result<(), PilError> {
         let image_mode = self.mode_identity()?;
         validate_putalpha_mode(OperationId::PutAlphaData, image_mode)?;
+        let routed_mask = match route {
+            Some((pinned_backend, context)) => mask
+                .clone()
+                .with_backend_and_execution_context(pinned_backend, context),
+            None => mask.clone(),
+        };
 
         // The Python adapter promotes before invoking mask-mode/load callbacks.
         // Direct Rust callers have no intervening host callback, so successful
         // calls can use the exact source-mode PutAlphaData strategy directly;
         // retain the promotion when validation fails.
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin_preserving_current();
-        let mask_img = match validated_putalpha_mask(self, mask) {
+        let mask_img = match validated_putalpha_mask(self, &routed_mask) {
             Ok(mask) => mask,
             Err(error) => {
                 promote_putalpha_destination(self, image_mode)?;
+                self.apply_putalpha_execution_route(route);
                 return Err(error);
             }
         };
@@ -572,7 +760,21 @@ impl Image {
             mode: image_mode,
         };
         let new_self = Image::push_op(self, operation);
-        *self = new_self;
+        *self = match route {
+            Some((pinned_backend, context)) => {
+                new_self.with_backend_and_execution_context(pinned_backend, context)
+            }
+            None => new_self,
+        };
         Ok(())
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    fn apply_putalpha_execution_route(&mut self, route: Option<PutAlphaExecutionRoute>) {
+        if let Some((pinned_backend, context)) = route {
+            *self = self
+                .clone()
+                .with_backend_and_execution_context(pinned_backend, context);
+        }
     }
 }

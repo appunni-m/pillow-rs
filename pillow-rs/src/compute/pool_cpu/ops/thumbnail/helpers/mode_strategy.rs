@@ -17,7 +17,7 @@ pub(crate) enum ThumbnailModeStrategy {
 }
 
 impl ThumbnailModeStrategy {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub(crate) const fn for_mode(mode: Mode) -> Self {
         match mode {
             Mode::One => Self::One,
@@ -48,7 +48,7 @@ impl ThumbnailModeStrategy {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub(crate) fn effective_filter(self, requested: ResampleFilter) -> ResampleFilter {
         match self {
             Self::One => super::super::one::ops::effective_filter(requested),
@@ -63,7 +63,7 @@ impl ThumbnailModeStrategy {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub(crate) fn should_reduce(self, filter: ResampleFilter, reducing_gap: Option<f64>) -> bool {
         if reducing_gap.is_none() {
             return false;
@@ -79,7 +79,7 @@ impl ThumbnailModeStrategy {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub(crate) fn resize_reducing_gap(
         self,
         filter: ResampleFilter,
@@ -101,7 +101,7 @@ impl ThumbnailModeStrategy {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn uses_unboxed_resize(
         self,
         source: (u32, u32),
@@ -121,7 +121,7 @@ impl ThumbnailModeStrategy {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn streams_i32_thumbnail(
         self,
         source: (u32, u32),

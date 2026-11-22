@@ -3,6 +3,7 @@ use crate::error::PilError;
 use super::plan::{NativeF32Plan, NativeU16Plan};
 
 /// Executes an internal native u16 Paste extension without mode conversion.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute_u16<const CHANNELS: usize>(
     plan: NativeU16Plan<'_>,
     source: &[u16],
@@ -71,6 +72,7 @@ pub(crate) fn execute_u16<const CHANNELS: usize>(
 }
 
 /// Executes an internal native f32 Paste extension without mode conversion.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute_f32<const CHANNELS: usize>(
     plan: NativeF32Plan<'_>,
     source: &[f32],
@@ -138,6 +140,7 @@ pub(crate) fn execute_f32<const CHANNELS: usize>(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 fn blend_u16<const CHANNELS: usize>(source: &[u16], destination: &mut [u16], mask: u8) {
     let weight = u32::from(mask);
@@ -149,6 +152,7 @@ fn blend_u16<const CHANNELS: usize>(source: &[u16], destination: &mut [u16], mas
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 fn blend_f32<const CHANNELS: usize>(source: &[f32], destination: &mut [f32], mask: u8) {
     let weight = f32::from(mask) / 255.0;
@@ -158,6 +162,7 @@ fn blend_f32<const CHANNELS: usize>(source: &[f32], destination: &mut [f32], mas
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn sample_count(dimensions: (u32, u32)) -> Result<usize, PilError> {
     usize::try_from(dimensions.0)
         .ok()
@@ -169,6 +174,7 @@ fn sample_count(dimensions: (u32, u32)) -> Result<usize, PilError> {
         .ok_or_else(|| overflow("sample count"))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn overflow(part: &str) -> PilError {
     PilError::OverflowError(format!("native Paste {part} overflowed"))
 }

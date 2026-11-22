@@ -17,7 +17,7 @@ pub type FontMaskAndBounds = (u32, u32, Vec<u8>, (i32, i32, i32, i32));
 pub type FontTextBounds = (i32, i32, i32, i32);
 
 /// Text advance and the bounds produced by the same glyph layout pass.
-pub type FontLengthAndBounds = (f32, FontTextBounds);
+pub type FontLengthAndBounds = (f64, FontTextBounds);
 
 /// Text size followed by its `(left, top)` offset.
 pub type FontSizeAndOffset = ((i32, i32), (i32, i32));
@@ -268,8 +268,8 @@ pub struct ImageFontVariationAxis {
     pub default: i32,
     /// Maximum design coordinate as Pillow reports it.
     pub maximum: i32,
-    /// Axis name bytes after Pillow's null-byte cleanup.
-    pub name: Vec<u8>,
+    /// Axis name bytes after Pillow's null-byte cleanup, when the font names it.
+    pub name: Option<Vec<u8>>,
 }
 
 /// A Pillow-compatible scalar from a font bounding box.
@@ -479,6 +479,7 @@ impl FreeTypeFont {
         self.multiline_textbbox_ref(xy, FontTextRef::String(text), spacing, align, options)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn multiline_textbbox_ref(
         &self,
         xy: (i32, i32),
@@ -520,7 +521,7 @@ impl FreeTypeFont {
                 .map(|line| self.getlength_text_with_options(*line, options))
                 .collect::<Result<Vec<_>, _>>()?
         };
-        let max_width = widths.iter().copied().fold(0.0_f32, f32::max);
+        let max_width = widths.iter().copied().fold(0.0_f64, f64::max);
         let x0 = xy.0 as f64;
         let y0 = xy.1 as f64;
         let mut left = f64::MAX;
@@ -530,8 +531,8 @@ impl FreeTypeFont {
         for (index, line) in lines.iter().enumerate() {
             let line_y = y0 + index as f64 * line_height as f64;
             let line_x = match align {
-                "center" => x0 + (max_width as f64 - widths[index] as f64) / 2.0,
-                "right" => x0 + max_width as f64 - widths[index] as f64,
+                "center" => x0 + (max_width - widths[index]) / 2.0,
+                "right" => x0 + max_width - widths[index],
                 _ => x0,
             };
             let bbox = if let Some(metrics) = &combined_metrics {
@@ -690,7 +691,8 @@ impl FreeTypeFont {
     }
 
     /// Return Pillow's public text length in pixels.
-    pub fn getlength(&self, text: &str) -> Result<f32, PilError> {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub fn getlength(&self, text: &str) -> Result<f64, PilError> {
         imagingft::getlength_text(self, FontTextRef::String(text))
     }
 
@@ -775,26 +777,29 @@ impl FreeTypeFont {
     }
 
     /// Return Pillow's public text length for a Python `bytes` text argument.
-    pub fn getlength_bytes(&self, text: &[u8]) -> Result<f32, PilError> {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub fn getlength_bytes(&self, text: &[u8]) -> Result<f64, PilError> {
         let text = pillow_bytes_to_text(text);
         self.getlength(&text)
     }
 
     /// Return Pillow's public text length using optional layout arguments.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn getlength_with_options(
         &self,
         text: &str,
         options: &ImageFontTextOptions,
-    ) -> Result<f32, PilError> {
+    ) -> Result<f64, PilError> {
         self.getlength_text_with_options(FontTextRef::String(text), options)
     }
 
     /// Return Pillow's public text length for byte text using optional layout arguments.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn getlength_bytes_with_options(
         &self,
         text: &[u8],
         options: &ImageFontTextOptions,
-    ) -> Result<f32, PilError> {
+    ) -> Result<f64, PilError> {
         let text = pillow_bytes_to_text(text);
         self.getlength_text_with_options(FontTextRef::String(&text), options)
     }

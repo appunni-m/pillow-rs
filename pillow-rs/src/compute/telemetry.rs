@@ -97,13 +97,14 @@ pub struct PipelineResourceTelemetry {
 
 /// Evidence for one public operation inside a backend execution.
 ///
-/// `path` is intentionally a small controlled vocabulary.  `vector` means a
-/// vector kernel processed at least one block; `native-identity` means the
-/// wrapper returned the existing pixel buffer without a kernel; `native-copy`
-/// is for bandwidth operations such as crop; `scalar-control` is the scalar
-/// part of a valid SIMD-capable operation (geometry, validation, or a tail);
-/// `cpu` means the CPU backend produced the operation; and `unsupported` means
-/// strict SIMD rejected it during contextual preflight.
+/// The path is a small controlled vocabulary. Vector means a vector kernel
+/// processed at least one block; native-identity means the wrapper returned the
+/// existing pixel buffer without a kernel; native-copy is for bandwidth
+/// operations such as crop; scalar-control is the scalar part of a valid
+/// SIMD-capable operation (geometry, validation, or a tail). CPU identifies
+/// routing through the CPU backend and does not assert that the operation
+/// succeeded. Unsupported means strict SIMD rejected it during contextual
+/// preflight.
 #[derive(Debug, Clone)]
 pub struct PipelineOperationTelemetry {
     /// Registry key for the public pipeline operation.
@@ -454,6 +455,23 @@ pub fn take_pipeline_operation_telemetry() -> Vec<PipelineOperationTelemetry> {
             })
             .collect()
     })
+}
+
+/// Restores logical order after a group of operation receipts completed LIFO.
+// TODO(pillow-rs#3ptb): verify grouped receipt order and pending-handoff
+// attribution in frozen CPU receipt cases.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(crate) fn restore_pipeline_operation_telemetry_order(count: usize) {
+    if !pipeline_telemetry_enabled() || count < 2 {
+        return;
+    }
+    LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+        let mut samples = last.borrow_mut();
+        if samples.len() >= count {
+            let start = samples.len() - count;
+            samples[start..].reverse();
+        }
+    });
 }
 
 /// Begin evidence collection for one logical operation.

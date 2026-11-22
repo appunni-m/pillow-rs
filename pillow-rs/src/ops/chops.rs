@@ -12,8 +12,10 @@ use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
 
 // TODO(pillow-rs#3ptb): Freeze unsupported-primary versus lazy-secondary
-// decode-failure ordering for each direct binary Chops constructor.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// decode-failure ordering for direct Rust binary Chops constructors. The
+// Python ImageChops adapters load both operands in Pillow order before calling
+// these lazy constructors.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 /// Validate the native byte-layout compatibility enforced by
 /// `ImagingChops` before it allocates a result image. Modes in the same byte
 /// width family are intentionally compatible (for example `P` with `L` and
@@ -30,7 +32,7 @@ fn validate_binary_operands(
     validate_binary_mode_pair(operation, mode1, image2)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn validate_binary_mode_pair(
     operation: OperationId,
     mode1: Mode,
@@ -40,7 +42,7 @@ fn validate_binary_mode_pair(
     mode_support.validate_chops_secondary_mode(|| image2.mode_identity())
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn validate_logical_operands(
     operation: OperationId,
     image1: &Image,

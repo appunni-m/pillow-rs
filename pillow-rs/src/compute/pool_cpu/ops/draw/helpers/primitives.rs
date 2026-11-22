@@ -3,6 +3,7 @@ use crate::draw::{
 };
 
 /// Draw a line directly on a canvas (Bresenham).
+// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-91ca2fee143d41f9bb05c30d69df2a3a; benchmark=pending
 pub(super) fn draw_line_on_canvas<C: DrawCanvas>(
     canvas: &mut C,
     x0: i32,
@@ -12,8 +13,11 @@ pub(super) fn draw_line_on_canvas<C: DrawCanvas>(
     fill: (u8, u8, u8, u8),
     width: u32,
 ) {
+    if width == 0 {
+        return;
+    }
     let (w, h) = (canvas.width(), canvas.height());
-    if width <= 1 {
+    if width == 1 {
         bresenham_line(canvas, x0, y0, x1, y1, fill, w, h, false);
         return;
     }

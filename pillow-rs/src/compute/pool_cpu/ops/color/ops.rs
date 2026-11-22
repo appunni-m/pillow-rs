@@ -29,6 +29,66 @@ pub(super) const RGBX_INPUTS: &[InputContract] = &[InputContract::ExactNativeByt
     mismatch_reason: "LAB conversion requires tightly packed RGBX8 input",
 }];
 
+pub(super) const TRANSPARENT_RGB_TARGETS: &[Mode] = &[
+    Mode::ImageRgba8,
+    Mode::ImageRgbPremultiplied8,
+    Mode::ImageLumaA8,
+    Mode::ImageLaPremultiplied8,
+];
+pub(super) const TRANSPARENT_GRAY_TARGETS: &[Mode] = &[Mode::ImageRgba8, Mode::ImageLumaA8];
+pub(super) const TRANSPARENT_RGB_INPUTS: &[InputContract] = &[
+    InputContract::ExactNativeBytes {
+        channels: 3,
+        overflow_reason: "ConvertTransparent RGB image size overflow",
+        mismatch_reason: "ConvertTransparent RGB input has wrong native byte length",
+    },
+    InputContract::ConvertTarget {
+        targets: TRANSPARENT_RGB_TARGETS,
+        core_only_targets: &[],
+        core_only_reason: None,
+        rejection_reason: "conversion not supported in convert_transparent",
+    },
+];
+pub(super) const TRANSPARENT_GRAY_BYTE_INPUTS: &[InputContract] = &[
+    InputContract::ExactNativeBytes {
+        channels: 1,
+        overflow_reason: "ConvertTransparent gray image size overflow",
+        mismatch_reason: "ConvertTransparent gray input has wrong native byte length",
+    },
+    InputContract::ConvertTarget {
+        targets: TRANSPARENT_GRAY_TARGETS,
+        core_only_targets: &[],
+        core_only_reason: None,
+        rejection_reason: "conversion not supported in convert_transparent",
+    },
+];
+pub(super) const TRANSPARENT_I32_INPUTS: &[InputContract] = &[
+    InputContract::ExactNativeBytes {
+        channels: 4,
+        overflow_reason: "ConvertTransparent I image size overflow",
+        mismatch_reason: "ConvertTransparent I input has wrong native byte length",
+    },
+    InputContract::ConvertTarget {
+        targets: TRANSPARENT_GRAY_TARGETS,
+        core_only_targets: &[],
+        core_only_reason: None,
+        rejection_reason: "conversion not supported in convert_transparent",
+    },
+];
+pub(super) const TRANSPARENT_I16_INPUTS: &[InputContract] = &[
+    InputContract::ExactNativeBytes {
+        channels: 2,
+        overflow_reason: "ConvertTransparent I;16 image size overflow",
+        mismatch_reason: "ConvertTransparent I;16 input has wrong native byte length",
+    },
+    InputContract::ConvertTarget {
+        targets: TRANSPARENT_GRAY_TARGETS,
+        core_only_targets: &[],
+        core_only_reason: None,
+        rejection_reason: "conversion not supported in convert_transparent",
+    },
+];
+
 pub(super) const LUMA_TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,
@@ -266,6 +326,126 @@ pub(crate) static CONVERT_SUPPORT: OperationSupport =
         .with_rejected_output(OutputModeRule::ByTargetMode)
         .with_target_compositions(super::helpers::convert::classify_target_composition);
 
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+fn classify_convert_transparent_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::One => super::one::ops::CONVERT_TRANSPARENT_SUPPORT,
+        Mode::ImageLuma8 => super::luma8::ops::CONVERT_TRANSPARENT_SUPPORT,
+        Mode::ImageRgb8 => super::rgb8::ops::CONVERT_TRANSPARENT_SUPPORT,
+        Mode::ImageI32 => super::i32::ops::CONVERT_TRANSPARENT_SUPPORT,
+        Mode::ImageI16 => super::i16::ops::CONVERT_TRANSPARENT_SUPPORT,
+        _ => ModeSupport::Rejected {
+            mode,
+            reason: "conversion not supported in convert_transparent",
+            kind: RejectionKind::ValueError,
+        },
+    }
+}
+
+/// Native mode/target matrix for ImagingCore's transparent conversion.
+pub(crate) static CONVERT_TRANSPARENT_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::ConvertTransparent,
+    &[],
+    classify_convert_transparent_mode,
+)
+.with_rejected_output(OutputModeRule::ByTargetMode);
+
+pub(crate) struct PreparedConvertTransparent<'a> {
+    source: &'a DynamicImage,
+    target: Mode,
+    key: [u8; 3],
+    selection: StrategySelection,
+}
+
+impl PreparedConvertTransparent<'_> {
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    pub(crate) const fn selection(&self) -> &StrategySelection {
+        &self.selection
+    }
+
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        match self.source {
+            DynamicImage::One(source) => super::one::ops::execute_transparent(
+                source,
+                self.target,
+                [self.key[0]; 3],
+                self.selection,
+            ),
+            DynamicImage::ImageLuma8(source) => super::luma8::ops::execute_transparent(
+                source,
+                self.target,
+                [self.key[0]; 3],
+                self.selection,
+            ),
+            DynamicImage::ImageRgb8(source) => {
+                super::rgb8::ops::execute_transparent(source, self.target, self.key, self.selection)
+            }
+            DynamicImage::ImageI32(source) => super::i32::ops::execute_transparent(
+                source,
+                self.target,
+                [self.key[0]; 3],
+                self.selection,
+            ),
+            DynamicImage::ImageI16(source) => super::i16::ops::execute_transparent(
+                source,
+                self.target,
+                [self.key[0]; 3],
+                self.selection,
+            ),
+            _ => Err(PilError::InternalError(
+                "ConvertTransparent source changed after strategy preparation".into(),
+            )),
+        }
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn prepare_convert_transparent<'a>(
+    input: OperationInputs<'a>,
+    target: Mode,
+    key: [u8; 3],
+    ctx: &ExecutionContext,
+) -> Result<PreparedConvertTransparent<'a>, PilError> {
+    let source_mode = input.mode();
+    let support = CONVERT_TRANSPARENT_SUPPORT.for_mode(source_mode);
+    validate_convert_transparent_target(source_mode, target)?;
+    let facts = input.facts().with_convert_target(target);
+    let selection = match support.assess(ctx, facts)? {
+        SupportAssessment::Ready(selection) => selection,
+        SupportAssessment::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
+        SupportAssessment::Deferred { .. } => {
+            return Err(PilError::InternalError(
+                "ConvertTransparent support remained unresolved".into(),
+            ));
+        }
+    };
+    Ok(PreparedConvertTransparent {
+        source: input.image,
+        target,
+        key,
+        selection,
+    })
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn validate_convert_transparent_target(
+    source: Mode,
+    target: Mode,
+) -> Result<(), PilError> {
+    if CONVERT_TRANSPARENT_SUPPORT
+        .scope_for_target(source, target)
+        .is_some()
+    {
+        return Ok(());
+    }
+    let source_name = source.pillow_name().unwrap_or("unknown");
+    let target_name = target.pillow_name().unwrap_or("unknown");
+    Err(PilError::ValueError(format!(
+        "conversion from {source_name} to {target_name} not supported in convert_transparent"
+    )))
+}
+
 // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_matrix_mode(mode: Mode) -> ModeSupport {
     match mode {
@@ -367,7 +547,7 @@ pub(crate) static SUPPORT: OperationSupport =
 /// Prepared Convert plan exported through the color-family registry facade.
 pub(crate) type PreparedConvert<'a> = Prepared<'a>;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn classify_remap_palette(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageLuma8 => super::luma8::ops::SUPPORT,
@@ -501,7 +681,7 @@ impl PreparedRemapPalette<'_> {
 }
 
 /// Selects the native L/P mode strategy for a typed remap request.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn prepare_remap_palette<'a>(
     input: OperationInputs<'a>,
     dest_map: &'a [u8],

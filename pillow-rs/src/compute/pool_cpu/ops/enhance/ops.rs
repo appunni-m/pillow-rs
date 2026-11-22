@@ -329,7 +329,7 @@ macro_rules! declare_contrast_modes {
             strategy: PreparedContrastMode<'a>,
         }
 
-        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
         pub(super) fn classify_contrast_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::CONTRAST_SUPPORT,)+
@@ -364,7 +364,7 @@ macro_rules! declare_contrast_modes {
             }
         }
 
-        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
         pub(super) fn prepare_contrast_mode<'a>(
             image: &'a DynamicImage,
             facts: crate::compute::registry::support::StrategyInputs,
@@ -415,7 +415,7 @@ macro_rules! declare_contrast_modes {
                 }
             }
 
-            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let source = self.source;
                 let lane_context = self.lane_context;

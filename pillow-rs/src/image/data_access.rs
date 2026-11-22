@@ -132,6 +132,7 @@ fn append_two_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn append_three_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<(), PilError> {
     match value {
         PutDataValue::Packed(packed) => data.extend_from_slice(&packed.to_le_bytes()[..3]),
@@ -151,6 +152,7 @@ fn append_three_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Resul
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn append_four_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<(), PilError> {
     match value {
         PutDataValue::Packed(packed) => data.extend_from_slice(&packed.to_le_bytes()[..4]),
@@ -176,6 +178,7 @@ fn append_four_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn append_putdata_value(
     mode: Mode,
     value: &PutDataValue,
@@ -223,6 +226,7 @@ fn putdata_bytes(
 /// `_putdata` stores all four bytes of that ink, even though public pixels
 /// expose only lanes 0 and 3 for two-band modes or lanes 0 through 2 for
 /// three-band modes. Pillow's `getink` selects those layouts by band count.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn putdata_hidden_lanes(mode: Mode, value: &PutDataValue) -> Result<Option<[u8; 2]>, PilError> {
     match (mode, value) {
         (
@@ -267,6 +271,7 @@ fn putdata_hidden_lanes(mode: Mode, value: &PutDataValue) -> Result<Option<[u8; 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn putdata_hidden_lane_bytes(
     mode: Mode,
     values: &[PutDataValue],
@@ -311,4 +316,6 @@ fn validated_band_index(band: i32, band_count: usize) -> Result<usize, PilError>
 }
 
 mod get;
+mod imaging_core;
 mod put;
+pub use imaging_core::ImagingCoreTransparencyKey;

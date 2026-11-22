@@ -4,6 +4,7 @@ use crate::error::PilError;
 use crate::raster::Mode;
 
 impl PasteSource {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(super) fn solid_color(&self, mode: Mode) -> Result<ResolvedPasteColor, PilError> {
         match mode {
             Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => single_band_color(self),
@@ -63,6 +64,7 @@ fn luma_alpha_color(source: &PasteSource) -> Result<ResolvedPasteColor, PilError
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn multi_band_color(mode: Mode, source: &PasteSource) -> Result<ResolvedPasteColor, PilError> {
     let preserves_alpha = matches!(
         mode,

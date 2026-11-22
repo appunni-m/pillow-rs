@@ -248,6 +248,7 @@ fn assess_filter_request(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn assess_posterize_request(request: RequestFacts) -> Result<Option<UnresolvedGuard>, PilError> {
     match request {
         RequestFacts::Posterize { bits } if (1..=8).contains(&bits) => Ok(None),

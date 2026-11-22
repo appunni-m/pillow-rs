@@ -218,7 +218,7 @@ pub fn cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
 /// Returns [`PilError::ValueError`] when the operation is unknown to the
 /// registry or has no CPU implementation. Propagates the operation's existing
 /// input errors. A context for another backend is an internal routing error.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub fn prepare_cpu<'a>(
     op: &'a PipelineOp,
     input: OperationInputs<'a>,

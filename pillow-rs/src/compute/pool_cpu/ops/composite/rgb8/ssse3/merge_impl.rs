@@ -39,6 +39,7 @@ const RGB_SSSE3_MASKS: [[[u8; 16]; 3]; 3] = [
     ],
 ];
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[allow(
     unsafe_code,
     reason = "the SSSE3 architecture strategy and merge guard validate this kernel's preconditions"
@@ -56,9 +57,7 @@ pub(crate) fn merge(
             source,
             remaining,
             Mode::ImageRgb8,
-            crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three {
-                lab_encoding: false,
-            },
+            crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three,
         );
     }
     let bands = merge::collect_bands(source, remaining, pixels)?;
@@ -73,14 +72,7 @@ pub(crate) fn merge(
     let (output, vector_blocks, scalar_tail) =
         unsafe { interleave_rgb_ssse3(red, green, blue, pixels, output_len) };
     let mut image = native_bytes::construct(width, height, Mode::ImageRgb8, output)?;
-    merge::preserve_merged_padding(
-        &mut image,
-        Mode::ImageRgb8,
-        MergeLayout::Three {
-            lab_encoding: false,
-        },
-        pixels,
-    )?;
+    merge::preserve_merged_padding(&mut image, Mode::ImageRgb8, MergeLayout::Three, pixels)?;
     crate::compute::record_pipeline_allocation(output_len);
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);

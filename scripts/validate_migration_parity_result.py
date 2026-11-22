@@ -18,6 +18,8 @@ except ModuleNotFoundError:
 ARCHITECTURE_NAMES = frozenset(
     {
         "default",
+        "aarch64",
+        "x86_64",
         "neon",
         "sse2",
         "sse3",
@@ -114,9 +116,33 @@ def identity(value: dict[str, Any]) -> None:
     unique(oracle_ids, "identity.oracles")
     target_keys: list[tuple[str, str]] = []
     for index, item in enumerate(value["targets"]):
-        exact(item, {"target_profile", "target_id", "revision", "dirty", "runtime", "backend", "features"}, f"identity.targets[{index}]")
+        target_fields = {
+            "target_profile",
+            "target_id",
+            "revision",
+            "dirty",
+            "runtime",
+            "backend",
+            "features",
+        }
+        valid_target_fields = {
+            frozenset(target_fields),
+            frozenset(target_fields | {"architecture"}),
+        }
+        # `architecture` was added after existing reports were already
+        # persisted locally. Accept both shapes while validating new reports.
+        if frozenset(item) not in valid_target_fields:
+            raise ValueError(
+                f"identity.targets[{index}]: unexpected fields {sorted(item)}"
+            )
         for field in ("target_profile", "target_id", "revision", "runtime", "backend"):
             string(item[field], f"identity.targets[{index}].{field}")
+        if "architecture" in item:
+            string(
+                item["architecture"],
+                f"identity.targets[{index}].architecture",
+                nullable=True,
+            )
         if not isinstance(item["dirty"], bool):
             raise ValueError(f"identity.targets[{index}].dirty: expected boolean")
         if not isinstance(item["features"], list) or not all(isinstance(feature, str) and feature for feature in item["features"]):

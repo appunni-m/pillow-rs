@@ -6,16 +6,16 @@ use crate::compute::helpers::put_data::clip_u8;
 ///
 /// Each input row updates only its first `width` raw storage bytes. Unwritten
 /// bytes keep their existing value; this matters for partial `putdata` calls.
-/// If a bytes subclass reports a length beyond its physical storage, missing
-/// entries are zero-filled to keep the write within the allocated Rust buffer.
-/// Pillow 12.2 reads those entries past the end of `PyBytes_AS_STRING`, so that
-/// malformed-input behavior is undefined and cannot be claimed as parity.
-// NO_PILLOW_SUPPORT: bytes-subclass length overreads are undefined in Pillow;
-// this path defines absent bytes as zero for memory safety.
+/// A direct Rust caller may provide an entry count larger than the physical
+/// byte slice; absent values are zero-filled to keep writes within storage.
+/// The Python image8 adapter derives its count from the physical bytes object.
+// NO_PILLOW_SUPPORT: the Rust-only unequal-count extension defines missing
+// raw bytes as zero; Pillow's Python image8 path does not expose this input.
 // NO_PILLOW_SUPPORT: Pillow converts scaled bytes to C int before clipping;
 // Rust defines the non-finite and out-of-range cases through clip_u8.
 // TODO(pillow-rs#3ptb): freeze those deterministic Rust-only edge values in
 // the CPU parity extension lane; they have no defined Pillow oracle result.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn write_byte_prefix<const BIG_ENDIAN: bool>(
     samples: &mut [u16],
     width: u32,

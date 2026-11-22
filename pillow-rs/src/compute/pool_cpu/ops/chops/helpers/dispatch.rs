@@ -8,7 +8,7 @@ use super::super::ops::ChopsRequest;
 
 // TODO(pillow-rs#3ptb): Freeze direct and in-place Chops output, rejection,
 // and selected/fallback receipts across all 25 modes and declared CPU arches.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute(
     mode: Mode,
     image: &DynamicImage,
@@ -51,7 +51,7 @@ pub(crate) fn execute(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute_in_place(
     mode: Mode,
     image: &mut DynamicImage,

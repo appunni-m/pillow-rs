@@ -18,6 +18,7 @@ pub(crate) struct PhysicalFourBytesToRgb;
 pub(crate) struct PhysicalFourBytesToFour;
 
 impl<const CHANNELS: usize> SourceMap<CHANNELS, CHANNELS> for Native {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[inline(always)]
     fn sample(source: &[u8], band: usize) -> u8 {
         source[band]
@@ -25,6 +26,7 @@ impl<const CHANNELS: usize> SourceMap<CHANNELS, CHANNELS> for Native {
 }
 
 impl SourceMap<4, 2> for PhysicalFourBytesToLumaAlpha {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[inline(always)]
     fn sample(source: &[u8], band: usize) -> u8 {
         source[if band == 0 { 0 } else { 3 }]
@@ -32,6 +34,7 @@ impl SourceMap<4, 2> for PhysicalFourBytesToLumaAlpha {
 }
 
 impl SourceMap<4, 3> for PhysicalFourBytesToRgb {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[inline(always)]
     fn sample(source: &[u8], band: usize) -> u8 {
         source[band]
@@ -39,6 +42,7 @@ impl SourceMap<4, 3> for PhysicalFourBytesToRgb {
 }
 
 impl SourceMap<4, 4> for PhysicalFourBytesToFour {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[inline(always)]
     fn sample(source: &[u8], band: usize) -> u8 {
         source[band]
@@ -46,6 +50,7 @@ impl SourceMap<4, 4> for PhysicalFourBytesToFour {
 }
 
 /// Executes the prepared, exact-mode byte strategy without mode conversion.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute<const CHANNELS: usize, I>(plan: BytePlan<'_, I>) -> Result<Vec<u8>, PilError>
 where
     I: Deref<Target = DynamicImage>,
@@ -64,6 +69,7 @@ where
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn execute_mapped<const SOURCE: usize, const DESTINATION: usize, M, I>(
     plan: BytePlan<'_, I>,
 ) -> Result<Vec<u8>, PilError>
@@ -144,6 +150,7 @@ where
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn copy_unmasked<const SOURCE: usize, const DESTINATION: usize, I>(
     plan: &BytePlan<'_, I>,
     output: &mut [u8],
@@ -165,6 +172,7 @@ where
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn copy_native_rows<const SOURCE: usize, const DESTINATION: usize, I>(
     plan: &BytePlan<'_, I>,
     output: &mut [u8],
@@ -212,6 +220,7 @@ where
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn copy_physical_four_bytes<const SOURCE: usize, const DESTINATION: usize, M, I>(
     plan: &BytePlan<'_, I>,
     output: &mut [u8],
@@ -232,6 +241,7 @@ where
     })
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn copy_mapped_rows<const SOURCE: usize, const DESTINATION: usize, I>(
     plan: &BytePlan<'_, I>,
     output: &mut [u8],
@@ -285,6 +295,7 @@ where
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[allow(clippy::too_many_arguments)]
 fn apply_row<const SOURCE: usize, const DESTINATION: usize, M>(
     source_row: &[u8],
@@ -332,6 +343,7 @@ fn apply_row<const SOURCE: usize, const DESTINATION: usize, M>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 fn copy_pixel<const SOURCE: usize, const DESTINATION: usize, M>(
     source: &[u8],
@@ -344,6 +356,7 @@ fn copy_pixel<const SOURCE: usize, const DESTINATION: usize, M>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline(always)]
 fn blend_pixel<const SOURCE: usize, const DESTINATION: usize, M>(
     source: &[u8],
@@ -365,6 +378,7 @@ fn blend_pixel<const SOURCE: usize, const DESTINATION: usize, M>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn checked_stride(width: u32, channels: usize) -> Result<usize, PilError> {
     usize::try_from(width)
         .ok()
@@ -372,6 +386,7 @@ fn checked_stride(width: u32, channels: usize) -> Result<usize, PilError> {
         .ok_or_else(|| overflow("row stride"))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn overflow(part: &str) -> PilError {
     PilError::OverflowError(format!("Paste {part} overflowed"))
 }

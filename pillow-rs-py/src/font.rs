@@ -211,13 +211,16 @@ fn variation_axes_to_python(
     py: Python<'_>,
     axes: Vec<pillow_rs::ImageFontVariationAxis>,
 ) -> PyResult<Vec<Py<PyAny>>> {
+    // VERIFY: source=reviewed@2026-11-15; parity=pass@type1-mm-cpu-default-retry-20261115; benchmark=n/a
     axes.into_iter()
         .map(|axis| {
             let dict = PyDict::new(py);
             dict.set_item("minimum", axis.minimum)?;
             dict.set_item("default", axis.default)?;
             dict.set_item("maximum", axis.maximum)?;
-            dict.set_item("name", PyBytes::new(py, &axis.name))?;
+            if let Some(name) = axis.name {
+                dict.set_item("name", PyBytes::new(py, &name))?;
+            }
             Ok(dict.into())
         })
         .collect()
@@ -358,12 +361,13 @@ impl PyFont {
         .map_err(map_error)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn _image_text_get_length(
         &self,
         text: &Bound<'_, PyAny>,
         mode: &str,
         embedded_color: bool,
-    ) -> PyResult<f32> {
+    ) -> PyResult<f64> {
         let text = imagefont_text_input_from_python(text)?;
         let mode = pillow_rs::Mode::from_pillow_name(mode).unwrap_or(pillow_rs::Mode::ImageLuma8);
         pillow_rs::imagefont_text_length(&self.inner, mode, embedded_color, text).map_err(map_error)
@@ -648,6 +652,7 @@ impl PyFont {
     }
 
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None))]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn getlength_with_options(
         &self,
         text: &Bound<'_, PyAny>,
@@ -655,7 +660,7 @@ impl PyFont {
         direction: Option<String>,
         features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
-    ) -> PyResult<f32> {
+    ) -> PyResult<f64> {
         let text = imagefont_text_input_from_python(text)?;
         let features_invalid = draw_features_presence_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {

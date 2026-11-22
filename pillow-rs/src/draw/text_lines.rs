@@ -1,4 +1,5 @@
 use super::Mode;
+use crate::compute::{Backend, ExecutionContext};
 
 /// One line object yielded by Pillow's `ImageText._split` callback.
 #[doc(hidden)]
@@ -20,7 +21,11 @@ pub trait DrawTextLinesCallbacks {
     /// Run the ordered direct FreeType route checks.
     fn uses_direct_route(&mut self) -> Result<bool, Self::Error>;
     /// Draw multiline text through the direct FreeType strategy.
-    fn draw_direct(&mut self) -> Result<(), Self::Error>;
+    fn draw_direct(
+        &mut self,
+        requested_backend: Option<Backend>,
+        context: &ExecutionContext,
+    ) -> Result<(), Self::Error>;
     /// Call `ImageText._split` after the direct route has been rejected.
     fn split_lines(&mut self) -> Result<Self::Lines, Self::Error>;
     /// Fetch and unpack the next four-field line from the host iterator.
@@ -36,6 +41,8 @@ pub trait DrawTextLinesCallbacks {
         &mut self,
         line: &DrawTextLine<Self::Value>,
         mode: Mode,
+        requested_backend: Option<Backend>,
+        context: &ExecutionContext,
     ) -> Result<(), Self::Error>;
     /// Draw the custom font's fill mask for one line.
     fn draw_custom_fill(
@@ -43,6 +50,8 @@ pub trait DrawTextLinesCallbacks {
         line: &DrawTextLine<Self::Value>,
         mode: Mode,
         embedded_color: bool,
+        requested_backend: Option<Backend>,
+        context: &ExecutionContext,
     ) -> Result<(), Self::Error>;
 }
 
@@ -52,29 +61,34 @@ pub trait DrawTextLinesCallbacks {
 /// entered. The strategy therefore preserves Pillow's ordering while owning
 /// route selection and iteration instead of leaving those decisions in the
 /// Python facade.
+/// The caller injects one selected route and all callback writes reuse it,
+/// including the direct multiline path and reentrant Bitmap writes.
 #[doc(hidden)]
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn draw_text_lines_with_callbacks<C: DrawTextLinesCallbacks>(
     mode: Mode,
     stroke_ink: Option<i64>,
     fill_ink: i64,
+    requested_backend: Option<Backend>,
+    context: &ExecutionContext,
     callbacks: &mut C,
 ) -> Result<(), C::Error> {
     if callbacks.uses_direct_route()? {
-        return callbacks.draw_direct();
+        return callbacks.draw_direct(requested_backend, context);
     }
 
     let mut lines = callbacks.split_lines()?;
     let stroke_mode = crate::imagefont_text_font_mode(mode, false);
     while let Some(line) = callbacks.next_line(&mut lines)? {
         if let Some(stroke_ink) = stroke_ink {
-            callbacks.draw_custom_stroke(&line, stroke_mode)?;
+            callbacks.draw_custom_stroke(&line, stroke_mode, requested_backend, context)?;
             if stroke_ink == fill_ink {
                 continue;
             }
         }
         let embedded_color = callbacks.embedded_color_is_truthy()?;
         let fill_mode = crate::imagefont_text_font_mode(mode, embedded_color);
-        callbacks.draw_custom_fill(&line, fill_mode, embedded_color)?;
+        callbacks.draw_custom_fill(&line, fill_mode, embedded_color, requested_backend, context)?;
     }
     Ok(())
 }

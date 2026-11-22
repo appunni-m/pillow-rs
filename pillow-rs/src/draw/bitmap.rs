@@ -18,6 +18,15 @@ type PalettedBitmapMetadata = (
     Option<Vec<u8>>,
 );
 
+#[derive(Clone, Copy)]
+enum BitmapDispatch {
+    QueueWithBoundaryContext,
+    ExecuteWithParentContext {
+        requested_backend: Option<crate::compute::Backend>,
+        context: ExecutionContext,
+    },
+}
+
 impl Draw {
     /// Draws a bitmap mask at `(x, y)` using `fill`.
     ///
@@ -28,13 +37,49 @@ impl Draw {
     ///
     /// Returns [`PilError::ValueError`] when the bitmap mode is not a valid
     /// mask mode, and propagates mode, size, or pixel-data errors.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn bitmap(
         &mut self,
         x: i32,
         y: i32,
         bitmap: &Image,
         fill: Option<(u8, u8, u8, u8)>,
+    ) -> Result<(), PilError> {
+        self.bitmap_with_route(x, y, bitmap, fill, BitmapDispatch::QueueWithBoundaryContext)
+    }
+
+    /// Draw a Bitmap child using the route selected by its parent operation.
+    #[doc(hidden)]
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    pub fn bitmap_with_context(
+        &mut self,
+        x: i32,
+        y: i32,
+        bitmap: &Image,
+        fill: Option<(u8, u8, u8, u8)>,
+        requested_backend: Option<crate::compute::Backend>,
+        context: &ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.bitmap_with_route(
+            x,
+            y,
+            bitmap,
+            fill,
+            BitmapDispatch::ExecuteWithParentContext {
+                requested_backend,
+                context: *context,
+            },
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn bitmap_with_route(
+        &mut self,
+        x: i32,
+        y: i32,
+        bitmap: &Image,
+        fill: Option<(u8, u8, u8, u8)>,
+        paste_dispatch: BitmapDispatch,
     ) -> Result<(), PilError> {
         let bmp_mode = bitmap.mode_identity()?;
         crate::compute::pool_cpu::ops::draw::ops::validate_bitmap_mask_mode(bmp_mode)?;
@@ -43,15 +88,25 @@ impl Draw {
         let color = fill.unwrap_or_else(|| Draw::default_draw_ink_for_mode(mode));
         // Pending Image pipelines keep their exact output mode on the wrapper.
         let raster_mode = self.image.mode_identity()?;
-        let (requested_backend, context) = self.cpu_execution_context()?;
+        let (requested_backend, context) = match paste_dispatch {
+            BitmapDispatch::QueueWithBoundaryContext => self.cpu_execution_context()?,
+            BitmapDispatch::ExecuteWithParentContext {
+                requested_backend,
+                context,
+            } => (requested_backend, context),
+        };
         let route_inputs = OperationRouteInputs {
             requested_backend,
             width: bmp_w,
             height: bmp_h,
             loaded_image: None,
             byte_storage_length_matches_pixel_count: None,
+            reducing_gap_pre_reduction_selected: None,
+            reducing_gap_fused_resize_selected: None,
             draw_context_mode: Some(mode),
             bitmap_mask_mode: Some(bmp_mode),
+            draw_embedded_color: None,
+            draw_text_stroke_width_zero: None,
         };
         let paste_route = crate::compute::pool_cpu::ops::draw::ops::SUPPORT
             .conditional_pipeline_child(raster_mode, route_inputs);
@@ -69,8 +124,23 @@ impl Draw {
                 Mode::ImageLumaA8 => PasteSource::LumaAlpha(color.0, color.3),
                 _ => PasteSource::Rgba(color.0, color.1, color.2, color.3),
             };
-            self.image
-                .paste_bitmap_solid_masked_at(source, (x, y), bitmap)?;
+            match paste_dispatch {
+                BitmapDispatch::QueueWithBoundaryContext => {
+                    self.image
+                        .paste_bitmap_solid_masked_at(source, (x, y), bitmap)?;
+                }
+                BitmapDispatch::ExecuteWithParentContext { .. } => {
+                    if let Some(output) = self.image.execute_bitmap_paste_at_with_context(
+                        source,
+                        (x, y),
+                        bitmap,
+                        requested_backend,
+                        context,
+                    )? {
+                        self.replace_draw_output(output);
+                    }
+                }
+            }
             return Ok(());
         }
 
@@ -116,6 +186,7 @@ impl Draw {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn bitmap_cpu(
         &mut self,
         x: i32,
@@ -213,6 +284,7 @@ impl Draw {
         Ok(prepared)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn apply_prepared_bitmap(
         &mut self,
         prepared: StrategySelection,
@@ -248,6 +320,7 @@ impl Draw {
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn install_bitmap_output(
         &mut self,
         selected_mode: Mode,
@@ -276,6 +349,7 @@ impl Draw {
         }
         Ok(())
     }
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn try_native_rgb_bitmap(
         &mut self,
         selection: Option<&StrategySelection>,
@@ -289,11 +363,11 @@ impl Draw {
         mode: Mode,
         raster_mode: Mode,
     ) -> Result<bool, PilError> {
-        // Ordinary RGB context and explicit RGBA context over an RGB image
-        // both write the same three-byte destination. With RGB input alpha
-        // fixed at 255, the visible channels use this native coverage blend.
+        // Ordinary RGB context and explicit RGBA context over RGB storage
+        // both blend visible channels using mask coverage. The RGBA context's
+        // ink alpha separately updates RGB's retained hidden physical lane.
         let rgb_target = raster_mode == Mode::ImageRgb8
-            && (mode == Mode::ImageRgb8 || (mode == Mode::ImageRgba8 && self.alpha_blend_rgb()));
+            && (mode == Mode::ImageRgb8 || (mode == Mode::ImageRgba8 && self.alpha_blend_rgb()?));
         if !rgb_target {
             return Ok(false);
         }
@@ -320,6 +394,7 @@ impl Draw {
         Ok(true)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn try_native_cmyk_l_bitmap(
         &mut self,
         selection: Option<&StrategySelection>,

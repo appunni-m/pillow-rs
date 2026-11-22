@@ -35,6 +35,7 @@ const MODE1_BYTE_PIXELS: [[u8; 8]; 256] = {
     table
 };
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn initialize_new_hidden_lanes(
     image: &mut DynamicImage,
     mode: Mode,
@@ -108,6 +109,7 @@ pub(crate) fn unpack_mode1_rows(packed: &[u8], width: usize, pixels: &mut [u8]) 
 
 impl Image {
     /// Returns a logically independent image sharing immutable caches until mutation.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn copy(&self) -> Self {
         // Pillow's copy returns a fresh image whose `format` is None even when
         // the source came from a file; only the originally opened image
@@ -160,7 +162,7 @@ pub struct NewColorInput {
 
 impl NewColorInput {
     /// Builds a constructor input from binding-level type extraction only.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[allow(clippy::too_many_arguments)]
     pub fn from_parts(
         string: Option<String>,
@@ -408,7 +410,7 @@ impl Image {
         Self::new_with_color_presence(width, height, mode, color, true)
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn new_with_color_presence(
         width: u32,
         height: u32,
@@ -460,7 +462,7 @@ impl Image {
     /// Bindings extract host values into [`NewColorInput`]; this method
     /// owns mode-specific color resolution and the distinction between scalar
     /// and tuple-created palette images.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn new_with_input(
         width: u32,
         height: u32,
@@ -521,6 +523,7 @@ impl Image {
 
     /// Creates an indexed Transform destination with its source palette and
     /// public image metadata.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(crate) fn new_palette_index_from_source(
         source: &Image,
         width: u32,
@@ -538,7 +541,7 @@ impl Image {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn new_palette_index_with_metadata(
         width: u32,
         height: u32,
@@ -584,6 +587,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when allocation checks fail, the mode is
     /// unsupported, or `data` is shorter than the required mode layout.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn frombytes(mode: Mode, size: (u32, u32), data: &[u8]) -> Result<Self, PilError> {
         Self::frombytes_with_data(mode, size, Cow::Borrowed(data))
     }
@@ -793,7 +797,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when a format name is unknown, the encoded header
     /// is unknown or malformed, or no requested format matches the header.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn open_bytes_with_formats(
         data: Vec<u8>,
         formats: Option<&[&str]>,

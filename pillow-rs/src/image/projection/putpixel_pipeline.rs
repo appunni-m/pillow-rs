@@ -20,7 +20,7 @@ struct PreparedPutPixelProjection<'a> {
     output_sizes: [usize; 2],
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn projection_terminal_backend(
     backend: Option<crate::compute::Backend>,
 ) -> Result<Option<crate::compute::Backend>, PilError> {
@@ -208,7 +208,7 @@ impl Image {
         Ok((h_proj, v_proj, vector_blocks, scalar_tail))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn prepare_putpixel_projection<'a>(
         source: &Image,
         ops: &'a PipelineOps,
@@ -218,6 +218,7 @@ impl Image {
         let Some(terminal_backend) = projection_terminal_backend(backend)? else {
             return Ok(None);
         };
+        let injected_context = ops.execution_context();
         let ops = ops.as_slice();
         if !ops
             .iter()
@@ -225,7 +226,11 @@ impl Image {
         {
             return Ok(None);
         }
-        let prepared = crate::compute::prepare_execution(ops, Some(terminal_backend))?;
+        let prepared = crate::compute::prepare_execution_with_context(
+            ops,
+            Some(terminal_backend),
+            injected_context,
+        )?;
         let execution_context = *prepared.context();
         let backend_matches = match terminal_backend {
             crate::compute::Backend::Cpu => prepared.is_serial_cpu_without_fallback(),
@@ -283,7 +288,7 @@ impl Image {
         }))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[inline(always)]
     fn execute_cmyk_cpu_putpixel_projection(
         execution: &PreparedPutPixelProjection<'_>,
@@ -314,7 +319,7 @@ impl Image {
         .map(Some)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[inline(always)]
     fn execute_rgb_cpu_putpixel_projection(
         execution: &PreparedPutPixelProjection<'_>,
@@ -345,7 +350,7 @@ impl Image {
         .map(Some)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[inline(always)]
     fn execute_cmyk_arch_putpixel_projection(
         execution: &PreparedPutPixelProjection<'_>,
@@ -388,7 +393,7 @@ impl Image {
         .map(Some)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[inline(always)]
     fn execute_rgb_arch_putpixel_projection(
         execution: &PreparedPutPixelProjection<'_>,
@@ -432,7 +437,7 @@ impl Image {
         .map(Some)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn execute_prepared_putpixel_projection(
         execution: PreparedPutPixelProjection<'_>,
     ) -> Result<Option<ProjectionAxes>, PilError> {
@@ -493,7 +498,7 @@ impl Image {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(super) fn try_getprojection_putpixel_pipeline(
         &self,
     ) -> Result<Option<ProjectionAxes>, PilError> {

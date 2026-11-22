@@ -22,6 +22,7 @@ pub(crate) fn apply_text<const RGBA_MASK: bool>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn try_native_bitmap(
     selection: &StrategySelection,
     image: &DynamicImage,
@@ -37,6 +38,7 @@ pub(crate) fn try_native_bitmap(
     super::default::bitmap_impl::apply(image, mask, mask_mode, mask_width, mask_height, x, y, color)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply_bitmap(
     selection: &StrategySelection,
     image: DynamicImage,
@@ -63,6 +65,7 @@ pub(crate) fn support() -> ModeSupport {
     SUPPORT
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     ops: &[PipelineOp],
@@ -79,6 +82,7 @@ pub(crate) fn execute(
             let output = super::default::draw_impl::execute(pixels, ops)?;
             Ok(DynamicImage::ImageRgb8(output))
         }
+        Architecture::Avx2 => super::avx2::draw_impl::execute(image, ops),
         Architecture::Sse2 => super::sse2::draw_impl::execute(image, ops),
         Architecture::Neon => super::neon::draw_impl::execute(image, ops),
         Architecture::WasmSimd128 => super::wasm_simd128::draw_impl::execute(image, ops),

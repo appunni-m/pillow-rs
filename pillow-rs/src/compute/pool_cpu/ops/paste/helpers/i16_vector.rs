@@ -5,6 +5,7 @@ use crate::error::PilError;
 use wide::u16x8;
 
 /// Executes a destination-mode vectorized I;16 Paste plan.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[expect(
     clippy::arithmetic_side_effects,
     reason = "prepared extents validate every sample and mask access"
@@ -72,6 +73,7 @@ pub(crate) fn execute(plan: Luma16Plan<'_>, source: &[u16]) -> Result<Vec<u16>, 
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn copy_region(
     plan: &Luma16Plan<'_>,
     source: &[u16],
@@ -114,12 +116,14 @@ fn copy_region(
     vector_blocks
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn record_vector_blocks(blocks: u64) {
     if blocks != 0 {
         crate::compute::record_pipeline_operation_vector_blocks(blocks);
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn copy_binary_region(
     plan: &Luma16Plan<'_>,
     source: &[u16],
@@ -154,6 +158,7 @@ fn copy_binary_region(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[expect(
     clippy::arithmetic_side_effects,
     reason = "prepared extents validate byte-lane source, destination, and mask offsets"
@@ -211,6 +216,7 @@ fn blend_fractional_region(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn blend_group(
     source: [u8; 8],
     destination: [u8; 8],
@@ -230,6 +236,7 @@ fn blend_group(
     values.to_array().map(|value| value as u8)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn write_byte_lanes(
     output: &mut [u16],
     blended: [u8; 8],
@@ -245,11 +252,13 @@ fn write_byte_lanes(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn div255(value: u16x8) -> u16x8 {
     let incremented = value + u16x8::splat(1);
     (incremented + (incremented >> 8u32)) >> 8u32
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn byte_shift(high_byte_first: bool, byte_offset: usize) -> u32 {
     match (high_byte_first, byte_offset % 2) {
         (false, 0) | (true, 1) => 0,
@@ -258,12 +267,14 @@ fn byte_shift(high_byte_first: bool, byte_offset: usize) -> u32 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn sample_count(width: usize, height: usize) -> Result<usize, PilError> {
     width
         .checked_mul(height)
         .ok_or_else(|| overflow("sample count"))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn overflow(part: &str) -> PilError {
     PilError::OverflowError(format!("I;16 Paste vector {part} overflowed"))
 }

@@ -26,7 +26,7 @@ where
     execute_native_buffer::<P, CHANNELS, HIDDEN_LANES>(image, ops)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pass@regular-polygon-prepush-final2-192x9; benchmark=pass@regular-polygon-standard-default-neon/pil-imagedraw-imagedraw.regular-polygon.standard
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 fn execute_native_buffer<P, const CHANNELS: usize, const HIDDEN_LANES: usize>(
     image: &ImageBuffer<P, Vec<u8>>,
     ops: &[PipelineOp],

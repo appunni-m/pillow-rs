@@ -193,14 +193,11 @@ fn kernel_hamming(x: f64) -> f64 {
 fn kernel_mks2013(x: f64) -> f64 {
     let x = x.abs();
     if x < 0.5 {
-        let square = x * x;
-        17.0 / 16.0 - 7.0 / 4.0 * square
+        (-7.0_f64 / 4.0).mul_add(x.powf(2.0), 17.0_f64 / 16.0)
     } else if x < 1.5 {
         (1.0 - x) * (7.0 / 4.0 - x)
     } else if x < 2.5 {
-        let offset = x - 5.0 / 2.0;
-        let square = offset * offset;
-        -1.0 / 8.0 * square
+        -1.0 / 8.0 * (x - 5.0 / 2.0).powf(2.0)
     } else {
         0.0
     }
@@ -210,8 +207,7 @@ fn kernel_mks2013(x: f64) -> f64 {
 fn kernel_mks2021(x: f64) -> f64 {
     let x = x.abs();
     if x < 0.5 {
-        let square = x * x;
-        577.0 / 576.0 - 239.0 / 144.0 * square
+        (-239.0_f64 / 144.0).mul_add(x.powf(2.0), 577.0_f64 / 576.0)
     } else if x < 1.5 {
         35.0 / 36.0 * (x - 1.0) * (x - 239.0 / 140.0)
     } else if x < 2.5 {
@@ -219,9 +215,7 @@ fn kernel_mks2021(x: f64) -> f64 {
     } else if x < 3.5 {
         1.0 / 36.0 * (x - 3.0) * (x - 15.0 / 4.0)
     } else if x < 4.5 {
-        let offset = x - 9.0 / 2.0;
-        let square = offset * offset;
-        -1.0 / 288.0 * square
+        -1.0 / 288.0 * (x - 9.0 / 2.0).powf(2.0)
     } else {
         0.0
     }

@@ -180,10 +180,12 @@ impl<'a> PreparedPosterize<'a> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.selection.implementation.architecture {
             Architecture::Default => super::default::posterize_impl::execute(self.input, self.bits),
@@ -215,10 +217,12 @@ impl<'a> PreparedSolarize<'a> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.selection.implementation.architecture {
             Architecture::Default => {
@@ -279,6 +283,7 @@ pub(crate) fn execute_quantize_with_palette(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const CROP_BORDER_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::imageops::helpers::strategy::crop_border_serial_support(
         crate::raster::Mode::ImageRgb8,

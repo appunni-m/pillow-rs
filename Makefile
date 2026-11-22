@@ -43,15 +43,15 @@ TIMEOUT      := 300
 MIGRATION_PARITY_OUTPUT ?= build/migration-parity/parity-result.json
 PARITY_STORE_ENV_FILE ?= build/parity-store/local.env
 PARITY_STORE_COMPOSE_FILE ?= scripts/parity_store/compose.yaml
-DOCKER ?= docker
-MIGRATION_PARITY_STORE_PROFILE ?=
-MIGRATION_PARITY_STORE_LIMIT ?=
+DOCKER ?= $(shell command -v docker 2>/dev/null || { if [ -x '/Applications/Rancher Desktop.app/Contents/Resources/resources/darwin/bin/docker' ]; then printf '%s' '/Applications/Rancher Desktop.app/Contents/Resources/resources/darwin/bin/docker'; else printf '%s' docker; fi; })
 MIGRATION_PARITY_STORE_CASE_IDS ?=
 MIGRATION_PARITY_STORE_CASE_ID_LIST = $(strip $(subst $(MIGRATION_COMMA),$(MIGRATION_SPACE),$(MIGRATION_PARITY_STORE_CASE_IDS)))
 MIGRATION_PARITY_STORE_CASE_ARGS = $(foreach case_id,$(MIGRATION_PARITY_STORE_CASE_ID_LIST),--case-id '$(case_id)')
+MIGRATION_PARITY_INPUT_STORE ?= fixtures
+MIGRATION_PARITY_INPUT_SPECIFICATION_DIGEST ?=
 MIGRATION_PARITY_OUTPUTS ?= $(MIGRATION_PARITY_OUTPUT)
 MIGRATION_PARITY_AGGREGATE_ARGS = $(foreach output,$(MIGRATION_PARITY_OUTPUTS),--parity $(output))
-MIGRATION_CPU_ARCHITECTURES ?= default neon sse2 sse3 ssse3 avx avx2 avx_fma avx2_fma
+MIGRATION_CPU_ARCHITECTURES ?= default aarch64 neon sse2 sse3 ssse3 avx avx2 avx_fma avx2_fma
 MIGRATION_CPU_ARCH_PARITY_DIR ?= build/migration-parity/cpu-architecture
 MIGRATION_CPU_ARCH_BENCHMARK_DIR ?= build/migration-parity/cpu-architecture-benchmark
 MIGRATION_CPU_BENCHMARK_ARCHITECTURES ?= $(MIGRATION_CPU_ARCHITECTURES)
@@ -62,7 +62,8 @@ MIGRATION_PARALLEL_CPU_PARITY_OUTPUT ?= build/migration-parity/parity-result-par
 MIGRATION_PARITY_ARGS ?=
 MIGRATION_PARITY_CASE_IDS ?=
 MIGRATION_PARITY_CASE_ID_LIST = $(strip $(subst $(MIGRATION_COMMA),$(MIGRATION_SPACE),$(MIGRATION_PARITY_CASE_IDS)))
-MIGRATION_PARITY_CASE_ARGS = $(foreach case_id,$(MIGRATION_PARITY_CASE_ID_LIST),--case-id '$(case_id)')
+MIGRATION_PARITY_CASE_ID_FILE ?=
+MIGRATION_PARITY_CASE_ARGS = $(foreach case_id,$(MIGRATION_PARITY_CASE_ID_LIST),--case-id '$(case_id)') $(if $(strip $(MIGRATION_PARITY_CASE_ID_FILE)),--case-id-file '$(MIGRATION_PARITY_CASE_ID_FILE)')
 MIGRATION_PARITY_CASE ?= $(CASE_ID)
 MIGRATION_PARITY_CASE_OUTPUT ?= build/migration-parity/parity-case-result.json
 MIGRATION_GPU_FAULT_PARITY_OUTPUT ?= build/migration-parity/gpu-fault-contract-result.json
@@ -184,6 +185,7 @@ help: ## Show common contributor commands
 	@printf "%s\n" "pillow-rs — build, compare, contribute" "" \
 	  "  make setup-venv     Install pinned Python tools in this checkout" \
 	  "  make setup-parity-store  Install the optional PostgreSQL parity-store driver" \
+	  "  make parity-db-init      Initialize configured PostgreSQL; local Docker keeps a named volume" \
 	  "  make parity-store-up     Start the local PostgreSQL store without replacing the data volume" \
 	  "  make build-parity   Build without replacing the Pillow oracle" \
 	  "  make build-parity-cpu-architecture   Build CPU architecture parity hooks" \
@@ -242,7 +244,8 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-benchmark-pillow-simd$(NC) Compare matched x86 Pillow-SIMD workloads\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run the all-backend public parity campaign\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
-	@printf "  $(CYAN)make migration-parity-test-postgres$(NC) Import and run bounded profile batches through the typed PostgreSQL store\n"
+	@printf "  $(CYAN)make migration-parity-inputs-postgres$(NC) Import immutable parity inputs only; parity results remain local artifacts\n"
+	@printf "  $(CYAN)make parity-db-init$(NC) Initialize configured PostgreSQL (local Docker uses a persistent volume)\n"
 	@printf "  $(CYAN)make parity-store-down$(NC) Stop PostgreSQL while retaining its named data volume\n"
 	@printf "  $(CYAN)make migration-parity-test-cpu-architectures$(NC) Run CPU parity for each architecture selector (no WASM)\n"
 	@printf "  $(CYAN)make migration-parity-test-parallel-cpu$(NC) Run parity with the opt-in Parallel CPU profile\n"
@@ -528,7 +531,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
 .PHONY: migration-parity-test migration-parity-test-cpu-architectures migration-parity-test-parallel-cpu migration-parity-test-gpu-fault-contract migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-cpu-architectures migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
-.PHONY: parity-store-init parity-store-up parity-store-down setup-parity-store migration-parity-test-postgres
+.PHONY: parity-store-init parity-store-up parity-store-down parity-db-init setup-parity-store migration-parity-inputs-postgres
 .PHONY: migration-parity-test-gpu-adapters migration-parity-benchmark-gpu-adapters
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
@@ -544,6 +547,9 @@ pillow-rs-test: ## Run the public parity campaign for pillow-rs
 
 migration-parity-test: ## Run canonical input-only parity against live Pillow
 	set +e; \
+	MIGRATION_PARITY_INPUT_STORE="$(MIGRATION_PARITY_INPUT_STORE)" \
+	MIGRATION_PARITY_INPUT_SPECIFICATION_DIGEST="$(MIGRATION_PARITY_INPUT_SPECIFICATION_DIGEST)" \
+	PARITY_STORE_ENV_FILE="$(PARITY_STORE_ENV_FILE)" \
 	$(PYTHON) scripts/run_migration_parity.py --output $(MIGRATION_PARITY_OUTPUT) $(MIGRATION_PARITY_ARGS) $(MIGRATION_PARITY_CASE_ARGS); \
 	status=$$?; \
 	$(PYTHON) scripts/validate_migration_parity_result.py parity $(MIGRATION_PARITY_OUTPUT); \
@@ -555,20 +561,27 @@ parity-store-init: ## Create local-only credentials for the PostgreSQL parity st
 	$(PYTHON) scripts/parity_store/initialize_local_env.py --output "$(PARITY_STORE_ENV_FILE)"
 
 parity-store-up: parity-store-init ## Start the local PostgreSQL parity store (keeps its named volume)
-	$(DOCKER) compose --env-file "$(PARITY_STORE_ENV_FILE)" -f "$(PARITY_STORE_COMPOSE_FILE)" up -d --wait
+	"$(DOCKER)" compose --env-file "$(PARITY_STORE_ENV_FILE)" -f "$(PARITY_STORE_COMPOSE_FILE)" up -d --wait
 
 parity-store-down: ## Stop the PostgreSQL parity store without deleting its data volume
-	$(DOCKER) compose --env-file "$(PARITY_STORE_ENV_FILE)" -f "$(PARITY_STORE_COMPOSE_FILE)" stop
+	"$(DOCKER)" compose --env-file "$(PARITY_STORE_ENV_FILE)" -f "$(PARITY_STORE_COMPOSE_FILE)" stop
 
 setup-parity-store: ## Install the optional PostgreSQL parity-store driver
 	$(PIP) install -r requirements-parity-store.txt
 
-migration-parity-test-postgres: build-parity parity-store-up setup-parity-store ## Import and run profile-scoped parity incrementally through PostgreSQL
-	$(PYTHON) -m scripts.run_migration_parity_postgres \
+ifneq ($(strip $(PARITY_STORE_DSN)),)
+PARITY_DB_INIT_PREREQUISITES := setup-parity-store
+else
+PARITY_DB_INIT_PREREQUISITES := parity-store-up setup-parity-store
+endif
+
+parity-db-init: $(PARITY_DB_INIT_PREREQUISITES) ## Initialize configured PostgreSQL; retain the local named volume when using Docker
+	$(PYTHON) -m scripts.initialize_parity_db --env-file "$(PARITY_STORE_ENV_FILE)"
+
+migration-parity-inputs-postgres: parity-db-init ## Import immutable parity inputs into PostgreSQL without executing cases
+	$(PYTHON) -m scripts.import_parity_inputs_postgres \
 		--manifest "$(MANIFEST)" \
 		--env-file "$(PARITY_STORE_ENV_FILE)" \
-		$(if $(strip $(MIGRATION_PARITY_STORE_PROFILE)),--profile "$(MIGRATION_PARITY_STORE_PROFILE)",) \
-		$(if $(strip $(MIGRATION_PARITY_STORE_LIMIT)),--limit "$(MIGRATION_PARITY_STORE_LIMIT)",) \
 		$(MIGRATION_PARITY_STORE_CASE_ARGS)
 
 migration-parity-test-cpu-architectures: build-parity-cpu-architecture ## Run CPU parity once for each declared non-WASM architecture selector

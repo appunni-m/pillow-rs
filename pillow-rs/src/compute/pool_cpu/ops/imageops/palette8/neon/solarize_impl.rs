@@ -1,11 +1,14 @@
 //! NEON-selected Solarize strategy over native palette indices.
 
+// NO_PILLOW_SUPPORT: Pillow transforms P palette entries; this Rust route transforms indices.
+
 use crate::compute::pool_cpu::ops::imageops::helpers::native_bytes::{
     self, NativeBytePointTransform,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage};
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute(input: &GrayImage, threshold: u8) -> Result<DynamicImage, PilError> {
     let bytes = native_bytes::pointwise(
         input.as_raw(),

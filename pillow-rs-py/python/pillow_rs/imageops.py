@@ -7,11 +7,11 @@
 import re
 from typing import Tuple, Union
 
-from .image import Image
+from .image import Image, _execution_context_scope
 from . import _core
 
 _BASE_RE_SUB = re.sub
-_EQUALIZE_FAST_BUILTINS = (len, range, sum, list)
+_AUTOCONTRAST_FAST_BUILTINS = (sum,)
 
 _BASE_IMAGE_SIZE = Image.size
 _BASE_IMAGE_WIDTH = Image.width
@@ -43,101 +43,138 @@ def _scale_native_types(image, factor):
     )
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 def _fit_native_types(bleed, centering):
     """Report host type facts for the core's native Fit strategy."""
     return (
-        type(bleed) in (int, float)
+        # Keep integers on the callback path: Pillow compares arbitrary-size
+        # integers before arithmetic, while converting them to f64 can overflow.
+        type(bleed) is float
         and type(centering) is tuple
         and len(centering) == 2
-        and all(type(value) in (int, float) for value in centering)
+        and all(type(value) is float for value in centering)
     )
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 def _unpack_fit_centering(centering):
     """Apply Python's pair-unpacking protocol for the callback Fit strategy."""
     centering_x, centering_y = centering
     return centering_x, centering_y
 
 
+# VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 def autocontrast(image: Image, cutoff: Union[float, Tuple[float, float]] = 0, ignore=None, mask=None,
                  preserve_tone: bool = False) -> Image:
-    return _core.ops_autocontrast_with_callbacks(
-        image, cutoff, ignore, mask, preserve_tone
-    )
+    with _execution_context_scope(image):
+        return _core.ops_autocontrast_with_callbacks(
+            image, cutoff, ignore, mask, preserve_tone
+        )
 
 
-# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def equalize(image: Image, mask=None) -> Image:
-    return _core.ops_imageops_equalize_with_callbacks(image, mask)
+    with _execution_context_scope(image):
+        return _core.ops_imageops_equalize_with_callbacks(image, mask)
 
 
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def invert(image: Image) -> Image:
-    return _core.ops_invert(image)
+    with _execution_context_scope(image):
+        return _core.ops_invert(image)
 
 
+# VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 def flip(image: Image) -> Image:
     return image.transpose("FLIP_TOP_BOTTOM")
 
 
+# VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 def mirror(image: Image) -> Image:
     return image.transpose("FLIP_LEFT_RIGHT")
 
 
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def posterize(image: Image, bits: int) -> Image:
-    return _core.ops_posterize(image, bits)
+    with _execution_context_scope(image):
+        return _core.ops_posterize(image, bits)
 
 
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def solarize(image: Image, threshold: int = 128) -> Image:
-    return _core.ops_solarize(image, threshold)
+    with _execution_context_scope(image):
+        return _core.ops_solarize(image, threshold)
 
 
+# VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 def grayscale(image: Image) -> Image:
     return image.convert("L")
 
 
+# TODO(pillow-rs#3ptb): verify canvas pixels, palette/transparency metadata,
+# callback/fault order, and shared architecture receipts for public Paste.
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def expand(image: Image, border=0, fill=0) -> Image:
-    return _core.ops_expand_with_callbacks(image, border, fill, lambda: Image)
+    with _execution_context_scope(image):
+        return _core.ops_expand_with_callbacks(image, border, fill, lambda: Image)
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def crop(image: Image, border: int = 0) -> Image:
-    box = _core.ops_crop_box_with_route_callbacks(image, border)
-    # TODO(pillow-rs#3ptb): verify custom border protocol and public crop
-    # callback/fault/metadata behavior in CPU parity.
-    return image.crop(box)
+    with _execution_context_scope(image):
+        box = _core.ops_crop_box_with_route_callbacks(image, border)
+        # TODO(pillow-rs#3ptb): verify custom border protocol and public crop
+        # callback/fault/metadata behavior in CPU parity, including Pillow's
+        # ValueError for tuple borders whose length is not two or four.
+        return image.crop(box)
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def scale(image: Image, factor: float, resample=Image.Resampling.BICUBIC) -> Image:
-    # TODO(pillow-rs#3ptb): freeze custom factor arithmetic, copy/load behavior,
-    # and resize strategy receipts in the CPU parity matrix.
-    return _core.ops_scale_with_route_callbacks(image, factor, resample)
+    with _execution_context_scope(image):
+        # TODO(pillow-rs#3ptb): freeze custom factor arithmetic, copy/load behavior,
+        # and resize strategy receipts in the CPU parity matrix.
+        return _core.ops_scale_with_route_callbacks(image, factor, resample)
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def contain(image: Image, size, method=Image.Resampling.BICUBIC) -> Image:
-    size = _core.ops_contain_size_with_route_callbacks(image, size)
-    # TODO(pillow-rs#3ptb): freeze custom size arithmetic, mutation/fault order,
-    # and Resize strategy receipts in the CPU parity matrix.
-    method = _core._imageops_filter_code(method)
-    return image.resize(size, resample=method)
+    with _execution_context_scope(image):
+        route, resize_size = _core.ops_contain_size_with_route_callbacks(image, size)
+        if route == 2:
+            return Image.new(image.mode, (size[0], 0))
+        if route == 3:
+            return Image.new(image.mode, (0, 0))
+        if route == 4:
+            return Image.new(image.mode, size)
+        if route == 5:
+            return Image.new(image.mode, resize_size)
+        size = resize_size
+        # TODO(pillow-rs#3ptb): verify empty-result mode/palette/metadata; custom
+        # size/property mutation and fault order; subclass resize dispatch; mode ×
+        # architecture Resize receipts/fallbacks; and public-call latency.
+        return image.resize(size, resample=method)
 
 
 _BASE_IMAGEOPS_CONTAIN = contain
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def cover(image: Image, size, method=Image.Resampling.BICUBIC) -> Image:
-    size = _core.ops_cover_size_with_route_callbacks(image, size)
-    # TODO(pillow-rs#3ptb): freeze custom size arithmetic, mutation/fault order,
-    # and Resize strategy receipts in the CPU parity matrix.
-    method = _core._imageops_filter_code(method)
-    return image.resize(size, resample=method)
+    with _execution_context_scope(image):
+        route, resize_size = _core.ops_cover_size_with_route_callbacks(image, size)
+        if route == 2:
+            return Image.new(image.mode, (size[0], 0))
+        if route == 3:
+            return Image.new(image.mode, (0, 0))
+        size = resize_size
+        # TODO(pillow-rs#3ptb): verify empty-result mode/palette/metadata; custom
+        # size/property mutation and fault order; subclass resize dispatch; mode ×
+        # architecture Resize receipts/fallbacks; and public-call latency.
+        return image.resize(size, resample=method)
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def fit(
     image: Image,
     size,
@@ -145,39 +182,57 @@ def fit(
     bleed=0.0,
     centering=(0.5, 0.5),
 ):
-    box = _core.ops_fit_box_with_route_callbacks(
-        image, size, bleed, centering
-    )
-    # TODO(pillow-rs#3ptb): freeze custom centering/bleed/size callbacks,
-    # mutation/fault order, and Resize strategy receipts in CPU parity.
-    method = _core._imageops_filter_code(method)
-    return image.resize(size, method, box=box)
+    with _execution_context_scope(image):
+        box = _core.ops_fit_box_with_route_callbacks(
+            image, size, bleed, centering
+        )
+        if box is None:
+            # Pillow returns Image.new before parsing the resize filter when the
+            # target has a zero axis or the live source height is zero.
+            return Image.new(image.mode, size)
+        # TODO(pillow-rs#3ptb): verify Image.new output/metadata for zero target
+        # axes and zero live source height; freeze custom centering/bleed/size
+        # callbacks (including arbitrary-size ints), mutation/fault order, subclass
+        # resize dispatch, mode × architecture Resize receipts/fallbacks, and
+        # public-call latency.
+        return image.resize(size, method, box=box)
 
 
-# VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def pad(
     image: Image, size, method=Image.Resampling.BICUBIC, color=None, centering=(0.5, 0.5)
 ):
     # TODO(pillow-rs#3ptb): parity-check a replaced module-level `contain`
     # callback uses the fallback, including its output and fault order; freeze
-    # native/callback output, palette behavior, and route receipts as well.
-    return _core.ops_pad_with_route_callbacks(
-        image, size, method, color, centering
-    )
+    # palette behavior and shared Resize/Paste context receipts as well.
+    with _execution_context_scope(image):
+        return _core.ops_pad_with_route_callbacks(
+            image, size, method, color, centering
+        )
 
 
-# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):
-    return _core.ops_imageops_colorize_with_callbacks(
-        image, black, white, mid, blackpoint, midpoint, whitepoint
-    )
+    with _execution_context_scope(image):
+        return _core.ops_imageops_colorize_with_callbacks(
+            image, black, white, mid, blackpoint, midpoint, whitepoint
+        )
 
 
+# TODO(pillow-rs#3ptb): verify EXIF transpose output/fault ordering, selected
+# architecture receipts after eager Load, and retained metadata in CPU parity.
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def exif_transpose(image: Image, *, in_place=False):
-    image.load()
-    changed, first_in_place, result = _core.ops_exif_transpose(
-        image._rust_image, in_place
-    )
+    # Loading can consume a lazy pipeline's selected context, so retain the
+    # route through the later Rust-owned transpose operation.
+    with _execution_context_scope(image):
+        image.load()
+        execution_context = (
+            image._current_execution_context() if isinstance(image, Image) else None
+        )
+        changed, first_in_place, result = _core.ops_exif_transpose(
+            image._rust_image, in_place, execution_context
+        )
 
     if changed:
         if first_in_place:
@@ -207,16 +262,18 @@ def exif_transpose(image: Image, *, in_place=False):
             return transposed_image
     elif not in_place:
         return image.copy()
-    # TODO(pillow-rs#3ptb): verify exact Exif.tobytes serialization and Pillow's
-    # EXIF serialization, XMP callbacks, and outputs/faults in CPU parity.
+    # TODO(pillow-rs#3ptb): verify exact Exif.tobytes serialization, XMP
+    # callbacks, and outputs/faults in CPU parity.
     return None
 
 
+# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 def deform(image: Image, deformer, resample=Image.Resampling.BILINEAR):
-    size = image.size
-    method = Image.Transform.MESH
-    mesh = deformer.getmesh(image)
-    # TODO(pillow-rs#3ptb): freeze reentrant getmesh mutation, faults, and
-    # Transform strategy receipts in CPU parity.
-    resample = _core._thumbnail_filter_code(resample)
-    return image.transform(size, method, mesh, resample)
+    with _execution_context_scope(image):
+        size = image.size
+        method = Image.Transform.MESH
+        mesh = deformer.getmesh(image)
+        # TODO(pillow-rs#3ptb): freeze reentrant getmesh mutation, faults, and
+        # Transform strategy receipts in CPU parity.
+        resample = _core._thumbnail_filter_code(resample)
+        return image.transform(size, method, mesh, resample)

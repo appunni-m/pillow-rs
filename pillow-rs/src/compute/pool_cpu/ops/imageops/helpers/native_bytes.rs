@@ -18,6 +18,7 @@ pub(crate) enum NativeBytePointTransform {
 ///
 /// The final partial block is padded and transformed as one vector, matching
 /// the archived Posterize and Solarize kernels' tail behavior.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn pointwise(
     source: &[u8],
     operation: NativeBytePointTransform,
@@ -46,6 +47,7 @@ pub(crate) fn pointwise(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn transform_pointwise_bytes<F>(source: &[u8], transform: F) -> Vec<u8>
 where
     F: Fn(u8x16) -> u8x16,

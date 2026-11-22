@@ -9,14 +9,22 @@
 //! TODO(pillow-rs#3ptb): verify exact-mode output, boxed validation/error
 //! ordering, empty/zero-axis cases, and requested-architecture fallback
 //! receipts across the frozen CPU matrix.
+//! TODO(pillow-rs#3ptb): parity-check the declared LA/RGBA fused
+//! reducing-gap child and its serial architecture fallback.
 //! Resize/ResizeBoxed now compose omitted lanes at the prepared execution
 //! boundary. Current fused Resize-to-Pad owners are L and RGBX; neither has
 //! omitted physical lanes. Compact modes use prepared Resize followed by Pad.
+//! Reducing-gap routing declares both the conditional Reduce child and the
+//! fused straight-alpha ResizeBoxed child, including its serial support.
+//! Wrapper and prepared admission select from these same mode routes.
 
-use crate::compute::registry::support::{ModeSupport, OperationId, OperationSupport};
+use crate::compute::registry::support::{
+    ModeSupport, OperationId, OperationModeRoute, OperationRouteGuard, OperationRouteInputs,
+    OperationRoutePath, OperationSupport,
+};
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn classify_resize(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -47,7 +55,7 @@ fn classify_resize(mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn classify_boxed_resize(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::BOXED_SUPPORT,
@@ -79,10 +87,111 @@ fn classify_boxed_resize(mode: Mode) -> ModeSupport {
 }
 
 /// Exhaustive source-mode support for ordinary Resize.
-pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
+/// Child strategies composed by the Pillow Resize wrapper.
+const COMPOSED_OPERATIONS: &[OperationId] = &[OperationId::Reduce, OperationId::ResizeBoxed];
+
+const REDUCING_GAP_REDUCE_GUARDS: &[OperationRouteGuard] =
+    &[OperationRouteGuard::ReducingGapPreReductionSelected];
+const REDUCING_GAP_FUSED_RESIZE_GUARDS: &[OperationRouteGuard] =
+    &[OperationRouteGuard::ReducingGapFusedResizeSelected];
+const REDUCING_GAP_REDUCE_PATHS: &[OperationRoutePath] =
+    &[OperationRoutePath::ConditionalPipelineChild {
+        operation: OperationId::Reduce,
+        guards: REDUCING_GAP_REDUCE_GUARDS,
+        support: None,
+    }];
+
+const REDUCING_GAP_LA_PATHS: &[OperationRoutePath] =
+    &[OperationRoutePath::ConditionalPipelineChild {
+        operation: OperationId::ResizeBoxed,
+        guards: REDUCING_GAP_FUSED_RESIZE_GUARDS,
+        support: Some(ModeSupport::serial(
+            OperationId::ResizeBoxed,
+            Mode::ImageLumaA8,
+            super::helpers::support::INPUTS,
+        )),
+    }];
+
+const REDUCING_GAP_RGBA_PATHS: &[OperationRoutePath] =
+    &[OperationRoutePath::ConditionalPipelineChild {
+        operation: OperationId::ResizeBoxed,
+        guards: REDUCING_GAP_FUSED_RESIZE_GUARDS,
+        support: Some(ModeSupport::serial(
+            OperationId::ResizeBoxed,
+            Mode::ImageRgba8,
+            super::helpers::support::INPUTS,
+        )),
+    }];
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+fn classify_resize_route_paths(mode: Mode) -> &'static [OperationRoutePath] {
+    match mode {
+        Mode::One | Mode::ImagePalette8 => &[],
+        Mode::ImageLumaA8 => REDUCING_GAP_LA_PATHS,
+        Mode::ImageRgba8 => REDUCING_GAP_RGBA_PATHS,
+        Mode::ImageLuma8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => REDUCING_GAP_REDUCE_PATHS,
+    }
+}
+
+/// Selects the declared reducing-gap child and any specialized child support.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn select_reducing_gap_child(
+    mode: Mode,
+    pre_reduction_selected: bool,
+    fused_resize_selected: bool,
+) -> Option<(OperationId, Option<ModeSupport>)> {
+    SUPPORT.conditional_pipeline_child_contract(
+        mode,
+        OperationRouteInputs {
+            requested_backend: None,
+            width: 0,
+            height: 0,
+            loaded_image: None,
+            byte_storage_length_matches_pixel_count: None,
+            reducing_gap_pre_reduction_selected: Some(pre_reduction_selected),
+            reducing_gap_fused_resize_selected: Some(fused_resize_selected),
+            draw_context_mode: None,
+            bitmap_mask_mode: None,
+            draw_embedded_color: None,
+            draw_text_stroke_width_zero: None,
+        },
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+fn classify_resize_route(mode: Mode) -> OperationModeRoute {
+    OperationModeRoute::Prepared {
+        support: classify_resize(mode),
+        intermediate_mode: None,
+        paths: classify_resize_route_paths(mode),
+    }
+}
+
+pub(crate) static SUPPORT: OperationSupport = OperationSupport::routed(
     OperationId::Resize,
     super::helpers::support::INPUTS,
-    classify_resize,
+    classify_resize_route,
+    COMPOSED_OPERATIONS,
 );
 
 /// Exhaustive source-mode support for boxed Resize.
@@ -96,6 +205,6 @@ pub(crate) static BOXED_SUPPORT: OperationSupport = OperationSupport::new(
 #[path = "helpers/prepared.rs"]
 mod prepared;
 pub(crate) use prepared::{
-    PreparedResize, alpha_reducing_gap_support, effective_filter, prepare_direct,
-    prepare_direct_with_reducing_gap_selection, prepare_direct_with_selection, prepare_pipeline,
+    PreparedResize, effective_filter, prepare_direct, prepare_direct_with_reducing_gap_selection,
+    prepare_direct_with_selection, prepare_pipeline,
 };

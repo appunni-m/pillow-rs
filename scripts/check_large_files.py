@@ -16,7 +16,7 @@ LIMIT_BYTES = 1 * 1024 * 1024
 # Reviewed exact-path approvals: path -> (maximum bytes, reason).
 APPROVED_FILES: dict[str, tuple[int, str]] = {
     "docs/CPU_REFACTOR_INVENTORY.md": (
-        1_500_000,
+        2_000_000,
         "Active mode-by-mode CPU refactor inventory and verification evidence; keep its growth capped.",
     ),
     "scripts/build_migration_parity_inputs.py": (
@@ -46,6 +46,10 @@ APPROVED_FILES: dict[str, tuple[int, str]] = {
     "pillow-rs/tests/fixtures/inputs/benchmark/pil-imagechops.json": (
         65_000_000,
         "Fixed mode/size ImageChops benchmark matrix inputs required for CPU and architecture replay.",
+    ),
+    "pillow-rs/tests/fixtures/inputs/benchmark/pil-imagechops.json.gz": (
+        1_250_000,
+        "Gzip-compressed fixed ImageChops benchmark matrix; keep the compressed corpus capped.",
     ),
     "pillow-rs/tests/fixtures/inputs/benchmark/pil-imageenhance-brightness.json": (
         9_000_000,

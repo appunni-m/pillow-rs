@@ -8,6 +8,7 @@ use crate::draw::{for_each_polygon_fill_span, wide_line_polygon_points};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView};
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_line_native(
     img: &DynamicImage,
     x0: i32,
@@ -248,6 +249,7 @@ impl BresenhamGeometry {
 
 /// Draw a width-one Bresenham line with scalar geometry and native-byte SIMD
 /// spans. Consecutive pixels on one row are coalesced before the vector store.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn simd_draw_bresenham_native(
     img: &DynamicImage,
     x0: i32,

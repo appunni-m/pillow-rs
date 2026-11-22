@@ -18,7 +18,7 @@ pub(crate) const BOXED_SUPPORT: ModeSupport = super::super::helpers::support::bo
     &RESIZE_BOXED_ARCHITECTURES,
 );
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pass@migration-parity-5e339e0b1e114b5ea54221d8961f1b46; benchmark=pending
 pub(crate) fn resize(
     context: &ExecutionContext,
     selection: &StrategySelection,
@@ -29,43 +29,84 @@ pub(crate) fn resize(
     bounds: Option<(f64, f64, f64, f64)>,
 ) -> Result<RgbImage, PilError> {
     let architecture = selection.implementation.architecture;
+    let kernel_image = kernel_image(image)?;
     super::super::helpers::strategy::resize_byte_native::<_, 3>(
         context,
         selection,
-        image.as_raw(),
-        image.dimensions(),
+        kernel_image.as_raw(),
+        kernel_image.dimensions(),
         width,
         height,
         filter,
         bounds,
-        || super::default::resize_impl::execute(image, width, height, filter, bounds),
+        || {
+            let output =
+                super::default::resize_impl::execute(&kernel_image, width, height, filter, bounds)?;
+            output_image(width, height, output.into_raw())
+        },
         |bounds| match architecture {
             Architecture::Sse2 => match bounds {
-                Some(bounds) => {
-                    super::sse2::resize_impl::execute_boxed(image, width, height, bounds, filter)
-                }
-                None => super::sse2::resize_impl::execute(image, width, height, filter),
+                Some(bounds) => super::sse2::resize_impl::execute_boxed(
+                    &kernel_image,
+                    width,
+                    height,
+                    bounds,
+                    filter,
+                ),
+                None => super::sse2::resize_impl::execute(&kernel_image, width, height, filter),
             },
             Architecture::Neon => match bounds {
-                Some(bounds) => {
-                    super::neon::resize_impl::execute_boxed(image, width, height, bounds, filter)
-                }
-                None => super::neon::resize_impl::execute(image, width, height, filter),
+                Some(bounds) => super::neon::resize_impl::execute_boxed(
+                    &kernel_image,
+                    width,
+                    height,
+                    bounds,
+                    filter,
+                ),
+                None => super::neon::resize_impl::execute(&kernel_image, width, height, filter),
             },
             Architecture::WasmSimd128 => match bounds {
                 Some(bounds) => super::wasm_simd128::resize_impl::execute_boxed(
-                    image, width, height, bounds, filter,
+                    &kernel_image,
+                    width,
+                    height,
+                    bounds,
+                    filter,
                 ),
-                None => super::wasm_simd128::resize_impl::execute(image, width, height, filter),
+                None => {
+                    super::wasm_simd128::resize_impl::execute(&kernel_image, width, height, filter)
+                }
             },
             _ => Err(PilError::InternalError(format!(
                 "lab8 Resize received unsupported architecture {architecture:?}"
             ))),
         },
-        |bytes| {
-            RgbImage::from_raw(width, height, bytes).ok_or_else(|| {
-                PilError::ValueError("resize_lab: failed to create output buffer".into())
-            })
-        },
+        |bytes| output_image(width, height, bytes),
     )
+}
+
+// VERIFY: source=reviewed@2026-11-20; parity=pass@migration-parity-5e339e0b1e114b5ea54221d8961f1b46; benchmark=pending
+fn kernel_image(image: &RgbImage) -> Result<RgbImage, PilError> {
+    let (width, height) = image.dimensions();
+    let mut samples = image.as_raw().clone();
+    toggle_lab_chroma_bias(&mut samples);
+    RgbImage::from_raw(width, height, samples)
+        .ok_or_else(|| PilError::InternalError("invalid LAB Resize input buffer".into()))
+}
+
+// VERIFY: source=reviewed@2026-11-20; parity=pass@migration-parity-5e339e0b1e114b5ea54221d8961f1b46; benchmark=pending
+fn output_image(width: u32, height: u32, mut samples: Vec<u8>) -> Result<RgbImage, PilError> {
+    toggle_lab_chroma_bias(&mut samples);
+    RgbImage::from_raw(width, height, samples)
+        .ok_or_else(|| PilError::ValueError("resize_lab: failed to create output buffer".into()))
+}
+
+// VERIFY: source=reviewed@2026-11-20; parity=pass@migration-parity-5e339e0b1e114b5ea54221d8961f1b46; benchmark=pending
+fn toggle_lab_chroma_bias(samples: &mut [u8]) {
+    // This Resize-only byte mapping preserves the frozen Pillow output. It is
+    // not the public LAB byte representation used by pixel and band APIs.
+    for pixel in samples.chunks_exact_mut(3) {
+        pixel[1] ^= 0x80;
+        pixel[2] ^= 0x80;
+    }
 }

@@ -1,4 +1,5 @@
 use super::PyImage;
+use super::execution::{PyExecutionContext, route_from_context, route_pending_image};
 use crate::errors::map_error;
 use crate::inputs::{
     c_int_from_python, nonnegative_output_size_items_from_python, transform_data_from_python,
@@ -25,6 +26,7 @@ pub(super) struct PyTransformMeshState {
     inner: Option<pillow_rs::TransformMeshAccumulator>,
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn validate_transform_resample_membership(
     py: Python<'_>,
     value: &Bound<'_, PyAny>,
@@ -59,6 +61,7 @@ fn validate_transform_resample_membership(
     )))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn transform_mesh_resample_from_python_after_load(value: &Bound<'_, PyAny>) -> PyResult<i32> {
     let code = c_int_from_python(value)?;
     if matches!(code, 0 | 2 | 3) {
@@ -71,6 +74,7 @@ fn transform_mesh_resample_from_python_after_load(value: &Bound<'_, PyAny>) -> P
     )))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn transform_mesh_box_from_python(value: &Bound<'_, PyAny>) -> PyResult<(i64, i64, i64, i64)> {
     let mut coordinates = [0_i64; 4];
     for (index, coordinate) in coordinates.iter_mut().enumerate() {
@@ -85,6 +89,7 @@ fn transform_mesh_box_from_python(value: &Bound<'_, PyAny>) -> PyResult<(i64, i6
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn transform_mesh_coefficients_from_python(value: &Bound<'_, PyAny>) -> PyResult<[f64; 8]> {
     let mut values = [0.0; 8];
     let mut items = value.try_iter()?;
@@ -100,10 +105,13 @@ fn transform_mesh_coefficients_from_python(value: &Bound<'_, PyAny>) -> PyResult
 
 #[pymethods]
 impl PyImage {
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (size, fillcolor=None, execution_context=None))]
     fn _transform_prepare(
         slf: Py<Self>,
         size: &Bound<'_, PyAny>,
         fillcolor: Option<&Bound<'_, PyAny>>,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<PyTransformPlan> {
         let mode = {
@@ -138,17 +146,26 @@ impl PyImage {
                     .map_err(map_error)?
             }
         };
+        let route = route_from_context(execution_context, py);
+        let execution_context = route.map(|route| route.context);
         let image = slf.bind(py).borrow();
-        let source = image.inner.clone();
+        let source = route_pending_image(image.inner.clone(), route);
         drop(image);
         let destination = py
-            .detach(move || source.prepare_transform_output_public(prepared, output_size))
+            .detach(move || {
+                source.prepare_transform_output_public_with_context(
+                    prepared,
+                    output_size,
+                    execution_context,
+                )
+            })
             .map_err(map_error)?;
         Ok(PyTransformPlan {
             destination: Some(destination),
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn _transform_mesh_begin(
         slf: Py<Self>,
         mut plan: pyo3::PyRefMut<'_, PyTransformPlan>,
@@ -158,14 +175,16 @@ impl PyImage {
             pyo3::exceptions::PyRuntimeError::new_err("Transform plan has already been consumed")
         })?;
         drop(plan);
+        let route = route_from_context(None, py);
         let image = slf.bind(py).borrow();
-        let source = image.inner.clone();
+        let source = route_pending_image(image.inner.clone(), route);
         drop(image);
         py.detach(move || source.prepare_transform_mesh_from_output_public(destination))
             .map(|inner| PyTransformMeshState { inner: Some(inner) })
             .map_err(map_error)
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn _transform_validate_filter(
         slf: Py<Self>,
         value: &Bound<'_, PyAny>,
@@ -175,6 +194,7 @@ impl PyImage {
         validate_transform_resample_membership(py, value)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn _transform_mesh_record(
         slf: Py<Self>,
         mut state: pyo3::PyRefMut<'_, PyTransformMeshState>,
@@ -194,7 +214,8 @@ impl PyImage {
         // Python captures this PyImage before argument extraction. A
         // reentrant replacement is visible on the next record, whose mode is
         // checked against the accumulator's original output mode by the core.
-        let source = slf.bind(py).borrow().inner.clone();
+        let route = route_from_context(None, py);
+        let source = route_pending_image(slf.bind(py).borrow().inner.clone(), route);
         let mut accumulator = state.inner.take().ok_or_else(|| {
             pyo3::exceptions::PyRuntimeError::new_err(
                 "Transform MESH state has already been consumed",
@@ -213,22 +234,27 @@ impl PyImage {
         result.map_err(map_error)
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn _transform_mesh_finish(
         slf: Py<Self>,
         mut state: pyo3::PyRefMut<'_, PyTransformMeshState>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let _keep_self_alive = slf;
+        let route = route_from_context(None, py);
         let accumulator = state.inner.take().ok_or_else(|| {
             pyo3::exceptions::PyRuntimeError::new_err(
                 "Transform MESH state has already been consumed",
             )
         })?;
         py.detach(|| accumulator.finish())
-            .map(|inner| PyImage { inner })
+            .map(|inner| PyImage {
+                inner: route_pending_image(inner, route),
+            })
             .map_err(map_error)
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn _transform_data(
         slf: Py<Self>,
         method: &Bound<'_, PyAny>,
@@ -248,6 +274,7 @@ impl PyImage {
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn _transform_apply(
         slf: Py<Self>,
         mut plan: pyo3::PyRefMut<'_, PyTransformPlan>,
@@ -262,13 +289,16 @@ impl PyImage {
         let data = data_plan.data.clone();
         let resample = data_plan.resample;
         drop(data_plan);
+        let route = route_from_context(None, py);
         let image = slf.bind(py).borrow();
-        let source = image.inner.clone();
+        let source = route_pending_image(image.inner.clone(), route);
         drop(image);
         py.detach(move || {
             source.transform_prepared_output_public(destination, method, data, resample)
         })
-        .map(|inner| PyImage { inner })
+        .map(|inner| PyImage {
+            inner: route_pending_image(inner, route),
+        })
         .map_err(map_error)
     }
 }

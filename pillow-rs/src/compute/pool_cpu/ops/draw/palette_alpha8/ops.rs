@@ -26,6 +26,7 @@ pub(crate) const SUPPORT: ModeSupport =
 pub(crate) const CHANNELS: usize = 2;
 pub(crate) const FLOAT_MODE: bool = false;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn apply_text<const RGBA_MASK: bool>(
     selection: &StrategySelection,
     input: super::super::TextComposeInput<'_>,

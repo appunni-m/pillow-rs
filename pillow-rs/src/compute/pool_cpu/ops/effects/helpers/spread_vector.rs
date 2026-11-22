@@ -70,6 +70,7 @@ pub(crate) fn execute_wasm_simd128(kernel: Kernel<'_>) -> Result<Output, PilErro
     execute_vector(kernel)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn execute_vector(kernel: Kernel<'_>) -> Result<Output, PilError> {
     let width = kernel.width;
     let height = kernel.height;
@@ -220,6 +221,7 @@ fn copy_vectorized(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn carry_hidden_lanes(
     source: &HiddenPixelLanes,
     width: u32,
@@ -258,6 +260,7 @@ fn carry_hidden_lanes(
         .ok_or_else(|| PilError::InternalError("SIMD EffectSpread lane output was invalid".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn update_spread_lanes(
     source: &HiddenPixelLanes,
     output: &mut [u8],

@@ -134,6 +134,7 @@ pub(crate) fn write<P: Pixel<Subpixel = u8>>(
     output
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn write_with_hidden_lanes<P, F>(
     input: PixelInput<'_, P>,
     pixel: P,
@@ -169,6 +170,7 @@ where
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 /// Attach the mode-owned physical lanes after an architecture kernel rebuilt the logical buffer.
 pub(crate) fn preserve_hidden_lanes_after_write<P, F>(
     source: &ImageBuffer<P, Vec<u8>>,
@@ -221,6 +223,7 @@ pub(crate) fn write_batch<P: Pixel<Subpixel = u8>>(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 pub(crate) fn write_batch_with_hidden_lanes<P, F, G>(
     input: BatchInput<'_, P>,
     mut pixel_from_color: F,

@@ -46,6 +46,8 @@ pub trait ImageOpsFitRouteCallbacks:
 where
     <Self as ImageOpsAspectCallbacks>::Error: From<PilError>,
 {
+    /// Apply Pillow's initial `min(size) == 0` check before other fit inputs.
+    fn size_min_is_zero(&mut self) -> Result<bool, <Self as ImageOpsAspectCallbacks>::Error>;
     /// Check the exact numeric and tuple types used by Fit's native fast path.
     fn native_fit_inputs_are_eligible(
         &mut self,
@@ -86,14 +88,15 @@ where
     ) -> Result<<Self as ImageOpsAspectCallbacks>::Value, <Self as ImageOpsAspectCallbacks>::Error>;
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Compute Pillow-compatible `ImageOps.fit` crop coordinates with host callbacks.
+/// Returns `None` when Pillow returns a new empty-height result instead of resizing.
 pub fn fit_box_with_callbacks<C: ImageOpsFitCallbacks>(
     callbacks: &mut C,
     bleed: &C::Value,
     centering_x: &C::Value,
     centering_y: &C::Value,
-) -> Result<C::Value, C::Error> {
+) -> Result<Option<C::Value>, C::Error> {
     let zero = callbacks.fit_constant(ImageOpsFitConstant::Zero)?;
     let one = callbacks.fit_constant(ImageOpsFitConstant::One)?;
     let half = callbacks.fit_constant(ImageOpsFitConstant::Half)?;
@@ -116,6 +119,9 @@ pub fn fit_box_with_callbacks<C: ImageOpsFitCallbacks>(
         callbacks.arithmetic(ImageOpsAspectArithmetic::Multiply, &bleed, &source_height)?;
     let live_width = live_axis(callbacks, 0, &bleed_left, &two)?;
     let live_height = live_axis(callbacks, 1, &bleed_top, &two)?;
+    if callbacks.compare(ImageOpsAspectComparison::Equal, &live_height, &zero)? {
+        return Ok(None);
+    }
     let live_ratio =
         callbacks.arithmetic(ImageOpsAspectArithmetic::Divide, &live_width, &live_height)?;
     let target_width = callbacks.size_coordinate(0)?;
@@ -167,25 +173,34 @@ pub fn fit_box_with_callbacks<C: ImageOpsFitCallbacks>(
     )?;
     let right = callbacks.arithmetic(ImageOpsAspectArithmetic::Add, &left, &crop_width)?;
     let bottom = callbacks.arithmetic(ImageOpsAspectArithmetic::Add, &top, &crop_height)?;
-    callbacks.box_tuple(&left, &top, &right, &bottom)
+    callbacks.box_tuple(&left, &top, &right, &bottom).map(Some)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Select native or host-protocol Fit geometry from one core entry point.
+/// Returns `None` when Pillow's zero-size `Image.new` branch applies.
 pub fn fit_box_with_route_callbacks<C: ImageOpsFitRouteCallbacks>(
     callbacks: &mut C,
     bleed: &<C as ImageOpsAspectCallbacks>::Value,
     centering: &<C as ImageOpsAspectCallbacks>::Value,
-) -> Result<<C as ImageOpsAspectCallbacks>::Value, <C as ImageOpsAspectCallbacks>::Error> {
+) -> Result<Option<<C as ImageOpsAspectCallbacks>::Value>, <C as ImageOpsAspectCallbacks>::Error> {
+    if callbacks.size_min_is_zero()? {
+        return Ok(None);
+    }
     if let Some((width, height)) = native_size_pair_with_callbacks(callbacks)? {
         if callbacks.native_fit_inputs_are_eligible(bleed, centering)? {
             let image = callbacks.native_image()?;
             let bleed = callbacks.bleed_as_f64(bleed)?;
             let centering = callbacks.native_centering(centering)?;
-            let box_ = callbacks.run_core(move || {
-                super::fit_geometry_preflight(&image, width, height, bleed, centering)
+            let (source_height, box_) = callbacks.run_core(move || {
+                let box_ = super::fit_geometry_preflight(&image, width, height, bleed, centering)?;
+                let source_height = image.size()?.1;
+                Ok::<_, PilError>((source_height, box_))
             })?;
-            return callbacks.native_box_tuple(box_);
+            if source_height == 0 {
+                return Ok(None);
+            }
+            return callbacks.native_box_tuple(box_).map(Some);
         }
     }
 
@@ -193,7 +208,7 @@ pub fn fit_box_with_route_callbacks<C: ImageOpsFitRouteCallbacks>(
     fit_box_with_callbacks(callbacks, bleed, &centering_x, &centering_y)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn normalized_centering<C: ImageOpsFitCallbacks>(
     callbacks: &mut C,
     value: &C::Value,
@@ -210,7 +225,7 @@ fn normalized_centering<C: ImageOpsFitCallbacks>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn live_axis<C: ImageOpsFitCallbacks>(
     callbacks: &mut C,
     index: usize,
@@ -222,7 +237,7 @@ fn live_axis<C: ImageOpsFitCallbacks>(
     callbacks.arithmetic(ImageOpsAspectArithmetic::Subtract, &size, &bleed_twice)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn offset_axis<C: ImageOpsFitCallbacks>(
     callbacks: &mut C,
     bleed: &C::Value,

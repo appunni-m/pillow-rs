@@ -1,4 +1,7 @@
 use super::RsImage;
+use super::execution::{
+    PyExecutionContext, PythonExecutionRoute, route_from_context, route_pending_image,
+};
 use crate::*;
 use pyo3::basic::CompareOp;
 use pyo3::exceptions::PyBufferError;
@@ -186,17 +189,25 @@ impl PyImage {
         .map_err(map_error)
     }
 
-    #[pyo3(signature = (fp, format=None, compress_level=None, before_encode=None))]
+    // TODO(pillow-rs#3ptb): freeze file-object name/extension, writer-option,
+    // path/write faults, and route receipts in the CPU parity matrix.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (
+        fp,
+        format=None,
+        compress_level=None,
+        before_encode=None,
+        execution_context_provider=None
+    ))]
     fn save(
         slf: Py<Self>,
         fp: &Bound<'_, PyAny>,
         format: Option<&Bound<'_, PyAny>>,
         compress_level: Option<&Bound<'_, PyAny>>,
         before_encode: Option<&Bound<'_, PyAny>>,
+        execution_context_provider: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<()> {
-        // TODO(pillow-rs#3ptb): freeze file-object name/extension, writer-option,
-        // and path/write fault precedence in CPU parity.
         // Preserve format extraction before PathLike conversion. Compression
         // conversion follows the wrapper load and filesystem preflight below.
         let format = format
@@ -247,6 +258,27 @@ impl PyImage {
             .transpose()?;
         let encoder_options = save_options::encoder_options(&format, compress_level)?;
         let inner = slf.bind(py).borrow().inner.clone();
+        let execution_route = if inner.is_materialized() {
+            None
+        } else {
+            match execution_context_provider {
+                Some(provider) => {
+                    let context = provider.call0()?;
+                    if context.is_none() {
+                        None
+                    } else {
+                        let context = context.extract::<pyo3::PyRef<'_, PyExecutionContext>>()?;
+                        Some(PythonExecutionRoute {
+                            requested_backend: context.requested_backend,
+                            pinned_backend: context.pinned_backend,
+                            context: context.inner,
+                        })
+                    }
+                }
+                None => None,
+            }
+        };
+        let inner = route_pending_image(inner, execution_route);
         let encoded = py
             .detach(move || inner.encode_with_options(&format, &encoder_options))
             .map_err(map_error)?;
@@ -259,19 +291,30 @@ impl PyImage {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
+    // TODO(pillow-rs#3ptb): verify unpacked font-mask bytes and selected/fallback
+    // receipts when the mask image is still pending.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn tobytes_unpacked(&self, py: Python<'_>) -> PyResult<Vec<u8>> {
-        py.detach(|| self.inner.tobytes_unpacked())
+        let route = route_from_context(None, py);
+        let inner = route_pending_image(self.inner.clone(), route);
+        py.detach(move || inner.tobytes_unpacked())
             .map_err(map_error)
     }
 
+    // TODO(pillow-rs#3ptb): verify encoder fault order, route receipts, exact
+    // encoded bytes, and public-call latency in the frozen CPU matrix.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (encoder_name, args, execution_context=None))]
     fn tobytes_encoded(
         slf: Py<Self>,
         encoder_name: &str,
         args: Vec<String>,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<Py<PyBytes>> {
+        let execution_route = route_from_context(execution_context, py);
         let inner = slf.bind(py).borrow().inner.clone();
+        let inner = route_pending_image(inner, execution_route);
         let mode = inner.mode_identity().map_err(map_error)?;
         let encoder_name = encoder_name.to_owned();
         let bytes = py
@@ -299,8 +342,26 @@ impl PyImage {
         })
     }
 
-    fn load(&mut self, py: Python<'_>) -> PyResult<()> {
-        py.detach(|| self.inner.load()).map_err(map_error)
+    // TODO(pillow-rs#3ptb): verify selected/fallback load receipts and errors
+    // at the wrapper load boundary.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[pyo3(signature = (execution_context=None))]
+    fn load(
+        &mut self,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
+        py: Python<'_>,
+    ) -> PyResult<()> {
+        let execution_route = route_from_context(execution_context, py);
+        let mut inner = self.inner.clone();
+        inner = py
+            .detach(move || {
+                let mut inner = route_pending_image(inner, execution_route);
+                inner.load()?;
+                Ok(inner)
+            })
+            .map_err(map_error)?;
+        self.inner = inner;
+        Ok(())
     }
 
     fn seek(slf: Py<Self>, frame: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {

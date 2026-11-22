@@ -152,6 +152,7 @@ impl ImageFont {
     }
 
     /// Measures text advance using the supplied shaping options.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[wasm_bindgen(js_name = "getlengthWithOptions")]
     pub fn getlength_with_options(
         &self,
@@ -173,7 +174,6 @@ impl ImageFont {
             js_font_text_input(&text),
             &options,
         )
-        .map(|value| value as f64)
         .map_err(err)
     }
 
@@ -296,6 +296,7 @@ impl ImageFont {
 
     /// Returns the variable-font axes and their minimum, default, maximum, and names.
     #[wasm_bindgen(js_name = "getVariationAxes")]
+    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
     pub fn get_variation_axes(&self) -> Result<js_sys::Array, JsValue> {
         let axes = pillow_rs::imagefont_get_variation_axes(&self.font).map_err(err)?;
         let result = js_sys::Array::new();
@@ -319,7 +320,10 @@ impl ImageFont {
             js_sys::Reflect::set(
                 &object,
                 &JsValue::from_str("name"),
-                &js_sys::Uint8Array::from(axis.name.as_slice()).into(),
+                &axis
+                    .name
+                    .as_deref()
+                    .map_or(JsValue::NULL, |name| js_sys::Uint8Array::from(name).into()),
             )?;
             result.push(&object);
         }
@@ -443,12 +447,13 @@ impl ImageFont {
     }
 
     /// Measures text advance after validating the requested orientation.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     #[wasm_bindgen(js_name = "getTransposedLength")]
     pub fn get_transposed_length(
         &self,
         text: &str,
         orientation: Option<String>,
-    ) -> Result<f32, JsValue> {
+    ) -> Result<f64, JsValue> {
         pillow_rs::validate_transposed_length(orientation.as_deref()).map_err(err)?;
         pillow_rs::imagefont_getlength(&self.font, text).map_err(err)
     }

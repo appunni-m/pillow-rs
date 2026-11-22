@@ -3,7 +3,7 @@
 use crate::compute::registry::support::{ModeSupport, RejectionKind};
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn classify_native_byte_point_mode(
     mode: Mode,
     luma_support: ModeSupport,
@@ -39,7 +39,7 @@ pub(crate) fn classify_native_byte_point_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn rejected_native_byte_point_mode(mode: Mode) -> ModeSupport {
     let reason = match mode {
         Mode::One => "not supported for mode 1",

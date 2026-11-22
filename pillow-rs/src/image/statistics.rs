@@ -23,8 +23,20 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization fails.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn stat_formatted(&self) -> Result<StatResult, PilError> {
         let bands = self.stat()?;
+        Ok(StatResult::from_bands(&bands))
+    }
+
+    /// Returns formatted statistics using a route captured by the host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn stat_formatted_with_context(
+        &self,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<StatResult, PilError> {
+        let bands = self.stat_with_execution_context(execution_context)?;
         Ok(StatResult::from_bands(&bands))
     }
 
@@ -34,34 +46,61 @@ impl Image {
     /// unmasked scan followed by a validation-only mask check. Reusing the
     /// histogram path keeps the count, extrema, and all derived values
     /// restricted to the non-zero mask pixels.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn stat_formatted_with_mask(
         &self,
         mask: crate::ops::imageops::ImageOpsMask,
     ) -> Result<StatResult, PilError> {
+        self.stat_formatted_with_mask_and_context(mask, None)
+    }
+
+    /// Computes Pillow statistics with a route captured by the host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn stat_formatted_with_mask_and_context(
+        &self,
+        mask: crate::ops::imageops::ImageOpsMask,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<StatResult, PilError> {
         match mask {
-            crate::ops::imageops::ImageOpsMask::None => self.stat_formatted(),
+            crate::ops::imageops::ImageOpsMask::None => {
+                self.stat_formatted_with_context(execution_context)
+            }
             crate::ops::imageops::ImageOpsMask::Invalid(type_name) => Err(
                 PilError::AttributeError(format!("'{type_name}' object has no attribute 'load'")),
             ),
             crate::ops::imageops::ImageOpsMask::Image(mask) => {
-                self.stat_formatted_with_image_mask(&mask)
+                self.stat_formatted_with_image_mask(&mask, execution_context)
             }
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-    fn stat_formatted_with_image_mask(&self, mask: &Image) -> Result<StatResult, PilError> {
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn stat_formatted_with_image_mask(
+        &self,
+        mask: &Image,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<StatResult, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialized_shared()?;
+        let image = routed_image.materialized_shared()?;
         operation_receipts.capture();
-        let mask_image = mask.materialized_shared()?;
+        let routed_mask = execution_context.map_or_else(
+            || mask.clone(),
+            |context| mask.clone().with_execution_context(context),
+        );
+        let mask_image = routed_mask.materialized_shared()?;
         operation_receipts.capture();
         let prepared_mask = crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::prepare_histogram_mask(
             image.as_ref(),
             Some(mask_image),
         )?;
         let mask_raw = prepared_mask.raw();
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, routed_context) = routed_image.cpu_arch_execution_route_advisory();
+        let context = execution_context.unwrap_or(routed_context);
         let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
             // source and mask graph operation receipts are restored separately.
@@ -110,13 +149,28 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization fails.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub fn stat(&self) -> Result<Vec<Vec<f64>>, PilError> {
-        let mode = self.mode_identity()?;
+        self.stat_with_execution_context(None)
+    }
+
+    /// Computes statistics with a route captured by the host wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn stat_with_execution_context(
+        &self,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Vec<Vec<f64>>, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
+        let mode = routed_image.mode_identity()?;
         OperationId::Stat.support().for_mode(mode).validate_mode()?;
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, routed_context) = routed_image.cpu_arch_execution_route_advisory();
+        let context = execution_context.unwrap_or(routed_context);
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialized_shared()?;
+        let image = routed_image.materialized_shared()?;
         operation_receipts.capture();
         let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
@@ -173,14 +227,30 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when mode detection or materialization fails.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     #[allow(clippy::type_complexity)]
     pub fn getcolors(
         &self,
         maxcolors: u32,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        self.getcolors_with_execution_context(maxcolors, None)
+    }
+
+    /// Counts colors using a route captured by the Pillow wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    #[allow(clippy::type_complexity)]
+    pub fn getcolors_with_execution_context(
+        &self,
+        maxcolors: u32,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialized_shared()?;
+        let image = routed_image.materialized_shared()?;
         operation_receipts.capture();
         // Pillow loads before selecting its mode-specific histogram or
         // low-level getcolors path; unsupported-mode errors follow decoding.
@@ -189,7 +259,8 @@ impl Image {
             .support()
             .for_mode(mode)
             .validate_mode()?;
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, routed_context) = routed_image.cpu_arch_execution_route_advisory();
+        let context = execution_context.unwrap_or(routed_context);
         let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
             // source graph operation receipts are restored separately.
@@ -232,16 +303,31 @@ impl Image {
 
     /// Applies Pillow's signed `maxcolors` argument semantics for bindings.
     /// Negative limits still load and validate the image, then return `None`.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn getcolors_with_signed_limit(
         &self,
         maxcolors: i32,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        self.getcolors_with_signed_limit_and_context(maxcolors, None)
+    }
+
+    /// Applies Pillow's signed limit while retaining a caller's route.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getcolors_with_signed_limit_and_context(
+        &self,
+        maxcolors: i32,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
         if maxcolors >= 0 {
-            return self.getcolors(maxcolors as u32);
+            return self.getcolors_with_execution_context(maxcolors as u32, execution_context);
         }
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialized_shared()?;
+        let image = routed_image.materialized_shared()?;
         operation_receipts.capture();
         // The public method loads before Pillow's low-level mode rejection,
         // including when a negative limit guarantees a `None` result.
@@ -259,21 +345,36 @@ impl Image {
     /// Those modes use their exact GetColors strategy when the raster has the
     /// same identity. A visible-mode override over another raster uses the
     /// first 256 bins of Histogram, represented as scalar byte values.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn getcolors_via_histogram_mode(
         &self,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
-        let mode = self.mode_identity()?;
+        self.getcolors_via_histogram_mode_with_context(None)
+    }
+
+    /// Executes Pillow's histogram-selected route with a captured CPU context.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getcolors_via_histogram_mode_with_context(
+        &self,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
+        let mode = routed_image.mode_identity()?;
         if matches!(
             mode,
             crate::raster::Mode::One
                 | crate::raster::Mode::ImageLuma8
                 | crate::raster::Mode::ImagePalette8
         ) {
-            return self.getcolors(u32::MAX);
+            return routed_image.getcolors_with_execution_context(u32::MAX, execution_context);
         }
 
-        let colors = self
-            .histogram()?
+        let colors = routed_image
+            .histogram_with_mask_and_extrema_with_context(None, None, execution_context)?
             .into_iter()
             .take(256)
             .enumerate()
@@ -290,11 +391,27 @@ impl Image {
     /// A raster in `1`, `L`, or `P` cannot use ImagingGetColors. Pillow checks
     /// the signed table limit first, so an unrepresentable table size takes
     /// precedence over that wrong-mode error.
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn getcolors_via_low_level_mode_with_signed_limit(
         &self,
         maxcolors: i32,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
-        let image = self.materialized_shared()?;
+        self.getcolors_via_low_level_mode_with_signed_limit_and_context(maxcolors, None)
+    }
+
+    /// Executes the low-level route while retaining a caller's CPU context.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getcolors_via_low_level_mode_with_signed_limit_and_context(
+        &self,
+        maxcolors: i32,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
+        let image = routed_image.materialized_shared()?;
         let mode = image.mode();
         let histogram_mode = matches!(
             mode,
@@ -312,7 +429,7 @@ impl Image {
         if histogram_mode {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
-        self.getcolors_with_signed_limit(maxcolors)
+        routed_image.getcolors_with_signed_limit_and_context(maxcolors, execution_context)
     }
 
     /// Returns `getcolors` with Pillow's scalar/tuple color shape applied.
@@ -336,10 +453,24 @@ impl Image {
     }
 
     /// Returns extrema using Pillow's one-pair versus per-band result shape.
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub fn getextrema_formatted(&self) -> Result<FormattedExtrema, PilError> {
-        let (width, height) = self.size()?;
-        let mode = self.mode_identity()?;
+        self.getextrema_formatted_with_context(None)
+    }
+
+    /// Returns formatted extrema using a route captured by the Pillow wrapper.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn getextrema_formatted_with_context(
+        &self,
+        execution_context: Option<crate::compute::ExecutionContext>,
+    ) -> Result<FormattedExtrema, PilError> {
+        let routed_image = execution_context.map_or_else(
+            || self.clone(),
+            |context| self.clone().with_execution_context(context),
+        );
+        let (width, height) = routed_image.size()?;
+        let mode = routed_image.mode_identity()?;
         if width == 0 || height == 0 {
             // Pillow's ImagingGetExtrema returns its zero-size status before
             // dispatching on sample type, so empty I;16L/B/N images return
@@ -356,9 +487,10 @@ impl Image {
             .support()
             .for_mode(mode)
             .validate_mode()?;
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let (requested_backend, routed_context) = routed_image.cpu_arch_execution_route_advisory();
+        let context = execution_context.unwrap_or(routed_context);
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-        let image = self.materialized_shared()?;
+        let image = routed_image.materialized_shared()?;
         operation_receipts.capture();
         let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered

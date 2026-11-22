@@ -6,8 +6,7 @@ use crate::map_error;
 use pillow_rs::PilError;
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
 use pyo3::types::{
-    PyAnyMethods, PyDictMethods, PyInt, PyIterator, PyList, PyListMethods, PyModuleMethods,
-    PySlice, PyTuple, PyTupleMethods, PyTypeMethods,
+    PyAnyMethods, PyInt, PyIterator, PyList, PyListMethods, PyModuleMethods, PySlice,
 };
 use pyo3::{pyfunction, wrap_pyfunction};
 
@@ -23,32 +22,6 @@ struct PythonEqualizeCallbacks<'py> {
 enum EqualizeCallbackError {
     Core(pillow_rs::PilError),
     Python(PyErr),
-}
-
-const PY_TPFLAGS_HEAPTYPE: u64 = 1 << 9;
-
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-fn is_standard_equalize_builtin(value: &Bound<'_, PyAny>, name: &str) -> PyResult<bool> {
-    // The module snapshot can itself contain replacements installed pre-import.
-    let expected_type = match name {
-        "len" | "sum" => "builtin_function_or_method",
-        "range" | "list" => "type",
-        _ => return Ok(false),
-    };
-    if value.get_type().name()?.to_string() != expected_type {
-        return Ok(false);
-    }
-    if expected_type == "type"
-        && value.getattr("__flags__")?.extract::<u64>()? & PY_TPFLAGS_HEAPTYPE != 0
-    {
-        // Python classes can spoof __module__ and __name__. Reject heap types
-        // so a pre-import replacement for range/list cannot enter the native path.
-        return Ok(false);
-    }
-    Ok(
-        value.getattr("__module__")?.extract::<String>()? == "builtins"
-            && value.getattr("__name__")?.extract::<String>()? == name,
-    )
 }
 
 impl From<pillow_rs::PilError> for EqualizeCallbackError {
@@ -129,31 +102,15 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         image.call_method1("histogram", (mask,)).map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // TODO(pillow-rs#3ptb): verify native and Python fallback histogram output,
+    // callback/fault order, and selected/fallback receipts in CPU parity.
+    // Builtin mutation is outside the supported compatibility contract; do not
+    // inspect or emulate patched module globals on this native path.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn native_histogram(
         &mut self,
         histogram: &Self::Histogram,
     ) -> Result<Option<Vec<u32>>, Self::Error> {
-        // TODO(pillow-rs#3ptb): prove replacements installed before this module
-        // is imported cannot imitate a builtin C callable's type and metadata.
-        // If identity is uncertain, use the host callbacks.
-        let imageops = self.py.import("pillow_rs.imageops")?;
-        let namespace = imageops.dict();
-        let names = ["len", "range", "sum", "list"];
-        for name in names {
-            if namespace.get_item(name)?.is_some() {
-                return Ok(None);
-            }
-        }
-        let expected = imageops.getattr("_EQUALIZE_FAST_BUILTINS")?;
-        let expected = expected.cast::<PyTuple>().map_err(PyErr::from)?;
-        for (index, name) in names.into_iter().enumerate() {
-            let current = imageops_global_or_builtin(self.py, name)?;
-            let original = expected.get_item(index)?;
-            if !current.is(&original) || !is_standard_equalize_builtin(&current, name)? {
-                return Ok(None);
-            }
-        }
         if !histogram.is_exact_instance_of::<PyList>() {
             return Ok(None);
         }
@@ -393,7 +350,7 @@ fn map_equalize_callback_error(error: EqualizeCallbackError) -> PyErr {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_imageops_equalize_with_callbacks(
     py: Python<'_>,

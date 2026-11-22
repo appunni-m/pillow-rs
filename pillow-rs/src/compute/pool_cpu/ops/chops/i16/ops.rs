@@ -12,7 +12,7 @@ pub(crate) const MODE: Mode = Mode::ImageI16;
 
 declare_i16_offset_architectures!(MODE);
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn support(operation: OperationId) -> ModeSupport {
     let architectures: &'static [ImplementationSupport] = if operation == OperationId::ChopsOffset {
         &OFFSET_ARCHITECTURES
@@ -22,7 +22,7 @@ pub(crate) fn support(operation: OperationId) -> ModeSupport {
     super::super::ops::mode_support_with_architectures(MODE, operation, architectures)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     request: super::super::ops::ChopsRequest,

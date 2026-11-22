@@ -1,17 +1,18 @@
 //! Serial I32 resampling with a bounded vertical ring and exact pass rounding.
 
 use crate::checked_dims::CheckedDims;
+use crate::compute::pool_cpu::ops::resize::helpers::byte_samples;
 use crate::error::PilError;
 use crate::ops::pil_resize::{F64MulAdd, FilterCoeffsF64};
 use crate::raster::RgbaImage;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[inline(always)]
 fn mul_add<F: F64MulAdd>(fma: &F, weight: f64, sample: i32, accumulator: f64) -> f64 {
     fma.mul_add(weight, f64::from(sample), accumulator)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn sum_eight<F: F64MulAdd>(
     weights: &[f64; 8],
@@ -29,7 +30,7 @@ pub(crate) fn sum_eight<F: F64MulAdd>(
     mul_add(fma, weights[7], sample(first_sample + 7), accumulator)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[inline(always)]
 fn sum_eight_contiguous<F: F64MulAdd>(
     weights: &[f64; 8],
@@ -50,7 +51,7 @@ fn sum_eight_contiguous<F: F64MulAdd>(
     mul_add(fma, weights[7], samples[7], accumulator)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn sum_general<F: F64MulAdd>(
     weights: &[f64],
@@ -65,13 +66,13 @@ pub(crate) fn sum_general<F: F64MulAdd>(
     accumulator
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn round_to_i32(value: f64) -> i32 {
     (value + 0.5_f64.copysign(value)) as i32
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn contiguous_eight_tap_weights(
     coefficients: &[Vec<f64>],
 ) -> Option<(usize, Vec<[f64; 8]>)> {
@@ -93,7 +94,7 @@ pub(crate) fn contiguous_eight_tap_weights(
     Some((first, fixed_width))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(crate) fn horizontal_row<F: F64MulAdd>(
     source_row: &[i32],
     output_row: &mut [i32],
@@ -137,15 +138,16 @@ pub(crate) fn horizontal_row<F: F64MulAdd>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-fn vertical_pass<F: F64MulAdd>(
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn vertical_pass<H: F64MulAdd, V: F64MulAdd>(
     source: &[i32],
     source_width: usize,
     destination_width: usize,
     vertical: &FilterCoeffsF64,
     horizontal: &FilterCoeffsF64,
     fixed_horizontal_weights: Option<&(usize, Vec<[f64; 8]>)>,
-    fma: &F,
+    horizontal_fma: &H,
+    vertical_fma: &V,
     ring: &mut [i32],
     ring_mask: usize,
     output_bytes: &mut [u8],
@@ -166,7 +168,7 @@ fn vertical_pass<F: F64MulAdd>(
                 intermediate_row,
                 horizontal,
                 fixed_horizontal_weights,
-                fma,
+                horizontal_fma,
             );
             next_source_row += 1;
         }
@@ -177,7 +179,7 @@ fn vertical_pass<F: F64MulAdd>(
                     weights,
                     first_source_y,
                     |sy| ring[(sy & ring_mask) * destination_width + dx],
-                    fma,
+                    vertical_fma,
                 );
                 output.copy_from_slice(&round_to_i32(accumulator).to_le_bytes());
             }
@@ -187,7 +189,7 @@ fn vertical_pass<F: F64MulAdd>(
                     weights,
                     first_source_y,
                     |sy| ring[(sy & ring_mask) * destination_width + dx],
-                    fma,
+                    vertical_fma,
                 );
                 output.copy_from_slice(&round_to_i32(accumulator).to_le_bytes());
             }
@@ -195,15 +197,16 @@ fn vertical_pass<F: F64MulAdd>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-pub(crate) fn execute<F: F64MulAdd>(
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(crate) fn execute<H: F64MulAdd, V: F64MulAdd>(
     source: &[i32],
     source_width: u32,
     destination_width: u32,
     destination_height: u32,
     horizontal: &FilterCoeffsF64,
     vertical: &FilterCoeffsF64,
-    fma: &F,
+    horizontal_fma: &H,
+    vertical_fma: &V,
 ) -> Result<RgbaImage, PilError> {
     let max_vertical_taps = vertical.weights.iter().map(Vec::len).max().unwrap_or(0);
     let ring_rows = max_vertical_taps
@@ -226,7 +229,8 @@ pub(crate) fn execute<F: F64MulAdd>(
         vertical,
         horizontal,
         fixed_horizontal_weights.as_ref(),
-        fma,
+        horizontal_fma,
+        vertical_fma,
         &mut ring,
         ring_rows - 1,
         &mut output_bytes,
@@ -234,4 +238,149 @@ pub(crate) fn execute<F: F64MulAdd>(
     );
     RgbaImage::from_raw(destination_width, destination_height, output_bytes)
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
+}
+
+/// Resample only the horizontal axis, leaving unchanged rows untouched.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(crate) fn execute_horizontal_only<F: F64MulAdd>(
+    source: &[i32],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    horizontal: &FilterCoeffsF64,
+    fma: &F,
+) -> Result<RgbaImage, PilError> {
+    let source_dims = CheckedDims::new(source_size.0, source_size.1, 1)?;
+    if source.len() != source_dims.total_pixels() {
+        return Err(PilError::InternalError(
+            "ImageI32 Resize received an invalid source plane".into(),
+        ));
+    }
+    let output_dims = CheckedDims::new(destination_size.0, destination_size.1, 4)?;
+    let output_stride = output_dims.row_stride();
+    let mut output_bytes = output_dims.alloc_buffer();
+    let mut output_row = vec![0_i32; destination_size.0 as usize];
+    let source_width = source_size.0 as usize;
+    for y in 0..destination_size.1 as usize {
+        let source_start = y * source_width;
+        horizontal_row(
+            &source[source_start..source_start + source_width],
+            &mut output_row,
+            horizontal,
+            None,
+            fma,
+        );
+        let output_start = y * output_stride;
+        for (sample, bytes) in output_row
+            .iter()
+            .zip(output_bytes[output_start..output_start + output_stride].chunks_exact_mut(4))
+        {
+            bytes.copy_from_slice(&sample.to_le_bytes());
+        }
+    }
+    RgbaImage::from_raw(destination_size.0, destination_size.1, output_bytes)
+        .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
+}
+
+/// Resample only the vertical axis, reading native I32 rows directly.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(crate) fn execute_vertical_only<F: F64MulAdd>(
+    source: &[i32],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    vertical: &FilterCoeffsF64,
+    fma: &F,
+) -> Result<RgbaImage, PilError> {
+    let source_dims = CheckedDims::new(source_size.0, source_size.1, 1)?;
+    if source.len() != source_dims.total_pixels() {
+        return Err(PilError::InternalError(
+            "ImageI32 Resize received an invalid source plane".into(),
+        ));
+    }
+    let output_dims = CheckedDims::new(destination_size.0, destination_size.1, 4)?;
+    let output_stride = output_dims.row_stride();
+    let mut output_bytes = output_dims.alloc_buffer();
+    let source_width = source_size.0 as usize;
+    for (y, output_row) in output_bytes.chunks_exact_mut(output_stride).enumerate() {
+        let first = vertical.xmin[y] as usize;
+        let weights = &vertical.weights[y];
+        for (x, output) in output_row.chunks_exact_mut(4).enumerate() {
+            let sample = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
+                sum_eight(
+                    weights,
+                    first,
+                    |source_y| source[source_y * source_width + x],
+                    fma,
+                )
+            } else {
+                sum_general(
+                    weights,
+                    first,
+                    |source_y| source[source_y * source_width + x],
+                    fma,
+                )
+            };
+            output.copy_from_slice(&round_to_i32(sample).to_le_bytes());
+        }
+    }
+    RgbaImage::from_raw(destination_size.0, destination_size.1, output_bytes)
+        .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
+}
+
+/// Apply Pillow's vertical-first I-mode passes by transposing native samples.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+pub(crate) fn execute_vertical_first<H: F64MulAdd, V: F64MulAdd>(
+    source: &[i32],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    horizontal: &FilterCoeffsF64,
+    vertical: &FilterCoeffsF64,
+    horizontal_fma: &H,
+    vertical_fma: &V,
+) -> Result<RgbaImage, PilError> {
+    let source_dims = CheckedDims::new(source_size.0, source_size.1, 1)?;
+    if source.len() != source_dims.total_pixels() {
+        return Err(PilError::InternalError(
+            "ImageI32 Resize received an invalid source plane".into(),
+        ));
+    }
+    let transposed_source = transpose_samples(source, source_size)?;
+    let transposed_output = execute(
+        &transposed_source,
+        source_size.1,
+        destination_size.1,
+        destination_size.0,
+        vertical,
+        horizontal,
+        vertical_fma,
+        horizontal_fma,
+    )?;
+    let output_dims = CheckedDims::new(destination_size.0, destination_size.1, 4)?;
+    let output = byte_samples::transpose_samples::<4>(
+        transposed_output.as_raw(),
+        destination_size.0,
+        destination_size.1,
+        output_dims,
+    );
+    RgbaImage::from_raw(destination_size.0, destination_size.1, output)
+        .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
+}
+
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+fn transpose_samples(source: &[i32], source_size: (u32, u32)) -> Result<Vec<i32>, PilError> {
+    let (source_width, source_height) = source_size;
+    let dimensions = CheckedDims::new(source_width, source_height, 1)?;
+    if source.len() != dimensions.total_pixels() {
+        return Err(PilError::InternalError(
+            "ImageI32 Resize transpose received an invalid source plane".into(),
+        ));
+    }
+    let width = source_width as usize;
+    let height = source_height as usize;
+    let mut transposed = vec![0_i32; dimensions.total_pixels()];
+    for y in 0..height {
+        for x in 0..width {
+            transposed[x * height + y] = source[y * width + x];
+        }
+    }
+    Ok(transposed)
 }

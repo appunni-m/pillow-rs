@@ -238,7 +238,7 @@ impl Image {
     /// the raw index/alpha bands and preserves `PA`; unlike `P`, it is a valid
     /// input for built-in convolution filters. Keep the PA-specific exception
     /// out of the generic classifier so P still follows its declared rejection.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     pub(super) fn is_palette_safe_op_for_mode(mode: Mode, op: &PipelineOp) -> bool {
         Self::is_palette_safe_op(op) || Self::putdata_preserves_palette_output(mode, op)
             // Same-mode P/PA conversion is a wrapper copy; retain indexed
@@ -309,9 +309,9 @@ impl Image {
             || (mode == Mode::ImagePalette8
                 && matches!(op, PipelineOp::Rotate { .. }))
             // Pillow's ImagingTransform applies affine/projective sampling to
-            // native P/PA samples and preserves the indexed mode. Keep this
-            // channel-wise operation indexed so a retained RGB palette is not
-            // expanded to RGBA before the transform runs.
+            // native P/PA samples and preserves both the indexed mode and the
+            // wrapper palette. Keep this channel-wise operation indexed so a
+            // retained RGB palette is not expanded to RGBA before transform.
             || (matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
                 && matches!(op, PipelineOp::Transform { .. }))
             // Pillow's ImageOps.fit keeps P/PA images indexed through the
@@ -372,6 +372,7 @@ impl Image {
     /// replaying an earlier resize.  Keeping the shared materialized pixels in
     /// a concrete image preserves that behavior for callers that branch a
     /// lazy pipeline, while each derived branch can still remain lazy.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn materialized_branch(&self) -> Result<Image, PilError> {
         match self {
             Image::Bytes { format, info, .. } => {
@@ -401,6 +402,7 @@ impl Image {
 
     /// Returns shared operation-ready pixels, persistently initializing lazy
     /// source or pipeline state when necessary.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(crate) fn materialized_shared(&self) -> Result<Arc<DynamicImage>, PilError> {
         match self {
             Image::Loaded(data) => Ok(Arc::clone(&data.image)),
@@ -441,6 +443,7 @@ impl Image {
                         palette_alpha,
                         ops.preserves_palette(),
                         ops.prefix_cache(),
+                        ops.execution_context(),
                     )?;
                     if let Some(output) = palette_output {
                         ops.cache_palette_output(output)?;
@@ -453,6 +456,7 @@ impl Image {
 
     /// Evaluates a pipeline without publishing its result into the pipeline's
     /// ordinary materialization cache.
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn evaluate_pipeline(
         source: &Image,
         ops: &[PipelineOp],
@@ -462,6 +466,7 @@ impl Image {
         palette_alpha: &Option<Vec<u8>>,
         preserves_palette: bool,
         prefix_cache: Option<&PipelinePrefixCache>,
+        execution_context: Option<crate::compute::ExecutionContext>,
     ) -> Result<(Arc<DynamicImage>, Option<PipelinePaletteOutput>), PilError> {
         if ops.is_empty() {
             return Self::validate_declared_pipeline_mode(
@@ -478,7 +483,11 @@ impl Image {
             let prefix_image = prefix_cache
                 .materialized
                 .get_or_init(|| {
-                    let prepared = crate::compute::prepare_execution(prefix_ops, backend)?;
+                    let prepared = crate::compute::prepare_execution_with_context(
+                        prefix_ops,
+                        backend,
+                        execution_context,
+                    )?;
                     let source_image = source.materialized_shared()?;
                     let mut prefix_palette_output = None;
                     Self::evaluate_pipeline_with_image(
@@ -496,7 +505,11 @@ impl Image {
                 })
                 .clone()?;
             let suffix_ops = &ops[prefix_cache.ops_len..];
-            let prepared = crate::compute::prepare_execution(suffix_ops, backend)?;
+            let prepared = crate::compute::prepare_execution_with_context(
+                suffix_ops,
+                backend,
+                execution_context,
+            )?;
             let resolved_palette = palette.clone().or_else(|| source.extract_palette());
             let resolved_alpha = palette_alpha
                 .clone()
@@ -514,7 +527,8 @@ impl Image {
                 inputs,
             )?
         } else {
-            let prepared = crate::compute::prepare_execution(ops, backend)?;
+            let prepared =
+                crate::compute::prepare_execution_with_context(ops, backend, execution_context)?;
             let source_image = source.materialized_shared()?;
             Self::evaluate_pipeline_with_image(
                 source,
@@ -533,6 +547,7 @@ impl Image {
             .map(|image| (image, palette_output))
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     pub(super) fn evaluate_pipeline_uncached(
         source: &Image,
         ops: &[PipelineOp],
@@ -541,6 +556,7 @@ impl Image {
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
         preserves_palette: bool,
+        execution_context: Option<crate::compute::ExecutionContext>,
     ) -> Result<(Arc<DynamicImage>, Option<PipelinePaletteOutput>), PilError> {
         if ops.is_empty() {
             return Self::validate_declared_pipeline_mode(
@@ -549,7 +565,8 @@ impl Image {
             )
             .map(|image| (image, None));
         }
-        let prepared = crate::compute::prepare_execution(ops, backend)?;
+        let prepared =
+            crate::compute::prepare_execution_with_context(ops, backend, execution_context)?;
         let (source_pixels, source_palette_output) = source.materialize_uncached_with_metadata()?;
         let source_image = Arc::new(source_pixels);
         let resolved_palette = palette.clone().or_else(|| {
@@ -599,7 +616,7 @@ impl Image {
         Ok(result)
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn evaluate_palette_cpu_operation(
         source: &Image,
         img: &DynamicImage,
@@ -653,7 +670,7 @@ impl Image {
         Ok(Some(Arc::new(result)))
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn evaluate_palette_pipeline(
         source: &Image,
         img: &DynamicImage,
@@ -799,6 +816,7 @@ impl Image {
         Ok(logical_mode)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn evaluate_pipeline_with_image(
         source: &Image,
         img: &DynamicImage,
@@ -894,6 +912,7 @@ impl Image {
             .map(|(image, _)| image)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn materialize_uncached_with_metadata(
         &self,
     ) -> Result<(DynamicImage, Option<PipelinePaletteOutput>), PilError> {
@@ -929,6 +948,7 @@ impl Image {
                     palette,
                     palette_alpha,
                     ops.preserves_palette(),
+                    ops.execution_context(),
                 )
                 .map(|(image, palette_output)| (image.as_ref().clone(), palette_output))
             }

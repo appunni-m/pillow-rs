@@ -52,7 +52,7 @@ class ImagePalette:
         p.dirty = self.dirty
         return p
 
-    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-e26f1119fdbd4e96bfec5a3029c153e7; benchmark=n/a
     def getcolor(self, color, image=None):
         """Given an rgb tuple, allocate palette entry."""
         if self.rawmode:
@@ -69,7 +69,6 @@ class ImagePalette:
             return self.colors[color]
         except KeyError as error:
             index = self._new_color_index(image, error)
-            self.colors[color] = index
             mode_len = len(self.mode)
             if index * mode_len < len(self.palette):
                 self._palette = (
@@ -79,6 +78,7 @@ class ImagePalette:
                 )
             else:
                 self._palette += bytes(color)
+            self.colors[color] = index
             self.dirty = 1
             return index
 

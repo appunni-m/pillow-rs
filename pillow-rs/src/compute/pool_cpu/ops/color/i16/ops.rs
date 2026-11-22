@@ -6,7 +6,9 @@ crate::compute::pool_cpu::ops::color::helpers::convert::binary::declare_mode_str
 
 use crate::compute::{
     Architecture,
-    registry::support::{InputContract, ModeSupport, OperationId, StrategySelection},
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
+    },
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
@@ -27,6 +29,14 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     crate::compute::registry::support::OutputModeRule::ByTargetModeWithPalette,
     INPUTS,
     &ARCHITECTURES,
+);
+
+pub(crate) const CONVERT_TRANSPARENT_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::ConvertTransparent,
+    Mode::ImageI16,
+    OutputModeRule::ByTargetMode,
+    super::super::ops::TRANSPARENT_I16_INPUTS,
+    &[],
 );
 
 static ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 24] =
@@ -50,6 +60,23 @@ pub(crate) fn execute(
         Architecture::WasmSimd128 => super::wasm_simd128::convert_impl::execute(source, target),
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared I;16 architecture".into(),
+        )),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+pub(crate) fn execute_transparent(
+    source: &Samples,
+    target: Mode,
+    key: [u8; 3],
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::default::convert_transparent_impl::execute(source, target, key)
+        }
+        _ => Err(PilError::InternalError(
+            "ConvertTransparent selected an undeclared I;16 architecture".into(),
         )),
     }
 }

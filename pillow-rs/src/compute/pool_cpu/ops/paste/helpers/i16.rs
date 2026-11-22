@@ -4,6 +4,7 @@ use crate::raster::{DynamicImage, Mode};
 
 use super::plan::Luma16Plan;
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn source_samples(image: &DynamicImage) -> Option<&[u16]> {
     match image {
         DynamicImage::ImageI16(image)
@@ -14,6 +15,7 @@ pub(crate) fn source_samples(image: &DynamicImage) -> Option<&[u16]> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn high_byte_first(mode: Mode) -> bool {
     match mode {
         Mode::ImageI16B => true,
@@ -23,6 +25,7 @@ pub(crate) const fn high_byte_first(mode: Mode) -> bool {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) const fn sample_in_destination_order(
     sample: u16,
     source_high_byte_first: bool,
@@ -36,6 +39,7 @@ pub(crate) const fn sample_in_destination_order(
 }
 
 /// Executes Pillow's typed I;16 Paste behavior without changing mode identity.
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[expect(
     clippy::arithmetic_side_effects,
     reason = "validated image extents bound every row, pixel, and byte-lane offset"
@@ -125,6 +129,7 @@ pub(crate) fn execute(plan: Luma16Plan<'_>, source: &[u16]) -> Result<Vec<u16>, 
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[expect(
     clippy::arithmetic_side_effects,
     reason = "the mask is a byte and the byte blend intermediates are bounded"
@@ -142,6 +147,7 @@ fn blend_byte(source: u8, destination: u8, mask: u8, premultiplied: bool) -> u8 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn byte_shift(high_byte_first: bool, byte_offset: usize) -> u32 {
     match (high_byte_first, byte_offset % 2) {
         (false, 0) | (true, 1) => 0,
@@ -150,6 +156,7 @@ fn byte_shift(high_byte_first: bool, byte_offset: usize) -> u32 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn sample_count(width: u32, height: u32) -> Result<usize, PilError> {
     usize::try_from(width)
         .ok()
@@ -161,6 +168,7 @@ fn sample_count(width: u32, height: u32) -> Result<usize, PilError> {
         .ok_or_else(|| overflow("sample count"))
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn overflow(part: &str) -> PilError {
     PilError::OverflowError(format!("I;16 Paste {part} overflowed"))
 }

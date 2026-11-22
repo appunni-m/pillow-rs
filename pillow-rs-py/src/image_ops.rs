@@ -1,3 +1,4 @@
+use crate::image::PyExecutionContext;
 use crate::*;
 use pyo3::basic::CompareOp;
 use pyo3::prelude::{PyErr, PyModule};
@@ -50,6 +51,49 @@ fn imageops_global_or_builtin<'py>(py: Python<'py>, name: &str) -> PyResult<Boun
     })
 }
 
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+pub(super) fn preserve_pinned_backend_after<T>(
+    source: &Bound<'_, PyAny>,
+    destination: &Bound<'_, PyAny>,
+    operation: impl FnOnce() -> PyResult<T>,
+) -> PyResult<T> {
+    // Public Paste loads the source, so capture a lazy pipeline's pin first.
+    let backend = pinned_backend(source);
+    let result = operation()?;
+    if let Some(backend) = backend {
+        set_pinned_backend(destination, backend);
+    }
+    Ok(result)
+}
+
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+fn pinned_backend(image: &Bound<'_, PyAny>) -> Option<pillow_rs::Backend> {
+    if let Ok(image) = image.cast::<PyImage>() {
+        return image.borrow().inner.backend();
+    }
+    let image = image.getattr("_rust_image").ok()?;
+    let image = image.cast::<PyImage>().ok()?;
+    image.borrow().inner.backend()
+}
+
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+fn set_pinned_backend(image: &Bound<'_, PyAny>, backend: pillow_rs::Backend) {
+    if let Ok(image) = image.cast::<PyImage>() {
+        let mut image = image.borrow_mut();
+        image.inner = image.inner.clone().use_backend(backend);
+        return;
+    }
+    // Custom host wrappers without a core image carrier have no pin to apply.
+    let Ok(image) = image.getattr("_rust_image") else {
+        return;
+    };
+    let Ok(image) = image.cast::<PyImage>() else {
+        return;
+    };
+    let mut image = image.borrow_mut();
+    image.inner = image.inner.clone().use_backend(backend);
+}
+
 // --- ImageOps module-level functions ---
 
 #[pyfunction]
@@ -87,7 +131,7 @@ fn ops_grayscale(image: &Bound<'_, PyImage>, py: Python<'_>) -> PyResult<PyImage
     Ok(PyImage { inner: rs })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_scale_with_route_callbacks(
     py: Python<'_>,
@@ -150,7 +194,7 @@ impl<'py> pillow_rs::ImageOpsBorderCallbacks for PythonBorderCallbacks<'py> {
     type Value = Bound<'py, PyAny>;
     type Error = AspectCallbackError;
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn border_is_tuple(&mut self, border: &Self::Value) -> Result<bool, Self::Error> {
         let is_instance = imageops_global_or_builtin(self.py, "isinstance")?;
         let tuple_type = imageops_global_or_builtin(self.py, "tuple")?;
@@ -160,12 +204,12 @@ impl<'py> pillow_rs::ImageOpsBorderCallbacks for PythonBorderCallbacks<'py> {
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn border_length(&mut self, border: &Self::Value) -> Result<usize, Self::Error> {
         border.len().map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn border_coordinate(
         &mut self,
         border: &Self::Value,
@@ -176,7 +220,7 @@ impl<'py> pillow_rs::ImageOpsBorderCallbacks for PythonBorderCallbacks<'py> {
 }
 
 impl<'py> pillow_rs::ImageOpsExpandGeometryCallbacks for PythonBorderCallbacks<'py> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn image_size_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error> {
         self.image
             .getattr("size")?
@@ -184,14 +228,14 @@ impl<'py> pillow_rs::ImageOpsExpandGeometryCallbacks for PythonBorderCallbacks<'
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error> {
         left.add(right).map_err(Into::into)
     }
 }
 
 impl<'py> pillow_rs::ImageOpsCropCallbacks for PythonBorderCallbacks<'py> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn image_size_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error> {
         self.image
             .getattr("size")?
@@ -199,7 +243,7 @@ impl<'py> pillow_rs::ImageOpsCropCallbacks for PythonBorderCallbacks<'py> {
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn subtract(
         &mut self,
         left: &Self::Value,
@@ -208,7 +252,7 @@ impl<'py> pillow_rs::ImageOpsCropCallbacks for PythonBorderCallbacks<'py> {
         left.sub(right).map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn box_tuple(
         &mut self,
         left: &Self::Value,
@@ -226,14 +270,14 @@ impl<'py> pillow_rs::ImageOpsCropCallbacks for PythonBorderCallbacks<'py> {
 }
 
 impl<'py> pillow_rs::ImageOpsCropRouteCallbacks for PythonBorderCallbacks<'py> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn image_is_exact_base_type(&mut self) -> Result<bool, Self::Error> {
         let type_function = imageops_global_or_builtin(self.py, "type")?;
         let image_type = self.py.import("pillow_rs.imageops")?.getattr("Image")?;
         Ok(type_function.call1((self.image.clone(),))?.is(&image_type))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn size_property_is_base(&mut self) -> Result<bool, Self::Error> {
         let module = self.py.import("pillow_rs.imageops")?;
         let image_type = module.getattr("Image")?;
@@ -242,7 +286,7 @@ impl<'py> pillow_rs::ImageOpsCropRouteCallbacks for PythonBorderCallbacks<'py> {
         Ok(current.is(&baseline))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn crop_method_is_base(&mut self) -> Result<bool, Self::Error> {
         let module = self.py.import("pillow_rs.imageops")?;
         let image_type = module.getattr("Image")?;
@@ -251,7 +295,7 @@ impl<'py> pillow_rs::ImageOpsCropRouteCallbacks for PythonBorderCallbacks<'py> {
         Ok(current.is(&baseline))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn instance_crop_is_absent(&mut self) -> Result<bool, Self::Error> {
         let attributes = self.image.getattr("__dict__")?;
         let attributes = attributes.cast::<PyDict>().map_err(PyErr::from)?;
@@ -261,39 +305,39 @@ impl<'py> pillow_rs::ImageOpsCropRouteCallbacks for PythonBorderCallbacks<'py> {
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn border_is_exact_integer(&mut self, border: &Self::Value) -> Result<bool, Self::Error> {
         let type_function = imageops_global_or_builtin(self.py, "type")?;
         let integer_type = imageops_global_or_builtin(self.py, "int")?;
         Ok(type_function.call1((border.clone(),))?.is(&integer_type))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn border_is_nonnegative(&mut self, border: &Self::Value) -> Result<bool, Self::Error> {
         PyInt::new(self.py, 0).le(border).map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn border_fits_u32(&mut self, border: &Self::Value) -> Result<bool, Self::Error> {
         border.le(u32::MAX).map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn border_as_u32(&mut self, border: &Self::Value) -> Result<u32, Self::Error> {
         border.extract().map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn native_image(&mut self) -> Result<pillow_rs::Image, Self::Error> {
         wrapped_image_snapshot(&self.image).map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn run_core<T: Send>(&mut self, operation: impl FnOnce() -> T + Send) -> T {
         self.py.detach(operation)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn native_box_tuple(
         &mut self,
         (left, top, right, bottom): (u32, u32, u32, u32),
@@ -305,7 +349,7 @@ impl<'py> pillow_rs::ImageOpsCropRouteCallbacks for PythonBorderCallbacks<'py> {
 }
 
 impl<'py> PythonAspectCallbacks<'py> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn new(py: Python<'py>, image: &Bound<'py, PyAny>, size: &Bound<'py, PyAny>) -> Self {
         Self {
             py,
@@ -319,28 +363,33 @@ impl<'py> pillow_rs::ImageOpsAspectCallbacks for PythonAspectCallbacks<'py> {
     type Value = Bound<'py, PyAny>;
     type Error = AspectCallbackError;
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn image_width(&mut self) -> Result<Self::Value, Self::Error> {
         self.image
             .getattr("width")
             .map_err(AspectCallbackError::Python)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn image_height(&mut self) -> Result<Self::Value, Self::Error> {
         self.image
             .getattr("height")
             .map_err(AspectCallbackError::Python)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn size_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error> {
         self.size
             .get_item(index)
             .map_err(AspectCallbackError::Python)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    fn zero_value(&mut self) -> Result<Self::Value, Self::Error> {
+        Ok(PyInt::new(self.py, 0).into_any())
+    }
+
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn arithmetic(
         &mut self,
         operation: pillow_rs::ImageOpsAspectArithmetic,
@@ -356,7 +405,7 @@ impl<'py> pillow_rs::ImageOpsAspectCallbacks for PythonAspectCallbacks<'py> {
         .map_err(AspectCallbackError::Python)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn compare(
         &mut self,
         operation: pillow_rs::ImageOpsAspectComparison,
@@ -376,7 +425,7 @@ impl<'py> pillow_rs::ImageOpsAspectCallbacks for PythonAspectCallbacks<'py> {
             .map_err(AspectCallbackError::Python)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn round(&mut self, value: &Self::Value) -> Result<Self::Value, Self::Error> {
         self.py
             .import("builtins")
@@ -388,7 +437,7 @@ impl<'py> pillow_rs::ImageOpsAspectCallbacks for PythonAspectCallbacks<'py> {
             .map_err(AspectCallbackError::Python)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn size_pair(
         &mut self,
         width: &Self::Value,
@@ -521,7 +570,7 @@ impl<'py> pillow_rs::ImageOpsScaleRouteCallbacks for PythonScaleCallbacks<'py> {
 }
 
 impl<'py> pillow_rs::ImageOpsFitCallbacks for PythonAspectCallbacks<'py> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn image_size_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error> {
         let size = self
             .image
@@ -530,7 +579,7 @@ impl<'py> pillow_rs::ImageOpsFitCallbacks for PythonAspectCallbacks<'py> {
         size.get_item(index).map_err(AspectCallbackError::Python)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn box_tuple(
         &mut self,
         left: &Self::Value,
@@ -546,7 +595,7 @@ impl<'py> pillow_rs::ImageOpsFitCallbacks for PythonAspectCallbacks<'py> {
         .map_err(AspectCallbackError::Python)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn fit_constant(
         &mut self,
         constant: pillow_rs::ImageOpsFitConstant,
@@ -562,7 +611,16 @@ impl<'py> pillow_rs::ImageOpsFitCallbacks for PythonAspectCallbacks<'py> {
 }
 
 impl<'py> pillow_rs::ImageOpsFitRouteCallbacks for PythonAspectCallbacks<'py> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    fn size_min_is_zero(&mut self) -> Result<bool, AspectCallbackError> {
+        let minimum = imageops_global_or_builtin(self.py, "min")?.call1((self.size.clone(),))?;
+        minimum
+            .rich_compare(PyInt::new(self.py, 0), CompareOp::Eq)?
+            .is_truthy()
+            .map_err(Into::into)
+    }
+
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn native_fit_inputs_are_eligible(
         &mut self,
         bleed: &Bound<'py, PyAny>,
@@ -576,20 +634,17 @@ impl<'py> pillow_rs::ImageOpsFitRouteCallbacks for PythonAspectCallbacks<'py> {
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn native_image(&mut self) -> Result<pillow_rs::Image, AspectCallbackError> {
         wrapped_image_snapshot(&self.image).map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn bleed_as_f64(&mut self, bleed: &Bound<'py, PyAny>) -> Result<f64, AspectCallbackError> {
-        imageops_global_or_builtin(self.py, "float")?
-            .call1((bleed,))?
-            .extract::<f64>()
-            .map_err(Into::into)
+        bleed.extract::<f64>().map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn native_centering(
         &mut self,
         centering: &Bound<'py, PyAny>,
@@ -597,7 +652,7 @@ impl<'py> pillow_rs::ImageOpsFitRouteCallbacks for PythonAspectCallbacks<'py> {
         Ok(crate::inputs::centering_from_python(centering))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn unpack_centering(
         &mut self,
         centering: &Bound<'py, PyAny>,
@@ -610,12 +665,12 @@ impl<'py> pillow_rs::ImageOpsFitRouteCallbacks for PythonAspectCallbacks<'py> {
         Ok((pair.get_item(0)?, pair.get_item(1)?))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn run_core<T: Send>(&mut self, operation: impl FnOnce() -> T + Send) -> T {
         self.py.detach(operation)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn native_box_tuple(
         &mut self,
         (left, top, right, bottom): (f64, f64, f64, f64),
@@ -641,7 +696,7 @@ fn aspect_callback_error(error: AspectCallbackError) -> PyErr {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_fit_box_with_route_callbacks(
     py: Python<'_>,
@@ -649,14 +704,14 @@ fn ops_fit_box_with_route_callbacks(
     size: &Bound<'_, PyAny>,
     bleed: &Bound<'_, PyAny>,
     centering: &Bound<'_, PyAny>,
-) -> PyResult<Py<PyAny>> {
+) -> PyResult<Option<Py<PyAny>>> {
     let mut callbacks = PythonAspectCallbacks::new(py, image, size);
     pillow_rs::imageops_fit_box_with_route_callbacks(&mut callbacks, bleed, centering)
         .map_err(aspect_callback_error)
-        .map(|box_| box_.unbind())
+        .map(|box_| box_.map(|box_| box_.unbind()))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_crop_box_with_route_callbacks(
     py: Python<'_>,
@@ -678,12 +733,15 @@ fn wrapped_image_snapshot(image: &Bound<'_, PyAny>) -> PyResult<pillow_rs::Image
     Ok(borrowed.inner.clone())
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 #[pyfunction]
-#[pyo3(signature = (image, in_place=false))]
+#[pyo3(signature = (image, in_place=false, execution_context=None))]
 fn ops_exif_transpose(
     image: &Bound<'_, PyImage>,
     in_place: bool,
+    execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
 ) -> PyResult<(bool, bool, Option<PyImage>)> {
+    let execution_context = execution_context.map(|context| context.inner);
     let exif_snapshot = image.borrow().inner.getexif();
     let orientation = pillow_rs::exif_get_orientation(&exif_snapshot).unwrap_or(1);
     let changed = (2..=8).contains(&orientation);
@@ -691,7 +749,12 @@ fn ops_exif_transpose(
         let inner = image.borrow().inner.clone();
         Python::attach(|py| {
             py.detach(|| {
-                pillow_rs::imageops_exif_transpose_with_orientation(&inner, orientation, in_place)
+                pillow_rs::imageops_exif_transpose_with_orientation_and_context(
+                    &inner,
+                    orientation,
+                    in_place,
+                    execution_context,
+                )
             })
         })
         .map_err(map_error)?

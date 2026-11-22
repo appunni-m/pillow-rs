@@ -122,10 +122,23 @@ pub fn exif_transpose(image: &Image, in_place: bool) -> Result<Option<Image>, Pi
 /// effectful `in_place.__bool__`. It then applies that selected method to the
 /// image's current raster and removes the orientation from its current EXIF,
 /// matching the wrapper's order if truth testing mutates the image.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub fn exif_transpose_with_orientation(
     image: &Image,
     orientation: u32,
     in_place: bool,
+) -> Result<Option<Image>, PilError> {
+    exif_transpose_with_orientation_and_context(image, orientation, in_place, None)
+}
+
+/// Applies an earlier EXIF snapshot before loading a queued transpose.
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+#[doc(hidden)]
+pub fn exif_transpose_with_orientation_and_context(
+    image: &Image,
+    orientation: u32,
+    in_place: bool,
+    context: Option<crate::compute::ExecutionContext>,
 ) -> Result<Option<Image>, PilError> {
     let method = match orientation {
         2 => Some("FLIP_LEFT_RIGHT"),
@@ -141,10 +154,12 @@ pub fn exif_transpose_with_orientation(
     match method {
         Some(method) => {
             let exif = exif_remove_orientation(&image.getexif());
-            image
-                .transpose(method)?
-                .with_exif_metadata(Some(exif))
-                .map(Some)
+            let transposed = image.transpose(method)?;
+            let transposed = match context {
+                Some(context) => transposed.with_execution_context(context),
+                None => transposed,
+            };
+            transposed.with_exif_metadata(Some(exif)).map(Some)
         }
         None if in_place => Ok(None),
         None => Ok(Some(image.copy())),

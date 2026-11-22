@@ -41,16 +41,19 @@ impl<'py> pillow_rs::ImageOpsBorderCallbacks for PythonExpandCallbacks<'py> {
     type Value = Bound<'py, PyAny>;
     type Error = ExpandCallbackError;
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn border_is_tuple(&mut self, border: &Self::Value) -> Result<bool, Self::Error> {
         pillow_rs::ImageOpsBorderCallbacks::border_is_tuple(&mut self.geometry, border)
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn border_length(&mut self, border: &Self::Value) -> Result<usize, Self::Error> {
         pillow_rs::ImageOpsBorderCallbacks::border_length(&mut self.geometry, border)
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn border_coordinate(
         &mut self,
         border: &Self::Value,
@@ -62,11 +65,13 @@ impl<'py> pillow_rs::ImageOpsBorderCallbacks for PythonExpandCallbacks<'py> {
 }
 
 impl<'py> pillow_rs::ImageOpsExpandGeometryCallbacks for PythonExpandCallbacks<'py> {
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn image_size_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error> {
         pillow_rs::ImageOpsExpandGeometryCallbacks::image_size_coordinate(&mut self.geometry, index)
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error> {
         pillow_rs::ImageOpsExpandGeometryCallbacks::add(&mut self.geometry, left, right)
             .map_err(Into::into)
@@ -151,13 +156,16 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     fn palette_get_color(
         &mut self,
         palette: &Self::Palette,
         fill: &Self::Value,
     ) -> Result<Self::Value, Self::Error> {
+        // Pillow consults the image's reserved transparency/background indices
+        // and can inspect its histogram when the palette has no free slot.
         palette
-            .call_method1("getcolor", (fill,))
+            .call_method1("getcolor", (fill, self.geometry.image.clone()))
             .map_err(Into::into)
     }
 
@@ -233,6 +241,18 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    fn copy_transparency_info(&mut self, output: &mut Self::Output) -> Result<(), Self::Error> {
+        let source_info = self.geometry.image.getattr("info")?;
+        if source_info.contains("transparency")? {
+            let output_info = output.getattr("info")?;
+            let transparency = source_info.get_item("transparency")?;
+            output_info.set_item("transparency", transparency)?;
+        }
+        Ok(())
+    }
+
+    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
     fn paste(
         &mut self,
         output: &mut Self::Output,
@@ -241,10 +261,11 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
     ) -> Result<(), Self::Error> {
         let paste = output.getattr("paste")?;
         let position = PyTuple::new(self.geometry.py, [left.clone(), top.clone()])?;
-        paste
-            .call1((self.geometry.image.clone(), position))
-            .map(|_| ())
-            .map_err(Into::into)
+        super::preserve_pinned_backend_after(&self.geometry.image, output, || {
+            paste.call1((self.geometry.image.clone(), position))
+        })
+        .map(|_| ())
+        .map_err(Into::into)
     }
 }
 
@@ -255,6 +276,7 @@ fn expand_callback_error(error: ExpandCallbackError) -> PyErr {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_expand_with_callbacks(
     py: Python<'_>,

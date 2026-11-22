@@ -2,6 +2,7 @@ use super::DrawLayout;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn has_vectorized_byte_rows(image: &DynamicImage, channels: usize) -> bool {
     image.height() != 0
         && image
@@ -10,6 +11,7 @@ fn has_vectorized_byte_rows(image: &DynamicImage, channels: usize) -> bool {
             .is_some_and(|row_bytes| row_bytes >= 16)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 fn line_bounds_intersect(width: u32, height: u32, x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
     let min_x = i64::from(x0.min(x1));
     let max_x = i64::from(x0.max(x1));
@@ -23,10 +25,12 @@ fn line_bounds_intersect(width: u32, height: u32, x0: i32, y0: i32, x1: i32, y1:
         && min_y < i64::from(height)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn valid_draw_rectangle(x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
     x1 >= x0 && y1 >= y0
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn has_visible_draw_rectangle(
     width: u32,
     height: u32,
@@ -49,12 +53,14 @@ pub(super) fn has_visible_draw_rectangle(
         && i64::from(y0) < i64::from(height)
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn has_visible_draw_point(width: u32, height: u32, points: &[(i32, i32)]) -> bool {
     points.iter().any(|&(x, y)| {
         x >= 0 && y >= 0 && i64::from(x) < i64::from(width) && i64::from(y) < i64::from(height)
     })
 }
 
+// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
 pub(super) fn supports_for_image(
     image: &DynamicImage,
     op: &PipelineOp,
