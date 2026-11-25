@@ -488,52 +488,61 @@ impl Image {
     /// `JpegImagePlugin` APP1 handling, which retains the payload starting at
     /// the `Exif\0\0` signature.
     fn extract_jpeg_exif(data: &[u8]) -> Option<Vec<u8>> {
-        if data.len() < 4 || data[0] != 0xFF || data[1] != 0xD8 {
+        let payload = Self::jpeg_header_segment(data, |marker| marker == 0xE1)?;
+        (payload.len() > 6 && payload.starts_with(b"Exif\x00\x00")).then(|| payload.to_vec())
+    }
+
+    /// Pillow subsampling index of a newly opened JPEG. Grayscale, CMYK and
+    /// nonstandard component layouts use the encoder default (-1).
+    pub fn opened_jpeg_subsampling(&self) -> Option<i8> {
+        let Image::Bytes {
+            format: Some(ImageFormat::Jpeg),
+            source,
+            ..
+        } = self
+        else {
             return None;
-        }
-        let mut offset = 2usize;
-        while offset + 4 <= data.len() {
-            if data[offset] != 0xFF {
-                // Pillow's JpegImagePlugin._open skips non-marker header junk
-                // before reading the next marker. Keep scanning so an APP1
-                // Exif segment after that junk remains observable through
-                // Image.getexif().
-                offset += 1;
+        };
+        // SOF0 (baseline) and SOF2 (progressive) have the same component layout.
+        let frame =
+            Self::jpeg_header_segment(source.bytes(), |marker| matches!(marker, 0xC0 | 0xC2));
+        // After precision, height and width come the component count and a
+        // triple (id, horizontal/vertical sampling factors, table) per component.
+        Some(match frame.and_then(|frame| frame.get(5..)) {
+            Some([3, _, y, _, _, 0x11, _, _, 0x11, _, ..]) => match y {
+                0x11 => 0,
+                0x21 => 1,
+                0x22 => 2,
+                _ => -1,
+            },
+            _ => -1,
+        })
+    }
+
+    fn jpeg_header_segment(data: &[u8], matches_marker: impl Fn(u8) -> bool) -> Option<&[u8]> {
+        let mut rest = data.strip_prefix(&[0xFF, 0xD8])?;
+        while let Some((&byte, tail)) = rest.split_first() {
+            rest = tail;
+            if byte != 0xFF {
                 continue;
             }
-            let marker = data[offset + 1];
-            // Standalone markers (RST0-7, TEM) and the SOI marker carry no
-            // length field.
-            if marker == 0xD8 || (0xD0..=0xD7).contains(&marker) || marker == 0x01 {
-                offset += 2;
-                continue;
+            while let Some(tail) = rest.strip_prefix(&[0xFF]) {
+                rest = tail; // Fill bytes between markers.
             }
-            if marker == 0xD9 {
-                return None;
+            let (&marker, tail) = rest.split_first()?;
+            rest = tail;
+            match marker {
+                0x00 | 0x01 | 0xD0..=0xD8 => continue, // Padding or standalone marker.
+                0xD9 | 0xDA => break,                  // EOI or start of scan.
+                _ => {}
             }
-            // Pillow's JpegImagePlugin stops collecting header metadata at
-            // SOS and hands the remainder to the entropy decoder. Do not
-            // interpret entropy bytes (including later marker-like bytes) as
-            // additional APP segments.
-            if marker == 0xDA {
-                return None;
+            let (length, data) = rest.split_first_chunk::<2>()?;
+            let size = usize::from(u16::from_be_bytes(*length)).checked_sub(2)?;
+            let (payload, tail) = data.split_at_checked(size)?;
+            if matches_marker(marker) {
+                return Some(payload);
             }
-            let length = usize::from(u16::from_be_bytes([data[offset + 2], data[offset + 3]]));
-            if length < 2 {
-                return None;
-            }
-            let segment_end = offset + 2 + length;
-            if segment_end > data.len() {
-                return None;
-            }
-            if marker == 0xE1 {
-                let payload = &data[offset + 4..segment_end];
-                if payload.len() > 6 && payload.starts_with(b"Exif\x00\x00") {
-                    return Some(payload.to_vec());
-                }
-                return None;
-            }
-            offset = segment_end;
+            rest = tail;
         }
         None
     }

@@ -73,6 +73,82 @@ class JpegSaveOptionsTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             self.encode(subsampling=(4, 4, 4))
 
+    def test_keep_uses_original_jpeg_component_sampling(self):
+        for sampling in range(3):
+            original = self.encode(subsampling=sampling)
+            expected = jpeg_headers(original)[0xC0][0][7::3]
+            for edit in ("none", "load", "putpixel", "thumbnail"):
+                with self.subTest(sampling=sampling, edit=edit):
+                    reopened = Image.open(BytesIO(original))
+                    if edit == "load":
+                        reopened.load()
+                    elif edit == "putpixel":
+                        reopened.putpixel((0, 0), (10, 20, 30))
+                    elif edit == "thumbnail":
+                        reopened.thumbnail((16, 12))
+                    out = BytesIO()
+                    reopened.save(out, "JPEG", quality=85, subsampling="keep")
+                    self.assertEqual(jpeg_headers(out.getvalue())[0xC0][0][7::3], expected)
+
+    def test_keep_requires_an_opened_jpeg(self):
+        original = Image.open(BytesIO(self.encode()))
+        png = BytesIO()
+        self.image.save(png, "PNG")
+        for im in (
+            self.image, Image.open(BytesIO(png.getvalue())),
+            original.copy(), original.crop((0, 0, 4, 4)),
+        ):
+            with self.subTest(image=im):
+                with self.assertRaisesRegex(ValueError, "original image is not a JPEG"):
+                    im.save(BytesIO(), "JPEG", subsampling="keep")
+
+    def test_keep_single_component_jpeg(self):
+        encoded = BytesIO()
+        Image.new("L", (8, 8)).save(encoded, "JPEG")
+        original = Image.open(BytesIO(encoded.getvalue()))
+        expected, actual = BytesIO(), BytesIO()
+        original.save(expected, "JPEG")
+        original.save(actual, "JPEG", subsampling="keep")
+        self.assertEqual(actual.getvalue(), expected.getvalue())
+
+    def test_keep_skips_marker_bytes_inside_app_segments(self):
+        original = self.encode(subsampling=1)
+        # A valid APP2 payload may contain marker-looking bytes. The extra FF
+        # before the next actual marker is legal JPEG padding.
+        payload = b"\xff\xc0\x00\x02\xff\xda"
+        app2 = b"\xff\xe2" + (len(payload) + 2).to_bytes(2, "big") + payload
+        source = original[:2] + app2 + b"\xff" + original[2:]
+        out = BytesIO()
+        Image.open(BytesIO(source)).save(out, "JPEG", subsampling="keep")
+        self.assertEqual(jpeg_headers(out.getvalue())[0xC0][0][7::3],
+                         jpeg_headers(original)[0xC0][0][7::3])
+
+    def test_unrecognized_subsampling(self):
+        for name in ("0", "444", "4:3:2", ""):
+            with self.subTest(name=name), self.assertRaises(TypeError):
+                self.encode(subsampling=name)
+        for number in (-2, 3, 42):
+            with self.subTest(number=number):
+                self.assertEqual(self.encode(subsampling=number), self.encode())
+
+    def test_quality_requires_an_integer(self):
+        class IndexOnly:
+            def __index__(self):
+                return 1
+
+        with self.assertRaisesRegex(ValueError, "Invalid quality"):
+            self.encode(quality=IndexOnly())
+        self.assertEqual(self.encode(subsampling=IndexOnly()), self.encode(subsampling=1))
+
+    def test_jpeg_filename_aliases_use_the_same_options(self):
+        expected = self.encode(quality=35, subsampling=0)
+        with TemporaryDirectory() as directory:
+            for suffix in (".jpg", ".jpeg", ".JPE", ".jfif"):
+                with self.subTest(suffix=suffix):
+                    path = Path(directory) / ("image" + suffix)
+                    self.image.save(path, quality=35, subsampling=0)
+                    self.assertEqual(path.read_bytes(), expected)
+
     def test_png_still_ignores_jpeg_options(self):
         expected, actual = BytesIO(), BytesIO()
         self.image.save(expected, "PNG", compress_level=1)

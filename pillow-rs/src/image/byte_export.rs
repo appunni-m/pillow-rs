@@ -104,9 +104,17 @@ impl Image {
         explicit: Option<&str>,
         extension: Option<&str>,
     ) -> Result<String, PilError> {
+        Self::resolve_save_target(explicit, extension).map(|(name, _)| name.to_owned())
+    }
+
+    /// Returns the requested spelling and the canonical codec name for dispatch.
+    pub fn resolve_save_target<'a>(
+        explicit: Option<&'a str>,
+        extension: Option<&'a str>,
+    ) -> Result<(&'a str, &'static str), PilError> {
         if let Some(format) = explicit {
             parse_format_str(format)
-                .map(|_| format.to_owned())
+                .map(|codec| (format, codec.as_str()))
                 .map_err(|_| PilError::KeyError(format.to_owned()))
         } else {
             let extension = extension.ok_or_else(|| {
@@ -115,7 +123,7 @@ impl Image {
                 PilError::ValueError("unknown file extension: ".into())
             })?;
             parse_format_str(extension)
-                .map(|_| extension.to_owned())
+                .map(|codec| (extension, codec.as_str()))
                 .map_err(|_| PilError::ValueError(format!("unknown file extension: .{extension}")))
         }
     }

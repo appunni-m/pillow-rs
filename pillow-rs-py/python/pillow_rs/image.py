@@ -4,7 +4,7 @@ from operator import index as _index
 from pathlib import Path
 from struct import iter_unpack as _iter_unpack
 from sys import maxsize as _MAX_INDEX
-from typing import Any, Optional, Tuple, Union
+from typing import Any, BinaryIO, Optional, Tuple, Union
 
 from . import _core
 from ._core import Image as RustImage
@@ -228,6 +228,8 @@ class Image:
     TRANSPOSE = Transpose.TRANSPOSE
     TRANSVERSE = Transpose.TRANSVERSE
 
+    _source_jpeg_subsampling: Optional[int] = None
+
     def __init__(self, rust_image=None):
         if RustImage is None:
             raise ImportError("pillow-rs Rust extension not available.")
@@ -301,10 +303,13 @@ class Image:
             raise UnidentifiedImageError(f"cannot identify image file '{fp}'") from exc
         result = cls(rust_image)
         result._verify_encoded_source = True
-        # WebP frame timing becomes public metadata during Pillow's load in
-        # transpose. Cache that decoder requirement once when opening the
-        # file; ordinary images never need a format lookup in transpose.
-        result._transpose_loads_info = rust_image.format == "WEBP"
+        source_format = rust_image.format
+        if source_format == "JPEG":
+            # Pixel edits can replace the Rust image. Only the opened wrapper
+            # retains the original component sampling for save(subsampling="keep").
+            result._source_jpeg_subsampling = rust_image.opened_jpeg_subsampling
+        # WebP frame timing becomes public metadata during load in transpose.
+        result._transpose_loads_info = source_format == "WEBP"
         return result
 
     @classmethod
@@ -327,9 +332,11 @@ class Image:
         return cls(RustImage.effect_noise_from_size(size, sigma))
 
     def save(
-        self, fp: Union[str, Path], format: Optional[str] = None, **options
+        self, fp: Union[str, Path, BinaryIO], format: Optional[str] = None, **options
     ) -> None:
-        self._rust_image.save(fp, format, **options)
+        self._rust_image._save_with_source(
+            self._source_jpeg_subsampling, fp, format, **options
+        )
 
     def resize(
         self,
