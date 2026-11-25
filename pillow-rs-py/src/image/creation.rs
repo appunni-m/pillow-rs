@@ -103,12 +103,13 @@ impl PyImage {
         .map_err(map_error)
     }
 
-    #[pyo3(signature = (fp, format=None, compress_level=None))]
+    #[pyo3(signature = (fp, format=None, compress_level=None, **params))]
     fn save(
         &mut self,
         fp: &Bound<'_, PyAny>,
         format: Option<String>,
         compress_level: Option<i64>,
+        params: Option<&Bound<'_, PyDict>>,
         py: Python<'_>,
     ) -> PyResult<()> {
         let path = host_path_from_python(fp)?;
@@ -134,7 +135,7 @@ impl PyImage {
             .and_then(|extension| extension.to_str());
         let format = pillow_rs::Image::resolve_save_format(format.as_deref(), extension)
             .map_err(map_error)?;
-        let encoder_options = save_options::encoder_options(&format, compress_level)?;
+        let encoder_options = save_options::encoder_options(&format, compress_level, params)?;
         let encoded = py
             .detach(|| self.inner.encode_with_options(&format, &encoder_options))
             .map_err(map_error)?;
