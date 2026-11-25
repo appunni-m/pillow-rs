@@ -103,12 +103,33 @@ impl PyImage {
         .map_err(map_error)
     }
 
-    #[pyo3(signature = (fp, format=None, compress_level=None))]
+    #[pyo3(signature = (fp, format=None, compress_level=None, **params))]
     fn save(
         &mut self,
         fp: &Bound<'_, PyAny>,
         format: Option<String>,
         compress_level: Option<i64>,
+        params: Option<&Bound<'_, PyDict>>,
+        py: Python<'_>,
+    ) -> PyResult<()> {
+        self.save_with_source(
+            self.inner.opened_jpeg_subsampling(),
+            fp,
+            format,
+            compress_level,
+            params,
+            py,
+        )
+    }
+
+    #[pyo3(name = "_save_with_source", signature = (source_sampling, /, fp, format=None, compress_level=None, **params))]
+    fn save_with_source(
+        &mut self,
+        source_sampling: Option<i8>,
+        fp: &Bound<'_, PyAny>,
+        format: Option<String>,
+        compress_level: Option<i64>,
+        params: Option<&Bound<'_, PyDict>>,
         py: Python<'_>,
     ) -> PyResult<()> {
         let path = host_path_from_python(fp)?;
@@ -132,11 +153,16 @@ impl PyImage {
             .as_deref()
             .and_then(|path| path.extension())
             .and_then(|extension| extension.to_str());
-        let format = pillow_rs::Image::resolve_save_format(format.as_deref(), extension)
+        let (format, codec) = pillow_rs::Image::resolve_save_target(format.as_deref(), extension)
             .map_err(map_error)?;
-        let encoder_options = save_options::encoder_options(&format, compress_level)?;
+        let encoder_options = save_options::encoder_options(
+            (format, codec),
+            compress_level,
+            params,
+            source_sampling,
+        )?;
         let encoded = py
-            .detach(|| self.inner.encode_with_options(&format, &encoder_options))
+            .detach(|| self.inner.encode_with_options(format, &encoder_options))
             .map_err(map_error)?;
         if let Some(path) = path {
             py.detach(|| std::fs::write(path, &encoded))

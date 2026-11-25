@@ -30,6 +30,11 @@ impl PyImage {
         self.inner.format_name()
     }
 
+    #[getter]
+    fn opened_jpeg_subsampling(&self) -> Option<i8> {
+        self.inner.opened_jpeg_subsampling()
+    }
+
     fn __repr__(&mut self) -> String {
         match self.inner.size() {
             Ok((w, h)) => {

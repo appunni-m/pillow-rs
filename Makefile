@@ -400,9 +400,10 @@ build-wasm-release: ## Build WASM package (release)
 
 build-all: build build-wasm-release ## Build Python + WASM
 
-python-compat-check: build-parity ## Import the public PIL facade under a selected Python interpreter
+python-compat-check: build-parity ## Check the public PIL facade under a selected Python interpreter
 	PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX="$(CURDIR)/target/python-compat-cache" \
 	PYTHONPATH="$(abspath $(PY_SRC)/python)" "$(PYTHON_COMPAT)" scripts/check_python_compatibility.py
+	PYTHONPATH="$(abspath $(PY_SRC)/python)" "$(PYTHON_COMPAT)" scripts/test_jpeg_save_options.py
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 .PHONY: test test-wasm test-wasm-node test-wasm-browser test-all migration-parity-js-gap-report migration-parity-test-all-backends migration-parity-test-gpu-strict migration-parity-test-simd-strict

@@ -1233,6 +1233,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_getdata_sequence_parity.py
     |-- test_gpu_batch.py
     |-- test_grayscale_rgb_domain.py
+    |-- test_jpeg_save_options.py
     |-- test_migration_benchmark_attestation.py
     |-- test_migration_benchmark_runner_identity.py
     |-- test_migration_benchmark_samples.py
