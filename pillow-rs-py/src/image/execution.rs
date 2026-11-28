@@ -15,7 +15,7 @@ pub(crate) type ExecutionRoute = Option<PythonExecutionRoute>;
 
 // Direct ImagingCore calls made inside wrapper callbacks have no explicit
 // context argument. Resolve the active owner at the binding boundary.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn route_from_active_wrapper(py: Python<'_>) -> ExecutionRoute {
     let module = PyModule::import(py, "pillow_rs.image").ok()?;
     let scope = module
@@ -45,7 +45,7 @@ pub(crate) fn route_from_active_wrapper(py: Python<'_>) -> ExecutionRoute {
         })
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn route_from_context(
     context: Option<PyRef<'_, PyExecutionContext>>,
     py: Python<'_>,
@@ -69,7 +69,7 @@ pub(crate) struct PyExecutionContext {
 
 // TODO(pillow-rs#3ptb): verify terminal bytes/faults and selected/fallback
 // receipts for pending graphs across CPU and declared architectures.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn route_pending_image(
     image: pillow_rs::Image,
     route: ExecutionRoute,

@@ -12,11 +12,14 @@ use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage, Mode};
 
-const INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
-    channels: 1,
-    overflow_reason: "palette remap image size overflow",
-    mismatch_reason: "palette remap input has wrong native byte length",
-}];
+const INPUTS: &[InputContract] = &[
+    InputContract::ExactNativeBytes {
+        channels: 1,
+        overflow_reason: "palette remap image size overflow",
+        mismatch_reason: "palette remap input has wrong native byte length",
+    },
+    super::super::ops::REMAP_PALETTE_DESTINATION_MAP_INPUT,
+];
 const ARCHITECTURES: [ImplementationSupport; 3] =
     super::super::helpers::strategy::palette_remap_architectures(Mode::ImagePalette8);
 
@@ -35,12 +38,12 @@ pub(crate) struct Prepared<'a> {
 }
 
 impl Prepared<'_> {
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let bytes = match self.selection.implementation.architecture {
             Architecture::Default => {
@@ -70,7 +73,7 @@ impl Prepared<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     dest_map: &'a [u8],

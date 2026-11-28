@@ -30,7 +30,7 @@ macro_rules! declare_architectures {
         pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
 
-        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(crate) fn prepare<'a>(input: &'a grayscale_impl::Input, ctx: &ExecutionContext)
             -> Result<Strategy<'a>, PilError> {
             let facts = StrategyInputs { width: input.width(), height: input.height(),
@@ -45,10 +45,12 @@ macro_rules! declare_architectures {
             Ok(Prepared::new(implementation, selection))
         }
 
-        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
                 let output = match strategy.implementation {
-                    ArchitectureStrategy::Default(input) => Ok(grayscale_impl::execute(input)),
+                    ArchitectureStrategy::Default(input) => {
+                        Ok::<_, PilError>(grayscale_impl::execute(input))
+                    }
                     $(#[cfg($cfg)] ArchitectureStrategy::$variant(input) => {
                         let width = input.width();
                         let height = input.height();

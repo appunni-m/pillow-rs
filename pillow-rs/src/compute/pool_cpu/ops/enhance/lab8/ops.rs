@@ -16,12 +16,16 @@ const INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
     mismatch_reason: "Brightness source bytes did not match its dimensions",
 }];
 
-pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
+// NO_PILLOW_SUPPORT: Pillow's Brightness wrapper mistakes LAB's A color
+// component for alpha and fails while creating its blend base. The direct
+// native result is covered by the target-only expected-output contract.
+pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Brightness,
     Mode::ImageLab8,
     OutputModeRule::Preserve,
     INPUTS,
     &[],
+    "Pillow Brightness cannot construct its LAB blend base",
 );
 
 const CONTRAST_INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {

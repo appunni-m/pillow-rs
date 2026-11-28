@@ -71,14 +71,139 @@ impl StatResult {
     }
 }
 
+/// Computes Pillow's integer-valued ImageStat path from histogram counts.
+///
+/// Pillow 13 accumulates integer histogram bins into integer `count`, `sum`,
+/// and `sum2` values. Keeping the sum integer until after squaring preserves
+/// the exact quotient rounding used by its variance formula.
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+pub fn stat_from_integer_histogram(data: &[u64]) -> StatResult {
+    let mut count_values = Vec::new();
+    let mut sum_values = Vec::new();
+    let mut sum2_values = Vec::new();
+    let mut means = Vec::new();
+    let mut medians = Vec::new();
+    let mut rms_values = Vec::new();
+    let mut variances = Vec::new();
+    let mut stddev_values = Vec::new();
+    let mut extrema_values = Vec::new();
+
+    for histogram in data.chunks_exact(256) {
+        let (count, sum, sum2, median, minimum, maximum) = integer_histogram_moments(histogram);
+        let mean = (count > 0)
+            .then(|| integer_ratio_to_f64(sum, count))
+            .unwrap_or(0.0);
+        let rms = (count > 0)
+            .then(|| integer_ratio_to_f64(sum2, count).sqrt())
+            .unwrap_or(0.0);
+        let variance = if count > 0 {
+            let square = sum.checked_mul(sum).unwrap_or(u128::MAX);
+            ((sum2 as f64 - integer_ratio_to_f64(square, count)) / count as f64).max(0.0)
+        } else {
+            0.0
+        };
+
+        count_values.push(count as i64);
+        sum_values.push(sum as i64);
+        sum2_values.push(sum2 as i64);
+        means.push(mean);
+        medians.push(median as i64);
+        rms_values.push(rms);
+        variances.push(variance);
+        stddev_values.push(variance.sqrt());
+        extrema_values.push((minimum as i64, maximum as i64));
+    }
+
+    StatResult {
+        count: StatValue::IntList(count_values),
+        sum: StatValue::IntList(sum_values),
+        sum2: StatValue::IntList(sum2_values),
+        mean: StatValue::FloatList(means),
+        median: StatValue::IntList(medians),
+        rms: StatValue::FloatList(rms_values),
+        var: StatValue::FloatList(variances),
+        stddev: StatValue::FloatList(stddev_values),
+        extrema: StatValue::ExtremaList(extrema_values),
+    }
+}
+
+fn integer_histogram_moments(histogram: &[u64]) -> (u128, u128, u128, usize, usize, usize) {
+    let count = histogram.iter().map(|&value| u128::from(value)).sum();
+    let mut sum = 0u128;
+    let mut sum2 = 0u128;
+    let mut cumulative = 0u128;
+    let mut median = 255;
+    let mut minimum = 255;
+    let mut maximum = 0;
+    for (index, &frequency) in histogram.iter().enumerate() {
+        let frequency = u128::from(frequency);
+        sum += index as u128 * frequency;
+        sum2 += (index * index) as u128 * frequency;
+        cumulative += frequency;
+        if median == 255 && cumulative > count / 2 {
+            median = index;
+        }
+        if frequency > 0 {
+            minimum = minimum.min(index);
+            maximum = maximum.max(index);
+        }
+    }
+    (count, sum, sum2, median, minimum, maximum)
+}
+
+fn integer_ratio_to_f64(numerator: u128, denominator: u128) -> f64 {
+    if numerator == 0 || denominator == 0 {
+        return 0.0;
+    }
+    let mut exponent = (u128::BITS - numerator.leading_zeros()) as i32
+        - (u128::BITS - denominator.leading_zeros()) as i32;
+    let ratio_below_power = if exponent >= 0 {
+        numerator < (denominator << exponent as u32)
+    } else {
+        (numerator << (-exponent) as u32) < denominator
+    };
+    if ratio_below_power {
+        exponent -= 1;
+    }
+
+    let shift = 52 - exponent;
+    let (scaled_numerator, scaled_denominator) = if shift >= 0 {
+        let Some(value) = numerator.checked_shl(shift as u32) else {
+            return numerator as f64 / denominator as f64;
+        };
+        (value, denominator)
+    } else {
+        let Some(value) = denominator.checked_shl((-shift) as u32) else {
+            return numerator as f64 / denominator as f64;
+        };
+        (numerator, value)
+    };
+    let mut significand = scaled_numerator / scaled_denominator;
+    let remainder = scaled_numerator % scaled_denominator;
+    let complement = scaled_denominator - remainder;
+    if remainder > complement || (remainder == complement && significand & 1 != 0) {
+        significand += 1;
+    }
+    if significand == (1u128 << 53) {
+        significand >>= 1;
+        exponent += 1;
+    }
+    let exponent_bits = (exponent + 1023) as u64;
+    let fraction_bits = (significand - (1u128 << 52)) as u64;
+    f64::from_bits((exponent_bits << 52) | fraction_bits)
+}
+
 /// Computes Pillow `ImageStat.Stat` values from a precomputed histogram.
 ///
 /// A histogram is partitioned into 256-bin bands. Each returned band contains
 /// `[count, sum, sum2, mean, median, rms, var, stddev, min, max]`, matching the
-/// representation used by [`crate::image::Image::stat`].
+/// representation used by [`crate::image::Image::stat`]. An incomplete final
+/// band is ignored.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn stat_from_histogram(data: &[f64]) -> StatResult {
     let bands: Vec<Vec<f64>> = data
-        .chunks(256)
+        // Pillow creates one band per complete 256-entry histogram segment.
+        .chunks_exact(256)
         .map(|histogram| {
             let count: f64 = histogram.iter().sum();
             let sum: f64 = histogram

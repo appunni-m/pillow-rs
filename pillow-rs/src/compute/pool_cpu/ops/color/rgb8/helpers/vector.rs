@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayAlphaImage, Mode, RgbImage, RgbaImage};
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn luma_alpha(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
     let (bytes, vector_blocks) = super::luma_alpha::execute(source)?;
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
@@ -26,6 +27,7 @@ pub(crate) fn luma_alpha(source: &RgbImage, target: Mode) -> Result<DynamicImage
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn rgba_for_target(output: RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(output)),
@@ -37,6 +39,7 @@ pub(crate) fn rgba_for_target(output: RgbaImage, target: Mode) -> Result<Dynamic
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn cmyk(source: &RgbImage) -> Result<DynamicImage, PilError> {
     let (bytes, vector_blocks) =
         crate::compute::pool_cpu::ops::color::helpers::convert::native_rgb::to_cmyk::<3>(
@@ -51,6 +54,7 @@ pub(crate) fn cmyk(source: &RgbImage) -> Result<DynamicImage, PilError> {
     Ok(DynamicImage::ImageCmyk8(output))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn ycbcr(source: &RgbImage) -> Result<DynamicImage, PilError> {
     let (bytes, vector_blocks) =
         crate::compute::pool_cpu::ops::color::helpers::convert::native_rgb::to_ycbcr::<3>(
@@ -65,6 +69,7 @@ pub(crate) fn ycbcr(source: &RgbImage) -> Result<DynamicImage, PilError> {
     Ok(DynamicImage::ImageYCbCr8(output))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn hsv(source: &RgbImage) -> Result<DynamicImage, PilError> {
     let (bytes, vector_blocks) =
         crate::compute::pool_cpu::ops::color::helpers::convert::native_rgb::to_hsv::<3>(
@@ -79,6 +84,7 @@ pub(crate) fn hsv(source: &RgbImage) -> Result<DynamicImage, PilError> {
     Ok(DynamicImage::ImageHsv8(output))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn i32(source: &RgbImage) -> Result<DynamicImage, PilError> {
     let (bytes, vector_blocks) =
         crate::compute::pool_cpu::ops::color::helpers::convert::native_rgb::to_i32::<3>(
@@ -93,6 +99,7 @@ pub(crate) fn i32(source: &RgbImage) -> Result<DynamicImage, PilError> {
     Ok(DynamicImage::ImageI32(output))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn f32(source: &RgbImage) -> Result<DynamicImage, PilError> {
     let (bytes, vector_blocks) =
         crate::compute::pool_cpu::ops::color::helpers::convert::native_rgb::to_f32::<3>(
@@ -107,15 +114,7 @@ pub(crate) fn f32(source: &RgbImage) -> Result<DynamicImage, PilError> {
     Ok(DynamicImage::ImageF32(output))
 }
 
-pub(crate) fn identity(source: &RgbImage) -> Result<DynamicImage, PilError> {
-    let (bytes, vector_blocks) = super::layout::execute(source)?;
-    record_vector_output(vector_blocks, bytes.capacity());
-    let output = RgbImage::from_raw(source.width(), source.height(), bytes).ok_or_else(|| {
-        PilError::InternalError("RGB Convert identity output shape mismatch".into())
-    })?;
-    Ok(DynamicImage::ImageRgb8(output))
-}
-
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn record_vector_output(vector_blocks: u64, allocation_bytes: usize) {
     if vector_blocks == 0 {
         crate::compute::record_pipeline_operation_path("scalar-control");

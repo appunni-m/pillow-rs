@@ -12,6 +12,7 @@ pub(crate) fn prepare(input: scalar::Kernel<'_>) -> Kernel<'_> {
     input
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     put_data_vector::execute(input).map(DynamicImage::ImageHsv8)

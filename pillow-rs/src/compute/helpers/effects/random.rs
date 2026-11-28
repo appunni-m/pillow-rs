@@ -12,12 +12,14 @@ pub(crate) struct DarwinRand {
 }
 
 impl Default for DarwinRand {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn default() -> Self {
         Self { state: 1 }
     }
 }
 
 impl DarwinRand {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn next(&mut self) -> u32 {
         const MULTIPLIER: u64 = 16_807;
         const MODULUS: u64 = 2_147_483_647;
@@ -25,6 +27,7 @@ impl DarwinRand {
         self.state
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn advance(&mut self, steps: u64) {
         const MULTIPLIER: u64 = 16_807;
         const MODULUS: u64 = 2_147_483_647;
@@ -44,11 +47,13 @@ impl DarwinRand {
 
 static PROCESS_RNG: OnceLock<Mutex<DarwinRand>> = OnceLock::new();
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn process_rng() -> &'static Mutex<DarwinRand> {
     PROCESS_RNG.get_or_init(|| Mutex::new(DarwinRand::default()))
 }
 
 /// Runs a scalar control section on the shared process stream.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn with_process_rng<T>(f: impl FnOnce(&mut DarwinRand) -> T) -> Result<T, PilError> {
     let mut rng = process_rng()
         .lock()
@@ -57,6 +62,8 @@ pub(crate) fn with_process_rng<T>(f: impl FnOnce(&mut DarwinRand) -> T) -> Resul
 }
 
 /// Builds Pillow's ordered scatter relocation map for GPU gather execution.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+#[cfg(feature = "gpu")]
 pub(crate) fn effect_spread_mapping(
     width: u32,
     height: u32,
@@ -70,6 +77,7 @@ pub(crate) fn effect_spread_mapping(
 }
 
 /// Builds a usize relocation map for native CPU sample gathering.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn effect_spread_indices(
     width: u32,
     height: u32,
@@ -117,6 +125,7 @@ pub(crate) fn effect_spread_indices(
 }
 
 /// Advances the shared stream by the two draws consumed per pixel at distance one.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn effect_spread_advance_identity_rng(width: u32, height: u32) -> Result<(), PilError> {
     let pixels = checked_pixels(width, height, "effect_spread")?;
     let steps = u64::try_from(pixels)
@@ -128,6 +137,7 @@ pub(crate) fn effect_spread_advance_identity_rng(width: u32, height: u32) -> Res
 }
 
 /// Generates Pillow's L-mode Gaussian-noise samples in stream order.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn effect_noise_values(
     width: u32,
     height: u32,
@@ -162,6 +172,7 @@ pub(crate) fn effect_noise_values(
     Ok(values)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn checked_pixels(width: u32, height: u32, operation: &str) -> Result<usize, PilError> {
     usize::try_from(width)
         .ok()

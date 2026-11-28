@@ -15,6 +15,7 @@ pub(crate) struct CheckedBand<'a, P: Pixel> {
 }
 
 impl<'a, P: Pixel> CheckedBand<'a, P> {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn new(
         input: &'a ImageBuffer<P, Vec<P::Subpixel>>,
         index: u8,
@@ -37,6 +38,7 @@ impl<'a, P: Pixel> CheckedBand<'a, P> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn facts<P: Pixel>(
     input: &ImageBuffer<P, Vec<P::Subpixel>>,
     index: u8,
@@ -50,7 +52,7 @@ pub(crate) fn facts<P: Pixel>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn output_mode(mode: Mode) -> Mode {
     match mode {
         Mode::ImageLumaA16 | Mode::ImageRgb16 | Mode::ImageRgba16 => Mode::ImageI16,
@@ -86,7 +88,7 @@ pub(crate) const fn output_bytes_per_pixel(mode: Mode) -> u8 {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn support(
     mode: Mode,
     inputs: &'static [InputContract],
@@ -151,6 +153,7 @@ fn gray(width: u32, height: u32) -> GrayImage {
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn luma(input: CheckedBand<'_, Luma<u8>>) -> Result<DynamicImage, PilError> {
     let pixel_count = input.dimensions.total_pixels();
     let samples = if input.index < 3 {
@@ -167,6 +170,7 @@ pub(crate) fn luma(input: CheckedBand<'_, Luma<u8>>) -> Result<DynamicImage, Pil
     finish_bytes(input.input.width(), input.input.height(), samples)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn rgb(input: CheckedBand<'_, Rgb<u8>>) -> Result<DynamicImage, PilError> {
     let channel = input.index.min(3);
     let pixel_count = input.dimensions.total_pixels();
@@ -184,7 +188,33 @@ pub(crate) fn rgb(input: CheckedBand<'_, Rgb<u8>>) -> Result<DynamicImage, PilEr
     finish_bytes(input.input.width(), input.input.height(), samples)
 }
 
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+/// Extracts Pillow's logical LAB band values from their stored byte channels.
+pub(crate) fn lab(input: CheckedBand<'_, Rgb<u8>>) -> Result<DynamicImage, PilError> {
+    let channel = input.index.min(3);
+    let pixel_count = input.dimensions.total_pixels();
+    let samples = if channel < 3 {
+        input
+            .input
+            .as_raw()
+            .chunks_exact(3)
+            .take(pixel_count)
+            .map(|pixel| {
+                if channel == 0 {
+                    pixel[channel]
+                } else {
+                    pixel[channel].wrapping_add(128)
+                }
+            })
+            .collect()
+    } else {
+        vec![u8::MAX; pixel_count]
+    };
+    finish_bytes(input.input.width(), input.input.height(), samples)
+}
+
 /// LA and RGBA retain their original four-pixel unrolling and logical tail.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn grouped<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     input: CheckedBand<'_, P>,
 ) -> Result<DynamicImage, PilError> {

@@ -10,6 +10,7 @@ use crate::raster::DynamicImage;
 struct X86FmaToken;
 
 impl F32MulAdd for X86FmaToken {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[allow(unsafe_code)]
     #[inline(always)]
     fn mul_add(&self, sample: f32, weight: f32, accumulator: f32) -> f32 {
@@ -30,6 +31,7 @@ impl F32MulAdd for X86FmaToken {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute(
     image: &DynamicImage,
     kernel: &[f32; 25],

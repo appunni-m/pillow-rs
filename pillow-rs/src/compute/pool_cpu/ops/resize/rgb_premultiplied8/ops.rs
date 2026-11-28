@@ -6,12 +6,8 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{Mode, RgbaImage};
 
-static RESIZE_ARCHITECTURES: [ImplementationSupport; 3] =
-    super::super::helpers::support::native_byte_architectures(
-        Mode::ImageRgbPremultiplied8,
-        4,
-        false,
-    );
+static RESIZE_ARCHITECTURES: [ImplementationSupport; 4] =
+    super::super::helpers::support::native_byte_avx512f_architectures(Mode::ImageRgbPremultiplied8);
 static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 3] =
     super::super::helpers::support::boxed_byte_architectures(
         Mode::ImageRgbPremultiplied8,
@@ -28,7 +24,7 @@ pub(crate) const BOXED_SUPPORT: ModeSupport = super::super::helpers::support::bo
     &RESIZE_BOXED_ARCHITECTURES,
 );
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn resize(
     context: &ExecutionContext,
     selection: &StrategySelection,
@@ -39,6 +35,12 @@ pub(crate) fn resize(
     bounds: Option<(f64, f64, f64, f64)>,
 ) -> Result<RgbaImage, PilError> {
     let architecture = selection.implementation.architecture;
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if architecture == Architecture::Avx512F {
+        return super::avx512f::resize_impl::execute(
+            context, selection, image, width, height, filter, bounds,
+        );
+    }
     super::super::helpers::strategy::resize_byte_native::<_, 4>(
         context,
         selection,

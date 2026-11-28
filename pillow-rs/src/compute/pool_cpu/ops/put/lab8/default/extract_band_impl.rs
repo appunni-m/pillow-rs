@@ -7,7 +7,7 @@ use crate::raster::DynamicImage;
 pub(crate) type Input = crate::raster::RgbImage;
 pub(crate) type Kernel<'a> = CheckedBand<'a, crate::raster::Rgb<u8>>;
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn prepare(input: &Input, index: u8) -> Result<Kernel<'_>, PilError> {
     CheckedBand::new(input, index)
@@ -16,5 +16,5 @@ pub(crate) fn prepare(input: &Input, index: u8) -> Result<Kernel<'_>, PilError> 
 // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    helpers::rgb(input)
+    helpers::lab(input)
 }

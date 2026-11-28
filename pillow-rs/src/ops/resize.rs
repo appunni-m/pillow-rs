@@ -142,7 +142,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError::ValueError`] for invalid dimensions or unknown filters.
-    // VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn resize(
         &self,
         size: (i64, i64),
@@ -175,7 +175,7 @@ impl Image {
     // TODO(pillow-rs#3ptb): parity-check zero/negative-size factor and
     // reducer-first fault order, safe-box and
     // final-bound faults, input extraction, lazy decode, mode, and identity.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn resize_with_options(
         &self,
         size: (i64, i64),
@@ -220,7 +220,7 @@ impl Image {
                 (source_w, source_h),
             )?;
         }
-        let (w, h) = nonnegative_dimensions(size, "height and width must be >= 0")?;
+        let (w, h) = positive_dimensions(size)?;
         if let Some(identity_resize) =
             self.identity_boxed_nearest_resize(filter, (w, h), (source_w, source_h), mode, bounds)?
         {
@@ -278,7 +278,7 @@ impl Image {
     /// public `Image.reduce` method before the core performs the final resize.
     /// Invalid or inapplicable plans return `None`; the ordinary resize path
     /// remains responsible for reporting the corresponding public error.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn resize_reducing_gap_plan(
         &self,
@@ -319,7 +319,7 @@ impl Image {
         reducing_gap::prepare_callback(bounds, gap, filter, size, source_size).ok()?
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[inline(always)]
     fn identity_boxed_nearest_resize(
         &self,
@@ -347,7 +347,7 @@ impl Image {
         Ok(None)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn resize_with_filter(
         &self,
         (w, h): (u32, u32),
@@ -741,9 +741,9 @@ fn validate_resize_box(
 }
 
 // VERIFY: source=reviewed@2026-11-14; parity=migration-parity-429006958d5e400a9a88ba5f500bc888; benchmark=pending
-fn nonnegative_dimensions(size: (i64, i64), message: &str) -> Result<(u32, u32), PilError> {
-    if size.0 < 0 || size.1 < 0 {
-        return Err(PilError::ValueError(message.into()));
+fn positive_dimensions(size: (i64, i64)) -> Result<(u32, u32), PilError> {
+    if size.0 <= 0 || size.1 <= 0 {
+        return Err(PilError::ValueError("height and width must be > 0".into()));
     }
     let width = u32::try_from(size.0)
         .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;

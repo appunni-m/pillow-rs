@@ -5,6 +5,7 @@ use crate::error::PilError;
 use crate::raster::RgbaImage;
 
 /// Quantizes the native RGBA buffer while retaining alpha in palette entries.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &RgbaImage,
     width: u32,

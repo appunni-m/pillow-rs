@@ -13,6 +13,7 @@ use image_slash_star::{ImageFormat, ImageInfo};
 type PalettedBitmapMetadata = (
     Vec<u8>,
     Vec<u8>,
+    crate::image::PaletteData,
     Option<ImageFormat>,
     Option<ImageInfo>,
     Option<Vec<u8>>,
@@ -284,7 +285,7 @@ impl Draw {
         Ok(prepared)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn apply_prepared_bitmap(
         &mut self,
         prepared: StrategySelection,
@@ -301,9 +302,15 @@ impl Draw {
                 .palette()
                 .filter(|palette| !palette.is_empty())
                 .map(|palette| {
+                    let palette_alpha = self.image.palette_alpha().unwrap_or_default();
+                    let palette_data =
+                        self.image.palette_data().cloned().unwrap_or_else(|| {
+                            crate::image::PaletteData::from_alpha(&palette_alpha)
+                        });
                     (
                         palette,
-                        self.image.palette_alpha().unwrap_or_default(),
+                        palette_alpha,
+                        palette_data,
                         self.image.source_format(),
                         self.image.image_info(),
                         self.image.exif_metadata(),
@@ -320,7 +327,7 @@ impl Draw {
         Ok(())
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn install_bitmap_output(
         &mut self,
         selected_mode: Mode,
@@ -329,7 +336,9 @@ impl Draw {
     ) -> Result<(), PilError> {
         if selected_mode == Mode::ImagePaletteAlpha8 {
             self.replace_palette_alpha_output(output)?;
-        } else if let Some((palette, palette_alpha, source_format, info, exif)) = paletted {
+        } else if let Some((palette, palette_alpha, palette_data, source_format, info, exif)) =
+            paletted
+        {
             let DynamicImage::ImagePalette8(indices) = output else {
                 return Err(PilError::InternalError(
                     "Draw Bitmap P strategy returned another raster mode".into(),
@@ -337,7 +346,9 @@ impl Draw {
             };
             self.image = Image::Paletted(crate::image::PalettedData {
                 indices: DynamicImage::ImagePalette8(indices),
+                palette_attached: true,
                 palette,
+                palette_data,
                 palette_alpha,
                 source_format,
                 info,

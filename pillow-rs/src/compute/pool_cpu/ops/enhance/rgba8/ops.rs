@@ -23,7 +23,7 @@ const COLOR_SATURATION_INPUTS: &[InputContract] = &[InputContract::ExactNativeBy
     overflow_reason: "ColorSaturation native dimensions overflowed",
     mismatch_reason: "ColorSaturation source bytes did not match its dimensions",
 }];
-const COLOR_SATURATION_ARCHITECTURES: [ImplementationSupport; 2] =
+const COLOR_SATURATION_ARCHITECTURES: [ImplementationSupport; 3] =
     crate::compute::pool_cpu::ops::enhance::helpers::strategy::color_saturation_architectures(
         OperationId::ColorSaturation,
         Mode::ImageRgba8,
@@ -104,11 +104,15 @@ pub(crate) fn prepare_color_saturation<'a>(
     Ok(Prepared::new((source, factor), selection))
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute_color_saturation(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     let architecture = strategy.selection().implementation.architecture;
     let (source, factor) = strategy.implementation;
     match architecture {
         Architecture::Default => super::default::color_saturation_impl::execute(source, factor)
+            .map(DynamicImage::ImageRgba8),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => super::avx512f::color_saturation_impl::execute(source, factor)
             .map(DynamicImage::ImageRgba8),
         Architecture::AvxFma => {
             super::avx::color_saturation_impl::execute(source, factor).map(DynamicImage::ImageRgba8)

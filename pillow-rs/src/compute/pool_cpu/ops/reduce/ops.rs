@@ -9,8 +9,9 @@
 //! and HSV declare native-byte AVX2 plus portable SSE2, NEON, and wasm SIMD
 //! strategies where those kernels are built for the target. F32 declares its
 //! portable eight-lane even 2x2 kernel as AVX or SSE2 when compiled for those
-//! features, with NEON and wasm SIMD128 choices where built. Other requests
-//! and modes retain their same-mode Default strategy.
+//! features, with NEON and wasm SIMD128 choices where built. F32 and I32
+//! declare guarded AVX-512F 16-output 2x2 kernels. Other requests and modes
+//! retain their same-mode Default strategy.
 //! TODO(pillow-rs#3ptb): verify native I;16 values, per-mode output identity,
 //! architecture selection/fallback, and straight-alpha LA/RGBA premultiply →
 //! reduce → unpremultiply rounding across the frozen CPU matrix.
@@ -60,7 +61,7 @@ enum ReduceStrategy<'a> {
     ImageRgba32F(super::rgba32f::ops::Strategy<'a>),
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> crate::compute::registry::support::ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -94,7 +95,7 @@ fn classify_mode(mode: Mode) -> crate::compute::registry::support::ModeSupport {
 pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Reduce, &[], classify_mode);
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     factors: (u32, u32),
@@ -190,7 +191,7 @@ pub(crate) fn prepare<'a>(
 }
 
 impl PreparedReduce<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &crate::compute::registry::support::StrategySelection {
         match &self.strategy {
             ReduceStrategy::One(strategy) => strategy.selection(),
@@ -221,7 +222,7 @@ impl PreparedReduce<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let Self {
             image,

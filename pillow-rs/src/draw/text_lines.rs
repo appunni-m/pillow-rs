@@ -64,7 +64,7 @@ pub trait DrawTextLinesCallbacks {
 /// The caller injects one selected route and all callback writes reuse it,
 /// including the direct multiline path and reentrant Bitmap writes.
 #[doc(hidden)]
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub fn draw_text_lines_with_callbacks<C: DrawTextLinesCallbacks>(
     mode: Mode,
     stroke_ink: Option<i64>,

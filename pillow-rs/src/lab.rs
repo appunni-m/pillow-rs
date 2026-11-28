@@ -6,6 +6,7 @@
 //! with the mode-specific Color strategy; GPU table packing stays here because
 //! it reads the same immutable CLUT vertices.
 
+#[cfg(feature = "gpu")]
 use crate::raster::{DynamicImage, ImageBuffer};
 #[cfg(feature = "gpu")]
 use std::sync::{Arc, OnceLock};

@@ -3,15 +3,17 @@
 //! Pipeline callbacks for PutPixel, PutData, PutAlpha, and PutAlphaData are
 //! registered and consumed by the serial CPU batch executor. Consecutive
 //! PutPixel runs also compose with the prepared RGB Thumbnail fusion.
-//! TODO(pillow-rs#3ptb): verify PutAlpha/PutAlphaData mode changes and
-//! validation/error ordering, including callback-observed promotion and
-//! destination changes, noncanonical One masks, La scalar/mask output, declared
-//! rejections, CoreOnly high-depth outputs, and RGBa alpha values 0, 1, 254,
-//! and 255 with constant and mask inputs in CPU parity. Verify ImagingCore
-//! SetMode target-pair outputs and unsupported targets, including the missing
-//! RGB padding-lane case; verify PutBand/FillBand outputs, error ordering,
-//! compact hidden-lane retention, and serial Default fallback receipts across
-//! every declared mode.
+//! TODO(pillow-rs#3ptb): CPU parity for PutAlpha/PutAlphaData mode changes,
+//! indexed palette retention for P→PA and PA alpha writes, validation/error
+//! ordering, callback-observed promotion/destination changes, noncanonical
+//! One masks, La scalar/mask output, declared rejections, CoreOnly high-depth
+//! outputs, and RGBa alpha values 0, 1, 254, and 255 with constant and mask
+//! inputs. Verify ImagingCore SetMode target-pair outputs and unsupported
+//! targets, including the RGB padding-lane case; verify PutBand/FillBand
+//! outputs, error ordering,
+//! same-type cross-mode single-band rejection, exact-mode P palette transfer,
+//! the distinct single-band/multiband overlong-buffer behavior, compact
+//! hidden-lane retention, and serial Default fallback receipts.
 //! Wrapper mode validation and transitions now use these prepared declarations;
 //! source review found no separate Backend/Architecture selection in the
 //! wrappers. Cover callback PutData/PutPixel selection, including La/LAB
@@ -31,8 +33,8 @@
 //! premultiplied samples. One-mask-to-L normalization is fused into exact-mode
 //! Default and vector PutAlphaData loops; L mask samples stay borrowed directly.
 //! Same-carrier alpha outputs keep their single required result copy,
-//! and ExtractBand reads native channels directly. This source review remains
-//! unvalidated.
+//! and ExtractBand reads native channels directly. Source review remains
+//! unvalidated for mode, palette, callback-fault, and architecture receipts.
 // NO_PILLOW_SUPPORT: Internal high-depth raster identities have declared
 // core-only band, GetChannel, and mutation routes; ExtractBand preserves u16
 // and f32 samples in their native scalar output modes.
@@ -85,37 +87,37 @@ macro_rules! declare_modes {
             $($alpha_mode(super::$alpha_module::ops::AlphaDataStrategy<'a>),)+
         }
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn classify_mode(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::SUPPORT,)+ }
         }
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn classify_data_mode(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::PUT_DATA_SUPPORT,)+ }
         }
-        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn classify_alpha_mode(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::PUT_ALPHA_SUPPORT,)+ }
         }
-        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn classify_alpha_data_mode(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::PUT_ALPHA_DATA_SUPPORT,)+ }
         }
-        // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn classify_data_value_at_mode(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::PUT_DATA_VALUE_AT_SUPPORT,)+ }
         }
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn classify_pixel_value_at_mode(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::PUT_PIXEL_VALUE_AT_SUPPORT,)+ }
         }
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn classify_put_data_l16_bytes_mode(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::PUT_DATA_L16_BYTES_SUPPORT,)+ }
         }
 
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(crate) fn prepare<'a>(image: &'a DynamicImage, index: u8, ctx: &ExecutionContext)
             -> Result<PreparedExtractBand<'a>, PilError> {
             match image {
@@ -125,7 +127,7 @@ macro_rules! declare_modes {
         }
 
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(crate) fn prepare_put_data<'a>(
             image: &'a DynamicImage,
             data: &'a [u8],
@@ -147,7 +149,7 @@ macro_rules! declare_modes {
         }
 
 
-        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(crate) fn prepare_put_alpha<'a>(
             image: &'a DynamicImage, alpha: u8, ctx: &ExecutionContext,
         ) -> Result<PreparedPutAlpha<'a>, PilError> {
@@ -160,7 +162,7 @@ macro_rules! declare_modes {
         }
 
 
-        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(crate) fn prepare_put_alpha_data<'a>(
             image: &'a DynamicImage, mask: &'a DynamicImage, ctx: &ExecutionContext,
         ) -> Result<PreparedPutAlphaData<'a>, PilError> {
@@ -175,17 +177,17 @@ macro_rules! declare_modes {
         }
 
         impl PreparedExtractBand<'_> {
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
             }
 
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self { $(Self::$mode(strategy) => super::$module::ops::execute(strategy),)+ }
             }
 
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn execute_into(
                 self,
                 output: &mut [u8],
@@ -208,12 +210,12 @@ macro_rules! declare_modes {
         }
 
         impl PreparedPutData<'_> {
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(strategy, _) => strategy.selection(),)+ }
             }
 
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self {
                     $(Self::$mode(strategy, update) => {
@@ -226,24 +228,24 @@ macro_rules! declare_modes {
         }
 
         impl PreparedPutAlpha<'_> {
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$alpha_mode(strategy) => strategy.selection(),)+ }
             }
 
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self { $(Self::$alpha_mode(strategy) => strategy.execute(),)+ }
             }
         }
 
         impl PreparedPutAlphaData<'_> {
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$alpha_mode(strategy) => strategy.selection(),)+ }
             }
 
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self { $(Self::$alpha_mode(strategy) => strategy.execute(),)+ }
             }
@@ -311,7 +313,7 @@ declare_modes! {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn rejected_alpha_mode_error(mode: Mode) -> PilError {
     classify_alpha_mode(mode)
         .validate_mode()
@@ -319,7 +321,7 @@ fn rejected_alpha_mode_error(mode: Mode) -> PilError {
         .unwrap_or_else(|| PilError::InternalError("PutAlpha support has no mode strategy".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn rejected_alpha_data_mode_error(mode: Mode) -> PilError {
     classify_alpha_data_mode(mode)
         .validate_mode()
@@ -341,7 +343,7 @@ pub(crate) static PUT_DATA_L16_BYTES_SUPPORT: OperationSupport = OperationSuppor
     classify_put_data_l16_bytes_mode,
 );
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn select_put_data_l16_bytes(
     mode: Mode,
     context: &ExecutionContext,
@@ -351,7 +353,7 @@ pub(crate) fn select_put_data_l16_bytes(
         .select_serial(context)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_put_data_l16_bytes(
     image: &mut DynamicImage,
     data: &[u8],
@@ -428,6 +430,11 @@ pub(crate) static PUT_PIXEL_VALUE_AT_SUPPORT: OperationSupport = OperationSuppor
     classify_pixel_value_at_mode,
 );
 
+// Pillow's single-band PutBand checks native type/dimensions first, then
+// ImagingCopy2 rejects a cross-mode source. Exact-mode P copies also replace
+// attached destination palette metadata when the source has a palette; the
+// ImagingCore wrapper now carries that metadata after the native pixel copy.
+// TODO(pillow-rs#3ptb): verify these output and fault contracts in CPU parity.
 const PUT_BAND_SINGLE_INPUTS: &[InputContract] = &[
     InputContract::CallerValidatedBandIndex,
     InputContract::CallerValidatedSameModeSameSizeBandImage,
@@ -437,7 +444,7 @@ const PUT_BAND_MULTI_INPUTS: &[InputContract] = &[
     InputContract::CallerValidatedSameSizeByteSingleBandImage,
 ];
 const FILL_BAND_INPUTS: &[InputContract] = &[InputContract::CallerValidatedBandIndex];
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_put_band_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One
@@ -474,7 +481,7 @@ fn classify_put_band_mode(mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_fill_band_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One
@@ -515,7 +522,7 @@ pub(crate) static PUT_BAND_SUPPORT: OperationSupport =
 pub(crate) static FILL_BAND_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::FillBand, &[], classify_fill_band_mode);
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn select_put_band(
     mode: Mode,
     context: &ExecutionContext,
@@ -523,7 +530,7 @@ pub(crate) fn select_put_band(
     PUT_BAND_SUPPORT.for_mode(mode).select_serial(context)
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn select_fill_band(
     mode: Mode,
     context: &ExecutionContext,
@@ -531,7 +538,7 @@ pub(crate) fn select_fill_band(
     FILL_BAND_SUPPORT.for_mode(mode).select_serial(context)
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_put_band(
     destination: &mut DynamicImage,
     source: &DynamicImage,
@@ -542,7 +549,7 @@ pub(crate) fn execute_put_band(
     super::helpers::imaging_core_band::put_band(destination, source, band)
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_fill_band(
     image: &mut DynamicImage,
     band: usize,
@@ -553,7 +560,7 @@ pub(crate) fn execute_fill_band(
     super::helpers::imaging_core_band::fill_band(image, band, value)
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn validate_band_selection(
     selection: StrategySelection,
     operation: OperationId,
@@ -570,7 +577,7 @@ fn validate_band_selection(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn select_put_pixel_value_at(
     mode: Mode,
     context: &ExecutionContext,
@@ -580,7 +587,7 @@ pub(crate) fn select_put_pixel_value_at(
         .select_serial(context)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_put_pixel_value_at(
     image: &mut DynamicImage,
     pixel_index: usize,
@@ -644,7 +651,7 @@ pub(crate) enum PutPixelValueAtInput {
     Luma16(u16),
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn select_put_data_value_at(
     mode: Mode,
     context: &ExecutionContext,
@@ -654,7 +661,7 @@ pub(crate) fn select_put_data_value_at(
         .select_serial(context)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_put_data_value_at(
     image: &mut DynamicImage,
     pixel_index: usize,
@@ -681,7 +688,7 @@ pub(crate) fn execute_put_data_value_at(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_core_only_put_data_values(
     image: &mut DynamicImage,
     values: &[crate::image::PutDataValue],
@@ -710,7 +717,7 @@ pub(crate) fn execute_core_only_put_data_values(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn is_core_only_native_mode(mode: Mode) -> bool {
     matches!(
         mode,
@@ -722,7 +729,7 @@ fn is_core_only_native_mode(mode: Mode) -> bool {
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn is_luma16_mode(mode: Mode) -> bool {
     matches!(
         mode,
@@ -735,7 +742,7 @@ pub(crate) static PUT_ALPHA_SUPPORT: OperationSupport =
 pub(crate) static PUT_ALPHA_DATA_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::PutAlphaData, &[], classify_alpha_data_mode);
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_alpha_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -753,7 +760,7 @@ pub(crate) fn prepare_alpha_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_put_alpha)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_alpha_data_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -771,7 +778,7 @@ pub(crate) fn prepare_alpha_data_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_put_alpha_data)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -788,7 +795,7 @@ const WRITE_REJECTION_REASON: &str = "putpixel not supported for this image type
 const WRITE_REJECTION_KIND: crate::compute::registry::support::RejectionKind =
     crate::compute::registry::support::RejectionKind::NotImplementedError;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn rejected_write(mode: Mode) -> ModeSupport {
     ModeSupport::Rejected {
         mode,
@@ -808,7 +815,7 @@ macro_rules! declare_write_modes {
             $($mode(super::$module::ops::BatchStrategy<'a>),)+
         }
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn classify_pixel_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::PUT_PIXEL_SUPPORT,)+
@@ -816,7 +823,7 @@ macro_rules! declare_write_modes {
             }
         }
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn classify_pixel_batch_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::PUT_PIXEL_BATCH_SUPPORT,)+
@@ -826,7 +833,7 @@ macro_rules! declare_write_modes {
 
 
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(crate) fn prepare_put_pixel<'a>(
             image: &'a DynamicImage, write: PixelWrite, ctx: &ExecutionContext,
         ) -> Result<PreparedPutPixel<'a>, PilError> {
@@ -839,7 +846,7 @@ macro_rules! declare_write_modes {
             }
         }
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(crate) fn prepare_put_pixel_batch<'a>(
             image: &'a DynamicImage, ops: &'a [PipelineOp], ctx: &ExecutionContext,
         ) -> Result<PreparedPutPixelBatch<'a>, PilError> {
@@ -853,24 +860,24 @@ macro_rules! declare_write_modes {
         }
 
         impl PreparedPutPixel<'_> {
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
             }
 
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self { $(Self::$mode(strategy) => strategy.execute(),)+ }
             }
         }
 
         impl PreparedPutPixelBatch<'_> {
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
             }
 
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self { $(Self::$mode(strategy) => strategy.execute(),)+ }
             }
@@ -904,7 +911,8 @@ declare_write_modes! {
 }
 
 /// Execute one prepared CPU PutPixel write for GPU host-control calculations.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+#[cfg(feature = "gpu")]
 pub(crate) fn execute_put_pixel(
     image: &DynamicImage,
     write: PixelWrite,
@@ -918,7 +926,7 @@ pub(crate) static PUT_PIXEL_SUPPORT: OperationSupport =
 pub(crate) static PUT_PIXEL_BATCH_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::PutPixelBatch, &[], classify_pixel_batch_mode);
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_pixel_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -939,7 +947,7 @@ pub(crate) fn prepare_pixel_pipeline<'a>(
     .map(crate::compute::registry::PreparedOperation::from_put_pixel)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_data_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

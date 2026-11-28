@@ -13,7 +13,7 @@ class Filter(ABC):
 
     # TODO(pillow-rs#3ptb): verify callback outputs, callback fault order, and
     # selected/fallback receipts through the live ImagingCore carrier.
-    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     def _filter_with_execution_context(self, rust_image, _execution_context):
         # Pillow passes the live ImagingCore to user filters. Keep the same
         # PyImage object so callback mutations remain visible on Image.im;

@@ -4,7 +4,7 @@ use crate::compute::Architecture;
 use crate::compute::registry::support::{ImplementationSupport, OperationId, StrategyGuard};
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const fn luma16_copy_architectures(
     operation: OperationId,
     mode: Mode,

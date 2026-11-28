@@ -91,6 +91,7 @@ impl<'a> HiddenLaneUpdate<'a> {
 }
 
 /// Restores raw physical lanes after the selected mode and architecture kernel.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn apply_hidden_lane_update(
     output: &mut DynamicImage,
     update: HiddenLaneUpdate,
@@ -139,6 +140,7 @@ pub(crate) fn apply_hidden_lane_update(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn apply_hidden_lanes<P, F>(
     image: &mut ImageBuffer<P, Vec<u8>>,
     source_lanes: Option<HiddenPixelLanes>,
@@ -185,6 +187,7 @@ where
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn replace_complete_hidden_lanes<P: Pixel<Subpixel = u8>>(
     image: &mut ImageBuffer<P, Vec<u8>>,
     pixel_count: usize,
@@ -221,6 +224,7 @@ fn replace_complete_hidden_lanes<P: Pixel<Subpixel = u8>>(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn apply_partial_hidden_lanes<P, F>(
     image: &mut ImageBuffer<P, Vec<u8>>,
     source_lanes: Option<HiddenPixelLanes>,
@@ -281,6 +285,7 @@ where
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn facts<P: Pixel>(
     image: &ImageBuffer<P, Vec<P::Subpixel>>,
     data: &[u8],
@@ -306,6 +311,7 @@ struct Prefix {
 }
 
 impl Prefix {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn new(width: u32, height: u32, channels: u8, data_len: usize) -> Self {
         let expected = width as usize * height as usize * usize::from(channels);
         Self {
@@ -316,6 +322,7 @@ impl Prefix {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn apply<P: Pixel<Subpixel = u8>>(
         self,
         original: ImageBuffer<P, Vec<u8>>,
@@ -328,6 +335,10 @@ impl Prefix {
     }
 }
 
+/// Builds the operation-declared payload carrier before applying its byte prefix.
+/// Callers use this only when the payload has a different native sample or
+/// channel layout; same-layout payloads stay on the source mode's native writer.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn converted<P: Pixel<Subpixel = u8>>(
     width: u32,
@@ -339,6 +350,7 @@ pub(crate) fn converted<P: Pixel<Subpixel = u8>>(
     prefix.apply(convert(), data)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn native<P: Pixel<Subpixel = u8>>(
     image: &ImageBuffer<P, Vec<u8>>,
@@ -358,6 +370,7 @@ pub(crate) fn native<P: Pixel<Subpixel = u8>>(
     prefix.apply(image.clone(), data)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn clipped<P: Pixel<Subpixel = u8>>(
     image: &ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     pixel: impl Fn(u8) -> P,

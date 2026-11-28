@@ -5,6 +5,7 @@
 /// The source and output retain their native two-byte pixel layout. Borders
 /// are unchanged, and the integer arithmetic matches the default strategy.
 #[allow(unsafe_code)]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter_3x3_binomial_la_rows(
     raw: &[u8],
     output: &mut [u8],

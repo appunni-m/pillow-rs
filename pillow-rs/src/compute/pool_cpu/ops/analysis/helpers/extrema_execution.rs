@@ -1,7 +1,7 @@
 //! Prepared dispatch for exact-mode typed GetExtrema strategies.
 
 use crate::compute::ExecutionContext;
-use crate::compute::registry::support::StrategySelection;
+use crate::compute::registry::support::{PaletteKnowledge, StrategyInputs, StrategySelection};
 use crate::error::PilError;
 use crate::image::FormattedExtrema;
 use crate::raster::{DynamicImage, Mode};
@@ -179,16 +179,23 @@ impl PreparedGetExtrema<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 /// Selects exact-mode GetExtrema from the injected CPU context.
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     context: &ExecutionContext,
 ) -> Result<PreparedGetExtrema<'a>, PilError> {
     let mode = image.mode();
+    let input = StrategyInputs {
+        width: image.width(),
+        height: image.height(),
+        byte_len: Some(image.as_bytes().len()),
+        palette: PaletteKnowledge::Unknown,
+        request: crate::compute::registry::support::RequestFacts::Unspecified,
+    };
     let selection = super::super::ops::GET_EXTREMA_SUPPORT
         .for_mode(mode)
-        .select_serial(context)?;
+        .select(context, input)?;
     Ok(PreparedGetExtrema {
         image,
         mode,

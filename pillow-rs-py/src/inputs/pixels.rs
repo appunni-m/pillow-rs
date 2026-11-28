@@ -270,11 +270,14 @@ fn new_color_byte(value: i64) -> u8 {
     value.clamp(0, i64::from(u8::MAX)) as u8
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 fn new_color_integer_input(mode: pillow_rs::Mode, value: i64) -> pillow_rs::NewColorInput {
     if matches!(
         mode,
-        pillow_rs::Mode::ImagePalette8 | pillow_rs::Mode::ImageLuma8 | pillow_rs::Mode::One
+        pillow_rs::Mode::ImagePalette8
+            | pillow_rs::Mode::ImageLuma8
+            | pillow_rs::Mode::ImageLab8
+            | pillow_rs::Mode::One
     ) {
         return new_color_input(
             None,
@@ -534,6 +537,7 @@ fn pixel_access_float_coordinate(coordinate: f64) -> i32 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn transpose_input_from_python(
     method: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::TransposeInput> {

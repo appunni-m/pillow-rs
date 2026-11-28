@@ -21,6 +21,7 @@ declare_quantize_native_mode!(u8, "ImageRgbx8", ImageRgbx8);
 /// Maps the stored RGB lanes and ignores RGBX padding like Pillow's native mapper.
 // Pillow wrapper-mode overrides can admit visible L/RGB while the exact raster
 // remains RGBX; the native palette mapper reads its RGB lanes directly.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_quantize_with_palette(
     image: &Input,
     palette: &[[u8; 3]],

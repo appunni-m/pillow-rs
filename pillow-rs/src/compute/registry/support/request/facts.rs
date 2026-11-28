@@ -326,6 +326,13 @@ pub enum RequestFacts {
         /// Output mode selected by the caller.
         target_mode: Mode,
     },
+    /// Exact ConvertMatrix target and coefficient count.
+    ConvertMatrix {
+        /// Output mode selected by the caller.
+        target_mode: Mode,
+        /// Number of supplied coefficients.
+        coefficients: usize,
+    },
     /// Exact source-band metadata and dimensions for Pillow's Merge contract.
     MergeBands {
         /// Exact requested output identity.
@@ -871,6 +878,17 @@ impl StrategyInputs {
     #[must_use]
     pub const fn with_convert_target(mut self, target_mode: Mode) -> Self {
         self.request = RequestFacts::ConvertTarget { target_mode };
+        self
+    }
+
+    /// Supplies ConvertMatrix's exact target identity and coefficient count.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    #[must_use]
+    pub const fn with_convert_matrix(mut self, target_mode: Mode, coefficients: usize) -> Self {
+        self.request = RequestFacts::ConvertMatrix {
+            target_mode,
+            coefficients,
+        };
         self
     }
 

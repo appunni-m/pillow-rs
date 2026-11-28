@@ -8,7 +8,8 @@ use wide::{f32x8, u8x16, u16x16};
 
 use super::binary::BinaryOperation;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Chops binary SIMD request dispatch and selected typed vector owner.
 /// Executes a validated native-byte architecture strategy.
 pub(crate) fn execute<P>(
     image: &ImageBuffer<P, Vec<u8>>,
@@ -55,10 +56,69 @@ where
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn execute_invert<P>(image: &ImageBuffer<P, Vec<u8>>) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
 where
     P: Pixel<Subpixel = u8>,
+{
+    execute_invert_with_kernel(
+        image,
+        crate::compute::pool_cpu::helpers::bytes::native_invert::invert,
+        "vector",
+    )
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn execute_avx512f<P>(
+    image: &ImageBuffer<P, Vec<u8>>,
+    request: super::super::ops::ChopsRequest,
+    _other: Option<&ImageBuffer<P, Vec<u8>>>,
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    match request {
+        super::super::ops::ChopsRequest::Invert => execute_invert_avx512f(image),
+        _ => Err(PilError::InternalError(
+            "Chops AVX-512F strategy only implements Invert".into(),
+        )),
+    }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn execute_invert_avx512f<P>(
+    image: &ImageBuffer<P, Vec<u8>>,
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    execute_invert_with_kernel(
+        image,
+        crate::compute::pool_cpu::helpers::bytes::native_invert::avx512f::invert,
+        "avx512f",
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+fn execute_invert_with_kernel<P, K>(
+    image: &ImageBuffer<P, Vec<u8>>,
+    kernel: K,
+    path: &'static str,
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+    K: Fn(
+        &[u8],
+        u32,
+        u32,
+        usize,
+        bool,
+    ) -> Result<
+        crate::compute::pool_cpu::helpers::bytes::native_invert::NativeInvertOutput,
+        PilError,
+    >,
 {
     let channels = P::CHANNEL_COUNT;
     let dimensions = CheckedDims::new_allow_empty(image.width(), image.height(), channels)?;
@@ -68,7 +128,7 @@ where
             "Chops invert source did not match its admitted native layout".into(),
         ));
     }
-    match crate::compute::pool_cpu::helpers::bytes::native_invert::invert(
+    match kernel(
         source,
         image.width(),
         image.height(),
@@ -82,7 +142,7 @@ where
         crate::compute::pool_cpu::helpers::bytes::native_invert::NativeInvertOutput::Exact(
             bytes,
         ) => {
-            crate::compute::record_pipeline_operation_path("vector");
+            crate::compute::record_pipeline_operation_path(path);
             let mut output =
                 ImageBuffer::<P, Vec<u8>>::from_raw(image.width(), image.height(), bytes)
                     .ok_or_else(|| {
@@ -99,7 +159,8 @@ where
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: native-byte binary kernels process full blocks and a padded final tail.
 fn execute_bytes<P, K>(
     image: &ImageBuffer<P, Vec<u8>>,
     other: &ImageBuffer<P, Vec<u8>>,
@@ -138,7 +199,8 @@ where
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: all binary Chops vector blocks and padded final tails.
 #[inline(always)]
 fn apply_blocks<K>(left: &[u8], right: &[u8], output: &mut [u8], kernel: K)
 where
@@ -160,7 +222,8 @@ where
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd SIMD arithmetic, row boundaries, tails, and archived parity.
 fn execute_native<P>(
     image: &ImageBuffer<P, Vec<u8>>,
     other: &ImageBuffer<P, Vec<u8>>,
@@ -218,7 +281,8 @@ where
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd in-place selected strategy and exact typed storage.
 /// Applies an admitted Add/Sub vector strategy to an owned batch intermediate.
 pub(crate) fn execute_in_place<P>(
     image: &mut ImageBuffer<P, Vec<u8>>,
@@ -274,7 +338,8 @@ where
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd maps typed request parameters to its f32 native kernel.
 fn affine_parameters(operation: BinaryOperation) -> Result<(f32, f32, bool), PilError> {
     match operation {
         BinaryOperation::Add { scale, offset, .. } => Ok((scale, offset, false)),
@@ -285,7 +350,8 @@ fn affine_parameters(operation: BinaryOperation) -> Result<(f32, f32, bool), Pil
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd exact-default selection preserves the original input pair.
 fn exact_default_parameters(operation: BinaryOperation) -> bool {
     match operation {
         BinaryOperation::Add {
@@ -300,7 +366,8 @@ fn exact_default_parameters(operation: BinaryOperation) -> bool {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd exact-default saturating byte blocks and padded tail.
 fn apply_saturating(left: &[u8], right: &[u8], output: &mut [u8], subtract: bool) {
     let (left_blocks, left_tail) = left.as_chunks::<16>();
     let (right_blocks, right_tail) = right.as_chunks::<16>();
@@ -331,7 +398,8 @@ fn apply_saturating(left: &[u8], right: &[u8], output: &mut [u8], subtract: bool
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd in-place saturating full-block path.
 fn apply_saturating_in_place(left: &mut [u8], right: &[u8], subtract: bool) {
     let (left_blocks, left_tail) = left.as_chunks_mut::<16>();
     let (right_blocks, right_tail) = right.as_chunks::<16>();
@@ -361,7 +429,8 @@ fn apply_saturating_in_place(left: &mut [u8], right: &[u8], subtract: bool) {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd in-place f32x8 rows and scalar tails.
 fn apply_affine_in_place(
     left: &mut [u8],
     right: &[u8],
@@ -400,7 +469,8 @@ fn apply_affine_in_place(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd float32 vector blocks and per-row scalar tails.
 fn apply_affine(
     left: &[u8],
     right: &[u8],
@@ -441,7 +511,8 @@ fn apply_affine(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd float32 SIMD expression and clamp/truncate conversion.
 #[inline(always)]
 fn affine_block(left: [u8; 8], right: [u8; 8], scale: f32, offset: f32, subtract: bool) -> [u8; 8] {
     let left = f32x8::new(left.map(f32::from));
@@ -452,7 +523,8 @@ fn affine_block(left: [u8; 8], right: [u8; 8], scale: f32, offset: f32, subtract
         .map(|value| value.clamp(0.0, 255.0) as u8)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd float32 scalar tail expression and clamp/truncate conversion.
 #[inline]
 fn affine_sample(left: u8, right: u8, scale: f32, offset: f32, subtract: bool) -> u8 {
     let left = f32::from(left);
@@ -461,7 +533,8 @@ fn affine_sample(left: u8, right: u8, scale: f32, offset: f32, subtract: bool) -
     (value / scale + offset).clamp(0.0, 255.0) as u8
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Multiply/Screen use floor division by 255 as in the archive.
 #[inline]
 pub(super) fn divide_255(value: u16x16) -> u16x16 {
     const ONE: u16x16 = u16x16::splat(1);
@@ -469,7 +542,8 @@ pub(super) fn divide_255(value: u16x16) -> u16x16 {
     (incremented + (incremented >> 8u32)) >> 8u32
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Multiply vector kernel uses floor(left * right / 255).
 #[inline(always)]
 fn multiply_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let left = u16x16::from(u8x16::new(left));
@@ -478,7 +552,8 @@ fn multiply_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
         .to_array()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Screen vector kernel uses Pillow's integer intermediate truncation.
 #[inline(always)]
 fn screen_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     const MAX: u16x16 = u16x16::splat(255);
@@ -488,19 +563,22 @@ fn screen_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16(value).to_array()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Darker matches the archived lane-wise minimum kernel.
 #[inline(always)]
 fn darker_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     (u8x16::new(left).min(u8x16::new(right))).to_array()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Lighter matches the archived lane-wise maximum kernel.
 #[inline(always)]
 fn lighter_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     (u8x16::new(left).max(u8x16::new(right))).to_array()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Difference matches the archived absolute-byte-difference kernel.
 #[inline(always)]
 fn difference_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let left = u8x16::new(left);
@@ -520,7 +598,8 @@ fn subtract_modulo_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     (u8x16::new(left) - u8x16::new(right)).to_array()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: exact divide-by-127 for Overlay/HardLight products bounded by 127×255.
 #[inline]
 fn divide_127(value: u16x16) -> u16x16 {
     const ONE: u16x16 = u16x16::splat(1);
@@ -528,19 +607,22 @@ fn divide_127(value: u16x16) -> u16x16 {
     (value + (value >> 7u32) + (value >> 14u32)) >> 7u32
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Overlay uses Pillow's base-channel split and divide-by-127 branches.
 #[inline]
 fn overlay_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     lut_block(left, right, false)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: HardLight uses Pillow's blend-channel split and divide-by-127 branches.
 #[inline]
 fn hard_light_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     lut_block(left, right, true)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Overlay/HardLight branch selection and vector products match archived code.
 #[inline(always)]
 fn lut_block(left: [u8; 16], right: [u8; 16], hard_light: bool) -> [u8; 16] {
     const MAX: u16x16 = u16x16::splat(255);
@@ -558,7 +640,8 @@ fn lut_block(left: [u8; 16], right: [u8; 16], hard_light: bool) -> [u8; 16] {
     crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16(value).to_array()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: SoftLight preserves Pillow's ordered integer truncations in vector lanes.
 #[inline(always)]
 fn soft_light_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     const MAX: u16x16 = u16x16::splat(255);
@@ -576,21 +659,24 @@ fn soft_light_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16(clamped).to_array()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: LogicalAnd tests both stored samples for nonzero and writes 0/255.
 #[inline(always)]
 fn logical_and_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let nonzero = u8x16::new(left).min(u8x16::new(right)).simd_eq(u8x16::ZERO);
     nonzero.select(u8x16::ZERO, u8x16::splat(255)).to_array()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: LogicalOr tests both stored samples for nonzero and writes 0/255.
 #[inline(always)]
 fn logical_or_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let nonzero = (u8x16::new(left) | u8x16::new(right)).simd_eq(u8x16::ZERO);
     nonzero.select(u8x16::ZERO, u8x16::splat(255)).to_array()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: LogicalXor compares truth values and writes canonical 0/255 bytes.
 #[inline(always)]
 fn logical_xor_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let left = u8x16::new(left)

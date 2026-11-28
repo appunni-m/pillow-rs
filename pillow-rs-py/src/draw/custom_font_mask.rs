@@ -319,7 +319,7 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
         .map_err(TextMaskError::Python)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn draw_bitmap(
         &mut self,
         position: &DrawTextMaskPosition<Self::Value>,
@@ -355,7 +355,7 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
 }
 
 #[allow(clippy::too_many_arguments)]
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(super) fn draw_custom_font_mask<'py>(
     py: Python<'py>,
     py_draw: Py<PyDraw>,

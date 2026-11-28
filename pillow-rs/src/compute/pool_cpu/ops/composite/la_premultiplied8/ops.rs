@@ -18,6 +18,7 @@ pub(crate) fn merge(
     super::default::operations::merge(source, remaining)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn blend(
     source: &DynamicImage,
     other: &DynamicImage,

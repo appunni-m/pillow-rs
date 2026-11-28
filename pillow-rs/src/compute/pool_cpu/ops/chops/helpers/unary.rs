@@ -5,12 +5,14 @@ use crate::raster::buffer::{HiddenPixelLanes, ImageBuffer};
 use crate::raster::traits::Pixel;
 use crate::raster::{DynamicImage, GrayImage, Luma};
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Constant constructs the fixed L output with its final repeated sample.
 pub(crate) fn constant(width: u32, height: u32, value: u8) -> DynamicImage {
     DynamicImage::ImageLuma8(GrayImage::from_pixel(width, height, Luma([value])))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Duplicate preserves the exact typed image and retained sidecars.
 pub(crate) fn duplicate(image: &DynamicImage) -> DynamicImage {
     // NO_PILLOW_SUPPORT for internal high-depth sources: preserve their exact
     // native identity through this core-only route.

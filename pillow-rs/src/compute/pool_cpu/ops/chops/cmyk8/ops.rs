@@ -16,16 +16,16 @@ const CHANNELS: u8 = 4;
 declare_byte_binary_architectures!(MODE, CHANNELS);
 declare_byte_invert_architectures!(MODE, CHANNELS);
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn support(operation: OperationId) -> ModeSupport {
-    let architectures = match operation {
+    let architectures: &[_] = match operation {
         OperationId::ChopsInvert => &INVERT_ARCHITECTURES,
         _ => architecture_for(operation),
     };
     super::super::ops::mode_support_with_architectures(MODE, operation, architectures)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     request: super::super::ops::ChopsRequest,
@@ -77,6 +77,10 @@ pub(crate) fn execute(
                 }
             };
             match architecture {
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                Architecture::Avx512F => {
+                    super::avx512f::execute(buffer, request, other).map(DynamicImage::ImageCmyk8)
+                }
                 Architecture::Sse2 => {
                     super::sse2::execute(buffer, request, other).map(DynamicImage::ImageCmyk8)
                 }

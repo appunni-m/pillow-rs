@@ -6,7 +6,7 @@ use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn require_default_selection(
     selection: &StrategySelection,
     mode: Mode,
@@ -23,7 +23,8 @@ pub(crate) fn require_default_selection(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: byte binaries declare architecture strategies with operation guards.
 pub(crate) const fn byte_architectures(
     operation: OperationId,
     mode: Mode,
@@ -39,7 +40,110 @@ pub(crate) const fn byte_architectures(
     architecture_strategies(operation, mode, guard)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) const fn invert_architectures(mode: Mode, channels: u8) -> [ImplementationSupport; 4] {
+    [
+        ImplementationSupport::cpu(
+            OperationId::ChopsInvert,
+            mode,
+            Architecture::Avx512F,
+            cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+            &[Architecture::Avx512F],
+            StrategyGuard::NativeByteAvx512Invert { channels },
+        ),
+        ImplementationSupport::cpu(
+            OperationId::ChopsInvert,
+            mode,
+            Architecture::Sse2,
+            cfg!(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            )),
+            &[Architecture::Sse2],
+            StrategyGuard::NativePointwiseBytesIncludingEmpty { channels },
+        ),
+        ImplementationSupport::cpu(
+            OperationId::ChopsInvert,
+            mode,
+            Architecture::Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon],
+            StrategyGuard::NativePointwiseBytesIncludingEmpty { channels },
+        ),
+        ImplementationSupport::cpu(
+            OperationId::ChopsInvert,
+            mode,
+            Architecture::WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128],
+            StrategyGuard::NativePointwiseBytesIncludingEmpty { channels },
+        ),
+    ]
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) const fn avx512f_byte_invert_architecture(
+    mode: Mode,
+    channels: u8,
+) -> ImplementationSupport {
+    ImplementationSupport::cpu(
+        OperationId::ChopsInvert,
+        mode,
+        Architecture::Avx512F,
+        cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+        &[Architecture::Avx512F],
+        StrategyGuard::NativeByteAvx512Invert { channels },
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) const fn avx512f_typed_invert_architecture(
+    mode: Mode,
+    bytes_per_pixel: u8,
+    sample_bytes: u8,
+) -> ImplementationSupport {
+    ImplementationSupport::cpu(
+        OperationId::ChopsInvert,
+        mode,
+        Architecture::Avx512F,
+        cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+        &[Architecture::Avx512F],
+        StrategyGuard::NativeTypedAvx512Invert {
+            bytes_per_pixel,
+            sample_bytes,
+        },
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(crate) fn require_avx512f_typed_invert_selection(
+    selection: &StrategySelection,
+    mode: Mode,
+    bytes_per_pixel: u8,
+    sample_bytes: u8,
+) -> Result<(), PilError> {
+    let implementation = selection.implementation;
+    if selection.requested_backend == Backend::Cpu
+        && selection.requested_architecture == Architecture::Avx512F
+        && implementation.backend == Backend::Cpu
+        && implementation.operation == OperationId::ChopsInvert
+        && implementation.mode == mode
+        && implementation.architecture == Architecture::Avx512F
+        && selection.guard
+            == (StrategyGuard::NativeTypedAvx512Invert {
+                bytes_per_pixel,
+                sample_bytes,
+            })
+    {
+        return Ok(());
+    }
+    Err(PilError::InternalError(
+        "Chops typed AVX-512F strategy selection did not match its mode".into(),
+    ))
+}
+
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const fn offset_byte_architectures(
     mode: Mode,
     channels: u8,
@@ -51,7 +155,7 @@ pub(crate) const fn offset_byte_architectures(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const fn offset_i16_architectures(mode: Mode) -> [ImplementationSupport; 3] {
     architecture_strategies(
         OperationId::ChopsOffset,
@@ -60,7 +164,7 @@ pub(crate) const fn offset_i16_architectures(mode: Mode) -> [ImplementationSuppo
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 const fn architecture_strategies(
     operation: OperationId,
     mode: Mode,
@@ -117,11 +221,9 @@ macro_rules! declare_i16_offset_architectures {
 
 macro_rules! declare_byte_invert_architectures {
     ($mode:expr, $channels:expr) => {
-        static INVERT_ARCHITECTURES: [ImplementationSupport; 3] =
-            $crate::compute::pool_cpu::ops::chops::helpers::strategy::byte_architectures(
-                OperationId::ChopsInvert,
-                $mode,
-                $channels,
+        static INVERT_ARCHITECTURES: [ImplementationSupport; 4] =
+            $crate::compute::pool_cpu::ops::chops::helpers::strategy::invert_architectures(
+                $mode, $channels,
             );
     };
 }
@@ -204,7 +306,7 @@ macro_rules! declare_byte_binary_architectures {
             $crate::compute::pool_cpu::ops::chops::helpers::strategy::offset_byte_architectures(
                 $mode, $channels,
             );
-        // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         fn architecture_for(operation: OperationId) -> &'static [ImplementationSupport] {
             match operation {
                 OperationId::ChopsOffset => &OFFSET_ARCHITECTURES,
@@ -226,6 +328,8 @@ macro_rules! declare_byte_binary_architectures {
     };
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: logical vector routes are declared by the One mode owner only.
 macro_rules! declare_logical_architectures {
     ($mode:expr) => {
         static LOGICAL_AND_ARCHITECTURES: [ImplementationSupport; 3] =

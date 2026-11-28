@@ -1,8 +1,9 @@
 //! Exact ImageF32 mode dispatch for ordinary and boxed Resize.
 //!
 //! Prepared selection chooses the exact mode and architecture strategy. The
-//! portable Default sequence uses a fixed 16-product grouping; AArch64 keeps
-//! its distinct 4-product grouping, while vector leaves own their ISA route.
+//! portable Default sequence uses a fixed 16-product grouping; x86_64 keeps
+//! source-ordered separate arithmetic, AArch64 keeps its 4-product grouping,
+//! and vector leaves own their ISA route.
 
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
@@ -13,9 +14,26 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
-// TODO(pillow-rs#3ptb): Verify F32 Resize pixels, selected/fallback receipts,
-// and per-architecture latency in the frozen CPU campaign.
-static RESIZE_ARCHITECTURES: [ImplementationSupport; 5] = [
+// TODO(pillow-rs#3ptb): Compile the declared x86, x86_64, AArch64, and Wasm
+// strategy configurations; verify F32 Resize pixels, selected/fallback
+// receipts, and per-architecture latency in the frozen CPU campaign.
+static RESIZE_ARCHITECTURES: [ImplementationSupport; 9] = [
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageF32,
+        Architecture::Avx512F,
+        cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+        &[Architecture::Avx512F],
+        StrategyGuard::ResizeAvx512Nearest,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageF32,
+        Architecture::Avx512F,
+        cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+        &[Architecture::Avx512F],
+        StrategyGuard::ResizeFilteredAvx512F,
+    ),
     ImplementationSupport::cpu(
         OperationId::Resize,
         Mode::ImageF32,
@@ -27,10 +45,24 @@ static RESIZE_ARCHITECTURES: [ImplementationSupport; 5] = [
     ImplementationSupport::cpu(
         OperationId::Resize,
         Mode::ImageF32,
+        Architecture::Avx,
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx",
+            not(target_feature = "fma")
+        )),
+        &[Architecture::Avx],
+        StrategyGuard::ResizeF32Vector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageF32,
         Architecture::Sse2,
         cfg!(all(
             any(target_arch = "x86", target_arch = "x86_64"),
-            target_feature = "sse2"
+            target_feature = "sse2",
+            not(target_feature = "avx"),
+            not(target_feature = "fma")
         )),
         &[Architecture::Sse2],
         StrategyGuard::ResizeF32Vector,
@@ -59,9 +91,17 @@ static RESIZE_ARCHITECTURES: [ImplementationSupport; 5] = [
         &[],
         StrategyGuard::Always,
     ),
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageF32,
+        Architecture::X86_64,
+        cfg!(target_arch = "x86_64"),
+        &[],
+        StrategyGuard::Always,
+    ),
 ];
 
-static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 5] = [
+static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 7] = [
     ImplementationSupport::cpu(
         OperationId::ResizeBoxed,
         Mode::ImageF32,
@@ -73,10 +113,24 @@ static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 5] = [
     ImplementationSupport::cpu(
         OperationId::ResizeBoxed,
         Mode::ImageF32,
+        Architecture::Avx,
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx",
+            not(target_feature = "fma")
+        )),
+        &[Architecture::Avx],
+        StrategyGuard::ResizeF32Vector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::ResizeBoxed,
+        Mode::ImageF32,
         Architecture::Sse2,
         cfg!(all(
             any(target_arch = "x86", target_arch = "x86_64"),
-            target_feature = "sse2"
+            target_feature = "sse2",
+            not(target_feature = "avx"),
+            not(target_feature = "fma")
         )),
         &[Architecture::Sse2],
         StrategyGuard::ResizeF32Vector,
@@ -102,6 +156,14 @@ static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 5] = [
         Mode::ImageF32,
         Architecture::Aarch64,
         cfg!(target_arch = "aarch64"),
+        &[],
+        StrategyGuard::Always,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::ResizeBoxed,
+        Mode::ImageF32,
+        Architecture::X86_64,
+        cfg!(target_arch = "x86_64"),
         &[],
         StrategyGuard::Always,
     ),
@@ -122,7 +184,7 @@ pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::cpu(
     &RESIZE_BOXED_ARCHITECTURES,
 );
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize(
     context: &ExecutionContext,
     image: &DynamicImage,
@@ -167,7 +229,7 @@ pub(crate) fn resize(
     Ok(DynamicImage::ImageF32(output))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn resize_selected(
     context: &ExecutionContext,
     selection: &StrategySelection,
@@ -182,12 +244,28 @@ fn resize_selected(
         Architecture::Default => {
             super::default::resize_impl::execute(input, width, height, filter, bounds)
         }
+        #[cfg(target_arch = "x86_64")]
+        Architecture::X86_64 => super::x86_64::resize_impl::execute(
+            context, input, width, height, filter, bounds, selection,
+        ),
         #[cfg(target_arch = "aarch64")]
         Architecture::Aarch64 => super::aarch64::resize_impl::execute(
             context, input, width, height, filter, bounds, selection,
         ),
         #[cfg(target_arch = "x86_64")]
         Architecture::AvxFma => super::avx::resize_impl::execute(
+            context, input, width, height, filter, bounds, selection,
+        ),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => super::avx512f::resize_impl::execute(
+            context, input, width, height, filter, bounds, selection,
+        ),
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx",
+            not(target_feature = "fma")
+        ))]
+        Architecture::Avx => super::avx::vector_resize_impl::execute(
             context, input, width, height, filter, bounds, selection,
         ),
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

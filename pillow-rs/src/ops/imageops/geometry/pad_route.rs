@@ -30,8 +30,10 @@ pub trait ImageOpsPadRouteCallbacks:
         centering: &<Self as ImageOpsPadCallbacks>::Value,
     ) -> Result<bool, <Self as ImageOpsPadCallbacks>::Error>;
     /// Run Rust-only preparation and execution without holding the host lock.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn run_core<T: Send>(&mut self, operation: impl FnOnce() -> T + Send) -> T;
     /// Snapshot the current native raster after host callbacks.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn native_image_snapshot(
         &mut self,
     ) -> Result<crate::image::Image, <Self as ImageOpsPadCallbacks>::Error>;
@@ -61,7 +63,7 @@ pub trait ImageOpsPadRouteCallbacks:
     ) -> Result<<Self as ImageOpsPadCallbacks>::Image, <Self as ImageOpsPadCallbacks>::Error>;
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 /// Select typed Pad or its host-protocol fallback from one core route.
 ///
 /// Keep the native branch ordered: contain geometry precedes filter parsing;
@@ -88,7 +90,7 @@ pub fn pad_with_route_callbacks<C: ImageOpsPadRouteCallbacks>(
     super::pad_fallback_with_callbacks(callbacks, size, method, color, centering)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn native_pad_with_callbacks<C: ImageOpsPadRouteCallbacks>(
     callbacks: &mut C,
     dimensions: (u32, u32),

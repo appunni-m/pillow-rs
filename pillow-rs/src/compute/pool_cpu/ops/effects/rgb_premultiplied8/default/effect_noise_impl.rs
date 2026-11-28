@@ -9,10 +9,12 @@ pub(crate) type Kernel<'a> = crate::compute::pool_cpu::ops::effects::helpers::no
     crate::compute::pool_cpu::ops::effects::helpers::pixel_buffer::PixelOf<Input>,
 >;
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare(input: &Input, sigma: f64) -> Kernel<'_> {
     crate::compute::pool_cpu::ops::effects::helpers::noise::prepare(input, sigma)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(kernel: Kernel<'_>) -> Result<GrayImage, PilError> {
     crate::compute::pool_cpu::ops::effects::helpers::noise::execute(kernel)
 }

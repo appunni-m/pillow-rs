@@ -12,6 +12,7 @@ use crate::raster::{RgbImage, RgbaImage};
     unsafe_code,
     reason = "the selected architecture establishes the NEON feature precondition"
 )]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) unsafe fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)
@@ -61,6 +62,7 @@ pub(crate) unsafe fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
 #[cfg(target_arch = "aarch64")]
 #[target_feature(enable = "neon")]
 #[allow(unsafe_code)]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 unsafe fn rgb_to_rgba_neon(source: &[u8], vector_pixels: usize, output: &mut Vec<u8>) {
     use core::arch::aarch64 as neon;
 

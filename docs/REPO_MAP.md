@@ -124,6 +124,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- bytes/
 |   |   |   |   |   |   |-- hidden_lanes.rs
 |   |   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |   |-- native_invert/
+|   |   |   |   |   |   |   `-- avx512f.rs
 |   |   |   |   |   |   |-- native_invert.rs
 |   |   |   |   |   |   |-- preblend.rs
 |   |   |   |   |   |   |-- unpremultiply.rs
@@ -143,16 +145,19 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- palette/
 |   |   |   |   |   |   |-- lookup.rs
 |   |   |   |   |   |   `-- mod.rs
-|   |   |   |   |   `-- quantization/
-|   |   |   |   |       |-- fixed_palette.rs
-|   |   |   |   |       |-- maxcoverage.rs
-|   |   |   |   |       |-- median_cut.rs
-|   |   |   |   |       |-- mod.rs
-|   |   |   |   |       |-- octree.rs
-|   |   |   |   |       |-- rgb_source.rs
-|   |   |   |   |       |-- rgba_palette.rs
-|   |   |   |   |       |-- rgba_source.rs
-|   |   |   |   |       `-- web_palette.rs
+|   |   |   |   |   |-- quantization/
+|   |   |   |   |   |   |-- fixed_palette.rs
+|   |   |   |   |   |   |-- maxcoverage.rs
+|   |   |   |   |   |   |-- median_cut.rs
+|   |   |   |   |   |   |-- mod.rs
+|   |   |   |   |   |   |-- octree.rs
+|   |   |   |   |   |   |-- rgb_source.rs
+|   |   |   |   |   |   |-- rgba_palette.rs
+|   |   |   |   |   |   |-- rgba_source.rs
+|   |   |   |   |   |   `-- web_palette.rs
+|   |   |   |   |   `-- sample/
+|   |   |   |   |       |-- avx512f_invert.rs
+|   |   |   |   |       `-- mod.rs
 |   |   |   |   |-- legacy/
 |   |   |   |   |   |-- batch_execution.rs
 |   |   |   |   |   |-- mod.rs
@@ -637,6 +642,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- i32/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- extrema_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
@@ -866,6 +874,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |       `-- ops.rs
 |   |   |   |       |-- chops/
 |   |   |   |       |   |-- cmyk8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -878,6 +888,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- f32/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -904,6 +917,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- unary.rs
 |   |   |   |       |   |   `-- vector.rs
 |   |   |   |       |   |-- hsv8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -916,6 +932,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- i16/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -928,6 +947,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- i16b/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -940,6 +962,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- i16l/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -952,6 +977,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- i16n/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -964,6 +992,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- i32/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -976,18 +1007,26 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- la_premultiplied8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- lab8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- luma8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -1000,12 +1039,17 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- luma_a16/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- luma_a8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -1019,6 +1063,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- mod.rs
 |   |   |   |       |   |-- one/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -1032,6 +1078,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- ops.rs
 |   |   |   |       |   |-- palette8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -1044,6 +1092,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- palette_alpha8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -1056,18 +1106,26 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- rgb16/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgb32f/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgb8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -1080,6 +1138,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- rgb_premultiplied8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -1092,18 +1153,26 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- rgba16/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba32f/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -1116,6 +1185,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- rgbx8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
@@ -1128,6 +1200,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   `-- ycbcr8/
+|   |   |   |       |       |-- avx512f/
+|   |   |   |       |       |   |-- invert_impl.rs
+|   |   |   |       |       |   `-- mod.rs
 |   |   |   |       |       |-- default/
 |   |   |   |       |       |   |-- mod.rs
 |   |   |   |       |       |   `-- ops.rs
@@ -1423,7 +1498,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- convert_transparent_impl.rs
 |   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- helpers/
-|   |   |   |       |   |   |   |-- layout.rs
 |   |   |   |       |   |   |   |-- luma_alpha.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- rgba.rs
@@ -1660,6 +1734,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |           `-- mod.rs
 |   |   |   |       |-- composite/
 |   |   |   |       |   |-- cmyk8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- merge_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- operations.rs
@@ -1682,8 +1759,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- alpha_composite.rs
+|   |   |   |       |   |   |-- alpha_composite_avx512f.rs
 |   |   |   |       |   |   |-- alpha_composite_vector.rs
 |   |   |   |       |   |   |-- blend/
+|   |   |   |       |   |   |   |-- avx512f.rs
 |   |   |   |       |   |   |   |-- avx_fma.rs
 |   |   |   |       |   |   |   `-- neon.rs
 |   |   |   |       |   |   |-- blend.rs
@@ -1695,9 +1774,14 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- numeric.rs
 |   |   |   |       |   |   |   `-- output.rs
 |   |   |   |       |   |   |-- composite_module_support.rs
+|   |   |   |       |   |   |-- merge/
+|   |   |   |       |   |   |   `-- avx512f.rs
 |   |   |   |       |   |   |-- merge.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- native_bytes.rs
+|   |   |   |       |   |   |-- preparation/
+|   |   |   |       |   |   |   |-- merge.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   `-- strategy.rs
 |   |   |   |       |   |-- hsv8/
 |   |   |   |       |   |   |-- default/
@@ -1760,6 +1844,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- luma_a8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- alpha_composite_impl.rs
+|   |   |   |       |   |   |   |-- merge_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- alpha_composite_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
@@ -1847,6 +1935,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- alpha_composite_impl.rs
+|   |   |   |       |   |   |   |-- merge_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- alpha_composite_impl.rs
 |   |   |   |       |   |   |   |-- alpha_composite_mirror_impl.rs
@@ -2135,7 +2227,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- admission.rs
 |   |   |   |       |   |   |   |-- arithmetic.rs
 |   |   |   |       |   |   |   |-- execute.rs
-|   |   |   |       |   |   |   |-- kernels/
+|   |   |   |       |   |   |   |-- layout.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   |-- rasterization/
 |   |   |   |       |   |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |   |-- shapes/
 |   |   |   |       |   |   |   |   |   `-- rounded_rect.rs
@@ -2144,8 +2238,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |   |-- spans/
 |   |   |   |       |   |   |   |   |   `-- line.rs
 |   |   |   |       |   |   |   |   `-- spans.rs
-|   |   |   |       |   |   |   |-- layout.rs
-|   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- strategy.rs
 |   |   |   |       |   |   |-- strategy.rs
 |   |   |   |       |   |   |-- support.rs
@@ -2949,6 +3041,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- sharpness_impl.rs
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- color_saturation_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- brightness_impl.rs
 |   |   |   |       |   |   |   |-- color_saturation_impl.rs
@@ -2978,6 +3073,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- helpers/
+|   |   |   |       |   |   |-- color_saturation/
+|   |   |   |       |   |   |   `-- avx512f.rs
 |   |   |   |       |   |   |-- color_saturation.rs
 |   |   |   |       |   |   |-- contrast.rs
 |   |   |   |       |   |   |-- contrast_route.rs
@@ -3090,6 +3187,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- sharpness_impl.rs
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- color_saturation_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- brightness_impl.rs
 |   |   |   |       |   |   |   |-- color_saturation_impl.rs
@@ -3135,6 +3235,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- sharpness_impl.rs
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- color_saturation_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- brightness_impl.rs
 |   |   |   |       |   |   |   |-- color_saturation_impl.rs
@@ -3185,6 +3288,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- sharpness_impl.rs
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- color_saturation_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- brightness_impl.rs
 |   |   |   |       |   |   |   |-- color_saturation_impl.rs
@@ -3213,6 +3319,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- sharpness_impl.rs
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- color_saturation_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- brightness_impl.rs
 |   |   |   |       |   |   |   |-- color_saturation_impl.rs
@@ -3382,6 +3491,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- f32/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- rank_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
@@ -3397,6 +3509,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- blur/
 |   |   |   |       |   |   |   |-- box_rows.rs
 |   |   |   |       |   |   |   |-- line.rs
+|   |   |   |       |   |   |   |-- line_steps.rs
 |   |   |   |       |   |   |   |-- radius_one/
 |   |   |   |       |   |   |   |   `-- vertical.rs
 |   |   |   |       |   |   |   |-- radius_one.rs
@@ -3413,12 +3526,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- filter5x5.rs
 |   |   |   |       |   |   |-- hidden_lanes.rs
 |   |   |   |       |   |   |-- i16_kernel.rs
-|   |   |   |       |   |   |-- kernels/
-|   |   |   |       |   |   |   |-- blur_line_steps.rs
-|   |   |   |       |   |   |   |-- filter3x3_vector.rs
-|   |   |   |       |   |   |   |-- filter5x5_rgb_vector.rs
-|   |   |   |       |   |   |   |-- filter5x5_vector.rs
-|   |   |   |       |   |   |   `-- rank_vector.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- mode_filter.rs
 |   |   |   |       |   |   |-- mode_leaf.rs
@@ -3427,7 +3534,13 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- rgb_blur_ring.rs
 |   |   |   |       |   |   |-- uniform_box.rs
 |   |   |   |       |   |   |-- uniform_image.rs
-|   |   |   |       |   |   `-- unsharp.rs
+|   |   |   |       |   |   |-- unsharp.rs
+|   |   |   |       |   |   `-- vector/
+|   |   |   |       |   |       |-- filter3x3_vector.rs
+|   |   |   |       |   |       |-- filter5x5_rgb_vector.rs
+|   |   |   |       |   |       |-- filter5x5_vector.rs
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- rank_vector.rs
 |   |   |   |       |   |-- hsv8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
@@ -3470,6 +3583,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- filter5x5_impl.rs
 |   |   |   |       |   |   |   |-- filter5x5_kernel.rs
 |   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- convolution_impl.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- rank_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter3x3_impl.rs
 |   |   |   |       |   |   |   |-- filter5x5_bounded_binomial.rs
@@ -3478,8 +3595,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- i32_cross_smooth_kernel.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rank_impl.rs
+|   |   |   |       |   |   |-- helpers.rs
 |   |   |   |       |   |   |-- mod.rs
-|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   `-- x86_64/
+|   |   |   |       |   |       |-- filter5x5_impl.rs
+|   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- la_premultiplied8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
@@ -3573,6 +3694,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba8/
 |   |   |   |       |   |   |-- avx2/
+|   |   |   |       |   |   |   |-- gaussian_blur_radius_seven.rs
+|   |   |   |       |   |   |   |-- gaussian_blur_radius_seven_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- avx512f/
 |   |   |   |       |   |   |   |-- gaussian_blur_radius_seven.rs
 |   |   |   |       |   |   |   |-- gaussian_blur_radius_seven_impl.rs
 |   |   |   |       |   |   |   `-- mod.rs
@@ -4145,6 +4270,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |           `-- mod.rs
 |   |   |   |       |-- imageops/
 |   |   |   |       |   |-- cmyk8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- expand_impl.rs
 |   |   |   |       |   |   |   |-- invert_impl.rs
@@ -4173,6 +4301,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- autocontrast.rs
 |   |   |   |       |   |   |-- colorize.rs
+|   |   |   |       |   |   |-- crop_border.rs
 |   |   |   |       |   |   |-- equalize.rs
 |   |   |   |       |   |   |-- expand.rs
 |   |   |   |       |   |   |-- expand_edges.rs
@@ -4180,6 +4309,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- hidden_lanes.rs
 |   |   |   |       |   |   |-- histogram.rs
 |   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- native_bytes/
+|   |   |   |       |   |   |   `-- avx512f.rs
 |   |   |   |       |   |   |-- native_bytes.rs
 |   |   |   |       |   |   |-- pixel.rs
 |   |   |   |       |   |   |-- point_lut.rs
@@ -4256,6 +4387,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- luma8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- posterize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- autocontrast_impl.rs
 |   |   |   |       |   |   |   |-- colorize_impl.rs
@@ -4299,6 +4434,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- luma_a8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- expand_impl.rs
 |   |   |   |       |   |   |   |-- invert_impl.rs
@@ -4318,6 +4456,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- mod.rs
 |   |   |   |       |   |-- one/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- expand_impl.rs
 |   |   |   |       |   |   |   |-- invert_impl.rs
@@ -4337,6 +4478,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- ops.rs
 |   |   |   |       |   |-- palette8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- posterize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- autocontrast_impl.rs
 |   |   |   |       |   |   |   |-- equalize_impl.rs
@@ -4371,6 +4516,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- posterize_impl.rs
 |   |   |   |       |   |       `-- solarize_impl.rs
 |   |   |   |       |   |-- palette_alpha8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- expand_impl.rs
 |   |   |   |       |   |   |   |-- invert_impl.rs
@@ -4405,6 +4553,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgb8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- posterize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- autocontrast_impl.rs
 |   |   |   |       |   |   |   |-- equalize_impl.rs
@@ -4461,6 +4613,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- invert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- expand_impl.rs
 |   |   |   |       |   |   |   |-- invert_impl.rs
@@ -4534,13 +4689,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- contracts.rs
 |   |   |   |       |   |   |-- i16.rs
 |   |   |   |       |   |   |-- i16_vector.rs
-|   |   |   |       |   |   |-- kernels/
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- rgb_l_mask_neon.rs
 |   |   |   |       |   |   |-- layout.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- plan.rs
 |   |   |   |       |   |   |-- region.rs
+|   |   |   |       |   |   |-- rgb_l_mask_neon.rs
 |   |   |   |       |   |   |-- strategy.rs
 |   |   |   |       |   |   |-- telemetry.rs
 |   |   |   |       |   |   |-- typed.rs
@@ -5414,6 +5567,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- reduce_impl.rs
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- reduce_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- reduce_impl.rs
@@ -5430,6 +5586,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       `-- reduce_impl.rs
 |   |   |   |       |   |-- f32/
 |   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- reduce_impl.rs
+|   |   |   |       |   |   |-- avx512f/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- reduce_impl.rs
 |   |   |   |       |   |   |-- default/
@@ -5451,16 +5610,17 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- reduce_impl.rs
 |   |   |   |       |   |-- helpers/
+|   |   |   |       |   |   |-- avx512f_2x2.rs
 |   |   |   |       |   |   |-- hidden_lanes.rs
+|   |   |   |       |   |   |-- i32_avx512f.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- native_bytes/
+|   |   |   |       |   |   |   |-- avx2.rs
 |   |   |   |       |   |   |   |-- general.rs
-|   |   |   |       |   |   |   |-- kernels/
-|   |   |   |       |   |   |   |   |-- avx2.rs
-|   |   |   |       |   |   |   |   `-- wide.rs
-|   |   |   |       |   |   |   |-- kernels.rs
 |   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- rgb.rs
+|   |   |   |       |   |   |   |-- rgb.rs
+|   |   |   |       |   |   |   |-- rgb_kernels.rs
+|   |   |   |       |   |   |   `-- wide.rs
 |   |   |   |       |   |   |-- native_samples.rs
 |   |   |   |       |   |   |-- scalar32.rs
 |   |   |   |       |   |   `-- strategy.rs
@@ -5507,6 +5667,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- i32/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- reduce_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- reduce_impl.rs
@@ -5617,6 +5780,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- reduce_impl.rs
 |   |   |   |       |   |-- rgb_premultiplied8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- reduce_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- reduce_impl.rs
@@ -5638,6 +5804,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- reduce_impl.rs
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- reduce_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- reduce_impl.rs
@@ -5653,6 +5822,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- reduce_impl.rs
 |   |   |   |       |   |-- rgbx8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- reduce_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- reduce_impl.rs
@@ -5678,6 +5850,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |           `-- reduce_impl.rs
 |   |   |   |       |-- resize/
 |   |   |   |       |   |-- cmyk8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filtered.rs
 |   |   |   |       |   |   |   |-- mod.rs
@@ -5699,6 +5874,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- avx/
 |   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   |-- resize_impl.rs
+|   |   |   |       |   |   |   `-- vector_resize_impl.rs
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- filtered_resize_impl.rs
+|   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
@@ -5719,11 +5899,16 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- sse2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
-|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |   |-- wasm_simd128/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
+|   |   |   |       |   |   `-- x86_64/
+|   |   |   |       |   |       |-- filters.rs
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- resize_impl.rs
 |   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- alpha_samples.rs
+|   |   |   |       |   |   |-- avx512f_nearest.rs
 |   |   |   |       |   |   |-- boxed_crop.rs
 |   |   |   |       |   |   |-- byte_samples.rs
 |   |   |   |       |   |   |-- coefficients.rs
@@ -5768,6 +5953,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- resize_impl.rs
 |   |   |   |       |   |-- i16/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
@@ -5783,6 +5971,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- resize_impl.rs
 |   |   |   |       |   |-- i16b/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
@@ -5798,6 +5989,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- resize_impl.rs
 |   |   |   |       |   |-- i16l/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
@@ -5813,6 +6007,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- resize_impl.rs
 |   |   |   |       |   |-- i16n/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
@@ -5829,6 +6026,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       `-- resize_impl.rs
 |   |   |   |       |   |-- i32/
 |   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
+|   |   |   |       |   |   |-- avx512f/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
@@ -5972,6 +6172,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- resize_impl.rs
 |   |   |   |       |   |-- rgb_premultiplied8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
@@ -5999,6 +6202,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
@@ -6014,6 +6220,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- resize_impl.rs
 |   |   |   |       |   |-- rgbx8/
+|   |   |   |       |   |   |-- avx512f/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_impl.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- resize_impl.rs
@@ -6045,6 +6254,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |           `-- resize_impl.rs
 |   |   |   |       |-- rotate/
 |   |   |   |       |   |-- cmyk8/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6063,6 +6274,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- rotate_impl.rs
 |   |   |   |       |   |-- f32/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6098,6 +6311,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- vector_numeric.rs
 |   |   |   |       |   |   `-- vector_typed_bilinear.rs
 |   |   |   |       |   |-- hsv8/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6158,6 +6373,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- rotate_impl.rs
 |   |   |   |       |   |-- la_premultiplied8/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6176,6 +6393,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- rotate_impl.rs
 |   |   |   |       |   |-- lab8/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6194,6 +6413,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- rotate_impl.rs
 |   |   |   |       |   |-- luma8/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6218,6 +6439,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- luma_a8/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6304,6 +6527,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgb8/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6322,6 +6547,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- rotate_impl.rs
 |   |   |   |       |   |-- rgb_premultiplied8/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6352,6 +6579,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba8/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6370,6 +6599,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- rotate_impl.rs
 |   |   |   |       |   |-- rgbx8/
+|   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- rotate_impl.rs
@@ -6388,6 +6619,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- rotate_impl.rs
 |   |   |   |       |   `-- ycbcr8/
+|   |   |   |       |       |-- avx/
+|   |   |   |       |       |   `-- mod.rs
 |   |   |   |       |       |-- avx2/
 |   |   |   |       |       |   |-- mod.rs
 |   |   |   |       |       |   `-- rotate_impl.rs
@@ -6414,6 +6647,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- mode_strategy.rs
 |   |   |   |       |   |-- i32/
 |   |   |   |       |   |   |-- avx/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- thumbnail_impl.rs
+|   |   |   |       |   |   |-- avx512f/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- thumbnail_impl.rs
 |   |   |   |       |   |   |-- default/
@@ -6920,6 +7156,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |           `-- transform_impl.rs
 |   |   |   |       `-- transpose/
 |   |   |   |           |-- cmyk8/
+|   |   |   |           |   |-- avx512f/
+|   |   |   |           |   |   `-- mod.rs
 |   |   |   |           |   |-- default/
 |   |   |   |           |   |   |-- flip_impl.rs
 |   |   |   |           |   |   |-- mirror_impl.rs
@@ -6934,6 +7172,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |           |   `-- wasm_simd128/
 |   |   |   |           |       `-- transpose_impl.rs
 |   |   |   |           |-- f32/
+|   |   |   |           |   |-- avx512f/
+|   |   |   |           |   |   `-- mod.rs
 |   |   |   |           |   |-- default/
 |   |   |   |           |   |   |-- flip_impl.rs
 |   |   |   |           |   |   |-- mirror_impl.rs
@@ -6948,6 +7188,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |           |   `-- wasm_simd128/
 |   |   |   |           |       `-- transpose_impl.rs
 |   |   |   |           |-- helpers/
+|   |   |   |           |   |-- avx512f.rs
 |   |   |   |           |   |-- mod.rs
 |   |   |   |           |   |-- native_luma16.rs
 |   |   |   |           |   |-- native_mirror.rs
@@ -7025,6 +7266,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |           |   `-- wasm_simd128/
 |   |   |   |           |       `-- transpose_impl.rs
 |   |   |   |           |-- i32/
+|   |   |   |           |   |-- avx512f/
+|   |   |   |           |   |   `-- mod.rs
 |   |   |   |           |   |-- default/
 |   |   |   |           |   |   |-- flip_impl.rs
 |   |   |   |           |   |   |-- mirror_impl.rs
@@ -7165,6 +7408,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |           |   `-- wasm_simd128/
 |   |   |   |           |       `-- transpose_impl.rs
 |   |   |   |           |-- rgb_premultiplied8/
+|   |   |   |           |   |-- avx512f/
+|   |   |   |           |   |   `-- mod.rs
 |   |   |   |           |   |-- default/
 |   |   |   |           |   |   |-- flip_impl.rs
 |   |   |   |           |   |   |-- mirror_impl.rs
@@ -7198,6 +7443,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |           |   |-- avx2/
 |   |   |   |           |   |   |-- mod.rs
 |   |   |   |           |   |   `-- transpose_impl.rs
+|   |   |   |           |   |-- avx512f/
+|   |   |   |           |   |   `-- mod.rs
 |   |   |   |           |   |-- default/
 |   |   |   |           |   |   |-- flip_impl.rs
 |   |   |   |           |   |   |-- mirror_impl.rs
@@ -7216,6 +7463,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |           |       |-- rotate270_tiled.rs
 |   |   |   |           |       `-- transpose_impl.rs
 |   |   |   |           |-- rgbx8/
+|   |   |   |           |   |-- avx512f/
+|   |   |   |           |   |   `-- mod.rs
 |   |   |   |           |   |-- default/
 |   |   |   |           |   |   |-- flip_impl.rs
 |   |   |   |           |   |   |-- mirror_impl.rs
@@ -7534,10 +7783,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- facts.rs
 |   |   |   |   |   |   |-- guard_assessment.rs
 |   |   |   |   |   |   |-- guards/
+|   |   |   |   |   |   |   |-- composition.rs
 |   |   |   |   |   |   |   |-- core.rs
 |   |   |   |   |   |   |   |-- draw.rs
 |   |   |   |   |   |   |   |-- mutation.rs
-|   |   |   |   |   |   |   `-- resize.rs
+|   |   |   |   |   |   |   |-- resize.rs
+|   |   |   |   |   |   |   `-- rotation.rs
 |   |   |   |   |   |   `-- guards.rs
 |   |   |   |   |   |-- request.rs
 |   |   |   |   |   |-- route.rs
@@ -7592,6 +7843,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   `-- text_wrap.rs
 |   |   |-- format.rs
 |   |   |-- image/
+|   |   |   |-- arrow.rs
 |   |   |   |-- backend.rs
 |   |   |   |-- byte_export.rs
 |   |   |   |-- channel_access.rs
@@ -7621,12 +7873,17 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- entropy.rs
 |   |   |   |-- materialization/
 |   |   |   |   |-- derived.rs
+|   |   |   |   |-- evaluation.rs
 |   |   |   |   |-- lifecycle.rs
 |   |   |   |   |-- palette_output.rs
 |   |   |   |   `-- receipts.rs
 |   |   |   |-- materialization.rs
 |   |   |   |-- metadata.rs
 |   |   |   |-- mode_boundary.rs
+|   |   |   |-- palette/
+|   |   |   |   |-- access.rs
+|   |   |   |   |-- mutation.rs
+|   |   |   |   `-- remap.rs
 |   |   |   |-- palette.rs
 |   |   |   |-- pipeline_admission.rs
 |   |   |   |-- pipeline_ops/
@@ -7664,7 +7921,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- mod.rs
 |   |   |   |   |-- mode.rs
 |   |   |   |   |-- operation.rs
-|   |   |   |   `-- palette.rs
+|   |   |   |   |-- palette.rs
+|   |   |   |   `-- transparency.rs
 |   |   |   |-- crop.rs
 |   |   |   |-- enhance.rs
 |   |   |   |-- filter.rs
@@ -7696,12 +7954,16 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- module_fns/
 |   |   |   |   `-- point.rs
 |   |   |   |-- module_fns.rs
+|   |   |   |-- param_filters/
+|   |   |   |   `-- imaging_core.rs
 |   |   |   |-- param_filters.rs
 |   |   |   |-- paste/
 |   |   |   |   |-- color.rs
 |   |   |   |   |-- context_execution.rs
 |   |   |   |   |-- input.rs
 |   |   |   |   |-- operations.rs
+|   |   |   |   |-- source.rs
+|   |   |   |   |-- source_plan.rs
 |   |   |   |   `-- types.rs
 |   |   |   |-- paste.rs
 |   |   |   |-- pil_resize/
@@ -7749,6 +8011,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- pixel_rgb.rs
 |   |   |   |   `-- types.rs
 |   |   |   |-- dynamic/
+|   |   |   |   |-- masked_copy.rs
 |   |   |   |   |-- mode.rs
 |   |   |   |   `-- transform.rs
 |   |   |   |-- dynamic.rs
@@ -7858,8 +8121,16 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |-- image/
 |       |   |-- analysis.rs
 |       |   |-- arrays.rs
+|       |   |-- arrow/
+|       |   |   |-- abi.rs
+|       |   |   |-- array.rs
+|       |   |   |-- capsule.rs
+|       |   |   |-- import.rs
+|       |   |   |-- mod.rs
+|       |   |   `-- schema.rs
 |       |   |-- chops.rs
 |       |   |-- constructors.rs
+|       |   |-- convert.rs
 |       |   |-- creation.rs
 |       |   |-- crop.rs
 |       |   |-- data.rs
@@ -7869,6 +8140,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |   |-- imaging_core.rs
 |       |   |-- mod.rs
 |       |   |-- operations.rs
+|       |   |-- palette.rs
 |       |   |-- point.rs
 |       |   |-- properties.rs
 |       |   |-- put_alpha.rs

@@ -3,6 +3,7 @@ use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn selected_architecture(
     selection: &StrategySelection,
     mode: Mode,
@@ -20,6 +21,7 @@ pub(crate) fn selected_architecture(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn require_default_selection(
     selection: &StrategySelection,
     mode: Mode,

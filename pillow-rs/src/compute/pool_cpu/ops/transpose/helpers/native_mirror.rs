@@ -4,6 +4,7 @@ use crate::raster::{ImageBuffer, Pixel};
 use wide::u8x16;
 
 /// Mirrors a typed byte image and preserves its pixel-buffer type.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn mirror_image<P>(
     image: &ImageBuffer<P, Vec<u8>>,
     channels: usize,
@@ -21,6 +22,7 @@ where
 /// Reverse each row while keeping every pixel's native byte group intact.
 ///
 /// Trailing source storage is ignored, matching the archived native adapter.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn mirror_bytes(
     source: &[u8],
     width: u32,
@@ -52,6 +54,7 @@ pub(crate) fn mirror_bytes(
     Some((output, vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn mirror_native_row(
     source: &[u8],
     output: &mut [u8],
@@ -113,6 +116,7 @@ pub(crate) fn mirror_native_row(
     Some((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn reverse_pixel_block(input: &[u8], channels: usize) -> Option<[u8; 16]> {
     let indices = match channels {
         1 => [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
@@ -124,6 +128,7 @@ pub(crate) fn reverse_pixel_block(input: &[u8], channels: usize) -> Option<[u8; 
     Some(input.shuffle(u8x16::new(indices)).to_array())
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn reverse_rgb_block(input: &[u8]) -> Option<[u8; 48]> {
     let first = u8x16::new(<[u8; 16]>::try_from(input.get(..16)?).ok()?);
     let second = u8x16::new(<[u8; 16]>::try_from(input.get(16..32)?).ok()?);

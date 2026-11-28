@@ -10,7 +10,7 @@ use crate::raster::Mode;
 
 mod request;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 pub(super) fn assess(
     contract: InputContract,
     input: StrategyInputs,
@@ -55,23 +55,14 @@ pub(super) fn assess(
         InputContract::ExpandFill(_)
         | InputContract::PadFill(_)
         | InputContract::AutocontrastParameters
+        | InputContract::RemapPaletteDestinationMap { .. }
         | InputContract::FloodFillInputs => Ok(None),
         InputContract::PaletteMetadata if input.palette == PaletteKnowledge::Unknown => {
             Ok(Some(UnresolvedGuard::PaletteMetadata))
         }
         InputContract::Color3DLutTarget { targets } => assess_color3dlut_target(input, targets),
-        InputContract::ConvertTarget {
-            targets,
-            core_only_targets,
-            core_only_reason,
-            rejection_reason,
-        } => assess_convert_target(
-            input,
-            targets,
-            core_only_targets,
-            core_only_reason,
-            rejection_reason,
-        ),
+        contract @ (InputContract::ConvertTarget { .. }
+        | InputContract::ConvertMatrixTarget { .. }) => assess_conversion_targets(input, contract),
         contract @ InputContract::ChopsBinaryModes { .. } => {
             assess_chops_binary_modes(input, contract)
         }
@@ -116,6 +107,34 @@ pub(super) fn assess(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+fn assess_conversion_targets(
+    input: StrategyInputs,
+    contract: InputContract,
+) -> Result<Option<UnresolvedGuard>, PilError> {
+    match contract {
+        InputContract::ConvertTarget {
+            targets,
+            core_only_targets,
+            core_only_reason,
+            rejection_reason,
+        } => assess_convert_target(
+            input,
+            targets,
+            core_only_targets,
+            core_only_reason,
+            rejection_reason,
+        ),
+        matrix_contract @ InputContract::ConvertMatrixTarget { .. } => {
+            assess_convert_matrix_target(input, matrix_contract)
+        }
+        _ => Err(PilError::InternalError(
+            "conversion target assessment received another input contract".into(),
+        )),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_composite_inputs(
     contract: InputContract,
     input: StrategyInputs,
@@ -161,6 +180,7 @@ fn assess_composite_inputs(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_blend_inputs(
     contract: InputContract,
     input: StrategyInputs,
@@ -196,6 +216,7 @@ fn assess_blend_inputs(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_merge_band_layout(
     contract: InputContract,
     input: StrategyInputs,
@@ -273,7 +294,7 @@ fn assess_merge_band_layout(
     Ok(None)
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_paste_inputs(
     input: StrategyInputs,
     rules: &'static PasteInputRules,
@@ -332,6 +353,7 @@ fn assess_paste_inputs(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_convert_target(
     input: StrategyInputs,
     targets: &'static [Mode],
@@ -356,7 +378,54 @@ fn assess_convert_target(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+fn assess_convert_matrix_target(
+    input: StrategyInputs,
+    contract: InputContract,
+) -> Result<Option<UnresolvedGuard>, PilError> {
+    let InputContract::ConvertMatrixTarget {
+        targets,
+        length_rejection_reason,
+        target_rejection_reason,
+        coefficient_rejection_reason,
+    } = contract
+    else {
+        unreachable!("ConvertMatrix assessment received another contract")
+    };
+    match input.request {
+        RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(Box::new(contract)))),
+        RequestFacts::ConvertTarget { target_mode } => {
+            if targets.iter().any(|target| target.mode == target_mode) {
+                Ok(Some(UnresolvedGuard::InputContract(Box::new(contract))))
+            } else {
+                Err(PilError::ValueError(target_rejection_reason.into()))
+            }
+        }
+        RequestFacts::ConvertMatrix {
+            target_mode,
+            coefficients,
+        } => {
+            if !matches!(coefficients, 4 | 12) {
+                return Err(PilError::TypeError(length_rejection_reason.into()));
+            }
+            if !targets.iter().any(|target| target.mode == target_mode) {
+                return Err(PilError::ValueError(target_rejection_reason.into()));
+            }
+            if !targets
+                .iter()
+                .any(|target| target.mode == target_mode && target.coefficients == coefficients)
+            {
+                return Err(PilError::TypeError(coefficient_rejection_reason.into()));
+            }
+            Ok(None)
+        }
+        _ => Err(PilError::InternalError(
+            "ConvertMatrix validation received another operation request".into(),
+        )),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_chops_binary_modes(
     input: StrategyInputs,
     contract: InputContract,
@@ -379,6 +448,7 @@ fn assess_chops_binary_modes(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_same_mode_secondary_image(
     input: StrategyInputs,
     mode: Mode,
@@ -410,6 +480,7 @@ fn assess_same_mode_secondary_image(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_draw_inputs(
     input: StrategyInputs,
     contract: InputContract,
@@ -458,6 +529,7 @@ fn assess_draw_inputs(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_draw_bitmap(
     raster_mode: Option<Mode>,
     context_mode: Option<Mode>,
@@ -492,6 +564,7 @@ fn assess_draw_bitmap(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_draw_text(
     raster_mode: Option<Mode>,
     context_mode: Option<Mode>,
@@ -539,10 +612,12 @@ fn assess_draw_text(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn defer_draw_inputs(contract: InputContract) -> Result<Option<UnresolvedGuard>, PilError> {
     Ok(Some(UnresolvedGuard::InputContract(Box::new(contract))))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_checked_dimensions(
     input: StrategyInputs,
     bytes_per_pixel: u8,
@@ -560,6 +635,7 @@ fn assess_checked_dimensions(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_expanded_dimensions(
     contract: InputContract,
     input: StrategyInputs,
@@ -589,6 +665,7 @@ fn assess_expanded_dimensions(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn expanded_dimensions(
     width: u32,
     height: u32,
@@ -603,6 +680,7 @@ fn expanded_dimensions(
     Ok((width, height))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_color3dlut_target(
     input: StrategyInputs,
     targets: &'static [super::ModeChannelCapacity],
@@ -628,6 +706,7 @@ fn assess_color3dlut_target(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn assess_crop_border(
     contract: InputContract,
     input: StrategyInputs,
@@ -650,6 +729,7 @@ fn assess_crop_border(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_byte_data_payload(
     contract: InputContract,
     input: StrategyInputs,
@@ -659,10 +739,11 @@ fn assess_byte_data_payload(
     match input.request {
         RequestFacts::Unspecified => unresolved_request(contract),
         RequestFacts::PutData { payload_mode, .. } if modes.contains(&payload_mode) => Ok(None),
-        _ => Err(PilError::ValueError(rejection_reason.into())),
+        RequestFacts::PutData { .. } => Err(PilError::ValueError(rejection_reason.into())),
+        _ => Err(wrong_request("PutData")),
     }
 }
-
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_alpha_mask(
     contract: InputContract,
     input: StrategyInputs,
@@ -679,10 +760,12 @@ fn assess_alpha_mask(
         RequestFacts::PutAlphaData { mask } if modes.contains(&mask.mode) => {
             Err(PilError::ValueError("images do not match".into()))
         }
-        _ => Err(PilError::ValueError("illegal image mode".into())),
+        RequestFacts::PutAlphaData { .. } => Err(PilError::ValueError("illegal image mode".into())),
+        _ => Err(wrong_request("PutAlphaData")),
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_imageops_luma_mask(
     contract: InputContract,
     input: StrategyInputs,
@@ -698,6 +781,7 @@ fn assess_imageops_luma_mask(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn validate_imageops_mask(
     input: StrategyInputs,
     mode: Mode,
@@ -713,6 +797,7 @@ fn validate_imageops_mask(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_exact_native_bytes(
     contract: InputContract,
     input: StrategyInputs,
@@ -731,10 +816,12 @@ fn assess_exact_native_bytes(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn unresolved_request(contract: InputContract) -> Result<Option<UnresolvedGuard>, PilError> {
     Ok(Some(UnresolvedGuard::InputContract(Box::new(contract))))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn wrong_request(operation: &str) -> PilError {
     PilError::InternalError(format!(
         "{operation} support received facts for another operation"

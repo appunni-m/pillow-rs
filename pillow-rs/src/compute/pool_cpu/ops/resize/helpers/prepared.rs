@@ -12,7 +12,7 @@ use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::{DynamicImage, Mode};
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn effective_filter(mode: Mode, requested: ResampleFilter) -> ResampleFilter {
     match mode {
         Mode::One => super::super::one::ops::effective_filter(requested),
@@ -55,7 +55,7 @@ enum ResizeRequest {
     },
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn reducing_gap_support(mode: Mode) -> Option<ModeSupport> {
     match super::select_reducing_gap_child(mode, false, true) {
         Some((OperationId::ResizeBoxed, Some(support))) => Some(support),
@@ -74,12 +74,12 @@ pub(crate) struct PreparedResize<'a> {
 }
 
 impl PreparedResize<'_> {
-    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn supports_pad_window(&self) -> bool {
         let filtered = matches!(
             self.request,
@@ -89,7 +89,7 @@ impl PreparedResize<'_> {
     }
 
     /// Executes the retained mode and architecture strategy into a Pad window.
-    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute_into_pad_window(&self, output: &mut [u8]) -> Result<bool, PilError> {
         if !self.supports_pad_window() {
             return Ok(false);
@@ -107,7 +107,7 @@ impl PreparedResize<'_> {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         if let ResizeRequest::Boxed {
             filter,
@@ -178,7 +178,7 @@ impl PreparedResize<'_> {
 
     /// Executes the prepared RGB Resize strategy with exact active source-row
     /// facts supplied by Thumbnail's sparse reducing-gap fusion.
-    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute_rgb8_with_sparse_rows(
         self,
         sparse_source_rows: Option<&[bool]>,
@@ -235,7 +235,7 @@ impl PreparedResize<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_alpha_reducing_gap(
     image: &DynamicImage,
     destination: (u32, u32),
@@ -286,7 +286,7 @@ fn execute_alpha_reducing_gap(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_mode(
     image: &DynamicImage,
     context: ExecutionContext,
@@ -334,7 +334,7 @@ fn execute_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn selection(
     support: ModeSupport,
     facts: StrategyInputs,
@@ -349,7 +349,7 @@ fn selection(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn resize_request_facts(
     facts: StrategyInputs,
     width: u32,
@@ -364,7 +364,7 @@ fn resize_request_facts(
 }
 
 /// Prepares a typed Resize dependency for another CPU operation.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_direct<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -392,7 +392,7 @@ pub(crate) fn prepare_direct<'a>(
 ///
 /// Composite operations use this after materializing an intermediate raster;
 /// the stored support decision is retained rather than selected a second time.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_direct_with_selection<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -406,7 +406,7 @@ pub(crate) fn prepare_direct_with_selection<'a>(
 }
 
 /// Binds a prepared straight-alpha reducing-gap strategy to its image input.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_direct_with_reducing_gap_selection<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -429,7 +429,7 @@ pub(crate) fn prepare_direct_with_reducing_gap_selection<'a>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn prepare_direct_with_request<'a>(
     inputs: OperationInputs<'a>,
     width: u32,
@@ -490,7 +490,7 @@ fn prepare_direct_with_request<'a>(
 }
 
 /// Prepares ordinary or boxed Resize using the operation's declared support.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &'a PipelineOp,

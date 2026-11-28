@@ -2,6 +2,7 @@
 
 pub(crate) mod autocontrast;
 pub(crate) mod colorize;
+pub(crate) mod crop_border;
 pub(crate) mod equalize;
 pub(crate) mod expand;
 pub(crate) mod expand_edges;

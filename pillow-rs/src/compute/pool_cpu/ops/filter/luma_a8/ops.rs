@@ -53,6 +53,7 @@ super::super::helpers::native_filter3x3_arch_leaf!(ImageLumaA8, GrayAlphaImage, 
 super::super::helpers::native_filter5x5_architectures!(MODE, 2);
 super::super::helpers::native_filter5x5_arch_leaf!(ImageLumaA8, GrayAlphaImage, 2, la);
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         OperationId::Filter3x3 => {
@@ -112,6 +113,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -127,6 +129,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     super::super::helpers::execute_native_byte_blur::<2>(image, MODE, request, selection, context)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -217,6 +220,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_gaussian_blur(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,

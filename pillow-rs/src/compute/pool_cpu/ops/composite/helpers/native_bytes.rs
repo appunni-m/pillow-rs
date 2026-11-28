@@ -4,6 +4,7 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Luma, LumaA, Mode, Rgb, Rgba};
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn construct(
     width: u32,
     height: u32,
@@ -80,6 +81,7 @@ pub(crate) fn construct(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn invalid_target(layout: &'static str) -> PilError {
     PilError::InternalError(format!("invalid {layout} byte-mode output identity"))
 }

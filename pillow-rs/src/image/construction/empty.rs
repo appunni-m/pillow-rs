@@ -6,11 +6,12 @@ use crate::raster::{DynamicImage, Mode};
 use super::Image;
 
 impl Image {
-    /// Creates a new mode-typed image with Pillow's default zero fill.
+    /// Creates a new mode-typed image with Pillow's default black fill.
     ///
     /// Unlike `Image::new`, this also supports internal raster identities that
     /// do not have a Pillow-facing `Image.new` mode spelling. Palette mode
     /// starts without an attached palette, matching `Image.new("P", size)`.
+    // VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
     pub(crate) fn new_empty_with_mode(
         width: u32,
         height: u32,
@@ -37,7 +38,11 @@ impl Image {
             Mode::ImageYCbCr8 => {
                 DynamicImage::ImageYCbCr8(crate::raster::RgbImage::new(width, height))
             }
-            Mode::ImageLab8 => DynamicImage::ImageLab8(crate::raster::RgbImage::new(width, height)),
+            Mode::ImageLab8 => DynamicImage::ImageLab8(crate::raster::RgbImage::from_pixel(
+                width,
+                height,
+                crate::raster::Rgb([0, 128, 128]),
+            )),
             Mode::ImageHsv8 => DynamicImage::ImageHsv8(crate::raster::RgbImage::new(width, height)),
             Mode::ImageRgba8 => {
                 DynamicImage::ImageRgba8(crate::raster::RgbaImage::new(width, height))

@@ -1,15 +1,13 @@
 use super::execution::{ExecutionRoute, route_from_context, route_pending_image};
 use super::{PyImage, RsImage};
 use crate::*;
-use pyo3::exceptions::PyBufferError;
-use pyo3::prelude::PyModule;
 use pyo3::pymethods;
 use pyo3::types::PyTupleMethods;
 
 type ImageExecutionRoute = (Option<pillow_rs::Backend>, pillow_rs::ExecutionContext);
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-fn update_image_with_route<T: Send>(
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+pub(super) fn update_image_with_route<T: Send>(
     slf: Py<PyImage>,
     py: Python<'_>,
     route: ExecutionRoute,
@@ -26,24 +24,13 @@ fn update_image_with_route<T: Send>(
     result.map_err(map_error)
 }
 
-fn palette_alpha_bytes(value: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
-    let memoryview = PyModule::import(value.py(), "builtins")?
-        .getattr("memoryview")?
-        .call1((value,))?;
-    if !memoryview.getattr("c_contiguous")?.extract::<bool>()? {
-        return Err(PyBufferError::new_err(
-            "underlying buffer is not C-contiguous",
-        ));
-    }
-    Ok(memoryview.call_method0("tobytes")?.extract::<Vec<u8>>()?)
-}
-
 struct PreparedPalettePutPixel<'py> {
     value: pillow_rs::PutPixelValue,
     deferred_alpha: Option<Bound<'py, PyAny>>,
     reserved: Vec<u32>,
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
 fn prepare_palette_putpixel<'py>(
     value: &Bound<'py, PyAny>,
     mode: pillow_rs::Mode,
@@ -54,6 +41,12 @@ fn prepare_palette_putpixel<'py>(
         mode,
         pillow_rs::Mode::ImagePalette8 | pillow_rs::Mode::ImagePaletteAlpha8
     );
+    let cmyk_palette = mode == pillow_rs::Mode::ImagePalette8 && palette_mode == Some("CMYK");
+    // Public Image.putpixel resolves P/PA color tuples through
+    // ImagePalette.getcolor before entering this helper. PyImage.putpixel is a
+    // separate ImagingCore route with palette-index coercion. This internal
+    // binding-only helper has no ImagePalette object or subclass callback, so
+    // direct callers retain its typed core behavior.
     if !is_palette
         || !(value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>())
         || !matches!(value.len()?, 3 | 4)
@@ -67,7 +60,8 @@ fn prepare_palette_putpixel<'py>(
     };
     // The palette wrapper precedes coordinate parsing. PA's alpha conversion
     // happens later, after palette allocation and coordinate bounds checks.
-    let rgb_only = mode == pillow_rs::Mode::ImagePaletteAlpha8 || palette_mode != Some("RGBA");
+    let rgb_only = !cmyk_palette
+        && (mode == pillow_rs::Mode::ImagePaletteAlpha8 || palette_mode != Some("RGBA"));
     if mode == pillow_rs::Mode::ImagePalette8
         && rgb_only
         && value.len()? == 4
@@ -383,159 +377,6 @@ impl PyImage {
         formatted_pixel_to_python(py, value)
     }
 
-    #[pyo3(signature = (rawmode=None))]
-    fn getpalette_with_input(
-        &self,
-        rawmode: Option<String>,
-        py: Python<'_>,
-    ) -> PyResult<Py<PyAny>> {
-        let palette = self
-            .inner
-            .getpalette_with_input(rawmode.as_deref())
-            .map_err(map_error)?;
-        match palette {
-            Some(values) => Ok(PyList::new(py, values)?.into_py_any(py)?),
-            None => Ok(py.None()),
-        }
-    }
-
-    // TODO(pillow-rs#3ptb): verify packed palette bytes, rawmode faults, the
-    // missing-palette error, and direct-filter callback output in CPU parity.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
-    #[pyo3(signature = (*args))]
-    fn getpalette(&self, args: &Bound<'_, PyTuple>, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        if args.len() > 1 {
-            return Err(PyTypeError::new_err(format!(
-                "function takes at most 1 argument ({} given)",
-                args.len()
-            )));
-        }
-        let rawmode = if args.is_empty() {
-            self.inner.palette_mode().map(str::to_owned)
-        } else {
-            Some(args.get_item(0)?.extract::<String>()?)
-        };
-        let rawmode = rawmode.as_deref().unwrap_or("RGB");
-        let palette = self
-            .inner
-            .getpalette_rawmode(rawmode)
-            .map_err(map_error)?
-            .ok_or_else(|| PyValueError::new_err("image has no palette"))?;
-        Ok(PyBytes::new(py, &palette).into())
-    }
-
-    fn indexed_color_table(&self) -> PyResult<Vec<(u8, u8, u8)>> {
-        self.inner.indexed_color_table().map_err(map_error)
-    }
-
-    fn palette_mode(&self) -> Option<String> {
-        self.inner.palette_mode().map(str::to_owned)
-    }
-
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
-    fn getpalettemode(&self) -> PyResult<String> {
-        self.inner
-            .palette_mode()
-            .map(str::to_owned)
-            .ok_or_else(|| PyValueError::new_err("image has no palette"))
-    }
-
-    fn has_attached_palette(&self) -> bool {
-        self.inner.has_attached_palette()
-    }
-
-    fn has_transparency_data(&self) -> bool {
-        self.inner.has_transparency_data()
-    }
-
-    // TODO(pillow-rs#3ptb): verify transparency commits, palette metadata,
-    // errors, and route receipts at the active materialization boundary.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    fn apply_transparency(slf: Py<Self>, py: Python<'_>) -> PyResult<()> {
-        let route = route_from_context(None, py);
-        update_image_with_route(slf, py, route, |image, route| match route {
-            Some(route) => {
-                image.apply_transparency_with_execution_context(route.pinned_backend, route.context)
-            }
-            None => image.apply_transparency(),
-        })
-    }
-
-    // TODO(pillow-rs#3ptb): verify palette edits, partial mutations on errors,
-    // and route receipts for public and callback-created calls.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    #[pyo3(signature = (data, rawmode="RGB"))]
-    fn putpalette(
-        slf: Py<Self>,
-        data: &Bound<'_, PyAny>,
-        rawmode: &str,
-        py: Python<'_>,
-    ) -> PyResult<()> {
-        let data = data.extract::<Vec<u8>>()?;
-        let rawmode = rawmode.to_owned();
-        let route = route_from_context(None, py);
-        update_image_with_route(slf, py, route, move |image, route| match route {
-            Some(route) => image.putpalette_with_execution_context(
-                &data,
-                &rawmode,
-                route.pinned_backend,
-                route.context,
-            ),
-            None => image.putpalette(&data, &rawmode),
-        })
-    }
-
-    // TODO(pillow-rs#3ptb): verify single-entry alpha writes, truncation,
-    // errors, and active-route receipts after any source materialization.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    fn putpalettealpha(
-        slf: Py<Self>,
-        index: &Bound<'_, PyAny>,
-        alpha: &Bound<'_, PyAny>,
-        py: Python<'_>,
-    ) -> PyResult<()> {
-        let index = index.extract::<i32>()?;
-        let alpha = alpha.extract::<i32>()?;
-        let route = route_from_context(None, py);
-        update_image_with_route(slf, py, route, move |image, route| match route {
-            Some(route) => image.putpalettealpha_with_execution_context(
-                index,
-                alpha,
-                route.pinned_backend,
-                route.context,
-            ),
-            None => image.putpalettealpha(index, alpha),
-        })
-    }
-
-    // TODO(pillow-rs#3ptb): verify alpha-table prefix semantics, buffer faults,
-    // errors, and active-route receipts after any source materialization.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    fn putpalettealphas(slf: Py<Self>, values: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
-        let values = palette_alpha_bytes(values)?;
-        let route = route_from_context(None, py);
-        update_image_with_route(slf, py, route, move |image, route| match route {
-            Some(route) => image.putpalettealphas_with_execution_context(
-                &values,
-                route.pinned_backend,
-                route.context,
-            ),
-            None => image.putpalettealphas(&values),
-        })
-    }
-
-    // TODO(pillow-rs#3ptb): verify raw-palette alpha commit output and route
-    // receipts for pending decoder and callback-created images.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    fn commit_palette_alpha(slf: Py<Self>, py: Python<'_>) -> PyResult<()> {
-        let route = route_from_context(None, py);
-        update_image_with_route(slf, py, route, |image, route| match route {
-            Some(route) => image
-                .commit_palette_alpha_with_execution_context(route.pinned_backend, route.context),
-            None => image.commit_palette_alpha(),
-        })
-    }
-
     fn get_child_images(&self) -> Vec<PyImage> {
         self.inner
             .get_child_images()
@@ -771,7 +612,6 @@ impl PyImage {
         putpixel_imaging_core(slf, xy, value, py)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
     // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     #[pyo3(signature = (data, scale=1.0, offset=0.0, execution_context=None))]
     fn putdata_formatted(

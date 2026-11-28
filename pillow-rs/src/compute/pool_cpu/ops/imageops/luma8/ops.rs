@@ -61,6 +61,7 @@ pub(crate) struct PreparedEqualize<'a> {
 }
 
 impl<'a> PreparedEqualize<'a> {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn new(input: &'a GrayImage, lut: Vec<u8>, selection: StrategySelection) -> Self {
         Self {
             input,
@@ -69,10 +70,12 @@ impl<'a> PreparedEqualize<'a> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.selection.implementation.architecture {
             Architecture::Default => super::default::equalize_impl::execute(self.input, &self.lut),
@@ -108,6 +111,7 @@ impl<'a> PreparedAutocontrast<'a> {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.selection.implementation.architecture {
             Architecture::Default => {
@@ -132,8 +136,8 @@ const POSTERIZE_INPUTS: &[InputContract] = &[
         allow_empty: true,
     },
 ];
-static POSTERIZE_ARCHITECTURES: [ImplementationSupport; 3] =
-    super::super::helpers::strategy::native_byte_point_architectures(
+static POSTERIZE_ARCHITECTURES: [ImplementationSupport; 4] =
+    super::super::helpers::strategy::posterize_architectures(
         OperationId::Posterize,
         Mode::ImageLuma8,
         1,
@@ -217,6 +221,7 @@ impl<'a> PreparedColorize<'a> {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let lut = super::super::helpers::colorize::lookup_tables(
             &self.black,
@@ -268,6 +273,7 @@ pub(crate) struct PreparedPosterize<'a> {
 }
 
 impl<'a> PreparedPosterize<'a> {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn new(input: &'a GrayImage, bits: u8, selection: StrategySelection) -> Self {
         Self {
             input,
@@ -276,15 +282,17 @@ impl<'a> PreparedPosterize<'a> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.selection.implementation.architecture {
             Architecture::Default => super::default::posterize_impl::execute(self.input, self.bits),
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Architecture::Avx512F => super::avx512f::posterize_impl::execute(self.input, self.bits),
             Architecture::Sse2 => super::sse2::posterize_impl::execute(self.input, self.bits),
             Architecture::Neon => super::neon::posterize_impl::execute(self.input, self.bits),
             Architecture::WasmSimd128 => {
@@ -313,12 +321,12 @@ impl<'a> PreparedSolarize<'a> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.selection.implementation.architecture {
             Architecture::Default => {
@@ -336,6 +344,7 @@ impl<'a> PreparedSolarize<'a> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_quantize(
     image: &GrayImage,
     width: u32,
@@ -359,6 +368,7 @@ pub(crate) fn execute_quantize(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_quantize_with_palette(
     image: &GrayImage,
     palette: &[[u8; 3]],

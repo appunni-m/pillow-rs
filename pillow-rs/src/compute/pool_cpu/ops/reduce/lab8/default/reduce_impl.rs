@@ -3,7 +3,7 @@
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &crate::raster::RgbImage,
     x_factor: u32,
@@ -12,7 +12,8 @@ pub(crate) fn execute(
     if x_factor < 2 && y_factor < 2 {
         return Ok(DynamicImage::ImageLab8(input.clone()));
     }
-    let bytes = super::super::super::helpers::native_bytes::reduce_lab_bytes(
+    // Pillow reduces LAB in centered chroma space, then writes raw bytes.
+    let bytes = super::super::super::helpers::native_bytes::reduce_lab_bytes::<3>(
         input.as_raw(),
         input.width(),
         input.height(),

@@ -4,6 +4,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage};
 
 // NO_PILLOW_SUPPORT: this transforms P indices directly and retains P identity.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(input: &GrayImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
     let (width, height) = input.dimensions();
     if lut.len() != 256 {

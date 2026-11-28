@@ -25,6 +25,7 @@ fn source_byte<const CHANNELS: usize>(fill: (u8, u8, u8, u8), byte: usize) -> u8
 }
 
 /// Bounds and global byte phase are the same as the original draw/PutPixel store.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn store<const CHANNELS: usize>(
     row: &mut [u8],

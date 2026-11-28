@@ -7,6 +7,7 @@ use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
     unsafe_code,
     reason = "the prepared Convert strategy verifies the host's NEON capability"
 )]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => luma8(source),
@@ -38,6 +39,7 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn luma8(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let kernel =
         crate::compute::pool_cpu::ops::grayscale::rgba8::default::grayscale_impl::prepare(source)?;
@@ -61,6 +63,7 @@ fn luma8(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     unsafe_code,
     reason = "the selected architecture establishes the NEON feature precondition"
 )]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) unsafe fn execute_rgb(source: &RgbaImage) -> Result<RgbImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)
@@ -105,6 +108,7 @@ pub(crate) unsafe fn execute_rgb(source: &RgbaImage) -> Result<RgbImage, PilErro
 #[cfg(target_arch = "aarch64")]
 #[target_feature(enable = "neon")]
 #[allow(unsafe_code)]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 unsafe fn rgba_to_rgb_neon(source: &[u8], vector_pixels: usize, output: &mut Vec<u8>) {
     use core::arch::aarch64 as neon;
 

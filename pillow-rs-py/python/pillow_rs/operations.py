@@ -52,6 +52,9 @@ def convert(image: Image, mode: str) -> Image:
     return image.convert(mode)
 
 
+# TODO(pillow-rs#3ptb): verify merge output, ordered faults, and route receipts
+# for supported targets and custom filter callback results.
+# VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 def merge(mode: str, bands):
     """Merge single-band images into a multi-band image."""
     (
@@ -75,32 +78,38 @@ def merge(mode: str, bands):
         for band in bands:
             band.load()
         merged = _core.image_merge(mode, bands)
+        execution_context = bands[0]._current_execution_context()
+        merged = bands[0]._bind_current_execution_context(merged)
+        # Pillow's merge returns completed pixels; the Rust operation may be
+        # queued, so realize it before copying wrapper metadata into the result.
+        merged.load(execution_context)
         return bands[0]._new(merged)
 
 
-# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-def _image_blend_with_context(im1, im2, alpha, context_owner, *, load_inputs):
-    """Bind a blend graph to its source route, even after eager input loads."""
+# VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+def _image_blend_with_context(im1, im2, alpha, context_owner):
+    """Run Blend under its source route and honor Pillow's eager boundary."""
     with _execution_context_scope(context_owner):
-        if load_inputs:
-            im1.load()
-            im2.load()
+        im1.load()
+        im2.load()
         result = _core.image_blend(im1._rust_image, im2._rust_image, alpha)
-        return context_owner._bind_current_execution_context(result)
+        result = context_owner._bind_current_execution_context(result)
+        result.load(context_owner._current_execution_context())
+        return result
 
 
-# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+# TODO(pillow-rs#3ptb): verify eager Blend pixels, mode/size error order, and
+# selected/fallback receipts across supported mode pairs and endpoints.
+# VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 def blend(im1: Image, im2: Image, alpha: float) -> Image:
     """Linear interpolation between two images."""
-    rust_result = _image_blend_with_context(
-        im1, im2, alpha, im1, load_inputs=True
-    )
+    rust_result = _image_blend_with_context(im1, im2, alpha, im1)
     return im1._new(rust_result)
 
 
 # TODO(pillow-rs#3ptb): verify composite output, source/paste callback order,
 # metadata, and route receipts across destination/source/mask mode combinations.
-# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+# VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 def composite(image1: Image, image2: Image, mask: Image) -> Image:
     """Composite image1 over image2 using mask."""
     # Pillow composes this from destination copy plus public Paste callbacks.
@@ -111,14 +120,21 @@ def composite(image1: Image, image2: Image, mask: Image) -> Image:
         return result
 
 
-# VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+# TODO(pillow-rs#3ptb): parity-check ordered input-load faults and subclass
+# load overrides, mode/size failures after both loads, eager output, and route
+# receipts across LA/RGBA cases.
+# VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 def alpha_composite(im1: Image, im2: Image) -> Image:
     """Alpha composite im2 over im1, returning a new image.
 
     PIL: ``Image.alpha_composite(im1, im2)`` composites im2 over im1
-    and returns a new RGBA image.
+    and returns a new image in the shared supported mode.
     """
     with _execution_context_scope(im1):
+        # Pillow performs these public calls before the core checks modes or
+        # sizes; preserve overrides, dirty state, and load-fault order.
+        im1.load()
+        im2.load()
         execution_context = im1._current_execution_context()
         if execution_context is None:
             result = _core.image_alpha_composite(im1._rust_image, im2._rust_image)
@@ -134,6 +150,24 @@ def fromarray(obj, mode=None):
     from . import _core
 
     return Image(_core.fromarray(obj, mode))
+
+
+# TODO(pillow-rs#3ptb): verify all supported-mode output bytes and hidden lanes,
+# readonly transition, producer callback/fault order, P/PA palette state,
+# size-limit behavior, and large-buffer latency.
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+def fromarrow(obj, mode, size):
+    """Create an image from an Arrow C Data Interface producer."""
+    if not hasattr(obj, "__arrow_c_array__"):
+        raise ValueError("arrow_c_array interface not found")
+    schema_capsule, array_capsule = obj.__arrow_c_array__()
+    result = Image(_core.image_from_arrow(mode, size, schema_capsule, array_capsule))
+    result.readonly = 1
+    if result.mode in ("P", "PA"):
+        from .imagepalette import ImagePalette
+
+        result._palette_object = ImagePalette()
+    return result
 
 
 def frombytes(mode, size, data, decoder_name="raw", *args):

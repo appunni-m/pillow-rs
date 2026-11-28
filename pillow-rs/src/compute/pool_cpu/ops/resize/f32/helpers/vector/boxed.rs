@@ -1,21 +1,23 @@
+use super::super::resize::FilterResolver;
 use super::{
     SIMD_F64_LANES, SIMD_RESIZE_LANES, f32_samples_from_le_bytes, f32x8, f64x8,
     invalid_vector_request,
 };
 use crate::compute::pool_cpu::ops::resize::helpers::native_nearest;
 use crate::error::PilError;
-use crate::ops::pil_resize::precompute_coeffs_f64_boxed;
+use crate::ops::pil_resize::precompute_coeffs_f64_boxed_with_kernel;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
-/// Run the boxed F32 vector kernel over the native four-byte carrier.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-pub(super) fn execute(
+/// Run boxed vector resize with an architecture-selected coefficient kernel.
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
+pub(super) fn execute_with_filter<const PRODUCT_BLOCK_WIDTH: usize>(
     image: &RgbaImage,
     output_width: u32,
     output_height: u32,
     bounds: (f64, f64, f64, f64),
     filter: ResampleFilter,
+    resolve_filter: FilterResolver,
 ) -> Result<RgbaImage, PilError> {
     let source_width = usize::try_from(image.width()).map_err(|_| invalid_vector_request())?;
     let source_height = usize::try_from(image.height()).map_err(|_| invalid_vector_request())?;
@@ -60,7 +62,7 @@ pub(super) fn execute(
             bounds,
         )?
     } else {
-        boxed_f_resize_filter(
+        boxed_f_resize_filter::<PRODUCT_BLOCK_WIDTH>(
             &samples,
             source_width,
             source_height,
@@ -70,6 +72,7 @@ pub(super) fn execute(
             filter,
             need_horizontal,
             need_vertical,
+            resolve_filter,
         )?
     };
     crate::compute::record_pipeline_operation_path("vector");
@@ -84,7 +87,7 @@ pub(super) fn execute(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 fn boxed_f_resize_nearest(
     source: &[f32],
     source_width: usize,
@@ -130,8 +133,8 @@ fn boxed_f_resize_nearest(
     Ok((output, vector_blocks))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn boxed_f_resize_filter(
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
+fn boxed_f_resize_filter<const PRODUCT_BLOCK_WIDTH: usize>(
     source: &[f32],
     source_width: usize,
     source_height: usize,
@@ -141,27 +144,37 @@ fn boxed_f_resize_filter(
     filter: ResampleFilter,
     need_horizontal: bool,
     need_vertical: bool,
+    resolve_filter: FilterResolver,
 ) -> Result<(Vec<f32>, u64), PilError> {
     let (left, top, right, bottom) = bounds;
+    let (kernel, support) = resolve_filter(filter);
     let (intermediate, horizontal_blocks) = if need_horizontal {
-        let coeffs = precompute_coeffs_f64_boxed(
+        let coeffs = precompute_coeffs_f64_boxed_with_kernel(
             output_width as u32,
             source_width as u32,
             left,
             right,
-            filter,
+            kernel,
+            support,
         );
-        boxed_f_resize_horizontal(source, source_width, source_height, output_width, &coeffs)?
+        boxed_f_resize_horizontal::<PRODUCT_BLOCK_WIDTH>(
+            source,
+            source_width,
+            source_height,
+            output_width,
+            &coeffs,
+        )?
     } else {
         (source.to_vec(), 0)
     };
     if need_vertical {
-        let coeffs = precompute_coeffs_f64_boxed(
+        let coeffs = precompute_coeffs_f64_boxed_with_kernel(
             output_height as u32,
             source_height as u32,
             top,
             bottom,
-            filter,
+            kernel,
+            support,
         );
         let (output, vertical_blocks) =
             boxed_f_resize_vertical(&intermediate, output_width, output_height, &coeffs)?;
@@ -171,8 +184,8 @@ fn boxed_f_resize_filter(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn boxed_f_resize_horizontal(
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
+fn boxed_f_resize_horizontal<const PRODUCT_BLOCK_WIDTH: usize>(
     source: &[f32],
     source_width: usize,
     source_height: usize,
@@ -186,8 +199,9 @@ fn boxed_f_resize_horizontal(
         let intermediate_row = source_y * output_width;
         for output_x in (0..output_width).step_by(SIMD_F64_LANES) {
             let count = (output_width - output_x).min(SIMD_F64_LANES);
-            let values =
-                boxed_f_resize_horizontal_block(source, source_row, output_x, count, coeffs);
+            let values = boxed_f_resize_horizontal_block::<PRODUCT_BLOCK_WIDTH>(
+                source, source_row, output_x, count, coeffs,
+            );
             intermediate[intermediate_row + output_x..intermediate_row + output_x + count]
                 .copy_from_slice(&values[..count]);
             vector_blocks = vector_blocks.saturating_add(1);
@@ -196,8 +210,8 @@ fn boxed_f_resize_horizontal(
     Ok((intermediate, vector_blocks))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn boxed_f_resize_horizontal_block(
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
+fn boxed_f_resize_horizontal_block<const PRODUCT_BLOCK_WIDTH: usize>(
     source: &[f32],
     source_row: usize,
     output_x: usize,
@@ -235,6 +249,17 @@ fn boxed_f_resize_horizontal_block(
             .map(|lane| coeffs.weights[output_x + lane].len())
             .max()
             .unwrap_or(0);
+        // Pillow's fixed eight-tap helper remains fused; other horizontal
+        // rows separate full architecture-sized product groups from the tail.
+        let product_counts: [usize; SIMD_F64_LANES] = std::array::from_fn(|lane| {
+            if lane >= count || coeffs.weights[output_x + lane].len() == 8 {
+                return 0;
+            }
+            let taps = coeffs.weights[output_x + lane].len();
+            taps / PRODUCT_BLOCK_WIDTH * PRODUCT_BLOCK_WIDTH
+        });
+        let max_product_count = product_counts[..count].iter().copied().max().unwrap_or(0);
+        let mut ordered_sums = [0.0; SIMD_F64_LANES];
         for tap in 0..max_count {
             let mut values = [0.0; SIMD_F64_LANES];
             let mut weights = [0.0; SIMD_F64_LANES];
@@ -246,13 +271,36 @@ fn boxed_f_resize_horizontal_block(
                     weights[lane] = coeffs.weights[output_index][tap];
                 }
             }
-            sums = f64x8::new(weights).mul_add(f64x8::new(values), sums);
+            let weight_vector = f64x8::new(weights);
+            let value_vector = f64x8::new(values);
+            if max_product_count == 0 {
+                sums = weight_vector.mul_add(value_vector, sums);
+            } else {
+                let fused = weight_vector
+                    .mul_add(value_vector, f64x8::new(ordered_sums))
+                    .to_array();
+                let products = if tap < max_product_count {
+                    std::hint::black_box(weight_vector * value_vector).to_array()
+                } else {
+                    [0.0; SIMD_F64_LANES]
+                };
+                for lane in 0..count {
+                    ordered_sums[lane] = if tap < product_counts[lane] {
+                        ordered_sums[lane] + products[lane]
+                    } else {
+                        fused[lane]
+                    };
+                }
+            }
+        }
+        if max_product_count != 0 {
+            return ordered_sums.map(|value| value as f32);
         }
     }
     sums.to_array().map(|value| value as f32)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 fn boxed_f_resize_vertical(
     intermediate: &[f32],
     output_width: usize,
@@ -283,7 +331,7 @@ fn boxed_f_resize_vertical(
     Ok((output, vector_blocks))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 fn boxed_f_resize_vertical_block(
     intermediate: &[f32],
     output_width: usize,
@@ -326,7 +374,7 @@ fn boxed_f_resize_vertical_block(
 }
 
 #[inline]
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 pub(super) fn write_f32_samples_le(output: &mut [u8], sample_offset: usize, samples: &[f32]) {
     let byte_start = sample_offset * std::mem::size_of::<f32>();
     let byte_end = byte_start + std::mem::size_of_val(samples);

@@ -26,7 +26,7 @@ pub(super) struct PyTransformMeshState {
     inner: Option<pillow_rs::TransformMeshAccumulator>,
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn validate_transform_resample_membership(
     py: Python<'_>,
     value: &Bound<'_, PyAny>,
@@ -61,7 +61,7 @@ fn validate_transform_resample_membership(
     )))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn transform_mesh_resample_from_python_after_load(value: &Bound<'_, PyAny>) -> PyResult<i32> {
     let code = c_int_from_python(value)?;
     if matches!(code, 0 | 2 | 3) {
@@ -74,7 +74,7 @@ fn transform_mesh_resample_from_python_after_load(value: &Bound<'_, PyAny>) -> P
     )))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn transform_mesh_box_from_python(value: &Bound<'_, PyAny>) -> PyResult<(i64, i64, i64, i64)> {
     let mut coordinates = [0_i64; 4];
     for (index, coordinate) in coordinates.iter_mut().enumerate() {
@@ -89,7 +89,7 @@ fn transform_mesh_box_from_python(value: &Bound<'_, PyAny>) -> PyResult<(i64, i6
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn transform_mesh_coefficients_from_python(value: &Bound<'_, PyAny>) -> PyResult<[f64; 8]> {
     let mut values = [0.0; 8];
     let mut items = value.try_iter()?;
@@ -105,7 +105,7 @@ fn transform_mesh_coefficients_from_python(value: &Bound<'_, PyAny>) -> PyResult
 
 #[pymethods]
 impl PyImage {
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[pyo3(signature = (size, fillcolor=None, execution_context=None))]
     fn _transform_prepare(
         slf: Py<Self>,
@@ -165,7 +165,7 @@ impl PyImage {
         })
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn _transform_mesh_begin(
         slf: Py<Self>,
         mut plan: pyo3::PyRefMut<'_, PyTransformPlan>,
@@ -184,7 +184,7 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn _transform_validate_filter(
         slf: Py<Self>,
         value: &Bound<'_, PyAny>,
@@ -194,7 +194,7 @@ impl PyImage {
         validate_transform_resample_membership(py, value)
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn _transform_mesh_record(
         slf: Py<Self>,
         mut state: pyo3::PyRefMut<'_, PyTransformMeshState>,
@@ -234,7 +234,7 @@ impl PyImage {
         result.map_err(map_error)
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn _transform_mesh_finish(
         slf: Py<Self>,
         mut state: pyo3::PyRefMut<'_, PyTransformMeshState>,
@@ -254,7 +254,7 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn _transform_data(
         slf: Py<Self>,
         method: &Bound<'_, PyAny>,
@@ -274,7 +274,7 @@ impl PyImage {
         })
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn _transform_apply(
         slf: Py<Self>,
         mut plan: pyo3::PyRefMut<'_, PyTransformPlan>,

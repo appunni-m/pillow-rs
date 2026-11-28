@@ -57,6 +57,7 @@ impl Prepared<'_> {
         &[]
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let identity = self.matrix.is_none() && self.input.mode() == self.target;
         if matches!(self.target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
@@ -81,6 +82,7 @@ impl Prepared<'_> {
         Ok(output.image)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute_with_output(self) -> Result<PreparedConvertOutput, PilError> {
         if self.matrix.is_none() && self.input.mode() == self.target {
             return Ok(self.identity_output());
@@ -218,6 +220,7 @@ impl Prepared<'_> {
         unsafe_code,
         reason = "the retained strategy selection proves the architecture-specific Convert preconditions"
     )]
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn execute_mode(
         input: OperationInputs<'_>,
         target: Mode,
@@ -320,7 +323,7 @@ impl Prepared<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn execute_binary(self) -> Result<DynamicImage, PilError> {
         let input = self.input;
         let dither = self.dither;
@@ -409,7 +412,7 @@ impl Prepared<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     target: Mode,
@@ -441,7 +444,7 @@ pub(crate) fn prepare<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_matrix<'a>(
     input: OperationInputs<'a>,
     target: Mode,
@@ -449,7 +452,8 @@ pub(crate) fn prepare_matrix<'a>(
     ctx: &ExecutionContext,
 ) -> Result<Prepared<'a>, PilError> {
     let support = MATRIX_SUPPORT.for_mode(input.mode());
-    let assessment = support.assess(ctx, input.facts().with_convert_target(target))?;
+    let assessment =
+        support.assess(ctx, input.facts().with_convert_matrix(target, matrix.len()))?;
     let selection = match assessment {
         SupportAssessment::Ready(selection) => selection,
         SupportAssessment::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
@@ -468,7 +472,7 @@ pub(crate) fn prepare_matrix<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

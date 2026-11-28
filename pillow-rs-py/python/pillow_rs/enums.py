@@ -81,6 +81,8 @@ class Dither:
     FLOYDSTEINBERG = "FLOYDSTEINBERG"
 
 
-class Palette:
-    WEB = "WEB"
-    ADAPTIVE = "ADAPTIVE"
+class Palette(IntEnum):
+    """Palette selection values accepted by Pillow's conversion API."""
+
+    WEB = 0
+    ADAPTIVE = 1

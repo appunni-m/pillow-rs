@@ -67,6 +67,39 @@ impl RawDecoderPlan {
         self.mode
     }
 
+    /// Decodes palette bytes with Pillow's `putpalette` entry-count rule.
+    ///
+    /// The raw-mode unpacker supplies the normalized samples; the palette
+    /// model selects the target raster mode before this helper is called.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    pub(crate) fn decode_palette_data(
+        mode: Mode,
+        rawmode: &str,
+        data: &[u8],
+    ) -> Result<Vec<u8>, PilError> {
+        let plan = Self::new(mode, Some(rawmode), 0, 1).map_err(|error| match error {
+            PilError::ValueError(_) => PilError::ValueError("unrecognized raw mode".into()),
+            other => other,
+        })?;
+        let input_bits = usize::from(plan.input_bits);
+        let total_bits = data
+            .len()
+            .checked_mul(8)
+            .ok_or_else(|| PilError::ValueError("invalid palette size".into()))?;
+        let entry_count = total_bits.checked_div(input_bits).ok_or_else(|| {
+            PilError::InternalError("raw palette decoder has zero bit width".into())
+        })?;
+        if entry_count > 256 {
+            return Err(PilError::ValueError("invalid palette size".into()));
+        }
+        if entry_count == 0 {
+            return Ok(Vec::new());
+        }
+        let width = u32::try_from(entry_count)
+            .map_err(|_| PilError::ValueError("invalid palette size".into()))?;
+        plan.decode((width, 1), data)?.tobytes()
+    }
+
     /// Decodes an immutable input buffer using this prepared row layout.
     pub fn decode(self, size: (u32, u32), data: &[u8]) -> Result<Image, PilError> {
         self.decode_prepared(size, Cow::Borrowed(data))

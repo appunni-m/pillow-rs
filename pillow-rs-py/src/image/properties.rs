@@ -49,6 +49,16 @@ impl PyImage {
         0
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    fn _is_materialized(&self) -> bool {
+        self.inner.is_materialized()
+    }
+
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    fn _is_unloaded_encoded_source(&self) -> bool {
+        self.inner.is_unloaded_encoded_source()
+    }
+
     #[getter]
     fn format(&self) -> Option<String> {
         self.inner.format_name()

@@ -8,6 +8,7 @@ use crate::compute::registry::support::{
 };
 use crate::error::PilError;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const fn byte_architectures(
     operation: OperationId,
     mode: crate::raster::Mode,
@@ -45,6 +46,7 @@ pub(crate) const fn byte_architectures(
     ]
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const fn contrast_architectures(
     operation: OperationId,
     mode: crate::raster::Mode,
@@ -82,7 +84,46 @@ pub(crate) const fn contrast_architectures(
     ]
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) const fn color_saturation_architectures(
+    operation: OperationId,
+    mode: crate::raster::Mode,
+    channels: u8,
+) -> [ImplementationSupport; 3] {
+    [
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::Avx512F,
+            cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+            &[Architecture::Avx512F],
+            StrategyGuard::ColorSaturationAvx512F { channels },
+        ),
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::AvxFma,
+            cfg!(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "avx",
+                target_feature = "fma"
+            )),
+            &[Architecture::AvxFma],
+            StrategyGuard::ColorSaturationVector { channels },
+        ),
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon],
+            StrategyGuard::ColorSaturationVector { channels },
+        ),
+    ]
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) const fn color_saturation_luma_architectures(
     operation: OperationId,
     mode: crate::raster::Mode,
     channels: u8,
@@ -112,6 +153,7 @@ pub(crate) const fn color_saturation_architectures(
     ]
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const fn sharpness_architectures(
     operation: OperationId,
     mode: crate::raster::Mode,
@@ -200,6 +242,7 @@ pub(crate) const fn sharpness_architectures(
     ]
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn select(
     support: ModeSupport,
     facts: StrategyInputs,

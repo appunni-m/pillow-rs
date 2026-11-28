@@ -6,7 +6,7 @@ use super::{
 use crate::error::PilError;
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(super) fn assess(
     contract: InputContract,
     input: StrategyInputs,
@@ -86,6 +86,7 @@ pub(super) fn assess(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_effect_request(
     contract: InputContract,
     request: RequestFacts,
@@ -101,7 +102,7 @@ fn assess_effect_request(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
 fn assess_quantize_request(
     contract: InputContract,
     input: StrategyInputs,
@@ -185,6 +186,7 @@ fn assess_quantize_request(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_mandelbrot_request(input: StrategyInputs) -> Result<Option<UnresolvedGuard>, PilError> {
     let RequestFacts::EffectMandelbrot {
         extent_bits,
@@ -193,9 +195,6 @@ fn assess_mandelbrot_request(input: StrategyInputs) -> Result<Option<UnresolvedG
     else {
         return Err(wrong_request("EffectMandelbrot"));
     };
-    if input.width == 0 || input.height == 0 {
-        return Ok(None);
-    }
     let (x0, y0, x1, y1) = extent_bits;
     let extent_width = f64::from_bits(x1) - f64::from_bits(x0);
     let extent_height = f64::from_bits(y1) - f64::from_bits(y0);
@@ -206,6 +205,7 @@ fn assess_mandelbrot_request(input: StrategyInputs) -> Result<Option<UnresolvedG
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_transform_request(request: RequestFacts) -> Result<Option<UnresolvedGuard>, PilError> {
     let RequestFacts::Transform {
         method, data_len, ..
@@ -223,6 +223,7 @@ fn assess_transform_request(request: RequestFacts) -> Result<Option<UnresolvedGu
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_filter_request(
     contract: InputContract,
     request: RequestFacts,
@@ -248,16 +249,18 @@ fn assess_filter_request(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_posterize_request(request: RequestFacts) -> Result<Option<UnresolvedGuard>, PilError> {
     match request {
         RequestFacts::Posterize { bits } if (1..=8).contains(&bits) => Ok(None),
-        _ => Err(PilError::ValueError(
+        RequestFacts::Posterize { .. } => Err(PilError::ValueError(
             "posterize bits must be in range 1..=8".into(),
         )),
+        _ => Err(wrong_request("Posterize")),
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_byte_lut_request(
     contract: InputContract,
     request: RequestFacts,
@@ -274,6 +277,7 @@ fn assess_byte_lut_request(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_point_float_lut_request(
     contract: InputContract,
     request: RequestFacts,
@@ -292,7 +296,7 @@ fn assess_point_float_lut_request(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_point_i32_lut_request(
     contract: InputContract,
     request: RequestFacts,
@@ -309,7 +313,7 @@ fn assess_point_i32_lut_request(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_reduce_request(
     contract: InputContract,
     request: RequestFacts,
@@ -329,6 +333,7 @@ fn assess_reduce_request(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_thumbnail_request(input: StrategyInputs) -> Result<Option<UnresolvedGuard>, PilError> {
     let RequestFacts::Thumbnail {
         width,
@@ -352,6 +357,7 @@ fn assess_thumbnail_request(input: StrategyInputs) -> Result<Option<UnresolvedGu
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_imageops_request(
     contract: InputContract,
     request: RequestFacts,
@@ -373,6 +379,7 @@ fn assess_imageops_request(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_rank_window(
     contract: InputContract,
     request: RequestFacts,
@@ -398,6 +405,7 @@ fn assess_rank_window(
     Ok(None)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn assess_mode_filter_window(request: RequestFacts) -> Result<Option<UnresolvedGuard>, PilError> {
     let RequestFacts::FilterWindow { size, rank, .. } = request else {
         return Err(wrong_request("ModeFilter"));

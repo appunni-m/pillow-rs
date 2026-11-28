@@ -60,22 +60,13 @@ pub(crate) fn supports(mode: Mode) -> bool {
     matches!(SUPPORT.for_mode(mode), ModeSupport::Supported { .. })
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare(
-    image: &Image,
+    image: DynamicImage,
     context: &ExecutionContext,
 ) -> Result<PreparedScalarPoint, PilError> {
-    let mode = match image.known_mode_identity() {
-        Some(mode) => mode,
-        None => image.materialized_shared()?.mode(),
-    };
+    let mode = image.mode();
     let selection = SUPPORT.for_mode(mode).select_serial(context)?;
-    let image = image.materialize()?;
-    if image.mode() != mode {
-        return Err(PilError::InternalError(
-            "scalar point mode did not match its DynamicImage variant".into(),
-        ));
-    }
     Ok(PreparedScalarPoint { image, selection })
 }
 

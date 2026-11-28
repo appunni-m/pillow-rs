@@ -74,7 +74,7 @@ pub(crate) fn prepare<'a>(
     prepare_with_support(input, lut, ctx, SUPPORT)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_point_one<'a>(
     input: &'a GrayImage,
     lut: &'a [u8],
@@ -83,7 +83,7 @@ pub(crate) fn prepare_point_one<'a>(
     prepare_with_support(input, lut, ctx, POINT_ONE_SUPPORT)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn prepare_with_support<'a>(
     input: &'a GrayImage,
     lut: &'a [u8],
@@ -124,7 +124,7 @@ fn prepare_with_support<'a>(
     Ok(Prepared::new(implementation, selection))
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn from_vector(output: vector::Output) -> Result<super::default::Input, PilError> {
     super::default::Input::from_raw(output.width, output.height, output.bytes)
         .ok_or_else(|| PilError::InternalError("Eval LUT output dimensions were invalid".into()))
@@ -135,12 +135,12 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
     execute_gray(strategy).map(DynamicImage::ImageLuma8)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_point_one(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     execute_gray(strategy).map(DynamicImage::One)
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_gray(strategy: Strategy<'_>) -> Result<GrayImage, PilError> {
     match strategy.implementation {
         ArchitectureStrategy::Default(kernel) => super::default::execute(kernel),
@@ -152,7 +152,7 @@ fn execute_gray(strategy: Strategy<'_>) -> Result<GrayImage, PilError> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_float_lut(
     input: &GrayImage,
     lut: &[f64],

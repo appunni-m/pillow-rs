@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbImage};
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(input: &RgbImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
     if input.width() == 0 || input.height() == 0 {
         return Ok(DynamicImage::ImageRgb8(input.clone()));

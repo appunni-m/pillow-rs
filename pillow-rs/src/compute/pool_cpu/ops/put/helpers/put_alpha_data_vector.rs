@@ -18,6 +18,7 @@ pub(crate) struct NativeInput<'a, P: Pixel<Subpixel = u8>> {
 }
 
 impl<'a, P: Pixel<Subpixel = u8>> NativeInput<'a, P> {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn new(input: AlphaDataInput<'a, P>) -> Result<Self, PilError> {
         let mask = input.mask.image();
         let dimensions =
@@ -35,12 +36,14 @@ impl<'a, P: Pixel<Subpixel = u8>> NativeInput<'a, P> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn unsupported() -> PilError {
     PilError::NotImplementedError(
         "SIMD PutAlphaData is unsupported for the validated image layout/parameters".into(),
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(super) fn rgb_mask_row<const ONE: bool>(source: &[u8], mask: &[u8], output: &mut [u8]) {
     let width = mask.len();
     let vector_pixels = width / 4 * 4;
@@ -70,6 +73,7 @@ pub(super) fn rgb_mask_row<const ONE: bool>(source: &[u8], mask: &[u8], output: 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn finish<P: Pixel<Subpixel = u8>>(
     width: u32,
     height: u32,
@@ -79,6 +83,7 @@ fn finish<P: Pixel<Subpixel = u8>>(
     crate::image_utils::typed_bytes_to_buffer(dimensions, bytes)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn preserve_unchanged_lanes<P: Pixel<Subpixel = u8>, O: Pixel<Subpixel = u8>>(
     source: &ImageBuffer<P, Vec<u8>>,
     output: &mut ImageBuffer<O, Vec<u8>>,
@@ -95,10 +100,12 @@ fn preserve_unchanged_lanes<P: Pixel<Subpixel = u8>, O: Pixel<Subpixel = u8>>(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn rgb_mask(input: NativeInput<'_, Rgb<u8>>) -> Result<RgbaImage, PilError> {
     native_mask::<3, 4, false, _, _>(input)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn native_mask<
     const SOURCE: usize,
     const OUTPUT: usize,
@@ -115,7 +122,7 @@ pub(crate) fn native_mask<
     )
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn native_mask_samples<
     const SOURCE: usize,
     const OUTPUT: usize,
@@ -175,6 +182,7 @@ fn native_mask_samples<
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn interleave<const SOURCE: usize, const OUTPUT: usize, const CMYK: bool, const ONE: bool>(
     source: &[u8],
     mask: &[u8],

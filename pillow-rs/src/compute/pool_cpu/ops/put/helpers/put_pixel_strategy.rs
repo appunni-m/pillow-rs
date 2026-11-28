@@ -51,6 +51,7 @@ macro_rules! declare_strategies {
 
 
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         #[inline]
         pub(crate) fn prepare_pixel<'a>(
             input: &'a pixel_scalar::Input,
@@ -72,6 +73,7 @@ macro_rules! declare_strategies {
             Ok(PreparedWrite::new(implementation, selection))
         }
 
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         #[inline]
         pub(crate) fn prepare_pixel_batch<'a>(
             input: &'a pixel_scalar::Input, ops: &'a [crate::pipeline::PipelineOp],
@@ -108,6 +110,7 @@ macro_rules! declare_strategies {
         }
 
         impl PixelStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             #[inline]
             pub(crate) fn execute(self) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
                 match self.implementation {
@@ -119,6 +122,7 @@ macro_rules! declare_strategies {
         }
 
         impl BatchStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             #[inline]
             pub(crate) fn execute(self) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
                 let _selection = *self.selection();

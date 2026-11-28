@@ -4,7 +4,7 @@ use crate::raster::DynamicImage;
 
 // TODO(pillow-rs#3ptb): verify x86_64 baseline output, selection receipts, and
 // public-call latency against portable Default and AVX2.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &super::super::Input,
     method: &TransposeMethod,

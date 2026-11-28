@@ -12,11 +12,13 @@ use crate::raster::color::FromPrimitive;
 /// Projects one mode-native sample into an 8-bit palette component.
 pub(crate) trait QuantizeSampleToU8: Copy {
     /// Projects one native sample into the byte palette's component range.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn to_palette_u8(self) -> u8;
 }
 
 impl QuantizeSampleToU8 for u8 {
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn to_palette_u8(self) -> u8 {
         self
     }
@@ -24,6 +26,7 @@ impl QuantizeSampleToU8 for u8 {
 
 impl QuantizeSampleToU8 for u16 {
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn to_palette_u8(self) -> u8 {
         u8::from_primitive(self)
     }
@@ -31,6 +34,7 @@ impl QuantizeSampleToU8 for u16 {
 
 impl QuantizeSampleToU8 for f32 {
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn to_palette_u8(self) -> u8 {
         u8::from_primitive(self)
     }
@@ -42,6 +46,7 @@ struct InterleavedRgbSamples<'a, T, const CHANNELS: usize> {
 }
 
 /// Runs the exact RGB quantizer over a native interleaved mode buffer.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_interleaved<T, const CHANNELS: usize>(
     samples: &[T],
     width: u32,
@@ -58,6 +63,7 @@ where
 }
 
 /// Maps native RGB lanes from an interleaved mode carrier to a fixed palette.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_interleaved_with_palette<T, const CHANNELS: usize>(
     samples: &[T],
     width: u32,
@@ -73,6 +79,7 @@ where
 }
 
 /// Runs quantization over I;16 samples using its clipped byte projection.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_clipped_luma16(
     samples: &[u16],
     width: u32,
@@ -86,6 +93,7 @@ pub(crate) fn execute_clipped_luma16(
 }
 
 /// Quantizes native I-mode scalars using a clamped byte-grayscale projection.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_i32_scalar(
     samples: &[u8],
     width: u32,
@@ -105,6 +113,7 @@ pub(crate) fn execute_i32_scalar(
 }
 
 /// Quantizes native F-mode scalars using the raster float-to-byte projection.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_f32_scalar(
     samples: &[u8],
     width: u32,
@@ -124,6 +133,7 @@ pub(crate) fn execute_f32_scalar(
 }
 
 /// Quantizes two- or four-channel native samples into an alpha palette.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_rgba_interleaved<T, const CHANNELS: usize>(
     samples: &[T],
     width: u32,
@@ -138,6 +148,7 @@ where
 }
 
 /// Quantizes native premultiplied luma-alpha samples without a staging raster.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_premultiplied_luma_alpha(
     samples: &[u8],
     width: u32,
@@ -149,6 +160,7 @@ pub(crate) fn execute_premultiplied_luma_alpha(
 }
 
 /// Quantizes native RGBa samples after per-pixel unpremultiplication.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_premultiplied_rgba(
     samples: &[u8],
     width: u32,
@@ -160,6 +172,7 @@ pub(crate) fn execute_premultiplied_rgba(
 }
 
 /// Quantizes PA indices with attached palette colors and per-pixel alpha.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_palette_alpha(
     samples: &[u8],
     palette: PaletteInput<'_>,
@@ -187,6 +200,7 @@ impl<T: QuantizeSampleToU8, const CHANNELS: usize> RgbPixelSource
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn rgb_at(&self, index: usize) -> [u8; 3] {
         let offset = index * CHANNELS;
         let first = self.samples[offset].to_palette_u8();
@@ -221,6 +235,7 @@ impl<T: QuantizeSampleToU8, const CHANNELS: usize> RgbaPixelSource
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn rgba_at(&self, index: usize) -> [u8; 4] {
         let offset = index * CHANNELS;
         let first = self.samples[offset].to_palette_u8();
@@ -251,6 +266,7 @@ impl RgbaPixelSource for PremultipliedLumaAlphaSamples<'_> {
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn rgba_at(&self, index: usize) -> [u8; 4] {
         let offset = index * 2;
         let alpha = self.0[offset + 1];
@@ -271,6 +287,7 @@ impl RgbaPixelSource for PremultipliedRgbaSamples<'_> {
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn rgba_at(&self, index: usize) -> [u8; 4] {
         let offset = index * 4;
         let alpha = self.0[offset + 3];
@@ -318,6 +335,7 @@ impl RgbaPixelSource for PaletteAlphaSamples<'_> {
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn rgba_at(&self, index: usize) -> [u8; 4] {
         let offset = index * 2;
         let palette_index = usize::from(self.samples[offset]);
@@ -360,6 +378,7 @@ impl RgbPixelSource for ClippedLuma16Samples<'_> {
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn rgb_at(&self, index: usize) -> [u8; 3] {
         let sample = self.0[index].min(u16::from(u8::MAX)) as u8;
         [sample, sample, sample]
@@ -375,6 +394,7 @@ impl RgbPixelSource for I32ScalarSamples<'_> {
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn rgb_at(&self, index: usize) -> [u8; 3] {
         let offset = index * 4;
         let value = i32::from_le_bytes([
@@ -397,6 +417,7 @@ impl RgbPixelSource for F32ScalarSamples<'_> {
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn rgb_at(&self, index: usize) -> [u8; 3] {
         let offset = index * 4;
         let value = f32::from_le_bytes([
@@ -411,6 +432,7 @@ impl RgbPixelSource for F32ScalarSamples<'_> {
 }
 
 /// Runs the shared RGB algorithms over one mode's operation-defined samples.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<S>(
     source: &S,
     width: u32,
@@ -443,6 +465,7 @@ where
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn refine_median_cut_kmeans<S>(
     source: &S,
     indices: Vec<u8>,

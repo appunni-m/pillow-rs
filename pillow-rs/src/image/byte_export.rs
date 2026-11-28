@@ -123,6 +123,10 @@ impl Image {
                 // suffix as a ValueError with this exact public message.
                 PilError::ValueError("unknown file extension: ".into())
             })?;
+            let extension = extension.strip_prefix('.').unwrap_or(extension);
+            if extension.is_empty() {
+                return Err(PilError::ValueError("unknown file extension: ".into()));
+            }
             parse_format_str(extension)
                 .map(|_| extension.to_owned())
                 .map_err(|_| PilError::ValueError(format!("unknown file extension: .{extension}")))

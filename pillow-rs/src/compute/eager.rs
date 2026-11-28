@@ -1,20 +1,22 @@
 //! Direct eager operations and execution receipts outside lazy image pipelines.
 //!
 #[cfg(feature = "gpu")]
+use super::PipelineOp;
+#[cfg(feature = "gpu")]
 use super::pool_gpu;
 use super::{
-    Backend, DynamicImage, ExecutionContext, PilError, PipelineOp,
-    PipelineOperationTelemetryCapture, PipelineTelemetry, begin_pipeline_operation_telemetry,
-    elapsed_ns, finish_pipeline_operation_telemetry, host_resource_telemetry,
-    pipeline_telemetry_enabled, pipeline_timestamp, record_pipeline_allocation,
-    record_pipeline_operation_handoff, record_pipeline_operation_mode_conversion,
-    record_pipeline_operation_path, record_pipeline_operation_scalar_tail,
-    record_pipeline_operation_selection, record_pipeline_operation_vector_blocks,
-    record_pipeline_resource_telemetry, record_pipeline_telemetry,
-    reset_pipeline_allocation_telemetry, reset_pipeline_operation_telemetry,
-    take_pipeline_allocation_telemetry, take_pipeline_backend_override,
-    take_pipeline_dispatch_count, take_pipeline_resize_coeff_cache_stats,
-    take_pipeline_resource_telemetry, take_pipeline_telemetry,
+    Backend, DynamicImage, ExecutionContext, PilError, PipelineOperationTelemetryCapture,
+    PipelineTelemetry, begin_pipeline_operation_telemetry, elapsed_ns,
+    finish_pipeline_operation_telemetry, host_resource_telemetry, pipeline_telemetry_enabled,
+    pipeline_timestamp, record_pipeline_allocation, record_pipeline_operation_handoff,
+    record_pipeline_operation_mode_conversion, record_pipeline_operation_path,
+    record_pipeline_operation_scalar_tail, record_pipeline_operation_selection,
+    record_pipeline_operation_vector_blocks, record_pipeline_resource_telemetry,
+    record_pipeline_telemetry, reset_pipeline_allocation_telemetry,
+    reset_pipeline_operation_telemetry, take_pipeline_allocation_telemetry,
+    take_pipeline_backend_override, take_pipeline_dispatch_count,
+    take_pipeline_resize_coeff_cache_stats, take_pipeline_resource_telemetry,
+    take_pipeline_telemetry,
 };
 mod generators;
 pub(crate) use generators::{
@@ -41,7 +43,7 @@ fn discard_eager_image_operation_telemetry() {
     let _ = take_pipeline_telemetry();
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_getprojection(
     input: &DynamicImage,
     context: &ExecutionContext,
@@ -51,7 +53,7 @@ pub(crate) fn execute_eager_cpu_getprojection(
     execute_eager_cpu_getprojection_inner(input, context, requested_backend, fallback_reason, None)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_getprojection_with_receipts(
     input: &DynamicImage,
     context: &ExecutionContext,
@@ -68,7 +70,7 @@ pub(crate) fn execute_eager_cpu_getprojection_with_receipts(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_eager_cpu_getprojection_inner(
     input: &DynamicImage,
     context: &ExecutionContext,
@@ -90,8 +92,24 @@ fn execute_eager_cpu_getprojection_inner(
     let backend_ns = elapsed_ns(backend_start);
     let result = output.axes;
     if timed {
+        let routed_backend_fallback = fallback_reason.is_some();
+        let selected_fallback = selection
+            .fallback
+            .map(|reason| format!("GetProjection strategy fell back: {reason:?}"))
+            .or_else(|| {
+                (requested_backend == Some(Backend::Simd)
+                    && selection.requested_architecture == crate::compute::Architecture::Default)
+                    .then(|| "GetProjection used CPU Default for a SIMD request".into())
+            });
+        let simd_strategy_fallback =
+            requested_backend == Some(Backend::Simd) && selected_fallback.is_some();
+        let fallback_reason = merge_eager_fallback_reasons(fallback_reason, selected_fallback);
+
         begin_pipeline_operation_telemetry("GetProjection");
         record_pipeline_operation_selection(&selection);
+        if routed_backend_fallback || simd_strategy_fallback {
+            record_pipeline_operation_handoff(1);
+        }
         record_pipeline_operation_vector_blocks(output.vector_blocks);
         record_pipeline_operation_scalar_tail(output.scalar_tail);
         record_pipeline_operation_path(if output.vector_blocks == 0 {
@@ -100,13 +118,6 @@ fn execute_eager_cpu_getprojection_inner(
             "vector"
         });
         finish_pipeline_operation_telemetry();
-        let selected_fallback = selection
-            .fallback
-            .map(|reason| format!("GetProjection strategy fell back: {reason:?}"));
-        let fallback_reason = fallback_reason.or(selected_fallback);
-        if fallback_reason.is_some() {
-            record_pipeline_operation_handoff(1);
-        }
 
         let mut resource = host_resource_telemetry(input);
         let output_bytes =
@@ -135,7 +146,7 @@ fn execute_eager_cpu_getprojection_inner(
             validation_ns: 0,
             backend_ns,
             dispatch_count,
-            fallback_reason: None,
+            fallback_reason,
             resource,
             resize_coeff_cache_hits: 0,
             resize_coeff_cache_misses: 0,
@@ -206,7 +217,7 @@ pub(crate) fn execute_eager_gpu_rgb_getprojection(
 /// retaining the same backend and host-buffer evidence as pipeline dispatch.
 /// Set `manual_output_allocation` when the closure does not record its result
 /// buffer through the normal allocation telemetry hook.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_arch_image_operation_with_context(
     operation: &'static str,
     input: &DynamicImage,
@@ -237,7 +248,7 @@ pub(crate) fn execute_eager_cpu_arch_image_operation_with_context(
 
 /// Executes a prepared CPU architecture child after restoring receipts from
 /// the lazy source graph that was materialized for this eager route.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_arch_image_operation_with_context_and_receipts(
     operation: &'static str,
     input: &DynamicImage,
@@ -269,7 +280,7 @@ pub(crate) fn execute_eager_cpu_arch_image_operation_with_context_and_receipts(
 }
 
 /// Executes a prepared CPU architecture strategy into a caller-owned byte slice.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_arch_bytes_with_context(
     operation: &'static str,
     input: &DynamicImage,
@@ -298,7 +309,7 @@ pub(crate) fn execute_eager_cpu_arch_bytes_with_context(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_eager_cpu_arch_bytes_with_route(
     operation: &'static str,
     input: &DynamicImage,
@@ -405,7 +416,7 @@ fn execute_eager_cpu_arch_bytes_with_route(
 }
 
 /// Executes one CPU architecture strategy with caller-routed context and phase timings.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_cpu_arch_operation(
     operation: &'static str,
     input: &DynamicImage,
@@ -437,7 +448,7 @@ pub(crate) fn execute_cpu_arch_operation(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_cpu_arch_operation_with_receipts(
     operation: &'static str,
     input: &DynamicImage,
@@ -505,6 +516,7 @@ fn execute_cpu_arch_operation_with_receipts(
     Ok(result)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn record_cpu_arch_operation_telemetry(
     operation: &'static str,
     input: &DynamicImage,
@@ -543,21 +555,20 @@ fn record_cpu_arch_operation_telemetry(
     let _ = take_pipeline_backend_override();
     let dispatch_count = take_pipeline_dispatch_count();
     let _ = take_pipeline_resize_coeff_cache_stats();
-    let fallback_reason = selection.fallback.map_or_else(
-        || {
-            routed_fallback_reason.or_else(|| {
-                (requested_backend == Some(Backend::Simd)
-                    && selection.requested_architecture == crate::compute::Architecture::Default)
-                    .then(|| format!("{operation} used CPU Default for a SIMD request"))
-            })
-        },
-        |reason| {
-            Some(format!(
+    let selected_fallback = selection
+        .fallback
+        .map(|reason| {
+            format!(
                 "{operation} selected {:?} after {reason:?} for requested {:?}",
                 selection.implementation.architecture, selection.requested_architecture,
-            ))
-        },
-    );
+            )
+        })
+        .or_else(|| {
+            (requested_backend == Some(Backend::Simd)
+                && selection.requested_architecture == crate::compute::Architecture::Default)
+                .then(|| format!("{operation} used CPU Default for a SIMD request"))
+        });
+    let fallback_reason = merge_eager_fallback_reasons(routed_fallback_reason, selected_fallback);
     record_pipeline_telemetry(PipelineTelemetry {
         requested_backend,
         actual_backend: Backend::Cpu,
@@ -571,6 +582,21 @@ fn record_cpu_arch_operation_telemetry(
         resize_coeff_cache_hits: 0,
         resize_coeff_cache_misses: 0,
     });
+}
+
+/// Retains both the requested-backend handoff and any later CPU strategy fallback.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+fn merge_eager_fallback_reasons(
+    routed: Option<String>,
+    selected: Option<String>,
+) -> Option<String> {
+    match (routed, selected) {
+        (Some(routed), Some(selected)) if routed != selected => {
+            Some(format!("{routed}; {selected}"))
+        }
+        (Some(routed), _) => Some(routed),
+        (None, selected) => selected,
+    }
 }
 
 /// Execute a native identity operation whose result shares immutable pixels

@@ -8,6 +8,8 @@
 //! `pool_parallel` owner; do not move its scheduling into this CPU family.
 //! TODO(pillow-rs#3ptb): freeze and run L/P-to-One and I-to-L Point parity and
 //! public-call benchmark cases after Stage 5 CPU source closure.
+//! TODO(pillow-rs#3ptb): include fixed-F LUT length and explicit target-band
+//! length faults for rejected Point mode transitions in CPU parity.
 //! Pillow 13.0 treats an unrecognized `Image.point` mode string as omitted for
 //! the output mode; the PyO3 adapter's no-target route preserves that result.
 use crate::compute::ExecutionContext;
@@ -25,7 +27,7 @@ pub(crate) use super::helpers::scalar_point::SUPPORT as SCALAR_POINT_SUPPORT;
 const POINT_FLOAT_ERROR: &str = "point operation not supported for this mode";
 const POINT_MODE_OUTPUT_ERROR: &str = "point operation not supported for this mode";
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn classify_float_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::FLOAT_LUT_SUPPORT,
@@ -109,16 +111,18 @@ pub(crate) static POINT_MODE_OUTPUT_SUPPORT: OperationSupport = OperationSupport
     classify_point_mode_output,
 );
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn point_mode_output_lut_length(source: Mode, target: Mode) -> usize {
     if source == Mode::ImageI32 && target == Mode::ImageLuma8 {
         65_536
     } else {
-        256 * source.pillow_band_count()
+        // Pillow sizes every other explicit-mode table by the requested
+        // output mode, including inputs which the Point kernel later rejects.
+        256 * target.pillow_band_count()
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_point_mode_output(
     image: &DynamicImage,
     target: Mode,
@@ -170,7 +174,7 @@ macro_rules! declare_eval_modes {
             $($mode(super::$module::ops::Strategy<'a>),)+
         }
 
-        // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         fn classify_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::SUPPORT,)+
@@ -181,7 +185,7 @@ macro_rules! declare_eval_modes {
         }
 
 
-        // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         fn prepare_image<'a>(
             image: &'a DynamicImage,
             lut: &'a [u8],
@@ -200,14 +204,14 @@ macro_rules! declare_eval_modes {
         }
 
         impl PreparedEval<'_> {
-            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match self {
                     $(Self::$mode(strategy) => strategy.selection(),)+
                 }
             }
 
-            // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let mut output = match self {
                     $(Self::$mode(strategy) => super::$module::ops::execute(strategy)?,)+
@@ -256,7 +260,7 @@ fn eval_mode_error() -> PilError {
     RejectionKind::ValueError.into_error(MODE_ERROR)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     lut: &'a [u8],
@@ -265,7 +269,7 @@ pub(crate) fn prepare<'a>(
     prepare_image(image, lut, ctx)
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -281,23 +285,24 @@ pub(crate) fn prepare_pipeline<'a>(
 }
 
 /// Applies the declared source-mode float-LUT strategy and retains F output mode.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-pub(crate) fn validate_float_lut_length(mode: Mode, lut: &[f64]) -> Result<(), PilError> {
-    let expected = 256 * mode.pillow_band_count();
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+pub(crate) fn validate_float_lut_length(lut: &[f64]) -> Result<(), PilError> {
+    // Mode F has one output band, regardless of the source image's mode.
+    let expected = 256;
     if lut.len() != expected {
         return Err(PilError::ValueError("wrong number of lut entries".into()));
     }
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_float(
     image: &DynamicImage,
     mode: Mode,
     lut: &[f64],
     ctx: &ExecutionContext,
 ) -> Result<(DynamicImage, StrategySelection), PilError> {
-    validate_float_lut_length(mode, lut)?;
+    validate_float_lut_length(lut)?;
     if image.mode() != mode {
         return Err(PilError::InternalError(
             "point float source mode did not match its DynamicImage variant".into(),

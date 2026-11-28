@@ -1,7 +1,7 @@
 //! Exact ImageI32 mode dispatch for Resize.
 //!
 //! Filtered requests use declared AVX/FMA or NEON strategies when eligible.
-//! Ordinary unboxed nearest can use NEON; boxed nearest remains scalar.
+//! Unboxed nearest can use AVX-512F or NEON; boxed nearest remains scalar.
 
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
@@ -12,7 +12,15 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, Mode};
 
-static RESIZE_ARCHITECTURES: [ImplementationSupport; 2] = [
+static RESIZE_ARCHITECTURES: [ImplementationSupport; 3] = [
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageI32,
+        Architecture::Avx512F,
+        cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+        &[Architecture::Avx512F],
+        StrategyGuard::ResizeAvx512Nearest,
+    ),
     ImplementationSupport::cpu(
         OperationId::Resize,
         Mode::ImageI32,
@@ -54,7 +62,7 @@ pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::cpu(
     &RESIZE_BOXED_ARCHITECTURES,
 );
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn resize(
     context: &ExecutionContext,
     image: &DynamicImage,
@@ -95,6 +103,10 @@ pub(crate) fn resize(
             super::super::helpers::strategy::require_default_architecture(context, selection)?;
             super::default::resize_impl::execute(input, width, height, filter, bounds)?
         }
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => super::avx512f::resize_impl::execute(
+            context, input, width, height, filter, bounds, selection,
+        )?,
         #[cfg(target_arch = "x86_64")]
         Architecture::AvxFma => super::avx::resize_impl::execute(
             context, input, width, height, filter, bounds, selection,

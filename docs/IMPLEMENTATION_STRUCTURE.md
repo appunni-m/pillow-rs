@@ -21,7 +21,8 @@ requirements; their presence here does not mean they are implemented yet.
 - Backend selects the executor: CPU, later Parallel CPU, or GPU.
 - Architecture selects a CPU implementation: `default`, target-baseline
   strategies such as `aarch64` and `x86_64`, instruction-set strategies such
-  as `neon`, `sse2`, `sse3`, `ssse3`, `avx`, `avx2`, `wasm_simd128`, or another
+  as `neon`, `sse2`, `sse3`, `ssse3`, `avx`, `avx2`, `avx512f`,
+  `wasm_simd128`, or another
   specifically implemented architecture. A baseline strategy can preserve
   target-specific behavior without requiring optional vector instructions.
 - SIMD is folded into CPU. Maintained vector implementations belong to
@@ -279,7 +280,7 @@ architecture without runtime detection. A portable binary that includes
 optional instructions may detect capabilities once when initializing the
 architecture policy, then inject the validated selection. Static analysis
 cannot establish the instruction support of every machine running a portable
-binary. Never execute AVX, AVX2, SSSE3, or another optional instruction set
+binary. Never execute AVX, AVX2, AVX-512F, SSSE3, or another optional instruction set
 without its required capability guarantee.
 
 `Architecture::Default` requests the ordinary serial policy. An operation
@@ -291,6 +292,10 @@ must not share a misleading label.
 An implementation requiring additional capabilities, such as FMA, must declare
 them precisely. Do not assume a higher-numbered architecture can call every
 lower-level kernel without checking the actual requirements centrally.
+AVX-512F uses runtime detection and function-level target-feature kernels;
+crate-wide `target_feature="avx512f"` builds are rejected because shared
+`wide` vector code would otherwise emit optional instructions outside the
+injected architecture strategy.
 
 Context-aware selection matches the operation, image variant, and architecture
 outside pixel loops. A validated specialization may also have existing shape,
@@ -298,6 +303,11 @@ alignment, or parameter requirements. If it cannot handle a supported image,
 call the matching mode's default implementation through a bounded, explicit
 fallback. Preserve the image identity and operation arguments. Do not recursively
 reroute through global backend selection.
+
+When a GPU request falls back to CPU for host-semantic work or preflight, use
+the injected CPU `Architecture` when the caller supplied one. Do not construct
+a fresh CPU `Default` context that discards that policy. Use CPU `Default` only
+when no CPU architecture was injected.
 
 Avoid parallel booleans, repeated feature detection, string mode parameters,
 and per-pixel dispatch. Use direct calls to typed implementations after routing.
@@ -666,6 +676,11 @@ composes reusable serial CPU kernels. GPU algorithms, shader organization,
 CUDA, and TileLang work are subsequent work, outside this CPU migration.
 Mechanical compatibility edits needed for shared type changes must be recorded;
 they are not evidence that another backend has been validated.
+
+TODO (deferred GPU stage): pass the optional injected CPU architecture through
+GPU host-semantic and preflight CPU fallbacks. The current fresh CPU `Default`
+contexts in `pool_gpu/mode.rs` and `pool_gpu/batch_execution/routing.rs` must
+preserve the injected CPU architecture when one is available.
 
 ## 8. Enforcement
 

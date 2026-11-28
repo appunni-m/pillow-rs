@@ -88,7 +88,7 @@ where
     ) -> Result<<Self as ImageOpsAspectCallbacks>::Value, <Self as ImageOpsAspectCallbacks>::Error>;
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 /// Compute Pillow-compatible `ImageOps.fit` crop coordinates with host callbacks.
 /// Returns `None` when Pillow returns a new empty-height result instead of resizing.
 pub fn fit_box_with_callbacks<C: ImageOpsFitCallbacks>(
@@ -176,7 +176,7 @@ pub fn fit_box_with_callbacks<C: ImageOpsFitCallbacks>(
     callbacks.box_tuple(&left, &top, &right, &bottom).map(Some)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 /// Select native or host-protocol Fit geometry from one core entry point.
 /// Returns `None` when Pillow's zero-size `Image.new` branch applies.
 pub fn fit_box_with_route_callbacks<C: ImageOpsFitRouteCallbacks>(

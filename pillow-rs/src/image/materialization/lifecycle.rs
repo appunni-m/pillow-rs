@@ -1,5 +1,5 @@
 use super::{
-    DynamicImage, Image, LoadedData, PalettedData, PilError, declared_pipeline_mode,
+    DynamicImage, Image, LoadedData, PaletteData, PalettedData, PilError, declared_pipeline_mode,
     expand_palette, image_from_materialized, map_codec_error, materialization_cache,
 };
 impl Image {
@@ -44,6 +44,7 @@ impl Image {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pass@migration-parity-be5b7f3169b142d3abf46796c30837c4; benchmark=pending
     fn pipeline_to_loaded(
         image_handle: &Image,
         source: &Image,
@@ -51,6 +52,7 @@ impl Image {
         mode: &super::super::PipelineModeCache,
         format: Option<image_slash_star::ImageFormat>,
         palette: &Option<Vec<u8>>,
+        palette_data: &Option<PaletteData>,
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Image, PilError> {
         let image = image_handle.materialized_shared()?;
@@ -69,6 +71,7 @@ impl Image {
                         image,
                         known_zero_fill: false,
                         palette: output.palette.clone(),
+                        palette_data: output.palette_data.clone(),
                         palette_alpha: output.palette_alpha.clone(),
                         source_format,
                         info,
@@ -81,7 +84,13 @@ impl Image {
                     })?;
                     Ok(Image::Paletted(PalettedData {
                         indices: DynamicImage::ImagePalette8(image.to_luma8()),
+                        palette_attached: true,
                         palette: retained_palette,
+                        palette_data: output.palette_data.clone().unwrap_or_else(|| {
+                            crate::image::PaletteData::from_alpha(
+                                output.palette_alpha.as_deref().unwrap_or_default(),
+                            )
+                        }),
                         palette_alpha: output.palette_alpha.clone().unwrap_or_default(),
                         source_format,
                         info,
@@ -93,6 +102,7 @@ impl Image {
                     image,
                     known_zero_fill: false,
                     palette: output.palette.clone(),
+                    palette_data: output.palette_data.clone(),
                     palette_alpha: output.palette_alpha.clone(),
                     source_format,
                     info,
@@ -105,14 +115,18 @@ impl Image {
         }
 
         if declared_pipeline_mode(mode) == Some(crate::raster::Mode::ImagePalette8) {
-            let Some(palette) = palette else {
-                return Err(PilError::PaletteError(
-                    "P-mode pipeline has no retained palette".to_owned(),
-                ));
-            };
             return Ok(Image::Paletted(PalettedData {
                 indices: DynamicImage::ImagePalette8(image.to_luma8()),
-                palette: palette.clone(),
+                palette_attached: palette.is_some(),
+                palette: palette.clone().unwrap_or_default(),
+                palette_data: palette_data
+                    .clone()
+                    .or_else(|| source.palette_data().cloned())
+                    .unwrap_or_else(|| {
+                        crate::image::PaletteData::from_alpha(
+                            palette_alpha.as_deref().unwrap_or_default(),
+                        )
+                    }),
                 palette_alpha: palette_alpha.clone().unwrap_or_default(),
                 source_format: format,
                 info: source.image_info(),
@@ -125,6 +139,9 @@ impl Image {
             image,
             known_zero_fill: false,
             palette: palette.clone(),
+            palette_data: palette_data
+                .clone()
+                .or_else(|| source.palette_data().cloned()),
             palette_alpha: palette_alpha.clone(),
             source_format: format,
             info: source.image_info(),
@@ -137,6 +154,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization fails.
+    // VERIFY: source=reviewed@2026-11-25; parity=pass@migration-parity-be5b7f3169b142d3abf46796c30837c4; benchmark=pending
     pub fn load(&mut self) -> Result<(), PilError> {
         let loaded = match &*self {
             Image::Loaded(_) | Image::Paletted(_) => return Ok(()),
@@ -152,11 +170,19 @@ impl Image {
                 mode,
                 format,
                 palette,
+                palette_data,
                 palette_alpha,
                 ..
-            } => {
-                Self::pipeline_to_loaded(self, source, ops, mode, *format, palette, palette_alpha)?
-            }
+            } => Self::pipeline_to_loaded(
+                self,
+                source,
+                ops,
+                mode,
+                *format,
+                palette,
+                palette_data,
+                palette_alpha,
+            )?,
         };
         *self = loaded;
         Ok(())
@@ -175,6 +201,7 @@ impl Image {
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     /// Returns whether this handle can reuse successfully materialized pixels.
     pub fn is_materialized(&self) -> bool {
         match self {
@@ -185,11 +212,35 @@ impl Image {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    /// Returns whether this image still has an unopened encoded source and no core.
+    ///
+    /// Empty pipeline layers used only to carry metadata retain the source's
+    /// unopened state. Pipelines with pixel operations do not.
+    #[doc(hidden)]
+    pub fn is_unloaded_encoded_source(&self) -> bool {
+        match self {
+            Image::Bytes { materialized, .. } => materialized.get().is_none(),
+            Image::Pipeline {
+                source,
+                ops,
+                materialized,
+                ..
+            } => {
+                ops.is_empty()
+                    && materialized.get().is_none()
+                    && source.is_unloaded_encoded_source()
+            }
+            Image::Loaded(_) | Image::Paletted(_) => false,
+        }
+    }
+
     /// Fully validates an encoded or deferred image without changing its state.
     ///
     /// # Errors
     ///
     /// Returns [`PilError`] when decoding or pipeline execution fails.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn verify(&self) -> Result<(), PilError> {
         match self {
             Image::Bytes { source, .. } => source
@@ -202,6 +253,7 @@ impl Image {
                 backend,
                 palette,
                 palette_alpha,
+                palette_data,
                 ..
             } => {
                 let _origin_scope = ops.telemetry_origin_scope();
@@ -212,6 +264,7 @@ impl Image {
                     *backend,
                     palette,
                     palette_alpha,
+                    palette_data,
                     ops.preserves_palette(),
                     ops.execution_context(),
                 )?;

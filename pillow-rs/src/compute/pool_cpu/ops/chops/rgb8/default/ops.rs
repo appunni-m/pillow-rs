@@ -1,11 +1,12 @@
 //! Default rgb8 ImageChops strategy.
 
 use crate::error::PilError;
-use crate::raster::{DynamicImage, RgbImage};
+use crate::raster::{DynamicImage, Mode, RgbImage};
 
 use super::super::super::ops::ChopsRequest;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: RGB Default ChopsAdd typed three-byte route and hidden-lane handoff.
 pub(crate) fn execute(
     image: &DynamicImage,
     request: ChopsRequest,
@@ -19,7 +20,8 @@ pub(crate) fn execute(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=pending
+// Scope: RGB Default ChopsAdd visible-channel dispatch.
 fn execute_binary(
     image: &DynamicImage,
     other: Option<&DynamicImage>,
@@ -30,7 +32,7 @@ fn execute_binary(
             "Chops mode strategy received a different raster variant".into(),
         ));
     };
-    super::super::super::helpers::three_band::execute(buffer, other, operation)
+    super::super::super::helpers::three_band::execute(buffer, Mode::ImageRgb8, other, operation)
         .map(DynamicImage::ImageRgb8)
 }
 

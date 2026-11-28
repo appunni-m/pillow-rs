@@ -7,7 +7,13 @@ const WRONG_MODE: &str = "image has wrong mode";
 const BAND_OUT_OF_RANGE: &str = "band index out of range";
 const IMAGES_DO_NOT_MATCH: &str = "images do not match";
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// Pillow's single-band PutBand checks native type and size before ImagingCopy2
+// enforces exact mode. The wrapper copies an attached P palette after this
+// helper copies the source raster. Direct Rust buffers can be overlong: this
+// one-band clone accepts them, but multi-band PutBand and FillBand require exact
+// logical storage.
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn is_byte_mode(mode: Mode) -> bool {
     matches!(
         mode,
@@ -28,7 +34,7 @@ pub(crate) const fn is_byte_mode(mode: Mode) -> bool {
     )
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn validate_band_index(band: i32, bands: usize) -> Result<usize, PilError> {
     usize::try_from(band)
         .ok()
@@ -36,7 +42,7 @@ pub(crate) fn validate_band_index(band: i32, bands: usize) -> Result<usize, PilE
         .ok_or_else(|| PilError::ValueError(BAND_OUT_OF_RANGE.into()))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn validate_put_band_source(source_mode: Mode) -> Result<(), PilError> {
     if source_mode.band_count() != 1 {
         return Err(PilError::ValueError(WRONG_MODE.into()));
@@ -44,7 +50,7 @@ pub(crate) fn validate_put_band_source(source_mode: Mode) -> Result<(), PilError
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn validate_put_band_layout(
     destination_mode: Mode,
     source_mode: Mode,
@@ -62,7 +68,7 @@ pub(crate) fn validate_put_band_layout(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn fill_band(image: &mut DynamicImage, band: usize, value: u8) -> Result<(), PilError> {
     let mode = image.mode();
     if !is_byte_mode(mode) || band >= mode.band_count() {
@@ -99,7 +105,7 @@ pub(crate) fn fill_band(image: &mut DynamicImage, band: usize, value: u8) -> Res
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn put_band(
     destination: &mut DynamicImage,
     source: &DynamicImage,
@@ -159,7 +165,7 @@ pub(crate) fn put_band(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn checked_pixel_count(width: u32, height: u32) -> Result<usize, PilError> {
     let width = usize::try_from(width)
         .map_err(|_| PilError::DimensionError("band mutation pixel count overflow".into()))?;

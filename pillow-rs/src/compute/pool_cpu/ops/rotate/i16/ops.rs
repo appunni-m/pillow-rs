@@ -25,6 +25,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &[],
 );
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: &'a Input,
     request: RotateRequest,
@@ -35,6 +36,7 @@ pub(crate) fn prepare<'a>(
     Ok(Prepared::new(Rotate { input, request }, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
     let image = super::default::rotate_impl::execute(
         plan.implementation.input,

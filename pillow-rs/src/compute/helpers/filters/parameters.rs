@@ -37,6 +37,7 @@ pub(crate) fn gaussian_blur_box_parameters(sigma: f32) -> (usize, u32, u32) {
 }
 
 /// Whether a 3×3 request is the normalized binomial kernel used by native paths.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn binomial3x3_parameters_match(kernel: &[f32; 9], scale: f32, offset: f32) -> bool {
     const WEIGHTS: [f32; 9] = [1.0, 2.0, 1.0, 2.0, 4.0, 2.0, 1.0, 2.0, 1.0];
     scale == 16.0 && offset == 0.0 && kernel == &WEIGHTS

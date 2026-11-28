@@ -113,7 +113,10 @@ try:
         CHOPS_DUPLICATE_PILLOW_MODES,
         CHOPS_CONSTANT_PILLOW_MODES,
         CHOPS_INVERT_PILLOW_MODES,
+        CHOPS_INVERT_CORE_ONLY_MODES,
         chops_invert_target_output_cases,
+        chops_invert_avx512f_core_only_boundary_cases,
+        chops_invert_avx512f_core_only_material_cases,
         chops_duplicate_target_output_cases,
         chops_duplicate_core_only_matrix_cases,
         chops_constant_target_output_cases,
@@ -129,6 +132,7 @@ try:
         core_only_getdata_matrix_cases,
         core_only_l1_rawmode_cases,
         get_child_images_target_output_cases,
+        direct_posterize_target_output_cases,
         rotate_direct_target_output_cases,
         putdata_core_only_matrix_cases,
         REDUCE_CORE_ONLY_MODES,
@@ -157,7 +161,10 @@ except ModuleNotFoundError:
         CHOPS_DUPLICATE_PILLOW_MODES,
         CHOPS_CONSTANT_PILLOW_MODES,
         CHOPS_INVERT_PILLOW_MODES,
+        CHOPS_INVERT_CORE_ONLY_MODES,
         chops_invert_target_output_cases,
+        chops_invert_avx512f_core_only_boundary_cases,
+        chops_invert_avx512f_core_only_material_cases,
         chops_duplicate_target_output_cases,
         chops_duplicate_core_only_matrix_cases,
         chops_constant_target_output_cases,
@@ -173,6 +180,7 @@ except ModuleNotFoundError:
         core_only_getdata_matrix_cases,
         core_only_l1_rawmode_cases,
         get_child_images_target_output_cases,
+        direct_posterize_target_output_cases,
         rotate_direct_target_output_cases,
         putdata_core_only_matrix_cases,
         REDUCE_CORE_ONLY_MODES,
@@ -215,6 +223,16 @@ WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = WORKSPACE_ROOT / "pillow-rs" / "tests" / "fixtures"
 DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_OUTPUT_ROOT = FIXTURE_ROOT
+AVX512F_STRATEGY_SURFACES = frozenset(
+    {
+        "PIL.Image",
+        "PIL.Image.Image",
+        "PIL.ImageChops",
+        "PIL.ImageEnhance.Color",
+        "PIL.ImageOps",
+    }
+)
+AVX512F_STRATEGY_INPUT = "inputs/parity/avx512f-strategy-cases.json"
 TARGET_PROFILE = "python-cpu"
 BENCHMARK_TARGET_PROFILES = ("python-cpu", "python-simd", "python-gpu")
 FILTER_BLUR_RGB_NOISE_CASE_ID = (
@@ -3473,7 +3491,14 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
-        if self.edge in {"noise-fill", "noise-ref-fill", "paste-noise-fill"}:
+        if self.edge in {
+            "noise-fill",
+            "noise-ref-fill",
+            "paste-noise-fill",
+            "blend-avx512f-noise",
+            "f32-orderable-noise-ref-fill",
+            "i32-orderable-noise-ref-fill",
+        }:
             # Deterministic diverse images are built through the public
             # frombytes endpoint from the same fixed bytes. Small cases can
             # inline the samples; larger cases share a content-addressed ref.
@@ -3483,6 +3508,8 @@ class WorkflowBuilder:
                 # Keep the source distinct from the destination so the paste
                 # workload measures a real copy rather than rewriting the
                 # same byte pattern.
+                seed += 1
+            if self.edge == "blend-avx512f-noise" and label.endswith(("im2", "image2")):
                 seed += 1
             rng = random.Random(seed)
             n_pixels = size[0] * size[1]
@@ -3495,17 +3522,33 @@ class WorkflowBuilder:
             elif requested_mode == "L":
                 data = bytes(rng.randrange(256) for _ in range(n_pixels))
             elif requested_mode == "I":
-                data = b"".join(
-                    struct.pack("<i", rng.randrange(-32, 32)) for _ in range(n_pixels)
-                )
+                if self.edge == "i32-orderable-noise-ref-fill":
+                    samples = [rng.randrange(-(1 << 31), 1 << 31) for _ in range(n_pixels)]
+                    if len(samples) >= 2:
+                        samples[0] = -(1 << 31)
+                        samples[1] = (1 << 31) - 1
+                    data = b"".join(struct.pack("<i", value) for value in samples)
+                else:
+                    data = b"".join(
+                        struct.pack("<i", rng.randrange(-32, 32))
+                        for _ in range(n_pixels)
+                    )
             elif requested_mode == "F":
-                values = (-7.5, -3.25, -1.0, -0.0, 0.0, 0.125, 0.5, 2.0, 9.25)
+                values = (
+                    (-7.5, -3.25, -1.0, 0.125, 0.5, 2.0, 9.25)
+                    if self.edge == "f32-orderable-noise-ref-fill"
+                    else (-7.5, -3.25, -1.0, -0.0, 0.0, 0.125, 0.5, 2.0, 9.25)
+                )
                 data = b"".join(
                     struct.pack("<f", rng.choice(values)) for _ in range(n_pixels)
                 )
             else:
                 raise ValueError(f"noise-fill edge unsupported for mode {requested_mode}")
-            if self.edge == "noise-ref-fill":
+            if self.edge in {
+                "noise-ref-fill",
+                "f32-orderable-noise-ref-fill",
+                "i32-orderable-noise-ref-fill",
+            }:
                 data_desc = self.ref_bytes(f"{label}-noise", data)
             else:
                 data_desc = self.inline_bytes(
@@ -7139,47 +7182,74 @@ class WorkflowBuilder:
                 "filter-f-mode-median",
                 "filter-f-mode-rank",
                 "filter-f-mode-large-rank",
+                "filter-f-mode-avx512-max",
+                "filter-f-mode-avx512-min",
+                "filter-f-mode-avx512-median",
+                "filter-f-mode-avx512-rank",
+                "filter-f-mode-avx512-large-rank",
             }:
                 image_step = self.ensure_image(mode="F")
-                self.add_step(
-                    "PIL.Image.Image",
-                    "putdata",
-                    receiver=binding(image_step),
-                    arguments={
-                        "data": literal(
-                            [
-                                float((index * 37 + 11) % 101)
-                                for index in range(81)
-                            ]
-                            if chain == "filter-f-mode-large-rank"
-                            else [
-                                1.0,
-                                9.0,
-                                3.0,
-                                4.0,
-                                5.0,
-                                6.0,
-                                7.0,
-                                8.0,
-                                2.0,
-                            ]
-                        )
-                    },
-                    step_id="setup-f-mode-rank-data",
-                )
+                if "avx512" not in chain:
+                    self.add_step(
+                        "PIL.Image.Image",
+                        "putdata",
+                        receiver=binding(image_step),
+                        arguments={
+                            "data": literal(
+                                [
+                                    float((index * 37 + 11) % 101)
+                                    for index in range(81)
+                                ]
+                                if chain == "filter-f-mode-large-rank"
+                                else [
+                                    1.0,
+                                    9.0,
+                                    3.0,
+                                    4.0,
+                                    5.0,
+                                    6.0,
+                                    7.0,
+                                    8.0,
+                                    2.0,
+                                ]
+                            )
+                        },
+                        step_id="setup-f-mode-rank-data",
+                    )
                 filter_name = {
                     "filter-f-mode-max": "MaxFilter",
                     "filter-f-mode-min": "MinFilter",
                     "filter-f-mode-median": "MedianFilter",
                     "filter-f-mode-rank": "RankFilter",
                     "filter-f-mode-large-rank": "RankFilter",
+                    "filter-f-mode-avx512-max": "MaxFilter",
+                    "filter-f-mode-avx512-min": "MinFilter",
+                    "filter-f-mode-avx512-median": "MedianFilter",
+                    "filter-f-mode-avx512-rank": "RankFilter",
+                    "filter-f-mode-avx512-large-rank": "RankFilter",
                 }[chain]
                 filter_arguments = {
-                    "size": literal(9 if chain == "filter-f-mode-large-rank" else 3)
+                    "size": literal(
+                        9
+                        if chain
+                        in {
+                            "filter-f-mode-large-rank",
+                            "filter-f-mode-avx512-large-rank",
+                        }
+                        else 3
+                    )
                 }
                 if filter_name == "RankFilter":
                     filter_arguments["rank"] = literal(
-                        40 if chain == "filter-f-mode-large-rank" else 0
+                        40
+                        if chain
+                        in {
+                            "filter-f-mode-large-rank",
+                            "filter-f-mode-avx512-large-rank",
+                        }
+                        else 4
+                        if "avx512" in chain
+                        else 0
                     )
                 filter_step = self.add_step(
                     "PIL.ImageFilter",
@@ -7233,6 +7303,67 @@ class WorkflowBuilder:
                     receiver=None,
                     arguments=filter_arguments,
                     step_id=f"setup-la-{filter_name.lower()}",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain in {
+                "filter-i-mode-avx512-max",
+                "filter-i-mode-avx512-min",
+                "filter-i-mode-avx512-median",
+                "filter-i-mode-avx512-rank",
+                "filter-i-mode-avx512-large-rank",
+            }:
+                image_step = self.ensure_image(mode="I")
+                filter_name = {
+                    "filter-i-mode-avx512-max": "MaxFilter",
+                    "filter-i-mode-avx512-min": "MinFilter",
+                    "filter-i-mode-avx512-median": "MedianFilter",
+                    "filter-i-mode-avx512-rank": "RankFilter",
+                    "filter-i-mode-avx512-large-rank": "RankFilter",
+                }[chain]
+                large_window = chain == "filter-i-mode-avx512-large-rank"
+                filter_arguments = {"size": literal(9 if large_window else 3)}
+                if filter_name == "RankFilter":
+                    filter_arguments["rank"] = literal(40 if large_window else 4)
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    filter_name,
+                    receiver=None,
+                    arguments=filter_arguments,
+                    step_id=f"setup-i-mode-{filter_name.lower()}",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain in {
+                "filter-i-mode-avx512-3x3",
+                "filter-i-mode-avx512-5x5",
+            }:
+                image_step = self.ensure_image(mode="I")
+                if chain.endswith("3x3"):
+                    size = [3, 3]
+                    kernel = [-1.0, -2.0, -1.0, -2.0, 12.0, -2.0, -1.0, -2.0, -1.0]
+                    scale = 1.0
+                else:
+                    size = [5, 5]
+                    kernel = [
+                        1.0, -2.0, 3.0, -4.0, 5.0,
+                        -6.0, 7.0, -8.0, 9.0, -10.0,
+                        11.0, -12.0, 13.0, -14.0, 15.0,
+                        -16.0, 17.0, -18.0, 19.0, -20.0,
+                        21.0, -22.0, 23.0, -24.0, 25.0,
+                    ]
+                    scale = 31.0
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "Kernel",
+                    receiver=None,
+                    arguments={
+                        "size": literal(size),
+                        "kernel": literal(kernel),
+                        "scale": literal(scale),
+                        "offset": literal(0.25),
+                    },
+                    step_id=f"setup-i-mode-avx512-{chain.rsplit('-', 1)[-1]}-kernel",
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
@@ -7355,12 +7486,13 @@ class WorkflowBuilder:
                 "invalid-band-item-int",
             }
         )
-        # The materialized RGB merge workload replaces the generic `bands`
-        # argument below with explicit inputs. Avoid leaving its default image
-        # alive during the measured operation, where it skews cache/memory
-        # pressure. Keep other merge fixtures unchanged.
+        # Material Merge workloads replace the generic `bands` argument below
+        # with explicit inputs. Avoid leaving the default image alive during
+        # measurement, where it skews cache/memory pressure.
         omit_unused_merge_default = (
-            merge_with_explicit_bands and self.edge == "merge-rgb-channel-pattern"
+            merge_with_explicit_bands
+            and self.edge
+            in {"merge-rgb-channel-pattern", "merge-avx512f-channel-pattern"}
         )
         arguments = (
             {}
@@ -7425,7 +7557,10 @@ class WorkflowBuilder:
                         step_id=f"setup-band-{index + 1}-palette",
                     )
                 else:
-                    if self.edge == "merge-rgb-channel-pattern":
+                    if self.edge in {
+                        "merge-rgb-channel-pattern",
+                        "merge-avx512f-channel-pattern",
+                    }:
                         generator = (
                             "radial_gradient" if index == 1 else "linear_gradient"
                         )
@@ -13342,7 +13477,7 @@ def imageops_palette_lut_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     return cases
 
 
-# VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def build_nuanced_cases(
     manifest: dict[str, Any],
     operations: dict[tuple[str, str], dict[str, Any]],
@@ -22473,6 +22608,104 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "reduce",
             "requirement_suffix": "behavior.default",
+            "additional_requirement_suffixes": ["mode.f"],
+            "name": "avx512f-f32-complete-16-output-block",
+            "observe_result": "tobytes",
+            "mode": "F",
+            "size": [32, 32],
+            "edge": "noise-fill",
+            "seed": 20261125,
+            "values": {"factor": literal([2, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "behavior.default",
+            "additional_requirement_suffixes": ["mode.i"],
+            "name": "avx512f-i32-complete-16-output-block",
+            "observe_result": "tobytes",
+            "mode": "I",
+            "size": [32, 32],
+            "edge": "noise-fill",
+            "seed": 20261128,
+            "values": {"factor": literal([2, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "behavior.default",
+            "additional_requirement_suffixes": ["mode.i"],
+            "name": "avx512f-i32-wrapping-quartet-sum",
+            "observe_result": "tobytes",
+            "mode": "I",
+            "size": [32, 32],
+            "edge": "uniform-fill",
+            "pixel": 2147483647,
+            "values": {"factor": literal([2, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "behavior.default",
+            "additional_requirement_suffixes": ["mode.f"],
+            "name": "avx512f-f32-incomplete-output-block-fallback",
+            "observe_result": "tobytes",
+            "mode": "F",
+            "size": [30, 32],
+            "edge": "noise-fill",
+            "seed": 20261126,
+            "values": {"factor": literal([2, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "behavior.default",
+            "additional_requirement_suffixes": ["mode.i"],
+            "name": "avx512f-i32-incomplete-output-block-fallback",
+            "observe_result": "tobytes",
+            "mode": "I",
+            "size": [30, 32],
+            "edge": "noise-fill",
+            "seed": 20261129,
+            "values": {"factor": literal([2, 2])},
+        },
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "reduce",
+                "requirement_suffix": "behavior.default",
+                "additional_requirement_suffixes": (
+                    [mode_requirement]
+                    + (
+                        ["performance.standard"]
+                        if case_name == "material-noise-1024x768"
+                        else []
+                    )
+                ),
+                "name": f"avx512f-{mode_slug}-{case_name}",
+                "observe_result": "tobytes",
+                "mode": mode,
+                "size": size,
+                "edge": "noise-fill",
+                "seed": seed,
+                "values": {"factor": literal([2, 2])},
+            }
+            for mode, mode_slug, mode_requirement in (
+                ("RGBA", "rgba8", "mode.rgba"),
+                ("RGBa", "rgb_premultiplied8", "mode.rgba-premultiplied"),
+                ("RGBX", "rgbx8", "mode.rgbx"),
+                ("CMYK", "cmyk8", "mode.cmyk"),
+            )
+            for case_name, size, seed in (
+                ("complete-16-output-block", [32, 32], 20261135),
+                ("incomplete-output-block-fallback", [30, 32], 20261136),
+                ("material-noise-1024x768", [1024, 768], 20261137),
+            )
+        ),
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "behavior.default",
             "name": "one-identity-factor-full-image",
             "mode": "1",
             "size": [7, 9],
@@ -25885,6 +26118,117 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "cmyk-mode",
             "mode": "CMYK",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-15-pixel-la-fallback",
+            "mode": "LA",
+            "size": [15, 1],
+            "edge": "merge-avx512f-channel-pattern",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-16-pixel-la-block",
+            "mode": "LA",
+            "size": [16, 1],
+            "edge": "merge-avx512f-channel-pattern",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-17-pixel-la-tail",
+            "mode": "LA",
+            "size": [17, 1],
+            "edge": "merge-avx512f-channel-pattern",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-15-pixel-rgba-fallback",
+            "mode": "RGBA",
+            "size": [15, 1],
+            "edge": "merge-avx512f-channel-pattern",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-16-pixel-rgba-block",
+            "mode": "RGBA",
+            "size": [16, 1],
+            "edge": "merge-avx512f-channel-pattern",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-17-pixel-rgba-tail",
+            "mode": "RGBA",
+            "size": [17, 1],
+            "edge": "merge-avx512f-channel-pattern",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-15-pixel-cmyk-fallback",
+            "mode": "CMYK",
+            "size": [15, 1],
+            "edge": "merge-avx512f-channel-pattern",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-16-pixel-cmyk-block",
+            "mode": "CMYK",
+            "size": [16, 1],
+            "edge": "merge-avx512f-channel-pattern",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-17-pixel-cmyk-tail",
+            "mode": "CMYK",
+            "size": [17, 1],
+            "edge": "merge-avx512f-channel-pattern",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-performance-material-la-1024x768",
+            "mode": "LA",
+            "size": [1024, 768],
+            "edge": "merge-avx512f-channel-pattern",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-performance-material-rgba-1024x768",
+            "mode": "RGBA",
+            "size": [1024, 768],
+            "edge": "merge-avx512f-channel-pattern",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-performance-material-cmyk-1024x768",
+            "mode": "CMYK",
+            "size": [1024, 768],
+            "edge": "merge-avx512f-channel-pattern",
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image",
@@ -33752,6 +34096,321 @@ def build_nuanced_cases(
             "chain": "filter-f-mode-large-rank",
             "observe_result": "tobytes",
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-f-max-rank3-33x35",
+            "mode": "F",
+            "size": [33, 35],
+            "edge": "f32-orderable-noise-ref-fill",
+            "seed": 20261151,
+            "chain": "filter-f-mode-avx512-max",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-f-min-rank3-33x35",
+            "mode": "F",
+            "size": [33, 35],
+            "edge": "f32-orderable-noise-ref-fill",
+            "seed": 20261152,
+            "chain": "filter-f-mode-avx512-min",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-f-median-rank3-33x35",
+            "mode": "F",
+            "size": [33, 35],
+            "edge": "f32-orderable-noise-ref-fill",
+            "seed": 20261153,
+            "chain": "filter-f-mode-avx512-median",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-f-rank3-33x35",
+            "mode": "F",
+            "size": [33, 35],
+            "edge": "f32-orderable-noise-ref-fill",
+            "seed": 20261154,
+            "chain": "filter-f-mode-avx512-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-f-rank9-17x19",
+            "mode": "F",
+            "size": [17, 19],
+            "edge": "f32-orderable-noise-ref-fill",
+            "seed": 20261155,
+            "chain": "filter-f-mode-avx512-large-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-f-rank3-narrow-fallback-15x17",
+            "mode": "F",
+            "size": [15, 17],
+            "edge": "f32-orderable-noise-ref-fill",
+            "seed": 20261156,
+            "chain": "filter-f-mode-avx512-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-f-rank3-mixed-zero-fallback-33x35",
+            "mode": "F",
+            "size": [33, 35],
+            "edge": "noise-ref-fill",
+            "seed": 20261157,
+            "chain": "filter-f-mode-avx512-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-f32-avx512-rank3-noise-1024x768",
+            "mode": "F",
+            "size": [1024, 768],
+            "edge": "f32-orderable-noise-ref-fill",
+            "seed": 20261158,
+            "chain": "filter-f-mode-avx512-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-i-max-rank3-33x35",
+            "mode": "I",
+            "size": [33, 35],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261161,
+            "chain": "filter-i-mode-avx512-max",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-i-min-rank3-33x35",
+            "mode": "I",
+            "size": [33, 35],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261162,
+            "chain": "filter-i-mode-avx512-min",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-i-median-rank3-33x35",
+            "mode": "I",
+            "size": [33, 35],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261163,
+            "chain": "filter-i-mode-avx512-median",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-i-rank3-33x35",
+            "mode": "I",
+            "size": [33, 35],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261164,
+            "chain": "filter-i-mode-avx512-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-i-rank9-17x19",
+            "mode": "I",
+            "size": [17, 19],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261165,
+            "chain": "filter-i-mode-avx512-large-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-i-rank3-narrow-fallback-15x17",
+            "mode": "I",
+            "size": [15, 17],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261166,
+            "chain": "filter-i-mode-avx512-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-i32-avx512-max-rank3-noise-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261167,
+            "chain": "filter-i-mode-avx512-max",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-i32-avx512-min-rank3-noise-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261168,
+            "chain": "filter-i-mode-avx512-min",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-i32-avx512-median-rank3-noise-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261169,
+            "chain": "filter-i-mode-avx512-median",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-i32-avx512-rank3-noise-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261170,
+            "chain": "filter-i-mode-avx512-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-i-filter3x3-minimum-block-18x3",
+            "mode": "I",
+            "size": [18, 3],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261171,
+            "chain": "filter-i-mode-avx512-3x3",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-i-filter3x3-narrow-fallback-17x19",
+            "mode": "I",
+            "size": [17, 19],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261172,
+            "chain": "filter-i-mode-avx512-3x3",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-i32-avx512-filter3x3-noise-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261173,
+            "chain": "filter-i-mode-avx512-3x3",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-i-filter5x5-minimum-block-20x5",
+            "mode": "I",
+            "size": [20, 5],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261174,
+            "chain": "filter-i-mode-avx512-5x5",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "avx512f-i-filter5x5-narrow-fallback-19x17",
+            "mode": "I",
+            "size": [19, 17],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261175,
+            "chain": "filter-i-mode-avx512-5x5",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "performance.standard",
+            "name": "performance-material-i32-avx512-filter5x5-noise-1024x768",
+            "mode": "I",
+            "size": [1024, 768],
+            "edge": "i32-orderable-noise-ref-fill",
+            "seed": 20261176,
+            "chain": "filter-i-mode-avx512-5x5",
+            "observe_result": "tobytes",
+        },
+        *(
+            {
+                "surface": "PIL.Image",
+                "operation": "blend",
+                "requirement_suffix": "behavior.default",
+                "additional_requirement_suffixes": ["performance.standard"],
+                "name": f"performance-material-avx512f-blend-{mode_slug}-1024x768",
+                "mode": mode,
+                "size": [1024, 768],
+                "edge": "blend-avx512f-noise",
+                "seed": seed,
+                "values": {"alpha": literal(0.37)},
+                "observe_result": "tobytes",
+            }
+            for mode, mode_slug, seed in (
+                ("L", "l", 20261181),
+                ("LA", "la", 20261182),
+                ("La", "la-premultiplied", 20261183),
+                ("RGB", "rgb", 20261184),
+                ("RGBA", "rgba", 20261185),
+                ("RGBa", "rgb-premultiplied", 20261186),
+                ("RGBX", "rgbx", 20261187),
+                ("CMYK", "cmyk", 20261188),
+                ("HSV", "hsv", 20261189),
+                ("YCbCr", "ycbcr", 20261190),
+            )
+        ),
         {
             "surface": "PIL.Image.Image",
             "operation": "filter",
@@ -43781,6 +44440,27 @@ def build_nuanced_cases(
             "values": {"factor": literal([3, 5])},
         },)
 
+        # The F/I cases exercise all 16 AVX-512F result lanes and give the
+        # architecture benchmarks representative native typed reductions.
+        specs += ({
+            "surface": "PIL.Image.Image", "operation": "reduce",
+            "requirement_suffix": "mode.f",
+            "additional_requirement_suffixes": ["performance.standard"],
+            "name": "performance-material-f-noise-1024x768-factor-2x2",
+            "mode": "F", "size": [1024, 768], "edge": "noise-ref-fill",
+            "seed": 20261127, "observe_result": "tobytes",
+            "values": {"factor": literal([2, 2])},
+        },)
+        specs += ({
+            "surface": "PIL.Image.Image", "operation": "reduce",
+            "requirement_suffix": "mode.i",
+            "additional_requirement_suffixes": ["performance.standard"],
+            "name": "performance-material-i-noise-1024x768-factor-2x2",
+            "mode": "I", "size": [1024, 768], "edge": "noise-ref-fill",
+            "seed": 20261130, "observe_result": "tobytes",
+            "values": {"factor": literal([2, 2])},
+        },)
+
         # Preserve Pillow's fixed-point reciprocal edge where the block area
         # exceeds 2^24.  The uniform source keeps the expected zero result
         # visible without storing a 16 MiB fixture asset.
@@ -44528,6 +45208,11 @@ def build_nuanced_cases(
     cases.extend(chops_binary_mode_parity_cases(surface_id))
     cases.extend(chops_logical_mode_parity_cases(surface_id))
     cases.extend(chops_invert_mode_parity_cases(surface_id))
+    cases.extend(chops_invert_avx512f_boundary_cases(surface_id))
+    cases.extend(chops_invert_avx512f_material_cases(surface_id, assets_root))
+    cases.extend(imageops_invert_avx512f_boundary_cases(surface_id))
+    cases.extend(imageops_posterize_avx512f_boundary_cases(surface_id))
+    cases.extend(getextrema_i32_avx512f_boundary_cases(surface_id))
     cases.extend(chops_duplicate_mode_parity_cases(surface_id))
     cases.extend(chops_constant_mode_parity_cases(surface_id))
     cases.extend(chops_offset_mode_parity_cases(surface_id))
@@ -44559,6 +45244,9 @@ def build_nuanced_cases(
     cases.extend(f_boxed_resize_materialized_parity_cases(surface_id))
     cases.extend(f_resize_materialized_parity_cases(surface_id))
     cases.extend(i_resize_materialized_parity_cases(surface_id))
+    cases.extend(avx512f_filtered_f_resize_boundary_cases(surface_id))
+    cases.extend(thumbnail_i32_avx512f_boundary_cases(surface_id))
+    cases.extend(avx512f_nearest_four_byte_resize_cases(surface_id))
     cases.extend(l_filter_materialized_parity_cases(surface_id, assets_root))
     cases.extend(la_filter_materialized_parity_cases(surface_id, assets_root))
     cases.extend(la_filter3x3_materialized_parity_cases(surface_id, assets_root))
@@ -47004,13 +47692,15 @@ def rotate_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
 
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def transform_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
-    """Expose native sample bytes, alpha, edge coordinates and fill semantics."""
+    """Exercise all Pillow modes with affine and alpha-filter inputs."""
     if surface_id != "PIL.Image.Image":
         return []
     cases = []
-    modes = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "RGBa": 4, "La": 2,
-             "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2, "I": 4, "F": 4,
+    modes = {"1": 1, "L": 1, "LA": 2, "La": 2, "P": 1, "PA": 2,
+             "RGB": 3, "RGBA": 4, "RGBa": 4, "RGBX": 4, "CMYK": 4,
+             "YCbCr": 3, "LAB": 3, "HSV": 3, "I": 4, "F": 4,
              "I;16": 2, "I;16L": 2, "I;16B": 2, "I;16N": 2}
     width, height = 17, 11
     for mode, channels in modes.items():
@@ -47021,15 +47711,29 @@ def transform_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         elif mode == "F":
             raw = b"".join(struct.pack("<f", rng.uniform(-1000, 1000))
                            for _ in range(width * height))
+        elif mode == "1":
+            raw = rng.randbytes(((width + 7) // 8) * height)
         else:
             raw = rng.randbytes(width * height * channels)
         assets = [{"id": "pixels", "kind": "inline", "encoding": "base64",
                    "data": base64.b64encode(raw).decode("ascii"),
                    "sha256": hashlib.sha256(raw).hexdigest(),
                    "media_type": "application/octet-stream"}]
-        fill = (4660 if mode.startswith("I;16") else 173.25 if mode == "F"
-                else 173 if channels == 1 or mode == "I" else [173, 127] if channels == 2
-                else [17, 83, 149] if channels == 3 else [17, 83, 149, 127])
+        fill = (
+            1
+            if mode == "1"
+            else 4660
+            if mode.startswith("I;16")
+            else 173.25
+            if mode == "F"
+            else 173
+            if channels == 1 or mode == "I"
+            else [173, 127]
+            if channels == 2
+            else [17, 83, 149]
+            if channels == 3
+            else [17, 83, 149, 127]
+        )
         quad = [-1.25, 0.5, 1.0, 10.25, 16.5, 9.5, 15.25, -0.5]
         parameters = (
             ("affine", {"method": 0, "data": [0.87, 0.21, -1.25, -0.16, 1.13, 0.5]}),
@@ -47055,10 +47759,450 @@ def transform_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 cases.append({
                     "case_id": f"{surface_id}.transform.nuanced.modes-{mode}-{resample}-{name}",
                     "surface": surface_id, "operation": "transform",
-                    "covers": [f"{surface_id}.transform.behavior.default"],
+                    "covers": [
+                        f"{surface_id}.transform.behavior.default",
+                        f"{surface_id}.transform.mode.{mode_slug(mode)}",
+                    ],
                      "assets": assets,
                     "steps": steps, "observations": ["call", "materialize"],
                 })
+        fill_key = tuple(fill) if isinstance(fill, (list, tuple)) else fill
+        source_pixel = None
+        for sample_index in range(10):
+            candidate = _patterned_pixel(mode, sample_index, 173)
+            candidate_key = (
+                tuple(candidate)
+                if isinstance(candidate, (list, tuple))
+                else candidate
+            )
+            if candidate_key != fill_key:
+                source_pixel = candidate
+                break
+        if source_pixel is None:
+            raise ValueError(f"no distinct Transform sample for {mode!r}")
+        nan_steps = [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "frombytes",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(mode),
+                    "size": literal([width, height]),
+                    "data": asset_value("pixels"),
+                },
+            },
+            {
+                "step_id": "distinct-source-pixel",
+                "surface": surface_id,
+                "operation": "putpixel",
+                "receiver": binding("image"),
+                "arguments": {
+                    "xy": literal([0, 0]),
+                    "value": literal(source_pixel),
+                },
+            },
+            {
+                "step_id": "call",
+                "surface": surface_id,
+                "operation": "transform",
+                "receiver": binding("image"),
+                "arguments": {
+                    "size": literal([13, 9]),
+                    "method": literal(0),
+                    "data": literal([float("nan"), 0, 0, 0, 1, 0]),
+                    "resample": literal(0),
+                    "fillcolor": literal(fill),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": surface_id,
+                "operation": "tobytes",
+                "receiver": binding("call"),
+                "arguments": {},
+            },
+        ]
+        cases.append({
+            "case_id": (
+                f"{surface_id}.transform.nuanced.modes-{mode_slug(mode)}-"
+                "affine-nan-nearest"
+            ),
+            "surface": surface_id,
+            "operation": "transform",
+            "covers": [
+                f"{surface_id}.transform.behavior.default",
+                f"{surface_id}.transform.mode.{mode_slug(mode)}",
+                f"{surface_id}.transform.parameter.data",
+            ],
+            "assets": assets,
+            "steps": nan_steps,
+            "observations": ["call", "materialize"],
+        })
+        translation_steps = [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "frombytes",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(mode),
+                    "size": literal([width, height]),
+                    "data": asset_value("pixels"),
+                },
+            },
+            {
+                "step_id": "distinct-source-pixel",
+                "surface": surface_id,
+                "operation": "putpixel",
+                "receiver": binding("image"),
+                "arguments": {
+                    "xy": literal([5, 0]),
+                    "value": literal(source_pixel),
+                },
+            },
+            {
+                "step_id": "call",
+                "surface": surface_id,
+                "operation": "transform",
+                "receiver": binding("image"),
+                "arguments": {
+                    "size": literal([13, 9]),
+                    "method": literal(0),
+                    "data": literal([1, 0, 5, 0, 1, 0]),
+                    "resample": literal(0),
+                    "fillcolor": literal(fill),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": surface_id,
+                "operation": "tobytes",
+                "receiver": binding("call"),
+                "arguments": {},
+            },
+        ]
+        cases.append({
+            "case_id": (
+                f"{surface_id}.transform.nuanced.modes-{mode_slug(mode)}-"
+                "affine-nearest-axis-aligned"
+            ),
+            "surface": surface_id,
+            "operation": "transform",
+            "covers": [
+                f"{surface_id}.transform.behavior.default",
+                f"{surface_id}.transform.mode.{mode_slug(mode)}",
+                f"{surface_id}.transform.parameter.data",
+            ],
+            "assets": assets,
+            "steps": translation_steps,
+            "observations": ["call", "materialize"],
+        })
+    for mode, raw in (
+        ("LA", bytes([255, 0, 0, 255])),
+        ("RGBA", bytes([255, 0, 0, 0, 0, 0, 255, 255])),
+    ):
+        cases.append({
+            "case_id": (
+                f"{surface_id}.transform.nuanced.alpha-filter-premultiplied-"
+                f"{mode.lower()}"
+            ),
+            "surface": surface_id,
+            "operation": "transform",
+            "covers": [
+                f"{surface_id}.transform.behavior.default",
+                f"{surface_id}.transform.mode.{mode_slug(mode)}",
+                f"{surface_id}.transform.parameter.resample",
+            ],
+            "assets": [{
+                "id": "pixels",
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(raw).decode("ascii"),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "media_type": "application/octet-stream",
+            }],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal(mode),
+                        "size": literal([2, 1]),
+                        "data": asset_value("pixels"),
+                    },
+                },
+                {
+                    "step_id": "call",
+                    "surface": surface_id,
+                    "operation": "transform",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "size": literal([1, 1]),
+                        "method": literal(0),
+                        "data": literal([1, 0, 0.5, 0, 1, 0]),
+                        "resample": literal(2),
+                    },
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["call", "materialize"],
+        })
+    for mode, raw in (("P", bytes([1, 2])), ("PA", bytes([1, 255, 2, 128]))):
+        cases.append({
+            "case_id": (
+                f"{surface_id}.transform.nuanced.empty-mesh-palette-{mode.lower()}"
+            ),
+            "surface": surface_id,
+            "operation": "transform",
+            "covers": [
+                f"{surface_id}.transform.behavior.default",
+                f"{surface_id}.transform.mode.{mode_slug(mode)}",
+                f"{surface_id}.transform.parameter.data",
+            ],
+            "assets": [{
+                "id": "pixels",
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(raw).decode("ascii"),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "media_type": "application/octet-stream",
+            }],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal(mode),
+                        "size": literal([2, 1]),
+                        "data": asset_value("pixels"),
+                    },
+                },
+                {
+                    "step_id": "set-palette",
+                    "surface": surface_id,
+                    "operation": "putpalette",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                },
+                {
+                    "step_id": "transform",
+                    "surface": surface_id,
+                    "operation": "transform",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "size": literal([2, 1]),
+                        "method": literal(4),
+                        "data": literal([]),
+                    },
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("transform"),
+                    "arguments": {},
+                },
+                {
+                    "step_id": "palette",
+                    "surface": surface_id,
+                    "operation": "getpalette",
+                    "receiver": binding("transform"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["transform", "materialize", "palette"],
+        })
+    for name, fill, source_palette in (
+        ("temporary-rgb", [10, 20, 30], None),
+        ("temporary-rgba", [10, 20, 30, 255], None),
+        ("source-replaces-temporary", [200, 100, 50], [10, 20, 30, 40, 50, 60]),
+        ("empty-source-replaces-temporary", [200, 100, 50], []),
+        ("scalar-keeps-no-palette", 5, None),
+    ):
+        steps = [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("P"),
+                    "size": literal([2, 1]),
+                    "color": literal(1),
+                },
+            },
+        ]
+        if source_palette is not None:
+            steps.append({
+                "step_id": "set-palette",
+                "surface": surface_id,
+                "operation": "putpalette",
+                "receiver": binding("image"),
+                "arguments": {
+                    "data": literal(source_palette),
+                    "rawmode": literal("RGB"),
+                },
+            })
+        steps.extend([
+            {
+                "step_id": "transform",
+                "surface": surface_id,
+                "operation": "transform",
+                "receiver": binding("image"),
+                "arguments": {
+                    "size": literal([2, 1]),
+                    "method": literal(0),
+                    "data": literal([1, 0, -1, 0, 1, 0]),
+                    "fillcolor": literal(fill),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": surface_id,
+                "operation": "tobytes",
+                "receiver": binding("transform"),
+                "arguments": {},
+            },
+            {
+                "step_id": "palette",
+                "surface": surface_id,
+                "operation": "getpalette",
+                "receiver": binding("transform"),
+                "arguments": {},
+            },
+        ])
+        cases.append({
+            "case_id": f"{surface_id}.transform.nuanced.palette-fill-{name}",
+            "surface": surface_id,
+            "operation": "transform",
+            "covers": [
+                f"{surface_id}.transform.behavior.default",
+                f"{surface_id}.transform.mode.p",
+                f"{surface_id}.transform.parameter.fillcolor",
+            ],
+            "assets": [],
+            "steps": steps,
+            "observations": ["transform", "materialize", "palette"],
+        })
+    for name, mesh_data in (
+        ("empty-mesh", []),
+        ("record-mesh", [[[1, 0, 2, 1], [0, 0, 0, 1, 1, 1, 1, 0]]]),
+    ):
+        cases.append({
+            "case_id": f"{surface_id}.transform.nuanced.palette-fill-{name}",
+            "surface": surface_id,
+            "operation": "transform",
+            "covers": [
+                f"{surface_id}.transform.behavior.default",
+                f"{surface_id}.transform.mode.p",
+                f"{surface_id}.transform.parameter.data",
+                f"{surface_id}.transform.parameter.fillcolor",
+            ],
+            "assets": [],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("P"),
+                        "size": literal([2, 1]),
+                        "color": literal(1),
+                    },
+                },
+                {
+                    "step_id": "transform",
+                    "surface": surface_id,
+                    "operation": "transform",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "size": literal([2, 1]),
+                        "method": literal(4),
+                        "data": literal(mesh_data),
+                        "fillcolor": literal([10, 20, 30]),
+                    },
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding("transform"),
+                    "arguments": {},
+                },
+                {
+                    "step_id": "palette",
+                    "surface": surface_id,
+                    "operation": "getpalette",
+                    "receiver": binding("transform"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["transform", "materialize", "palette"],
+        })
+    cases.append({
+        "case_id": f"{surface_id}.transform.nuanced.palette-state-pa-no-source",
+        "surface": surface_id,
+        "operation": "transform",
+        "covers": [
+            f"{surface_id}.transform.behavior.default",
+            f"{surface_id}.transform.mode.pa",
+            f"{surface_id}.transform.parameter.data",
+        ],
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("PA"),
+                    "size": literal([2, 1]),
+                },
+            },
+            {
+                "step_id": "transform",
+                "surface": surface_id,
+                "operation": "transform",
+                "receiver": binding("image"),
+                "arguments": {
+                    "size": literal([2, 1]),
+                    "method": literal(4),
+                    "data": literal([]),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": surface_id,
+                "operation": "tobytes",
+                "receiver": binding("transform"),
+                "arguments": {},
+            },
+            {
+                "step_id": "palette",
+                "surface": surface_id,
+                "operation": "getpalette",
+                "receiver": binding("transform"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["transform", "materialize", "palette"],
+    })
     # Fixed-point selection differs from direct f64 coordinates only after
     # enough output steps; the small mode matrix cannot expose that drift.
     for mode, channels in (("L", 1), ("RGB", 3)):
@@ -47400,55 +48544,211 @@ def f_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         f"{surface_id}.resize.nuanced.f-resize-bicubic-noise-"
         f"{width}x{height}"
     )
-    return [
-        {
-            "case_id": case_id,
-            "surface": surface_id,
-            "operation": "resize",
-            "covers": [f"{surface_id}.resize.behavior.default"],
-            "assets": [
-                {
-                    "id": "pixels",
-                    "kind": "inline",
-                    "encoding": "base64",
-                    "data": base64.b64encode(raw).decode("ascii"),
-                    "sha256": hashlib.sha256(raw).hexdigest(),
-                    "media_type": "application/octet-stream",
-                }
-            ],
-            "steps": [
-                {
-                    "step_id": "image",
-                    "surface": "PIL.Image",
-                    "operation": "frombytes",
-                    "receiver": None,
-                    "arguments": {
-                        "mode": literal("F"),
-                        "size": literal([width, height]),
-                        "data": asset_value("pixels"),
-                    },
+    case = {
+        "case_id": case_id,
+        "surface": surface_id,
+        "operation": "resize",
+        "covers": [f"{surface_id}.resize.behavior.default"],
+        "assets": [
+            {
+                "id": "pixels",
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(raw).decode("ascii"),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "media_type": "application/octet-stream",
+            }
+        ],
+        "steps": [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "frombytes",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("F"),
+                    "size": literal([width, height]),
+                    "data": asset_value("pixels"),
                 },
+            },
+            {
+                "step_id": "call",
+                "surface": surface_id,
+                "operation": "resize",
+                "receiver": binding("image"),
+                "arguments": {
+                    "size": literal([width // 2, height // 2]),
+                    "resample": literal(3),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": surface_id,
+                "operation": "tobytes",
+                "receiver": binding("call"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["call", "materialize"],
+    }
+    return [
+        case,
+        _avx512f_nearest_resize_case(case, surface_id, (width, height)),
+        _avx512f_filtered_resize_case(case, surface_id, (width, height)),
+    ]
+
+
+def avx512f_filtered_f_resize_boundary_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise F-mode filtered Resize below, at, and above an AVX-512F block."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    width, height = 19, 13
+    rng = random.Random(20261125)
+    raw = b"".join(
+        struct.pack("<f", rng.uniform(-1000.0, 1000.0))
+        for _ in range(width * height)
+    )
+    case = {
+        "case_id": (
+            f"{surface_id}.resize.nuanced."
+            "f-resize-avx512f-filtered-width-boundaries"
+        ),
+        "surface": surface_id,
+        "operation": "resize",
+        "covers": [f"{surface_id}.resize.behavior.default"],
+        "assets": [
+            {
+                "id": "pixels",
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(raw).decode("ascii"),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "media_type": "application/octet-stream",
+            }
+        ],
+        "steps": [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "frombytes",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("F"),
+                    "size": literal([width, height]),
+                    "data": asset_value("pixels"),
+                },
+            }
+        ],
+        "observations": [],
+    }
+    for suffix, output_width in (("narrow", 7), ("block", 8), ("tail", 9)):
+        call_id = f"avx512f-filtered-{suffix}-call"
+        bytes_id = f"avx512f-filtered-{suffix}-bytes"
+        case["steps"].extend(
+            [
                 {
-                    "step_id": "call",
+                    "step_id": call_id,
                     "surface": surface_id,
                     "operation": "resize",
                     "receiver": binding("image"),
                     "arguments": {
-                        "size": literal([width // 2, height // 2]),
+                        "size": literal([output_width, height]),
                         "resample": literal(3),
                     },
                 },
                 {
-                    "step_id": "materialize",
+                    "step_id": bytes_id,
                     "surface": surface_id,
                     "operation": "tobytes",
-                    "receiver": binding("call"),
+                    "receiver": binding(call_id),
                     "arguments": {},
                 },
-            ],
-            "observations": ["call", "materialize"],
-        }
-    ]
+            ]
+        )
+        case["observations"].extend([call_id, bytes_id])
+    return [case]
+
+
+def thumbnail_i32_avx512f_boundary_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover I32 Thumbnail's AVX-512F reducer below, at, and past one block."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    cases = []
+    for name, source_size, target_size, seed in (
+        ("narrow-fallback", (30, 16), (7, 4), 20261127),
+        ("exact-block", (32, 16), (8, 4), 20261128),
+        ("block-tail", (34, 16), (8, 4), 20261129),
+    ):
+        width, height = source_size
+        rng = random.Random(seed)
+        raw = b"".join(
+            struct.pack("<i", rng.randrange(-(1 << 31), 1 << 31))
+            for _ in range(width * height)
+        )
+        case_id = (
+            f"{surface_id}.thumbnail.nuanced.avx512f-i32-{name}-"
+            f"{width}x{height}"
+        )
+        cases.append(
+            {
+                "case_id": case_id,
+                "surface": surface_id,
+                "operation": "thumbnail",
+                "covers": [f"{surface_id}.thumbnail.behavior.default"],
+                "assets": [
+                    {
+                        "id": "pixels",
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": base64.b64encode(raw).decode("ascii"),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("I"),
+                            "size": literal([width, height]),
+                            "data": asset_value("pixels"),
+                        },
+                    },
+                    {
+                        "step_id": "call",
+                        "surface": surface_id,
+                        "operation": "thumbnail",
+                        "receiver": binding("image"),
+                        "arguments": {
+                            "size": literal(list(target_size)),
+                            "resample": literal(3),
+                            "reducing_gap": literal(2.0),
+                        },
+                    },
+                    {
+                        "step_id": "size",
+                        "surface": surface_id,
+                        "operation": "size",
+                        "receiver": binding("image"),
+                        "arguments": {},
+                    },
+                    {
+                        "step_id": "materialize",
+                        "surface": surface_id,
+                        "operation": "tobytes",
+                        "receiver": binding("image"),
+                        "arguments": {},
+                    },
+                ],
+                "observations": ["call", "size", "materialize"],
+            }
+        )
+    return cases
 
 
 def i_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -47466,9 +48766,76 @@ def i_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         f"{surface_id}.resize.nuanced.i-resize-bicubic-noise-"
         f"{width}x{height}"
     )
-    return [
-        {
-            "case_id": case_id,
+    case = {
+        "case_id": case_id,
+        "surface": surface_id,
+        "operation": "resize",
+        "covers": [f"{surface_id}.resize.behavior.default"],
+        "assets": [
+            {
+                "id": "pixels",
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(raw).decode("ascii"),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "media_type": "application/octet-stream",
+            }
+        ],
+        "steps": [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "frombytes",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("I"),
+                    "size": literal([width, height]),
+                    "data": asset_value("pixels"),
+                },
+            },
+            {
+                "step_id": "call",
+                "surface": surface_id,
+                "operation": "resize",
+                "receiver": binding("image"),
+                "arguments": {
+                    "size": literal([width // 2, height // 2]),
+                    "resample": literal(3),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": surface_id,
+                "operation": "tobytes",
+                "receiver": binding("call"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["call", "materialize"],
+    }
+    return [case, _avx512f_nearest_resize_case(case, surface_id, (width, height))]
+
+
+def avx512f_nearest_four_byte_resize_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise AVX-512F nearest Resize for each four-byte Pillow mode."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    width, height = 1024, 768
+    rng = random.Random(20261130)
+    raw = bytes(rng.randrange(256) for _ in range(width * height * 4))
+    cases = []
+    for mode, mode_slug in (
+        ("RGBA", "rgba8"),
+        ("RGBa", "rgb_premultiplied8"),
+        ("RGBX", "rgbx8"),
+        ("CMYK", "cmyk8"),
+    ):
+        source_case = {
+            "case_id": (
+                f"{surface_id}.resize.nuanced.{mode_slug}-resize-bicubic-noise-"
+                f"{width}x{height}"
+            ),
             "surface": surface_id,
             "operation": "resize",
             "covers": [f"{surface_id}.resize.behavior.default"],
@@ -47489,32 +48856,126 @@ def i_resize_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "operation": "frombytes",
                     "receiver": None,
                     "arguments": {
-                        "mode": literal("I"),
+                        "mode": literal(mode),
                         "size": literal([width, height]),
                         "data": asset_value("pixels"),
                     },
-                },
+                }
+            ],
+            "observations": [],
+        }
+        cases.append(
+            _avx512f_nearest_resize_case(source_case, surface_id, (width, height))
+        )
+    return cases
+
+
+def _avx512f_nearest_resize_case(
+    source_case: dict[str, Any],
+    surface_id: str,
+    source_size: tuple[int, int],
+) -> dict[str, Any]:
+    """Reuse a material source input as an isolated nearest Resize contract."""
+    case = copy.deepcopy(source_case)
+    case["case_id"] = case["case_id"].replace(
+        "bicubic-noise-", "avx512f-nearest-noise-"
+    )
+    case["steps"] = [step for step in case["steps"] if step["step_id"] == "image"]
+    case["observations"] = []
+    _append_avx512f_nearest_resize_steps(case, surface_id, source_size)
+    return case
+
+
+def _avx512f_filtered_resize_case(
+    source_case: dict[str, Any],
+    surface_id: str,
+    source_size: tuple[int, int],
+) -> dict[str, Any]:
+    """Reuse material F-mode pixels for filtered block, tail, and fallback outputs."""
+    case = copy.deepcopy(source_case)
+    case["case_id"] = case["case_id"].replace(
+        "f-resize-bicubic-noise-", "f-resize-avx512f-filtered-noise-"
+    )
+    case["steps"] = [step for step in case["steps"] if step["step_id"] == "image"]
+    case["observations"] = []
+    _append_avx512f_filtered_resize_steps(case, surface_id, source_size)
+    return case
+
+
+def _append_avx512f_filtered_resize_steps(
+    case: dict[str, Any],
+    surface_id: str,
+    source_size: tuple[int, int],
+) -> None:
+    """Add full-block, masked-tail, and narrow fallback filtered outputs."""
+    width, height = source_size
+    for suffix, output_width in (
+        ("full", width // 2),
+        ("tail", width // 2 + 1),
+        ("narrow", 7),
+    ):
+        call_id = f"avx512f-filtered-{suffix}-call"
+        bytes_id = f"avx512f-filtered-{suffix}-bytes"
+        case["steps"].extend(
+            [
                 {
-                    "step_id": "call",
+                    "step_id": call_id,
                     "surface": surface_id,
                     "operation": "resize",
                     "receiver": binding("image"),
                     "arguments": {
-                        "size": literal([width // 2, height // 2]),
+                        "size": literal([output_width, height // 2]),
                         "resample": literal(3),
                     },
                 },
                 {
-                    "step_id": "materialize",
+                    "step_id": bytes_id,
                     "surface": surface_id,
                     "operation": "tobytes",
-                    "receiver": binding("call"),
+                    "receiver": binding(call_id),
                     "arguments": {},
                 },
-            ],
-            "observations": ["call", "materialize"],
-        }
-    ]
+            ]
+        )
+        case["observations"].extend([call_id, bytes_id])
+
+
+def _append_avx512f_nearest_resize_steps(
+    case: dict[str, Any],
+    surface_id: str,
+    source_size: tuple[int, int],
+) -> None:
+    """Add full-block, scalar-tail, and narrow-fallback nearest outputs."""
+    width, height = source_size
+    for suffix, output_width in (
+        ("full", width // 2),
+        ("tail", width // 2 + 1),
+        ("narrow", 8),
+    ):
+        call_id = f"avx512f-nearest-{suffix}-call"
+        bytes_id = f"avx512f-nearest-{suffix}-bytes"
+        case["steps"].extend(
+            [
+                {
+                    "step_id": call_id,
+                    "surface": surface_id,
+                    "operation": "resize",
+                    "receiver": binding("image"),
+                    "arguments": {
+                        "size": literal([output_width, height // 2]),
+                        "resample": literal(0),
+                    },
+                },
+                {
+                    "step_id": bytes_id,
+                    "surface": surface_id,
+                    "operation": "tobytes",
+                    "receiver": binding(call_id),
+                    "arguments": {},
+                },
+            ]
+        )
+        case["observations"].extend([call_id, bytes_id])
 
 
 def i_filter_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -48406,6 +49867,42 @@ def color_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             case["assets"][0]["data"] = base64.b64encode(raw).decode()
             case["assets"][0]["sha256"] = hashlib.sha256(raw).hexdigest()
             cases.append(case)
+    # Cover AVX-512F's sixteen-byte admission boundary and a full vector plus
+    # scalar tail for every exact mode with a ColorSaturation strategy.
+    for mode, channels, mode_slug, short_width, tail_width, seed in (
+        ("LA", 2, "la", 7, 9, 20261192),
+        ("RGB", 3, "rgb", 5, 6, 20261193),
+        ("RGBA", 4, "rgba", 3, 5, 20261194),
+        ("CMYK", 4, "cmyk", 3, 5, 20261195),
+        ("RGBX", 4, "rgbx", 3, 5, 20261196),
+    ):
+        prototype = next(
+            case
+            for case in cases
+            if case["case_id"] == f"{target}.enhance.nuanced.audit-{mode}-varied-0.3"
+        )
+        for label, width in (("below-block", short_width), ("block-tail", tail_width)):
+            case = copy.deepcopy(prototype)
+            case["case_id"] = (
+                f"{target}.enhance.nuanced.avx512f-{mode_slug}-{label}"
+            )
+            case["steps"][0]["arguments"]["size"] = literal([width, 1])
+            raw = random.Random(f"color-avx512f-{mode}-{label}").randbytes(width * channels)
+            case["assets"][0]["data"] = base64.b64encode(raw).decode()
+            case["assets"][0]["sha256"] = hashlib.sha256(raw).hexdigest()
+            cases.append(case)
+
+        case = copy.deepcopy(prototype)
+        case["case_id"] = (
+            f"{target}.enhance.nuanced.performance-material-avx512f-"
+            f"color-saturation-{mode_slug}-1024x768"
+        )
+        case["covers"].append(f"{target}.enhance.performance.standard")
+        case["steps"][0]["arguments"]["size"] = literal([1024, 768])
+        raw = random.Random(seed).randbytes(1024 * 768 * channels)
+        case["assets"][0]["data"] = base64.b64encode(raw).decode()
+        case["assets"][0]["sha256"] = hashlib.sha256(raw).hexdigest()
+        cases.append(case)
     return cases
 
 
@@ -48685,6 +50182,336 @@ def chops_invert_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     return _chops_unary_mode_parity_cases(
         surface_id, "invert", CHOPS_INVERT_PILLOW_MODES
     )
+
+
+def chops_invert_avx512f_boundary_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover AVX-512F ChopsInvert block, tail, and fallback row widths."""
+
+    target = "PIL.ImageChops"
+    if surface_id != target:
+        return []
+
+    cases = []
+    for mode, mode_id, channels in CHOPS_INVERT_PILLOW_MODES:
+        row_channels = 1 if mode == "1" else channels
+        first_vector_width = (64 + row_channels - 1) // row_channels
+        for row_case, width in (
+            ("below-64-byte-row", max(1, 63 // row_channels)),
+            ("full-64-byte-block", first_vector_width),
+            ("scalar-row-tail", first_vector_width + 1),
+        ):
+            height = 2
+            byte_count = (
+                ((width + 7) // 8) * height
+                if mode == "1"
+                else width * height * channels
+            )
+            raw = random.Random(
+                f"chops-avx512f-invert-{mode}-{row_case}"
+            ).randbytes(byte_count)
+            asset_id = f"avx512f-invert-{mode_id}-{row_case}"
+            cases.append(
+                {
+                    "case_id": (
+                        f"{target}.invert.nuanced.avx512f-{row_case}-{mode_id}"
+                    ),
+                    "surface": target,
+                    "operation": "invert",
+                    "covers": [f"{target}.invert.mode.{mode_id}"],
+                    "assets": [
+                        {
+                            "id": asset_id,
+                            "kind": "inline",
+                            "encoding": "base64",
+                            "data": base64.b64encode(raw).decode("ascii"),
+                            "sha256": hashlib.sha256(raw).hexdigest(),
+                            "media_type": "application/octet-stream",
+                        }
+                    ],
+                    "steps": [
+                        {
+                            "step_id": "image",
+                            "surface": "PIL.Image",
+                            "operation": "frombytes",
+                            "receiver": None,
+                            "arguments": {
+                                "mode": literal(mode),
+                                "size": literal([width, height]),
+                                "data": asset_value(asset_id),
+                            },
+                        },
+                        {
+                            "step_id": "result",
+                            "surface": target,
+                            "operation": "invert",
+                            "receiver": None,
+                            "arguments": {"image": binding("image")},
+                        },
+                    ],
+                    "observations": ["result"],
+                }
+            )
+    return cases
+
+
+def chops_invert_avx512f_material_cases(
+    surface_id: str,
+    assets_root: Path,
+) -> list[dict[str, Any]]:
+    """Add named, content-addressed Pillow comparisons for every byte mode."""
+
+    target = "PIL.ImageChops"
+    if surface_id != target:
+        return []
+
+    width, height = 1024, 768
+    size = [width, height]
+    cases = []
+    for mode, mode_id, _channels in CHOPS_INVERT_PILLOW_MODES:
+        raw = _patterned_raw_bytes(
+            mode,
+            size,
+            seed_text=f"chops-avx512f-invert-material:{mode_id}",
+            variant="seeded-noise",
+        )
+        if raw is None:
+            raise ValueError(f"AVX-512F Chops Invert cannot create mode {mode!r}")
+        relative_path, digest = _write_content_addressed_asset(raw, assets_root)
+        asset_id = f"avx512f-invert-material-{mode_id}"
+        cases.append(
+            {
+                "case_id": (
+                    f"{target}.invert.nuanced.avx512f-performance-material-"
+                    f"{mode_id}-1024x768"
+                ),
+                "surface": target,
+                "operation": "invert",
+                "covers": [f"{target}.invert.mode.{mode_id}"],
+                "assets": [
+                    {
+                        "id": asset_id,
+                        "kind": "ref_bytes",
+                        "path": relative_path,
+                        "sha256": digest,
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal(mode),
+                            "size": literal(size),
+                            "data": asset_value(asset_id),
+                        },
+                    },
+                    {
+                        "step_id": "result",
+                        "surface": target,
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("image")},
+                    },
+                ],
+                "observations": ["result"],
+            }
+        )
+    return cases
+
+
+def imageops_invert_avx512f_boundary_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover Pillow-comparable AVX-512F ImageOps Invert block boundaries."""
+
+    target = "PIL.ImageOps"
+    if surface_id != target:
+        return []
+
+    # TODO(pillow-rs#3ptb): add mode One boundary coverage to its public
+    # contract and record target-only outputs for NO_PILLOW_SUPPORT extensions.
+    cases = []
+    for mode, mode_id, channels in (("L", "l", 1), ("RGB", "rgb", 3)):
+        first_vector_width = (64 + channels - 1) // channels
+        for row_case, width in (
+            ("below-64-byte-row", max(1, 63 // channels)),
+            ("full-64-byte-block", first_vector_width),
+            ("scalar-row-tail", first_vector_width + 1),
+        ):
+            height = 2
+            raw = random.Random(
+                f"imageops-avx512f-invert-{mode}-{row_case}"
+            ).randbytes(width * height * channels)
+            asset_id = f"avx512f-imageops-invert-{mode_id}-{row_case}"
+            cases.append(
+                {
+                    "case_id": (
+                        f"{target}.invert.nuanced.avx512f-{row_case}-{mode_id}"
+                    ),
+                    "surface": target,
+                    "operation": "invert",
+                    "covers": [f"{target}.invert.mode.{mode_id}"],
+                    "assets": [
+                        {
+                            "id": asset_id,
+                            "kind": "inline",
+                            "encoding": "base64",
+                            "data": base64.b64encode(raw).decode("ascii"),
+                            "sha256": hashlib.sha256(raw).hexdigest(),
+                            "media_type": "application/octet-stream",
+                        }
+                    ],
+                    "steps": [
+                        {
+                            "step_id": "image",
+                            "surface": "PIL.Image",
+                            "operation": "frombytes",
+                            "receiver": None,
+                            "arguments": {
+                                "mode": literal(mode),
+                                "size": literal([width, height]),
+                                "data": asset_value(asset_id),
+                            },
+                        },
+                        {
+                            "step_id": "result",
+                            "surface": target,
+                            "operation": "invert",
+                            "receiver": None,
+                            "arguments": {"image": binding("image")},
+                        },
+                    ],
+                    "observations": ["result"],
+                }
+            )
+    return cases
+
+
+def imageops_posterize_avx512f_boundary_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover AVX-512F Posterize's full-block and scalar-fallback boundaries."""
+
+    target = "PIL.ImageOps"
+    if surface_id != target:
+        return []
+
+    cases = []
+    for mode, mode_id, channels in (("L", "l", 1), ("RGB", "rgb", 3)):
+        for row_case, width in (
+            ("below-64-byte-block", max(1, 63 // channels)),
+            ("block-tail", (64 + channels - 1) // channels + 1),
+        ):
+            raw = random.Random(
+                f"imageops-avx512f-posterize-{mode}-{row_case}"
+            ).randbytes(width * channels)
+            asset_id = f"avx512f-posterize-{mode_id}-{row_case}"
+            cases.append(
+                {
+                    "case_id": (
+                        f"{target}.posterize.nuanced.avx512f-{row_case}-{mode_id}"
+                    ),
+                    "surface": target,
+                    "operation": "posterize",
+                    "covers": [f"{target}.posterize.mode.{mode_id}"],
+                    "assets": [
+                        {
+                            "id": asset_id,
+                            "kind": "inline",
+                            "encoding": "base64",
+                            "data": base64.b64encode(raw).decode("ascii"),
+                            "sha256": hashlib.sha256(raw).hexdigest(),
+                            "media_type": "application/octet-stream",
+                        }
+                    ],
+                    "steps": [
+                        {
+                            "step_id": "image",
+                            "surface": "PIL.Image",
+                            "operation": "frombytes",
+                            "receiver": None,
+                            "arguments": {
+                                "mode": literal(mode),
+                                "size": literal([width, 1]),
+                                "data": asset_value(asset_id),
+                            },
+                        },
+                        {
+                            "step_id": "result",
+                            "surface": target,
+                            "operation": "posterize",
+                            "receiver": None,
+                            "arguments": {
+                                "image": binding("image"),
+                                "bits": literal(4),
+                            },
+                        },
+                    ],
+                    "observations": ["result"],
+                }
+            )
+    return cases
+
+
+def getextrema_i32_avx512f_boundary_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover the I32 AVX-512F GetExtrema block boundary and scalar tail."""
+
+    target = "PIL.Image.Image"
+    if surface_id != target:
+        return []
+
+    cases = []
+    for row_case, width in (
+        ("below-16-sample-block", 15),
+        ("exact-16-sample-block", 16),
+        ("block-plus-tail", 17),
+    ):
+        values = [((index * 7919) % 200003) - 100001 for index in range(width)]
+        values[0] = 2**31 - 1
+        values[-1] = -(2**31)
+        raw = struct.pack("=" + "i" * width, *values)
+        asset_id = f"avx512f-getextrema-i-{row_case}"
+        cases.append(
+            {
+                "case_id": (
+                    f"{target}.getextrema.nuanced.avx512f-{row_case}-i"
+                ),
+                "surface": target,
+                "operation": "getextrema",
+                "covers": [f"{target}.getextrema.behavior.default"],
+                "assets": [
+                    {
+                        "id": asset_id,
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": base64.b64encode(raw).decode("ascii"),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("I"),
+                            "size": literal([width, 1]),
+                            "data": asset_value(asset_id),
+                        },
+                    },
+                    {
+                        "step_id": "result",
+                        "surface": target,
+                        "operation": "getextrema",
+                        "receiver": binding("image"),
+                        "arguments": {},
+                    },
+                ],
+                "observations": ["result"],
+            }
+        )
+    return cases
 
 
 def chops_duplicate_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
@@ -49839,6 +51666,7 @@ def quantize_fast_octree_rgb_performance_parity_cases(
     ]
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def alpha_composite_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     """Varied native pixels, all alpha pairs, vector tails and public cropping."""
     if surface_id not in ("PIL.Image", "PIL.Image.Image"):
@@ -49883,6 +51711,16 @@ def alpha_composite_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     for mode in ("LA", "RGBA"):
         for size in ((1, 1), (7, 3), (8, 3), (9, 7), (17, 9), (0, 3), (3, 0)):
             cases.append(make_case(mode, size, f"{size[0]}x{size[1]}"))
+    for mode, block_pixels in (("LA", 32), ("RGBA", 16)):
+        for pixels in (block_pixels - 1, block_pixels, block_pixels + 1):
+            cases.append(
+                make_case(mode, (pixels, 1), f"avx512f-block-{pixels}")
+            )
+        if method:
+            cases.append(
+                make_case(mode, (1024, 768), "avx512f-performance-material")
+            )
+    for mode in ("LA", "RGBA"):
         for label, alpha in (("transparent-source", (173, 0)), ("opaque-source", (43, 255)),
                              ("transparent-destination", (0, 113)), ("both-transparent", (0, 0))):
             cases.append(make_case(mode, (17, 9), label, alpha=alpha))
@@ -50773,6 +52611,7 @@ def transpose_tiled_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     def patterned_bytes(mode: str, size: tuple[int, int], seed: int) -> bytes:
         width, height = size
         channels = {"L": 1, "LA": 2, "RGB": 3, "HSV": 3, "RGBA": 4,
+                    "RGBa": 4,
                     "RGBX": 4, "CMYK": 4}
         data = bytearray()
         for y in range(height):
@@ -50916,6 +52755,28 @@ def transpose_tiled_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 f"{mode.lower().replace(';', '-')}-{size[0]}x{size[1]}-method-{method}",
                 mode, size, (method,), 47 + mode_index * 7 + method,
             ))
+    avx512f_modes = (
+        ("RGBA", "rgba8"),
+        ("RGBa", "rgb_premultiplied8"),
+        ("RGBX", "rgbx8"),
+        ("CMYK", "cmyk8"),
+        ("I", "i32"),
+        ("F", "f32"),
+    )
+    for mode_index, (mode, mode_slug) in enumerate(avx512f_modes):
+        for method in (2, 4, 5, 6):
+            cases.append(make_case(
+                f"avx512f-{mode_slug}-full-17x19-method-{method}",
+                mode, (17, 19), (method,), 211 + mode_index * 7 + method,
+            ))
+        cases.append(make_case(
+            f"avx512f-{mode_slug}-narrow-15x17-method-5",
+            mode, (15, 17), (5,), 263 + mode_index,
+        ))
+        cases.append(make_case(
+            f"avx512f-{mode_slug}-material-1024x768-method-5",
+            mode, (1024, 768), (5,), 271 + mode_index,
+        ))
     for mode_index, mode in enumerate((*modes, "I;16", "F")):
         for methods in ((2, 2), (5, 0)):
             size = (33, 17) if mode_index % 2 == 0 else (9, 31)
@@ -51550,6 +53411,7 @@ def ensure_pipeline_execution_observations(case: dict[str, Any]) -> None:
         observations.append(observation_id)
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def _patterned_pixel(mode: str, index: int, seed: int) -> Any:
     value = (index * 73 + seed) % 251 + 1
     if mode == "1":
@@ -51585,6 +53447,7 @@ def _patterned_pixel(mode: str, index: int, seed: int) -> Any:
     raise ValueError(f"no mode-correct parity pattern for {mode!r}")
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def _matrix_patterned_pixel(
     mode: str,
     index: int,
@@ -51647,6 +53510,7 @@ def _matrix_patterned_pixel(
     raise ValueError(f"no boundary pattern for mode {mode!r}")
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def _patterned_pixels(
     mode: str,
     size: Any,
@@ -51672,6 +53536,7 @@ def _patterned_pixels(
     ]
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def _patterned_raw_bytes(
     mode: str,
     size: list[int],
@@ -51794,6 +53659,7 @@ _PATTERN_ASSET_CACHE: dict[
 ] = {}
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def _write_pattern_asset(
     mode: str,
     size: list[int],
@@ -51838,6 +53704,7 @@ def _binding_step_ids(value: Any) -> set[str]:
     return set()
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def _seed_image_pattern(
     case: dict[str, Any],
     image_step_id: str,
@@ -51929,6 +53796,7 @@ MODE_SIZE_MATRIX_MODES = frozenset(MODE_SIZE_PILLOW_MODES)
 RESIZE_MKS_FILTER_VARIANTS = ((6, "mks2013"), (7, "mks2021"))
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def _literal_image_mode_size(step: dict[str, Any]) -> tuple[str, tuple[int, int]] | None:
     arguments = step.get("arguments", {})
     mode = arguments.get("mode", {})
@@ -51947,6 +53815,7 @@ def _literal_image_mode_size(step: dict[str, Any]) -> tuple[str, tuple[int, int]
     return mode["value"], tuple(size["value"])
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def _replace_frombytes_pattern(
     case: dict[str, Any],
     step: dict[str, Any],
@@ -51990,6 +53859,7 @@ def _replace_frombytes_pattern(
     step.setdefault("arguments", {})["data"] = asset_value(asset_id)
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def _mode_size_case(
     case: dict[str, Any],
     size: tuple[int, int],
@@ -52075,6 +53945,7 @@ def _mode_size_case(
     return matrix_case
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def _mode_size_template_sources(
     case: dict[str, Any],
 ) -> list[tuple[dict[str, Any], str, tuple[int, int]]] | None:
@@ -52115,7 +53986,7 @@ def _mode_size_template_sources(
     return parsed_sources
 
 
-# VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 def expand_mode_size_parity_cases(
     cases: list[dict[str, Any]],
     assets_root: Path,
@@ -55829,6 +57700,76 @@ def _transpose_tiled_benchmark_workloads(
     return workloads
 
 
+def _avx512f_transpose_benchmark_workloads(
+    operations: dict[tuple[str, str], dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Measure exact four-byte modes on the AVX-512F gather transpose route."""
+
+    modes = (
+        "rgba8",
+        "rgb_premultiplied8",
+        "rgbx8",
+        "cmyk8",
+        "i32",
+        "f32",
+    )
+    requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "transpose"
+    )
+    workloads = []
+    for mode_slug in modes:
+        case_id = (
+            "PIL.Image.Image.transpose.nuanced.tiled-"
+            f"avx512f-{mode_slug}-material-1024x768-method-5"
+        )
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"AVX-512F transpose benchmark case is missing: {case_id}")
+        transpose_steps = [
+            step["step_id"] for step in case["steps"] if step["operation"] == "transpose"
+        ]
+        context = _workflow_benchmark_context(
+            case,
+            variant=f"transpose-avx512f-{mode_slug}-1024x768-method5",
+            surface="PIL.Image.Image",
+            operation="transpose",
+        )
+        context["chain_length"] = len(transpose_steps)
+        for suffix, boundary, step_ids in (
+            ("whole-workflow", "whole_workflow", []),
+            (
+                "operation-materialized",
+                "observed_steps",
+                [*transpose_steps, "materialize"],
+            ),
+        ):
+            workloads.append(
+                {
+                    "workload_id": (
+                        f"pipeline-matrix.transpose-avx512f.{mode_slug}."
+                        f"1024x768.{suffix}"
+                    ),
+                    "covers": [requirement],
+                    "subjects": benchmark_subjects(),
+                    "input": {"kind": "parity_case", "case_id": case_id},
+                    "measurement": {
+                        "boundary": boundary,
+                        "step_ids": step_ids,
+                        "metrics": ["latency", "throughput"],
+                        "warmup_iterations": 5,
+                        "measurement_iterations": 20,
+                        "samples": 5,
+                        "concurrency": 1,
+                        "cache_state": "warm",
+                        "correctness_gate": "parity_pass",
+                    },
+                    "context": copy.deepcopy(context),
+                }
+            )
+    return workloads
+
+
 def _lifecycle_pipeline_workloads(
     cases_by_id: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -55934,6 +57875,7 @@ def _lifecycle_pipeline_workloads(
     return workloads
 
 
+# VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 def build_pipeline_benchmark_document(
     operations: dict[tuple[str, str], dict[str, Any]],
     cases_by_id: dict[str, dict[str, Any]],
@@ -55972,6 +57914,77 @@ def build_pipeline_benchmark_document(
                     variant=variant,
                     surface=spec.surface,
                     operation=spec.operation,
+                ),
+            }
+        )
+    blend_avx512f_workloads: list[dict[str, Any]] = []
+    for mode_slug in (
+        "l",
+        "la",
+        "la-premultiplied",
+        "rgb",
+        "rgba",
+        "rgb-premultiplied",
+        "rgbx",
+        "cmyk",
+        "hsv",
+        "ycbcr",
+    ):
+        case_id = (
+            "PIL.Image.blend.nuanced."
+            f"performance-material-avx512f-blend-{mode_slug}-1024x768"
+        )
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"AVX-512F Blend workload references missing case: {case_id}")
+        measurement = copy.deepcopy(policy)
+        measurement["correctness_gate"] = "parity_pass"
+        blend_avx512f_workloads.append(
+            {
+                "workload_id": f"pipeline-op.blend.avx512f-{mode_slug}-1024x768",
+                "covers": [_performance_requirement(operations, "PIL.Image", "blend")],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": measurement,
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant=f"blend-avx512f-{mode_slug}-1024x768",
+                    surface="PIL.Image",
+                    operation="blend",
+                ),
+            }
+        )
+    color_saturation_avx512f_workloads: list[dict[str, Any]] = []
+    for mode_slug in ("la", "rgb", "rgba", "rgbx", "cmyk"):
+        case_id = (
+            "PIL.ImageEnhance.Color.enhance.nuanced.performance-material-avx512f-"
+            f"color-saturation-{mode_slug}-1024x768"
+        )
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(
+                f"AVX-512F ColorSaturation workload references missing case: {case_id}"
+            )
+        measurement = copy.deepcopy(policy)
+        measurement["correctness_gate"] = "parity_pass"
+        color_saturation_avx512f_workloads.append(
+            {
+                "workload_id": (
+                    f"pipeline-op.color-saturation.avx512f-{mode_slug}-1024x768"
+                ),
+                "covers": [
+                    _performance_requirement(
+                        operations, "PIL.ImageEnhance.Color", "enhance"
+                    )
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": measurement,
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant=f"color-saturation-avx512f-{mode_slug}-1024x768",
+                    surface="PIL.ImageEnhance.Color",
+                    operation="enhance",
                 ),
             }
         )
@@ -56036,6 +58049,42 @@ def build_pipeline_benchmark_document(
         },
         "context": merge_rgb_material_context,
     }
+    merge_avx512f_workloads = []
+    merge_requirement = _performance_requirement(operations, "PIL.Image", "merge")
+    for mode in ("LA", "RGBA", "CMYK"):
+        case_id = (
+            "PIL.Image.merge.nuanced.avx512f-performance-material-"
+            f"{mode.lower()}-1024x768"
+        )
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"AVX-512F Merge workload case is missing: {case_id}")
+        context = _workflow_benchmark_context(
+            case,
+            variant=f"merge-avx512f-{mode.lower()}-1024x768",
+            surface="PIL.Image",
+            operation="merge",
+        )
+        context["mode"] = mode
+        context["operation_class"] = "point"
+        merge_avx512f_workloads.append(
+            {
+                "workload_id": f"pipeline-op.merge.avx512f-{mode.lower()}-1024x768",
+                "covers": [merge_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": {
+                    **copy.deepcopy(policy),
+                    "boundary": "observed_steps",
+                    "step_ids": ["call", "observe-result"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "correctness_gate": "parity_pass",
+                },
+                "context": context,
+            }
+        )
 
     posterize_material_workloads = []
     posterize_requirement = _performance_requirement(
@@ -56431,6 +58480,16 @@ def build_pipeline_benchmark_document(
             workload["context"]["operation_class"] = "geometry"
             thumbnail_scalar_workloads.append(workload)
 
+    thumbnail_i32_avx512f_source = next(
+        workload
+        for workload in thumbnail_scalar_workloads
+        if workload["workload_id"] == "pipeline-op.thumbnail.native-i32-1024x768"
+    )
+    thumbnail_i32_avx512f_workload = copy.deepcopy(thumbnail_i32_avx512f_source)
+    thumbnail_i32_avx512f_workload["workload_id"] = (
+        "pipeline-op.thumbnail.avx512f-i32-1024x768"
+    )
+
     f_boxed_resize_case_id = (
         "PIL.Image.Image.resize.nuanced.f-boxed-nearest-noise-512x512"
     )
@@ -56529,6 +58588,132 @@ def build_pipeline_benchmark_document(
         ),
     }
     i_resize_workload["context"]["operation_class"] = "geometry"
+
+    f_resize_avx512f_nearest_case_id = (
+        "PIL.Image.Image.resize.nuanced.f-resize-avx512f-nearest-noise-1024x768"
+    )
+    f_resize_avx512f_nearest_case = cases_by_id.get(f_resize_avx512f_nearest_case_id)
+    if f_resize_avx512f_nearest_case is None:
+        raise ValueError(
+            "AVX-512F F-mode nearest Resize benchmark case is missing: "
+            f"{f_resize_avx512f_nearest_case_id}"
+        )
+    f_resize_avx512f_nearest_workload = copy.deepcopy(f_resize_workload)
+    f_resize_avx512f_nearest_workload["workload_id"] = (
+        "pipeline-chain.resize-avx512f-nearest-f32.1024x768"
+    )
+    f_resize_avx512f_nearest_workload["input"]["case_id"] = (
+        f_resize_avx512f_nearest_case_id
+    )
+    f_resize_avx512f_nearest_workload["measurement"]["step_ids"] = [
+        "avx512f-nearest-full-call",
+        "avx512f-nearest-full-bytes",
+    ]
+    f_resize_avx512f_nearest_workload["context"] = _workflow_benchmark_context(
+        f_resize_avx512f_nearest_case,
+        variant="avx512f-nearest-f32-noise-1024x768",
+        surface="PIL.Image.Image",
+        operation="resize",
+    )
+    f_resize_avx512f_nearest_workload["context"]["chain_length"] = 1
+    f_resize_avx512f_nearest_workload["context"]["operation_class"] = "geometry"
+
+    f_resize_avx512f_filtered_case_id = (
+        "PIL.Image.Image.resize.nuanced."
+        "f-resize-avx512f-filtered-noise-1024x768"
+    )
+    f_resize_avx512f_filtered_case = cases_by_id.get(
+        f_resize_avx512f_filtered_case_id
+    )
+    if f_resize_avx512f_filtered_case is None:
+        raise ValueError(
+            "AVX-512F F-mode filtered Resize benchmark case is missing: "
+            f"{f_resize_avx512f_filtered_case_id}"
+        )
+    f_resize_avx512f_filtered_workload = copy.deepcopy(f_resize_workload)
+    f_resize_avx512f_filtered_workload["workload_id"] = (
+        "pipeline-chain.resize-avx512f-filtered-f32.1024x768"
+    )
+    f_resize_avx512f_filtered_workload["input"]["case_id"] = (
+        f_resize_avx512f_filtered_case_id
+    )
+    f_resize_avx512f_filtered_workload["measurement"]["step_ids"] = [
+        "avx512f-filtered-full-call",
+        "avx512f-filtered-full-bytes",
+    ]
+    f_resize_avx512f_filtered_workload["context"] = _workflow_benchmark_context(
+        f_resize_avx512f_filtered_case,
+        variant="avx512f-filtered-f32-noise-1024x768",
+        surface="PIL.Image.Image",
+        operation="resize",
+    )
+    f_resize_avx512f_filtered_workload["context"]["chain_length"] = 1
+    f_resize_avx512f_filtered_workload["context"]["operation_class"] = "geometry"
+
+    i_resize_avx512f_nearest_case_id = (
+        "PIL.Image.Image.resize.nuanced.i-resize-avx512f-nearest-noise-1024x768"
+    )
+    i_resize_avx512f_nearest_case = cases_by_id.get(i_resize_avx512f_nearest_case_id)
+    if i_resize_avx512f_nearest_case is None:
+        raise ValueError(
+            "AVX-512F I-mode nearest Resize benchmark case is missing: "
+            f"{i_resize_avx512f_nearest_case_id}"
+        )
+    i_resize_avx512f_nearest_workload = copy.deepcopy(i_resize_workload)
+    i_resize_avx512f_nearest_workload["workload_id"] = (
+        "pipeline-chain.resize-avx512f-nearest-i32.1024x768"
+    )
+    i_resize_avx512f_nearest_workload["input"]["case_id"] = (
+        i_resize_avx512f_nearest_case_id
+    )
+    i_resize_avx512f_nearest_workload["measurement"]["step_ids"] = [
+        "avx512f-nearest-full-call",
+        "avx512f-nearest-full-bytes",
+    ]
+    i_resize_avx512f_nearest_workload["context"] = _workflow_benchmark_context(
+        i_resize_avx512f_nearest_case,
+        variant="avx512f-nearest-i32-noise-1024x768",
+        surface="PIL.Image.Image",
+        operation="resize",
+    )
+    i_resize_avx512f_nearest_workload["context"]["chain_length"] = 1
+    i_resize_avx512f_nearest_workload["context"]["operation_class"] = "geometry"
+
+    avx512f_nearest_byte_workloads = []
+    for mode_slug in (
+        "rgba8",
+        "rgb_premultiplied8",
+        "rgbx8",
+        "cmyk8",
+    ):
+        case_id = (
+            "PIL.Image.Image.resize.nuanced."
+            f"{mode_slug}-resize-avx512f-nearest-noise-1024x768"
+        )
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(
+                f"AVX-512F {mode_slug} nearest Resize benchmark case is missing: "
+                f"{case_id}"
+            )
+        workload = copy.deepcopy(f_resize_workload)
+        workload["workload_id"] = (
+            f"pipeline-chain.resize-avx512f-nearest-{mode_slug}.1024x768"
+        )
+        workload["input"]["case_id"] = case_id
+        workload["measurement"]["step_ids"] = [
+            "avx512f-nearest-full-call",
+            "avx512f-nearest-full-bytes",
+        ]
+        workload["context"] = _workflow_benchmark_context(
+            case,
+            variant=f"avx512f-nearest-{mode_slug}-noise-1024x768",
+            surface="PIL.Image.Image",
+            operation="resize",
+        )
+        workload["context"]["chain_length"] = 1
+        workload["context"]["operation_class"] = "geometry"
+        avx512f_nearest_byte_workloads.append(workload)
 
     # Add one non-square size variant for every ordinary byte-image workflow
     # that has a public Image.new source. These remain benchmark-only inputs:
@@ -57179,6 +59364,40 @@ def build_pipeline_benchmark_document(
                 "correctness_gate": "parity_pass",
             },
             "context": terminal_scalar_analysis_context,
+        }
+    ]
+    terminal_scalar_i32_extrema_context = _workflow_benchmark_context(
+        terminal_scalar_analysis_case,
+        variant="getextrema-scalar-i-1024x768",
+        surface="PIL.Image.Image",
+        operation="getextrema",
+    )
+    terminal_scalar_i32_extrema_context.update(
+        size=[1024, 768],
+        mode="I",
+        chain_length=1,
+        operation_class="terminal",
+    )
+    terminal_scalar_i32_extrema_workloads = [
+        {
+            "workload_id": "pipeline-chain.terminal-read.getextrema.scalar-i-1024x768",
+            "covers": [
+                _performance_requirement(
+                    operations, "PIL.Image.Image", "getextrema"
+                )
+            ],
+            "subjects": benchmark_subjects(),
+            "input": {
+                "kind": "parity_case",
+                "case_id": TERMINAL_SCALAR_ANALYSIS_CASE_ID,
+            },
+            "measurement": {
+                **copy.deepcopy(chain_policy),
+                "boundary": "observed_steps",
+                "step_ids": ["i-getextrema"],
+                "correctness_gate": "parity_pass",
+            },
+            "context": terminal_scalar_i32_extrema_context,
         }
     ]
     terminal_scalar_getcolors_workloads = []
@@ -58187,6 +60406,78 @@ def build_pipeline_benchmark_document(
         }
     )
 
+    rank_f_avx512_case_id = (
+        "PIL.Image.Image.filter.nuanced."
+        "performance-material-f32-avx512-rank3-noise-1024x768"
+    )
+    rank_f_avx512_case = cases_by_id.get(rank_f_avx512_case_id)
+    if rank_f_avx512_case is None:
+        raise ValueError(
+            f"AVX-512F F32 rank benchmark references missing case: {rank_f_avx512_case_id}"
+        )
+    rank_f_avx512_measurement = copy.deepcopy(chain_policy)
+    rank_f_avx512_measurement.update(
+        {
+            "boundary": "observed_steps",
+            "step_ids": ["apply-filter", "observe-filter-result"],
+            "warmup_iterations": 5,
+            "measurement_iterations": 20,
+            "samples": 5,
+            "correctness_gate": "parity_pass",
+        }
+    )
+    rank_filter_workloads.append(
+        {
+            "workload_id": "pipeline-chain.rank-filter.avx512f-f-noise-1024x768-size3-rank4",
+            "covers": [rank_requirement],
+            "subjects": benchmark_subjects(),
+            "input": {"kind": "parity_case", "case_id": rank_f_avx512_case_id},
+            "measurement": rank_f_avx512_measurement,
+            "context": _workflow_benchmark_context(
+                rank_f_avx512_case,
+                variant="rank-filter-avx512f-noise-1024x768-size3-rank4",
+                surface=rank_f_avx512_case["surface"],
+                operation=rank_f_avx512_case["operation"],
+            ),
+        }
+    )
+
+    for operation in ("max", "min", "median", "rank"):
+        operation_case_name = "rank3" if operation == "rank" else f"{operation}-rank3"
+        case_id = (
+            "PIL.Image.Image.filter.nuanced."
+            f"performance-material-i32-avx512-{operation_case_name}-noise-1024x768"
+        )
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"AVX-512F I32 rank benchmark references missing case: {case_id}")
+        measurement = copy.deepcopy(chain_policy)
+        measurement.update(
+            {
+                "boundary": "observed_steps",
+                "step_ids": ["apply-filter", "observe-filter-result"],
+                "warmup_iterations": 5,
+                "measurement_iterations": 20,
+                "samples": 5,
+                "correctness_gate": "parity_pass",
+            }
+        )
+        rank_filter_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.rank-filter.avx512f-i32-{operation}-noise-1024x768-size3",
+                "covers": [rank_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": measurement,
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant=f"rank-filter-avx512f-i32-{operation}-noise-1024x768-size3",
+                    surface=case["surface"],
+                    operation=case["operation"],
+                ),
+            }
+        )
+
     rank_la_material_case_id = (
         "PIL.ImageFilter.RankFilter.nuanced."
         "performance-material-la-rank3-noise-1024x768"
@@ -58553,6 +60844,37 @@ def build_pipeline_benchmark_document(
     }
     i_filter_noise_workload["context"]["operation_class"] = "neighborhood"
     i_convolution_workloads.append(i_filter_noise_workload)
+
+    for filter_size in ("filter3x3", "filter5x5"):
+        avx512_case_id = (
+            "PIL.Image.Image.filter.nuanced."
+            f"performance-material-i32-avx512-{filter_size}-noise-1024x768"
+        )
+        avx512_case = cases_by_id.get(avx512_case_id)
+        if avx512_case is None:
+            raise ValueError(
+                f"AVX-512F I32 convolution workload references missing case: "
+                f"{avx512_case_id}"
+            )
+        avx512_measurement = copy.deepcopy(i_filter_noise_measurement)
+        i_convolution_workloads.append(
+            {
+                "workload_id": (
+                    f"pipeline-op.filter.avx512f-i-{filter_size}-noise-1024x768"
+                ),
+                "covers": [i_filter_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "parity_case", "case_id": avx512_case_id},
+                "measurement": avx512_measurement,
+                "context": _workflow_benchmark_context(
+                    avx512_case,
+                    variant=f"filter-avx512f-i-{filter_size}-noise-1024x768",
+                    surface="PIL.Image.Image",
+                    operation="filter",
+                ),
+            }
+        )
+        i_convolution_workloads[-1]["context"]["operation_class"] = "neighborhood"
 
     i_filter_bounded_case_id = (
         "PIL.Image.Image.filter.nuanced."
@@ -59097,6 +61419,7 @@ def build_pipeline_benchmark_document(
         )
 
     alpha_composite_workloads: list[dict[str, Any]] = []
+    alpha_composite_avx512f_workloads: list[dict[str, Any]] = []
     alpha_composite_requirement = _performance_requirement(
         operations, "PIL.Image.Image", "alpha_composite"
     )
@@ -59138,6 +61461,38 @@ def build_pipeline_benchmark_document(
                 "context": _workflow_benchmark_context(
                     parity_case,
                     variant="alpha-composite-native",
+                    surface="PIL.Image.Image",
+                    operation="alpha_composite",
+                ),
+            }
+        )
+    alpha_composite_operation = operations[("PIL.Image.Image", "alpha_composite")]
+    for mode in ("LA", "RGBA"):
+        case_id = (
+            "PIL.Image.Image.alpha_composite.nuanced.pixels-"
+            f"{mode}-avx512f-performance-material"
+        )
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"AVX-512F AlphaComposite workload case is missing: {case_id}")
+        alpha_composite_avx512f_workloads.append(
+            {
+                "workload_id": (
+                    f"pipeline-op.alpha-composite.avx512f-{mode.lower()}-1024x768"
+                ),
+                "covers": [alpha_composite_requirement],
+                "subjects": benchmark_subjects(alpha_composite_operation),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": {
+                    **copy.deepcopy(chain_policy),
+                    "boundary": "observed_steps",
+                    "step_ids": ["call", "materialize"],
+                },
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant=(
+                        f"alpha-composite-avx512f-{mode.lower()}-1024x768"
+                    ),
                     surface="PIL.Image.Image",
                     operation="alpha_composite",
                 ),
@@ -59528,6 +61883,9 @@ def build_pipeline_benchmark_document(
     quick_workloads = _quick_pipeline_workloads(operations, cases_by_id)
     lifecycle_workloads = _lifecycle_pipeline_workloads(cases_by_id)
     transpose_tiled_workloads = _transpose_tiled_benchmark_workloads(operations, cases_by_id)
+    avx512f_transpose_workloads = _avx512f_transpose_benchmark_workloads(
+        operations, cases_by_id
+    )
     seeded_corner_workloads, seeded_corner_suite = seeded_corner_benchmark_workloads(
         requirement_id=_performance_requirement(
             operations,
@@ -59542,9 +61900,12 @@ def build_pipeline_benchmark_document(
         "schema": "migration-parity/benchmark-input@1",
         "workloads": [
             *operation_workloads,
+            *blend_avx512f_workloads,
+            *color_saturation_avx512f_workloads,
             *scalar_conversion_workloads,
             thumbnail_material_workload,
             merge_rgb_material_workload,
+            *merge_avx512f_workloads,
             *posterize_material_workloads,
             median_l_material_workload,
             median_la_material_workload,
@@ -59554,9 +61915,14 @@ def build_pipeline_benchmark_document(
             rotate_rgb_material_workload,
             grayscale_ycbcr_material_workload,
             *thumbnail_scalar_workloads,
+            thumbnail_i32_avx512f_workload,
             f_boxed_resize_workload,
             f_resize_workload,
             i_resize_workload,
+            f_resize_avx512f_nearest_workload,
+            f_resize_avx512f_filtered_workload,
+            i_resize_avx512f_nearest_workload,
+            *avx512f_nearest_byte_workloads,
             *matrix_workloads,
             *expanded_matrix_workloads,
             autocontrast_identity_workload,
@@ -59571,6 +61937,7 @@ def build_pipeline_benchmark_document(
         cmyk_to_1_workload,
         cmyk_grayscale_workload,
             *terminal_scalar_analysis_workloads,
+            *terminal_scalar_i32_extrema_workloads,
             *terminal_scalar_getcolors_workloads,
             *terminal_scalar_getprojection_workloads,
             *terminal_scalar_no_run_getcolors_workloads,
@@ -59597,6 +61964,7 @@ def build_pipeline_benchmark_document(
             *point_fusion_workloads,
             *alpha_point_fusion_workloads,
             *alpha_composite_workloads,
+            *alpha_composite_avx512f_workloads,
             *simd_crossover_workloads,
             *simd_chops_workloads,
             *fused_chops_workloads,
@@ -59612,6 +61980,7 @@ def build_pipeline_benchmark_document(
             *quick_workloads,
             *lifecycle_workloads,
             *transpose_tiled_workloads,
+            *avx512f_transpose_workloads,
         ],
         "suites": [
             {
@@ -59644,6 +62013,17 @@ def build_pipeline_benchmark_document(
                 ],
             },
             {
+                "suite_id": "pipeline-operations.merge-avx512f-suite",
+                "description": (
+                    "Parity-gated noisy 1024x768 LA, RGBA, and CMYK Merge workloads "
+                    "for the AVX-512F sixteen-pixel interleave strategy."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in merge_avx512f_workloads
+                ],
+            },
+            {
                 "suite_id": "pipeline-operations.posterize-material-size-suite",
                 "description": (
                     "Parity-gated 1024x768 native L and RGB posterize latency "
@@ -59664,6 +62044,21 @@ def build_pipeline_benchmark_document(
                 "members": [
                     {"workload_id": item["workload_id"], "weight": 1}
                     for item in thumbnail_scalar_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.thumbnail-avx512f-suite",
+                "description": (
+                    "Material I32 Thumbnail reducing-gap execution with the "
+                    "AVX-512F 2x2 reducer and scalar tail guard."
+                ),
+                "members": [
+                    {
+                        "workload_id": thumbnail_i32_avx512f_workload[
+                            "workload_id"
+                        ],
+                        "weight": 1,
+                    }
                 ],
             },
             {
@@ -59806,6 +62201,17 @@ def build_pipeline_benchmark_document(
                 ],
             },
             {
+                "suite_id": "pipeline-operations.alpha-composite-avx512f-suite",
+                "description": (
+                    "Material-sized noisy public LA and RGBA alpha-composite "
+                    "workloads for the AVX-512F strategy and scalar tails."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in alpha_composite_avx512f_workloads
+                ],
+            },
+            {
                 "suite_id": "pipeline-operations.simd-crossover-suite",
                 "description": (
                     "Explicit-size public invert→mirror workloads used to "
@@ -59899,7 +62305,8 @@ def build_pipeline_benchmark_document(
                 "suite_id": "pipeline-operations.resize-typed-suite",
                 "description": (
                     "Public F-mode and I-mode resize workflows, including "
-                    "material noisy scalar sources for native-buffer execution."
+                    "material noisy sources for bicubic and AVX-512F nearest "
+                    "native-buffer execution."
                 ),
                 "members": [
                     {"workload_id": item["workload_id"], "weight": 1}
@@ -59907,7 +62314,40 @@ def build_pipeline_benchmark_document(
                         *typed_resize_workloads,
                         f_resize_workload,
                         i_resize_workload,
+                        f_resize_avx512f_nearest_workload,
+                        f_resize_avx512f_filtered_workload,
+                        i_resize_avx512f_nearest_workload,
                     ]
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.resize-avx512f-nearest-suite",
+                "description": (
+                    "Public nearest Resize for F, I, RGBA, RGBa, RGBX, and CMYK "
+                    "with AVX-512F block, tail, and narrow-width guards."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in [
+                        f_resize_avx512f_nearest_workload,
+                        i_resize_avx512f_nearest_workload,
+                        *avx512f_nearest_byte_workloads,
+                    ]
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.resize-avx512f-filtered-suite",
+                "description": (
+                    "Public F-mode filtered Resize using AVX-512F full and "
+                    "masked tail blocks plus the narrow-width fallback."
+                ),
+                "members": [
+                    {
+                        "workload_id": f_resize_avx512f_filtered_workload[
+                            "workload_id"
+                        ],
+                        "weight": 1,
+                    }
                 ],
             },
             {
@@ -60174,6 +62614,130 @@ def reduce_fixed_point_boundary_benchmark_workload(
     }
 
 
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+def avx512f_reduce_four_byte_benchmark_workloads(
+    operations: dict[tuple[str, str], dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build four exact-mode Reduce workloads for the AVX-512F 2x2 leaf."""
+
+    operation = operations[("PIL.Image.Image", "reduce")]
+    requirement_id = _performance_requirement(
+        operations, "PIL.Image.Image", "reduce"
+    )
+    workloads = []
+    for mode_slug in ("rgba8", "rgb_premultiplied8", "rgbx8", "cmyk8"):
+        case_name = f"avx512f-{mode_slug}-material-noise-1024x768"
+        case_id = f"PIL.Image.Image.reduce.nuanced.{slug(case_name)}"
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(
+                f"AVX-512F Reduce benchmark case is missing: {case_id}"
+            )
+        context = _workflow_benchmark_context(
+            case,
+            variant=f"avx512f-reduce-{mode_slug}-noise-1024x768",
+            surface="PIL.Image.Image",
+            operation="reduce",
+        )
+        context["chain_length"] = 1
+        context["operation_class"] = "geometry"
+        workload_id = (
+            f"pipeline-chain.reduce-avx512f-{slug(mode_slug)}.1024x768"
+        )
+        workloads.append(
+            {
+                "workload_id": workload_id,
+                "covers": [requirement_id],
+                "subjects": benchmark_subjects(operation),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": {
+                    "boundary": "observed_steps",
+                    "step_ids": ["call", "observe-result"],
+                    "metrics": operation["benchmark"]["metrics"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "concurrency": 1,
+                    "cache_state": "warm",
+                    "correctness_gate": "parity_pass",
+                },
+                "context": context,
+            }
+        )
+    return workloads
+
+
+# VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+def avx512f_chops_invert_benchmark_workloads(
+    operations: dict[tuple[str, str], dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build material AVX-512F Invert workloads for all exact source modes."""
+
+    surface = "PIL.ImageChops"
+    operation = operations[(surface, "invert")]
+    requirement_id = _performance_requirement(operations, surface, "invert")
+    workloads = []
+    case_ids = [
+        (
+            f"{surface}.invert.nuanced.avx512f-performance-material-"
+            f"{slug(mode_id)}-1024x768",
+            mode_id,
+            False,
+        )
+        for _mode, mode_id, _channels in CHOPS_INVERT_PILLOW_MODES
+    ]
+    case_ids.extend(
+        (
+            f"{surface}.invert.expected-output.{mode_id}."
+            "avx512f-performance-material-1024x768",
+            mode_id,
+            True,
+        )
+        for _mode, mode_id, _sample_kind, _samples in CHOPS_INVERT_CORE_ONLY_MODES
+    )
+    for case_id, mode_id, target_only in case_ids:
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"AVX-512F Chops Invert workload case is missing: {case_id}")
+        context = _workflow_benchmark_context(
+            case,
+            variant=f"avx512f-chops-invert-{slug(mode_id)}-1024x768",
+            surface=surface,
+            operation="invert",
+        )
+        context["chain_length"] = 1
+        context["operation_class"] = "point"
+        workloads.append(
+            {
+                "workload_id": (
+                    f"pipeline-op.chops-invert.avx512f-{slug(mode_id)}.1024x768"
+                ),
+                "covers": [requirement_id],
+                "subjects": (
+                    target_only_benchmark_subjects(operation, case)
+                    if target_only
+                    else benchmark_subjects(operation)
+                ),
+                "input": {"kind": "parity_case", "case_id": case_id},
+                "measurement": {
+                    "boundary": "observed_steps",
+                    "step_ids": ["result"],
+                    "metrics": operation["benchmark"]["metrics"],
+                    "warmup_iterations": 5,
+                    "measurement_iterations": 20,
+                    "samples": 5,
+                    "concurrency": 1,
+                    "cache_state": "warm",
+                    "correctness_gate": "parity_pass",
+                },
+                "context": context,
+            }
+        )
+    return workloads
+
+
 # VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
 def build_inputs(
     manifest: dict[str, Any],
@@ -60197,6 +62761,7 @@ def build_inputs(
         "benchmark_suites": 0,
     }
     indexed_parity_case_count = 0
+    avx512_strategy_cases_all: list[dict[str, Any]] = []
     crash_quarantine_cases = build_crash_quarantine_cases(
         manifest,
         operations,
@@ -60343,6 +62908,20 @@ def build_inputs(
             nuanced_cases.extend(chops_binary_target_output_cases())
             nuanced_cases.extend(chops_logical_target_output_cases())
             nuanced_cases.extend(chops_invert_target_output_cases())
+            invert_avx512f_core_boundaries = (
+                chops_invert_avx512f_core_only_boundary_cases(active_assets_root)
+            )
+            nuanced_cases.extend(invert_avx512f_core_boundaries)
+            counts["chops_invert_avx512f_core_only_boundary_cases"] = len(
+                invert_avx512f_core_boundaries
+            )
+            invert_avx512f_core_material = (
+                chops_invert_avx512f_core_only_material_cases(active_assets_root)
+            )
+            nuanced_cases.extend(invert_avx512f_core_material)
+            counts["chops_invert_avx512f_core_only_material_cases"] = len(
+                invert_avx512f_core_material
+            )
             invert_matrix_cases = chops_invert_core_only_matrix_cases(
                 active_assets_root
             )
@@ -60421,6 +63000,13 @@ def build_inputs(
             rotate_direct_cases = rotate_direct_target_output_cases()
             nuanced_cases.extend(rotate_direct_cases)
             counts["rotate_direct_target_output_cases"] = len(rotate_direct_cases)
+            direct_posterize_cases = direct_posterize_target_output_cases(
+                active_assets_root
+            )
+            nuanced_cases.extend(direct_posterize_cases)
+            counts["direct_posterize_target_output_cases"] = len(
+                direct_posterize_cases
+            )
             nuanced_cases.extend(get_child_images_target_output_cases())
             crop_generic_mode_ids = {
                 case["case_id"] for case in crop_cases_by_requirement.values()
@@ -60470,6 +63056,47 @@ def build_inputs(
             )
             if f_resize_requirement not in f_resize_case["covers"]:
                 f_resize_case["covers"].append(f_resize_requirement)
+            for nearest_case_id in (
+                "PIL.Image.Image.resize.nuanced.f-resize-avx512f-nearest-noise-1024x768",
+                "PIL.Image.Image.resize.nuanced.i-resize-avx512f-nearest-noise-1024x768",
+                "PIL.Image.Image.resize.nuanced.rgba8-resize-avx512f-nearest-noise-1024x768",
+                "PIL.Image.Image.resize.nuanced.rgb_premultiplied8-resize-avx512f-nearest-noise-1024x768",
+                "PIL.Image.Image.resize.nuanced.rgbx8-resize-avx512f-nearest-noise-1024x768",
+                "PIL.Image.Image.resize.nuanced.cmyk8-resize-avx512f-nearest-noise-1024x768",
+            ):
+                nearest_case = next(
+                    (
+                        case
+                        for case in nuanced_cases
+                        if case["case_id"] == nearest_case_id
+                    ),
+                    None,
+                )
+                if nearest_case is None:
+                    raise ValueError(
+                        f"AVX-512F Resize benchmark case is missing: {nearest_case_id}"
+                    )
+                if f_resize_requirement not in nearest_case["covers"]:
+                    nearest_case["covers"].append(f_resize_requirement)
+            filtered_case_id = (
+                "PIL.Image.Image.resize.nuanced."
+                "f-resize-avx512f-filtered-noise-1024x768"
+            )
+            filtered_case = next(
+                (
+                    case
+                    for case in nuanced_cases
+                    if case["case_id"] == filtered_case_id
+                ),
+                None,
+            )
+            if filtered_case is None:
+                raise ValueError(
+                    "AVX-512F filtered Resize benchmark case is missing: "
+                    f"{filtered_case_id}"
+                )
+            if f_resize_requirement not in filtered_case["covers"]:
+                filtered_case["covers"].append(f_resize_requirement)
         existing_cases_by_signature = {
             case_signature(case): case for case in parity_cases
         }
@@ -60776,6 +63403,23 @@ def build_inputs(
             if ".matrix-size-" not in case_id:
                 all_cases_by_id[case_id] = case
 
+        surface_parity_case_count = len(parity_cases)
+        avx512_strategy_cases: list[dict[str, Any]] = []
+        if surface_id in AVX512F_STRATEGY_SURFACES:
+            avx512_strategy_cases = [
+                case
+                for case in parity_cases
+                if "avx512f" in case["case_id"].lower()
+                or case.get("operation") == "_migration_direct_posterize"
+            ]
+            avx512_case_ids = {
+                case["case_id"] for case in avx512_strategy_cases
+            }
+            parity_cases = [
+                case for case in parity_cases if case["case_id"] not in avx512_case_ids
+            ]
+            avx512_strategy_cases_all.extend(avx512_strategy_cases)
+
         matrix_cases = [
             case
             for case in parity_cases
@@ -60911,7 +63555,7 @@ def build_inputs(
             )
             generated["parity"].add(parity_relative)
             indexed_parity_case_count += len(cases)
-        counts["parity_cases"] += len(parity_cases)
+        counts["parity_cases"] += surface_parity_case_count
         counts.setdefault("duplicate_parity_cases", 0)
         counts["duplicate_parity_cases"] += duplicate_count
 
@@ -62813,6 +65457,24 @@ def build_inputs(
             members.append(
                 {"workload_id": REDUCE_FIXED_POINT_BOUNDARY_WORKLOAD_ID, "weight": 1}
             )
+            avx512f_reduce_workloads = avx512f_reduce_four_byte_benchmark_workloads(
+                operations, all_cases_by_id
+            )
+            workloads.extend(avx512f_reduce_workloads)
+            members.extend(
+                {"workload_id": workload["workload_id"], "weight": 1}
+                for workload in avx512f_reduce_workloads
+            )
+        if surface_id == "PIL.ImageChops":
+            avx512f_chops_workloads = avx512f_chops_invert_benchmark_workloads(
+                operations,
+                all_cases_by_id,
+            )
+            workloads.extend(avx512f_chops_workloads)
+            members.extend(
+                {"workload_id": workload["workload_id"], "weight": 1}
+                for workload in avx512f_chops_workloads
+            )
 
         mode_size_workloads: list[dict[str, Any]] = []
         mode_size_members: list[dict[str, Any]] = []
@@ -63043,6 +65705,16 @@ def build_inputs(
         generated["benchmark"].add(benchmark_relative)
         counts["benchmark_workloads"] += len(workloads)
         counts["benchmark_suites"] += len(suites)
+
+    write_json(
+        output_root / AVX512F_STRATEGY_INPUT,
+        {
+            "schema": "migration-parity/parity-input@3",
+            "cases": avx512_strategy_cases_all,
+        },
+    )
+    generated["parity"].add(AVX512F_STRATEGY_INPUT)
+    indexed_parity_case_count += len(avx512_strategy_cases_all)
 
     if indexed_parity_case_count != counts["parity_cases"]:
         raise ValueError(

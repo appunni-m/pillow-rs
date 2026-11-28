@@ -13,7 +13,7 @@ use super::default::get_data_impl;
 const SSE2_REQUIRES: &[Architecture] = &[Architecture::Sse2];
 const NEON_REQUIRES: &[Architecture] = &[Architecture::Neon];
 const WASM_REQUIRES: &[Architecture] = &[Architecture::WasmSimd128];
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 const ARCHITECTURES: &[ImplementationSupport] = &[
     ImplementationSupport::cpu(
         OperationId::GetProjection,
@@ -41,7 +41,7 @@ const ARCHITECTURES: &[ImplementationSupport] = &[
     ),
 ];
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::GetProjection,
     Mode::ImageRgb8,
@@ -73,7 +73,7 @@ pub(crate) fn execute_get_data(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &RgbImage,
     selection: StrategySelection,

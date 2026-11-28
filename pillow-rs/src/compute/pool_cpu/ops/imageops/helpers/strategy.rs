@@ -10,7 +10,7 @@ use crate::image::Image;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) const fn crop_border_serial_support(
     mode: Mode,
     inputs: &'static [InputContract],
@@ -18,6 +18,7 @@ pub(crate) const fn crop_border_serial_support(
     ModeSupport::serial(OperationId::CropBorder, mode, inputs)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn selected_quantize_architecture(
     selection: &StrategySelection,
     mode: Mode,
@@ -45,6 +46,7 @@ macro_rules! declare_quantize_native_mode {
             method: u32,
             selection: &$crate::compute::registry::support::StrategySelection,
         ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             let architecture = super::super::helpers::strategy::selected_quantize_architecture(
                 selection,
                 $crate::raster::Mode::$mode,
@@ -75,6 +77,7 @@ macro_rules! declare_quantize_native_default {
             kmeans: u32,
             method: u32,
         ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_interleaved::<
                 $component,
                 $channels,
@@ -90,6 +93,7 @@ macro_rules! declare_quantize_native_default {
             _kmeans: u32,
             _method: u32,
         ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_rgba_interleaved::<
                 $component,
                 $channels,
@@ -105,6 +109,7 @@ macro_rules! declare_quantize_native_default {
             _kmeans: u32,
             _method: u32,
         ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_premultiplied_luma_alpha(
                 samples, width, height, colors,
             )
@@ -119,6 +124,7 @@ macro_rules! declare_quantize_native_default {
             _kmeans: u32,
             _method: u32,
         ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_premultiplied_rgba(
                 samples, width, height, colors,
             )
@@ -132,6 +138,7 @@ macro_rules! declare_quantize_native_default {
             height: u32,
             colors: usize,
         ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_palette_alpha(
                 samples, palette, width, height, colors,
             )
@@ -146,6 +153,7 @@ macro_rules! declare_quantize_native_default {
             kmeans: u32,
             method: u32,
         ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_clipped_luma16(
                 samples, width, height, colors, kmeans, method,
             )
@@ -160,6 +168,7 @@ macro_rules! declare_quantize_native_default {
             kmeans: u32,
             method: u32,
         ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_i32_scalar(
                 samples, width, height, colors, kmeans, method,
             )
@@ -174,6 +183,7 @@ macro_rules! declare_quantize_native_default {
             kmeans: u32,
             method: u32,
         ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_f32_scalar(
                 samples, width, height, colors, kmeans, method,
             )
@@ -203,7 +213,7 @@ pub(crate) fn imageops_mask_facts(
     }))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn native_byte_point_architectures(
     operation: OperationId,
     mode: Mode,
@@ -216,7 +226,53 @@ pub(crate) const fn native_byte_point_architectures(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) const fn posterize_architectures(
+    operation: OperationId,
+    mode: Mode,
+    channels: u8,
+) -> [ImplementationSupport; 4] {
+    let guard = StrategyGuard::NativePointwiseBytes { channels };
+    [
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::Avx512F,
+            cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+            &[Architecture::Avx512F],
+            StrategyGuard::NativeByteAvx512Pointwise { channels },
+        ),
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::Sse2,
+            cfg!(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            )),
+            &[Architecture::Sse2],
+            guard,
+        ),
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon],
+            guard,
+        ),
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128],
+            guard,
+        ),
+    ]
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn cpu_architectures_for(
     operation: OperationId,
     mode: Mode,
@@ -440,6 +496,7 @@ pub(crate) fn select_mode(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn select_expand(
     support: ModeSupport,
     input: StrategyInputs,
@@ -454,6 +511,7 @@ pub(crate) fn select_expand(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn select_invert_strategy(
     support: crate::compute::registry::support::ModeSupport,
     width: u32,
@@ -482,6 +540,7 @@ pub(crate) fn select_invert_strategy(
 
 macro_rules! declare_invert_mode {
     ($mode:ident, $input:ty, $implementation:path, $bytes_per_pixel:expr, $core_only_reason:expr $(,)?) => {
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) const SUPPORT: crate::compute::registry::support::ModeSupport =
             match $core_only_reason {
                 Some(reason) => crate::compute::registry::support::ModeSupport::cpu_core_only(
@@ -520,6 +579,7 @@ macro_rules! declare_invert_mode {
                 ArchitectureStrategy<'a>,
             >;
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) fn prepare<'a>(
             input: &'a $input,
             ctx: &crate::compute::ExecutionContext,
@@ -537,6 +597,7 @@ macro_rules! declare_invert_mode {
             ))
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) fn execute(
             strategy: Strategy<'_>,
         ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
@@ -552,7 +613,18 @@ macro_rules! declare_invert_native_mode {
         declare_invert_native_mode!($mode, $input, $channels, $bytes_per_pixel, None);
     };
     ($mode:ident, $input:ty, $channels:expr, $bytes_per_pixel:expr, $core_only_reason:expr $(,)?) => {
-        const ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 3] = [
+        // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+        const ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 4] = [
+            crate::compute::registry::support::ImplementationSupport::cpu(
+                crate::compute::registry::support::OperationId::Invert,
+                crate::raster::Mode::$mode,
+                crate::compute::Architecture::Avx512F,
+                cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+                &[crate::compute::Architecture::Avx512F],
+                crate::compute::registry::support::StrategyGuard::NativeByteAvx512Invert {
+                    channels: $channels,
+                },
+            ),
             crate::compute::registry::support::ImplementationSupport::cpu(
                 crate::compute::registry::support::OperationId::Invert,
                 crate::raster::Mode::$mode,
@@ -588,6 +660,7 @@ macro_rules! declare_invert_native_mode {
             ),
         ];
 
+        // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
         // NO_PILLOW_SUPPORT: `Some(reason)` declares the exact mode's native Invert extension.
         pub(crate) const SUPPORT: crate::compute::registry::support::ModeSupport =
             match $core_only_reason {
@@ -620,6 +693,8 @@ macro_rules! declare_invert_native_mode {
 
         pub(crate) enum ArchitectureStrategy<'a> {
             Default(&'a $input),
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Avx512F(&'a $input),
             Sse2(&'a $input),
             Neon(&'a $input),
             WasmSimd128(&'a $input),
@@ -631,6 +706,7 @@ macro_rules! declare_invert_native_mode {
             >,
         }
 
+        // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
         pub(crate) fn prepare<'a>(
             input: &'a $input,
             ctx: &crate::compute::ExecutionContext,
@@ -643,6 +719,8 @@ macro_rules! declare_invert_native_mode {
                 ctx,
             )?;
             let implementation = match selection.implementation.architecture {
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                crate::compute::Architecture::Avx512F => ArchitectureStrategy::Avx512F(input),
                 crate::compute::Architecture::Sse2 => ArchitectureStrategy::Sse2(input),
                 crate::compute::Architecture::Neon => ArchitectureStrategy::Neon(input),
                 crate::compute::Architecture::WasmSimd128 => {
@@ -659,18 +737,24 @@ macro_rules! declare_invert_native_mode {
         }
 
         impl Strategy<'_> {
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn selection(
                 &self,
             ) -> &crate::compute::registry::support::StrategySelection {
                 self.prepared.selection()
             }
 
+            // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
             pub(crate) fn execute(
                 self,
             ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
                 match self.prepared.implementation {
                     ArchitectureStrategy::Default(input) => {
                         super::default::invert_impl::execute(input)
+                    }
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                    ArchitectureStrategy::Avx512F(input) => {
+                        super::avx512f::invert_impl::execute(input)
                     }
                     ArchitectureStrategy::Sse2(input) => super::sse2::invert_impl::execute(input),
                     ArchitectureStrategy::Neon(input) => super::neon::invert_impl::execute(input),
@@ -681,6 +765,7 @@ macro_rules! declare_invert_native_mode {
             }
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) fn execute(
             strategy: Strategy<'_>,
         ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
@@ -689,20 +774,15 @@ macro_rules! declare_invert_native_mode {
     };
 }
 
-macro_rules! declare_invert_architecture {
-    ($mode:ident, $carrier_mode:ident, $input:ty, $channels:expr, $invert_alpha:expr) => {
+macro_rules! declare_invert_architecture_with_kernel {
+    ($mode:ident, $carrier_mode:ident, $input:ty, $channels:expr, $invert_alpha:expr, $kernel:path, $path:literal) => {
+        // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
         pub(crate) fn execute(
             input: &$input,
         ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
             use crate::compute::pool_cpu::ops::imageops::helpers::native_bytes::NativeInvertOutput;
             let (width, height) = input.dimensions();
-            match crate::compute::pool_cpu::ops::imageops::helpers::native_bytes::invert(
-                input.as_raw(),
-                width,
-                height,
-                $channels,
-                $invert_alpha,
-            )? {
+            match $kernel(input.as_raw(), width, height, $channels, $invert_alpha)? {
                 NativeInvertOutput::Empty => {
                     crate::compute::record_pipeline_operation_path("native-copy");
                     Ok(crate::raster::DynamicImage::$mode(input.clone()))
@@ -715,7 +795,7 @@ macro_rules! declare_invert_architecture {
                             "Invert kernel returned a different carrier layout".into(),
                         ));
                     };
-                    crate::compute::record_pipeline_operation_path("vector");
+                    crate::compute::record_pipeline_operation_path($path);
                     Ok(crate::raster::DynamicImage::$mode(image))
                 }
                 NativeInvertOutput::Prefix(bytes) => {
@@ -724,7 +804,7 @@ macro_rules! declare_invert_architecture {
                             "Invert kernel returned an invalid byte prefix".into(),
                         )
                     })?;
-                    crate::compute::record_pipeline_operation_path("vector");
+                    crate::compute::record_pipeline_operation_path($path);
                     Ok(crate::raster::DynamicImage::$mode(image))
                 }
             }
@@ -732,6 +812,38 @@ macro_rules! declare_invert_architecture {
     };
 }
 
+macro_rules! declare_invert_architecture {
+    ($mode:ident, $carrier_mode:ident, $input:ty, $channels:expr, $invert_alpha:expr) => {
+        $crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_invert_architecture_with_kernel!(
+            $mode,
+            $carrier_mode,
+            $input,
+            $channels,
+            $invert_alpha,
+            crate::compute::pool_cpu::ops::imageops::helpers::native_bytes::invert,
+            "vector"
+        );
+    };
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+macro_rules! declare_invert_architecture_avx512f {
+    ($mode:ident, $carrier_mode:ident, $input:ty, $channels:expr, $invert_alpha:expr) => {
+        $crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_invert_architecture_with_kernel!(
+            $mode,
+            $carrier_mode,
+            $input,
+            $channels,
+            $invert_alpha,
+            crate::compute::pool_cpu::helpers::bytes::native_invert::avx512f::invert,
+            "avx512f"
+        );
+    };
+}
+
 pub(crate) use declare_invert_architecture;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(crate) use declare_invert_architecture_avx512f;
+pub(crate) use declare_invert_architecture_with_kernel;
 pub(crate) use declare_invert_mode;
 pub(crate) use declare_invert_native_mode;

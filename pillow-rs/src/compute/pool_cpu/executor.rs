@@ -1,8 +1,9 @@
 //! Maintained serial CPU backend.
 //!
-//! Every operation receives the execution context selected by the router and
-//! prepares one concrete mode/architecture strategy. Parallel scheduling stays
-//! outside this backend.
+//! Every operation receives the context selected at the CPU routing boundary
+//! and prepares one concrete mode/architecture strategy. The unpinned entry
+//! resolves CPU context once; context-aware entries forward it unchanged.
+//! Parallel scheduling stays outside this backend.
 
 use super::batch_execution;
 use crate::compute::{Backend, BackendImpl, ExecutionContext, registry};
@@ -29,7 +30,7 @@ impl BackendImpl for CpuPool {
         registry::cpu_supports(op)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn execute_batch(
         &self,
         ops: &[PipelineOp],
@@ -40,7 +41,7 @@ impl BackendImpl for CpuPool {
         batch_execution::execute_batch(ops, image, &context, Default::default())
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn execute_batch_with_context(
         &self,
         ops: &[PipelineOp],
@@ -51,7 +52,7 @@ impl BackendImpl for CpuPool {
         batch_execution::execute_batch(ops, image, context, Default::default())
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn execute_batch_with_context_and_palette(
         &self,
         ops: &[PipelineOp],

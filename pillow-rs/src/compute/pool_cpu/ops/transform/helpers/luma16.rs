@@ -62,6 +62,170 @@ pub(crate) fn execute_into(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+pub(crate) fn execute_into_with_validity(
+    source: &[u16],
+    source_dimensions: (u32, u32),
+    request: TransformRequest<'_>,
+    order: ByteOrder,
+    output: &mut [u16],
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    let output_pixels = (request.width as usize)
+        .checked_mul(request.height as usize)
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    if output.len() != output_pixels || validity.len() != output_pixels {
+        return Err(PilError::InternalError(
+            "I;16 Transform output or validity shape mismatch".into(),
+        ));
+    }
+    let fill_value = request
+        .fill
+        .map_or(0, |fill| u16::from_le_bytes([fill.0, fill.1]));
+    if matches!(request.filter, ResampleFilter::Nearest) {
+        return execute_nearest_into_with_validity(
+            source,
+            source_dimensions,
+            request,
+            fill_value,
+            output,
+            validity,
+        );
+    }
+
+    execute_filtered_into_with_validity(
+        source,
+        source_dimensions,
+        request,
+        order,
+        fill_value,
+        output,
+        validity,
+        output_pixels,
+    )
+}
+
+fn execute_nearest_into_with_validity(
+    source: &[u16],
+    source_dimensions: (u32, u32),
+    request: TransformRequest<'_>,
+    fill_value: u16,
+    output: &mut [u16],
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    let fill_bytes = fill_value.to_ne_bytes();
+    let fill = Some((fill_bytes[0], fill_bytes[1], 0, 0));
+    let source_bytes = bytemuck::cast_slice(source);
+    let output_bytes = bytemuck::cast_slice_mut(output);
+    let affine_data;
+    let (data, quad) = match request.method {
+        TransformMethod::Affine => {
+            let [a, b, c, d, e, f] = request.data else {
+                return Err(PilError::InternalError(
+                    "I;16 affine Transform coefficients changed after admission".into(),
+                ));
+            };
+            affine_data = [*a, *b, *c, *d, *e, *f, 0.0, 0.0];
+            (&affine_data[..], false)
+        }
+        TransformMethod::Perspective => (request.data, false),
+        TransformMethod::Quad => (request.data, true),
+        TransformMethod::Mesh => return Err(mesh_validity_error()),
+    };
+    super::projective::transform_projective_generic_into_with_validity(
+        source_bytes,
+        source_dimensions,
+        request.width,
+        request.height,
+        data,
+        &request.filter,
+        fill,
+        2,
+        quad,
+        output_bytes,
+        Some(validity),
+    )
+}
+
+fn execute_filtered_into_with_validity(
+    source: &[u16],
+    source_dimensions: (u32, u32),
+    request: TransformRequest<'_>,
+    order: ByteOrder,
+    fill_value: u16,
+    output: &mut [u16],
+    validity: &mut [u8],
+    output_pixels: usize,
+) -> Result<(), PilError> {
+    let row_width = source_dimensions.0 as usize;
+    let source_plane_len = row_width
+        .checked_mul(source_dimensions.1 as usize)
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    if source.len() != source_plane_len {
+        return Err(PilError::InternalError(
+            "I;16 Transform source buffer shape mismatch".into(),
+        ));
+    }
+    let mut source_plane = Vec::new();
+    source_plane
+        .try_reserve_exact(source_plane_len)
+        .map_err(|error| PilError::MemoryError(error.to_string()))?;
+    for row in source.chunks(row_width.max(1)) {
+        source_plane.extend(
+            row.iter()
+                .flat_map(|&sample| order.encode(sample))
+                .take(row_width),
+        );
+    }
+    let fill_bytes = order.encode(fill_value);
+    let fill = Some((fill_bytes[0], fill_bytes[1], 0, 0));
+    let mut output_plane = Vec::new();
+    output_plane
+        .try_reserve_exact(output_pixels)
+        .map_err(|error| PilError::MemoryError(error.to_string()))?;
+    output_plane.resize(output_pixels, fill_bytes[0]);
+    match request.method {
+        TransformMethod::Affine => super::affine::transform_affine_generic_into_with_validity(
+            &source_plane,
+            source_dimensions,
+            request.width,
+            request.height,
+            request.data[0],
+            request.data[1],
+            request.data[2],
+            request.data[3],
+            request.data[4],
+            request.data[5],
+            fill,
+            1,
+            false,
+            matches!(request.filter, ResampleFilter::Bicubic),
+            &mut output_plane,
+            Some(validity),
+        ),
+        TransformMethod::Perspective | TransformMethod::Quad => {
+            super::projective::transform_projective_generic_into_with_validity(
+                &source_plane,
+                source_dimensions,
+                request.width,
+                request.height,
+                request.data,
+                &request.filter,
+                fill,
+                1,
+                matches!(request.method, TransformMethod::Quad),
+                &mut output_plane,
+                Some(validity),
+            )
+        }
+        TransformMethod::Mesh => Err(mesh_validity_error()),
+    }?;
+    for (sample, &first) in output.iter_mut().zip(&output_plane) {
+        *sample = order.decode([first, fill_bytes[1]]);
+    }
+    Ok(())
+}
+
 pub(crate) fn apply_mesh_record(
     source: &[u16],
     destination: &mut [u16],
@@ -247,6 +411,10 @@ fn clipped_box(coordinates: (i64, i64, i64, i64), dimensions: (u32, u32)) -> (i6
 
 fn invalid_mesh_shape() -> PilError {
     PilError::InternalError("Transform I;16 MESH buffer shape mismatch".into())
+}
+
+fn mesh_validity_error() -> PilError {
+    PilError::InternalError("I;16 MESH validity is reported by its record accumulator".into())
 }
 
 fn execute_nearest(

@@ -5,6 +5,7 @@ use crate::error::PilError;
 use crate::pipeline::TransposeMethod;
 use crate::raster::{ImageBuffer, Pixel};
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<P, const CHANNELS: usize, const FORCE_NEAREST: bool, const ALPHA: bool>(
     image: &ImageBuffer<P, Vec<u8>>,
     request: RotateRequest,

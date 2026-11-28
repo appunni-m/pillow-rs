@@ -213,6 +213,10 @@ pub(super) fn gpu_contrast_mean(img: &DynamicImage) -> Option<u8> {
 /// operations, and a later Contrast still require the ordinary host-control
 /// path because their current-image semantics are not represented by one
 /// static uniform.
+// TODO(pillow-rs#brg0): thread the pipeline's injected CPU ExecutionContext
+// into this host prefix; use its Architecture when available and CPU Default
+// only when no CPU context was supplied.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(super) fn gpu_contrast_mean_after_exact_prefix(
     img: &DynamicImage,
     ops: &[PipelineOp],

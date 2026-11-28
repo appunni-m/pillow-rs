@@ -3,13 +3,13 @@
 use std::arch::aarch64::{
     float64x2_t, int32x2_t, vaddq_f64, vbslq_f64, vcgeq_f64, vcvtq_f64_s64, vcvtq_s64_f64,
     vdupq_n_f64, vfmaq_f64, vget_high_s32, vget_low_s32, vld1q_s32, vld2q_s32, vmovl_s32,
-    vqmovn_s64, vst1_s32,
+    vmulq_f64, vqmovn_s64, vst1_s32,
 };
 
 use super::LANES;
 use super::plan::HorizontalBlock;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 #[inline]
 fn round_up_i32x2(value: float64x2_t) -> int32x2_t {
@@ -25,9 +25,8 @@ fn round_up_i32x2(value: float64x2_t) -> int32x2_t {
     }
 }
 
-/// Execute a horizontal tap plan when every lane has stride-two samples and a
-/// uniform coefficient.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+/// Execute horizontal taps with Pillow's separately rounded product and sum.
+// VERIFY: source=reviewed@2026-11-27; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 pub(super) fn horizontal_block(
     source_row: &[i32],
@@ -57,25 +56,21 @@ pub(super) fn horizontal_block(
             let source = source_row.as_ptr().add(start);
             let first = vld2q_s32(source).0;
             let second = vld2q_s32(source.add(8)).0;
-            sums[0] = vfmaq_f64(
+            sums[0] = vaddq_f64(
                 sums[0],
-                vcvtq_f64_s64(vmovl_s32(vget_low_s32(first))),
-                coefficient,
+                vmulq_f64(vcvtq_f64_s64(vmovl_s32(vget_low_s32(first))), coefficient),
             );
-            sums[1] = vfmaq_f64(
+            sums[1] = vaddq_f64(
                 sums[1],
-                vcvtq_f64_s64(vmovl_s32(vget_high_s32(first))),
-                coefficient,
+                vmulq_f64(vcvtq_f64_s64(vmovl_s32(vget_high_s32(first))), coefficient),
             );
-            sums[2] = vfmaq_f64(
+            sums[2] = vaddq_f64(
                 sums[2],
-                vcvtq_f64_s64(vmovl_s32(vget_low_s32(second))),
-                coefficient,
+                vmulq_f64(vcvtq_f64_s64(vmovl_s32(vget_low_s32(second))), coefficient),
             );
-            sums[3] = vfmaq_f64(
+            sums[3] = vaddq_f64(
                 sums[3],
-                vcvtq_f64_s64(vmovl_s32(vget_high_s32(second))),
-                coefficient,
+                vmulq_f64(vcvtq_f64_s64(vmovl_s32(vget_high_s32(second))), coefficient),
             );
         }
         let mut output = [0i32; LANES];
@@ -88,7 +83,7 @@ pub(super) fn horizontal_block(
 }
 
 /// Execute the vertical tap span for eight contiguous intermediate samples.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 pub(super) fn vertical_block(
     source: &[i32],

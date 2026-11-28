@@ -3,6 +3,7 @@
 use wide::u8x16;
 
 /// Scan packed I samples in wide blocks, then apply the exact shared Pillow-order proof.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter::i32) fn uniform_i32_filter3x3_is_identity(
     raw: &[u8],
     width: usize,

@@ -29,7 +29,9 @@ fn validate_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
 /// # Safety
 ///
 /// The prepared strategy must establish SSE2 and SSSE3 support and exact
-/// native byte-layout, output-size, and channel-index guards.
+/// native byte-layout, output-size, and channel-index guards. The source
+/// borrow and exclusive output slice must not overlap.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 pub(crate) unsafe fn ssse3_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     input: CheckedBand<'_, P>,
@@ -101,6 +103,7 @@ pub(crate) fn portable_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
 ///
 /// The prepared owner must establish SSE2/SSSE3 support, CHANNELS in 2..=4,
 /// and exact nonempty native storage with an index inside that layout.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) unsafe fn ssse3<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     input: CheckedBand<'_, P>,
 ) -> Result<DynamicImage, PilError> {
@@ -185,6 +188,7 @@ pub(crate) struct NeonBand<'a, P: Pixel> {
 }
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 pub(crate) fn prepare_neon<P: Pixel>(input: CheckedBand<'_, P>) -> NeonBand<'_, P> {
     // This module requires a statically guaranteed NEON target; the operation

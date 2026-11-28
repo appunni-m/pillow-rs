@@ -37,6 +37,7 @@ macro_rules! declare_strategies {
         pub(crate) type DataStrategy<'a> = PreparedData<DataArchitectureStrategy<'a>>;
 
 
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         #[inline]
         pub(crate) fn prepare_data<'a>(
             input: &'a data_scalar::Input, data: &'a [u8], mode: crate::raster::Mode,
@@ -59,6 +60,7 @@ macro_rules! declare_strategies {
         }
 
         impl DataStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             #[inline]
             pub(crate) fn execute(self) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
                 match self.implementation {

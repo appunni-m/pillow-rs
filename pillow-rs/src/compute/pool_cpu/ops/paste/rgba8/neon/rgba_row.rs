@@ -6,7 +6,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::{
 use crate::error::PilError;
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(super) fn try_execute<I>(plan: &BytePlan<'_, I>) -> Result<Option<Vec<u8>>, PilError>
 where
     I: std::ops::Deref<Target = crate::raster::DynamicImage>,
@@ -108,7 +108,7 @@ where
     Ok(Some(output))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn blend_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
     #[expect(
         clippy::arithmetic_side_effects,
@@ -184,7 +184,7 @@ fn blend_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 #[inline]
 fn blend_neon_block(source: &[u8], destination: &mut [u8], mask: &[u8], start: usize) {
@@ -254,12 +254,12 @@ fn blend_neon_block(source: &[u8], destination: &mut [u8], mask: &[u8], start: u
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn invalid_shape(part: &'static str) -> PilError {
     PilError::InternalError(format!("NEON Paste {part} row did not match its plan"))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn overflow(part: &'static str) -> PilError {
     PilError::OverflowError(format!("NEON Paste {part} overflowed"))
 }

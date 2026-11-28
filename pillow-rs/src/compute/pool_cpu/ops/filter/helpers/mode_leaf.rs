@@ -38,7 +38,7 @@ macro_rules! native_filter_mode_leaf {
         $la_special:expr,
         $filter5x5_impl:path
     ) => {
-        // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) fn execute(
             image: &crate::raster::DynamicImage,
             request: $crate::compute::pool_cpu::ops::filter::ops::FilterRequest,
@@ -351,6 +351,7 @@ macro_rules! native_filter5x5_arch_leaf {
         );
     };
     (@impl, $variant:ident, $carrier:ident, $channels:expr, $special:ident) => {
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(super) fn execute_filter5x5_small_uniform(
             image: &crate::raster::DynamicImage,
             request: $crate::compute::pool_cpu::ops::filter::ops::FilterRequest,
@@ -393,6 +394,7 @@ macro_rules! native_filter5x5_arch_leaf {
                 })
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(super) fn execute_filter5x5_vectorized(
             image: &crate::raster::DynamicImage,
             request: $crate::compute::pool_cpu::ops::filter::ops::FilterRequest,
@@ -508,6 +510,7 @@ macro_rules! native_filter3x3_arch_leaf {
         );
     };
     (@impl, $variant:ident, $carrier:ident, $channels:expr, $la_binomial:expr) => {
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(super) fn execute_filter3x3_vectorized(
             image: &crate::raster::DynamicImage,
             request: $crate::compute::pool_cpu::ops::filter::ops::FilterRequest,

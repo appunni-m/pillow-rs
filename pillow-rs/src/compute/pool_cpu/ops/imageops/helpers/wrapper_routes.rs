@@ -23,7 +23,7 @@ fn scope_for_wrapper_mode(mode: Mode) -> SupportScope {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn imageops_lut_mode_support(mode: Mode) -> Option<ModeSupport> {
     match mode {
         Mode::ImageLuma8 | Mode::ImageRgb8 => {
@@ -77,7 +77,7 @@ fn imageops_lut_mode_support(mode: Mode) -> Option<ModeSupport> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn imageops_lut_wrapper_rejection(mode: Mode) -> Option<(&'static str, RejectionKind)> {
     match mode {
         Mode::ImagePalette8 => Some((
@@ -111,7 +111,7 @@ fn imageops_lut_wrapper_rejection(mode: Mode) -> Option<(&'static str, Rejection
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_imageops_lut_route(mode: Mode) -> OperationModeRoute {
     let support_scope = scope_for_wrapper_mode(mode);
     let (support, operations, scope, outcome) =
@@ -172,7 +172,7 @@ fn classify_imageops_lut_route(mode: Mode) -> OperationModeRoute {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_imageops_palette_lut_route(
     mode: Mode,
     operation: OperationId,
@@ -188,7 +188,7 @@ fn classify_imageops_palette_lut_route(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
     if let Some(route) = classify_imageops_palette_lut_route(mode, OperationId::ImageOpsInvert) {
         return route;
@@ -196,9 +196,17 @@ pub(crate) fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
     let child_support = OperationId::Eval.support().for_mode(mode);
     let wrapper_rejection = match mode {
         Mode::ImageLumaA8 => Some(("not supported for mode LA", RejectionKind::OsError)),
+        Mode::ImageLaPremultiplied8 => Some(("not supported for mode La", RejectionKind::OsError)),
         Mode::ImagePaletteAlpha8 => Some(("not supported for mode PA", RejectionKind::OsError)),
         Mode::ImageRgba8 => Some(("not supported for mode RGBA", RejectionKind::OsError)),
+        Mode::ImageRgbPremultiplied8 => {
+            Some(("not supported for mode RGBa", RejectionKind::OsError))
+        }
+        Mode::ImageRgbx8 => Some(("not supported for mode RGBX", RejectionKind::OsError)),
         Mode::ImageCmyk8 => Some(("not supported for mode CMYK", RejectionKind::OsError)),
+        Mode::ImageYCbCr8 => Some(("not supported for mode YCbCr", RejectionKind::OsError)),
+        Mode::ImageLab8 => Some(("not supported for mode LAB", RejectionKind::OsError)),
+        Mode::ImageHsv8 => Some(("not supported for mode HSV", RejectionKind::OsError)),
         Mode::ImageI32 => Some(("not supported for mode I", RejectionKind::OsError)),
         Mode::ImageF32 => Some(("not supported for mode F", RejectionKind::OsError)),
         Mode::ImageI16 => Some(("not supported for mode I;16", RejectionKind::OsError)),
@@ -207,14 +215,8 @@ pub(crate) fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
         Mode::ImageI16N => Some(("not supported for mode I;16N", RejectionKind::OsError)),
         Mode::One
         | Mode::ImageLuma8
-        | Mode::ImageLaPremultiplied8
         | Mode::ImagePalette8
         | Mode::ImageRgb8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8
         | Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16
@@ -265,19 +267,19 @@ pub(crate) fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn classify_imageops_posterize_route(mode: Mode) -> OperationModeRoute {
     classify_imageops_palette_lut_route(mode, OperationId::ImageOpsPosterize)
         .unwrap_or_else(|| classify_imageops_lut_route(mode))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn classify_imageops_solarize_route(mode: Mode) -> OperationModeRoute {
     classify_imageops_palette_lut_route(mode, OperationId::ImageOpsSolarize)
         .unwrap_or_else(|| classify_imageops_lut_route(mode))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn classify_imageops_colorize_route(mode: Mode) -> OperationModeRoute {
     let scope = scope_for_wrapper_mode(mode);
     match mode {
@@ -314,8 +316,8 @@ pub(crate) fn classify_imageops_colorize_route(mode: Mode) -> OperationModeRoute
         | Mode::ImageRgba16
         | Mode::ImageRgb32F
         | Mode::ImageRgba32F => {
-            let reason = "";
-            let kind = RejectionKind::AssertionError;
+            let reason = "mode must be L";
+            let kind = RejectionKind::ValueError;
             OperationModeRoute::ComposedFallback {
                 mode,
                 intermediate_mode: None,
@@ -333,7 +335,7 @@ pub(crate) fn classify_imageops_colorize_route(mode: Mode) -> OperationModeRoute
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn classify_imageops_colorize_lut_route(mode: Mode) -> OperationModeRoute {
     let scope = scope_for_wrapper_mode(mode);
     let (support, operations, outcome) =

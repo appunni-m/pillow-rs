@@ -5,11 +5,12 @@ use crate::image::Image;
 use crate::pipeline::{DitherMethod, PipelineOp};
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(super) fn convert_to_binary(
     image: &Image,
     dither: Option<DitherMethod>,
     context_override: Option<crate::compute::ExecutionContext>,
+    route_override: Option<crate::compute::CpuExecutionRoute>,
 ) -> Result<Image, PilError> {
     let (source, mut operation_receipts) = image.materialized_shared_for_ops_with_receipts()?;
     let palette = image.palette();
@@ -18,6 +19,7 @@ pub(super) fn convert_to_binary(
         palette: PaletteInput {
             rgb: palette.as_deref(),
             alpha: &[],
+            data: image.palette_data(),
         },
     };
     let operation = PipelineOp::Convert {
@@ -27,7 +29,10 @@ pub(super) fn convert_to_binary(
     };
     // Binary Convert is CPU-owned. Preserve the selected CPU Architecture
     // when GPU preference falls back and retain the original request receipt.
-    let (requested_backend, routed_context) = image.cpu_arch_execution_route()?;
+    let (requested_backend, routed_context) = match route_override {
+        Some(route) => (route.requested_backend(), route.context()),
+        None => image.cpu_arch_execution_route()?,
+    };
     let context = context_override.unwrap_or(routed_context);
     let fallback_reason = (requested_backend == Some(Backend::Gpu)).then(|| {
         format!(

@@ -5,9 +5,9 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
     default_hidden_pixel_lanes, hidden_lanes_for_pixel_ref,
 };
 use crate::error::PilError;
-use crate::raster::DynamicImage;
 use crate::raster::buffer::{HiddenPixelLanes, ImageBuffer};
 use crate::raster::traits::Pixel;
+use crate::raster::{DynamicImage, Mode};
 
 static OVERLAY_LUT: &[u8; 65_536] = include_bytes!("../../../../../ops/lut_overlay.bin");
 static HARD_LIGHT_LUT: &[u8; 65_536] = include_bytes!("../../../../../ops/lut_hardlight.bin");
@@ -63,7 +63,8 @@ pub(crate) enum BinaryOperation {
 }
 
 impl BinaryOperation {
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    // Scope: all binary Chops formulas applied to retained physical byte lanes.
     /// Applies the same byte arithmetic as the native Chops strategy to an
     /// omitted physical pixel lane.
     pub(crate) fn apply_to_byte(self, left: u8, right: u8) -> u8 {
@@ -99,7 +100,8 @@ impl BinaryOperation {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Chops byte binaries map the RGB physical fourth byte and fallback.
 /// Produces Chops results for retained physical lanes, resolving missing
 /// producer state with the same canonical mode fallback used by Paste.
 pub(crate) fn output_hidden_lanes(
@@ -112,7 +114,8 @@ pub(crate) fn output_hidden_lanes(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Chops byte binaries clip sidecars, map lanes, and resolve fallbacks.
 /// Produces retained physical lanes using an operation-specific byte mapping.
 pub(crate) fn output_hidden_lanes_with<F>(
     image: &DynamicImage,
@@ -214,7 +217,8 @@ fn validate_hidden_lane_source(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Chops byte binaries map retained lanes over clipped row extents.
 fn output_hidden_lanes_with_fallbacks<F>(
     image: &DynamicImage,
     other: &DynamicImage,
@@ -253,7 +257,8 @@ where
         .ok_or_else(|| PilError::InternalError("Chops physical lane result was invalid".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Chops byte binaries compute RGB physical lanes when sidecars are absent.
 fn input_hidden_lanes(
     image: &DynamicImage,
     lanes: Option<&HiddenPixelLanes>,
@@ -282,7 +287,8 @@ fn input_hidden_lanes(
 
 // TODO(pillow-rs#3ptb): Freeze raw-byte follow-on Paste parity for binary
 // Chops across each declared CPU architecture and hidden-lane producer state.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Chops byte binaries attach their computed physical-lane sidecars.
 /// Attaches Chops arithmetic for omitted bytes to an already computed image.
 pub(crate) fn carry_hidden_lanes(
     image: &DynamicImage,
@@ -298,11 +304,57 @@ pub(crate) fn carry_hidden_lanes(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=pending
+// Scope: ChopsAdd typed bytes, clipped rows, and exact primary-mode output.
 /// Clips two admitted native-byte inputs and applies the operation to the
 /// primary mode's typed buffer. The mode owner wraps the result in its exact
 /// `DynamicImage` variant.
 pub(crate) fn execute<P>(
+    image: &ImageBuffer<P, Vec<u8>>,
+    other: &ImageBuffer<P, Vec<u8>>,
+    operation: BinaryOperation,
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    execute_with_chroma_encoding::<P, false, false, false>(image, other, operation)
+}
+
+// VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=pending
+// Scope: three-band Chops translates LAB's centered lanes per operand.
+pub(crate) fn execute_with_modes<P>(
+    image: &ImageBuffer<P, Vec<u8>>,
+    other: &ImageBuffer<P, Vec<u8>>,
+    operation: BinaryOperation,
+    left_mode: Mode,
+    right_mode: Mode,
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    let left_lab = left_mode == Mode::ImageLab8;
+    let right_lab = right_mode == Mode::ImageLab8;
+    match (left_lab, right_lab) {
+        (false, false) => execute(image, other, operation),
+        (false, true) => {
+            execute_with_chroma_encoding::<P, false, true, false>(image, other, operation)
+        }
+        (true, false) => {
+            execute_with_chroma_encoding::<P, true, false, true>(image, other, operation)
+        }
+        (true, true) => {
+            execute_with_chroma_encoding::<P, true, true, true>(image, other, operation)
+        }
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=pending
+fn execute_with_chroma_encoding<
+    P,
+    const LEFT_LAB: bool,
+    const RIGHT_LAB: bool,
+    const OUTPUT_LAB: bool,
+>(
     image: &ImageBuffer<P, Vec<u8>>,
     other: &ImageBuffer<P, Vec<u8>>,
     operation: BinaryOperation,
@@ -319,7 +371,7 @@ where
         CheckedDims::new(width, height, channels)?
     };
     let mut output = dimensions.alloc_buffer();
-    apply(
+    apply::<LEFT_LAB, RIGHT_LAB, OUTPUT_LAB>(
         image.as_raw().as_slice(),
         other.as_raw().as_slice(),
         &mut output,
@@ -334,8 +386,9 @@ where
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn apply(
+// VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=pending
+// Scope: binary Chops per-channel arithmetic and independent-stride row clipping.
+fn apply<const LEFT_LAB: bool, const RIGHT_LAB: bool, const OUTPUT_LAB: bool>(
     left: &[u8],
     right: &[u8],
     output: &mut [u8],
@@ -348,7 +401,7 @@ fn apply(
 ) {
     macro_rules! rows {
         ($map:expr) => {
-            apply_rows(
+            apply_rows::<LEFT_LAB, RIGHT_LAB, OUTPUT_LAB, _>(
                 left,
                 right,
                 output,
@@ -364,7 +417,7 @@ fn apply(
 
     macro_rules! lut {
         ($table:expr) => {
-            apply_lut(
+            apply_lut::<LEFT_LAB, RIGHT_LAB, OUTPUT_LAB>(
                 left,
                 right,
                 output,
@@ -379,19 +432,25 @@ fn apply(
     }
 
     match operation {
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         BinaryOperation::Add { scale, offset, .. } if scale == 1.0 && offset == 0.0 => {
             rows!(u8::saturating_add)
         }
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         BinaryOperation::Add { scale, offset, .. } => {
             rows!(|a, b| ((f32::from(a) + f32::from(b)) / scale + offset).clamp(0.0, 255.0) as u8)
         }
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         BinaryOperation::Subtract { scale, offset, .. } if scale == 1.0 && offset == 0.0 => {
             rows!(u8::saturating_sub)
         }
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         BinaryOperation::Subtract { scale, offset, .. } => {
             rows!(|a, b| ((f32::from(a) - f32::from(b)) / scale + offset).clamp(0.0, 255.0) as u8)
         }
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         BinaryOperation::Multiply => rows!(|a, b| ((u32::from(a) * u32::from(b)) / 255) as u8),
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         BinaryOperation::Screen => {
             rows!(|a, b| { (255 - ((255 - u32::from(a)) * (255 - u32::from(b)) / 255)) as u8 })
         }
@@ -409,8 +468,9 @@ fn apply(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn apply_lut(
+// VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=pending
+// Scope: LUT Chops use Pillow's left-major index and independent row strides.
+fn apply_lut<const LEFT_LAB: bool, const RIGHT_LAB: bool, const OUTPUT_LAB: bool>(
     left: &[u8],
     right: &[u8],
     output: &mut [u8],
@@ -421,7 +481,7 @@ fn apply_lut(
     right_stride: usize,
     lut: &[u8; 65_536],
 ) {
-    apply_rows(
+    apply_rows::<LEFT_LAB, RIGHT_LAB, OUTPUT_LAB, _>(
         left,
         right,
         output,
@@ -434,8 +494,14 @@ fn apply_lut(
     );
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn apply_rows<F: Fn(u8, u8) -> u8>(
+// VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=pending
+// Scope: byte Chops map clipped rows while retaining each source stride.
+fn apply_rows<
+    const LEFT_LAB: bool,
+    const RIGHT_LAB: bool,
+    const OUTPUT_LAB: bool,
+    F: Fn(u8, u8) -> u8,
+>(
     left: &[u8],
     right: &[u8],
     output: &mut [u8],
@@ -459,8 +525,16 @@ fn apply_rows<F: Fn(u8, u8) -> u8>(
         let right_start = y * right_stride;
         let left_row = &left[left_start..left_start + output_stride];
         let right_row = &right[right_start..right_start + output_stride];
-        for ((destination, &a), &b) in row.iter_mut().zip(left_row).zip(right_row) {
-            *destination = operation(a, b);
+        for (index, ((destination, &a), &b)) in
+            row.iter_mut().zip(left_row).zip(right_row).enumerate()
+        {
+            let is_chroma = index % channels != 0;
+            let left_offset = if LEFT_LAB && is_chroma { 128 } else { 0 };
+            let right_offset = if RIGHT_LAB && is_chroma { 128 } else { 0 };
+            let output_offset = if OUTPUT_LAB && is_chroma { 128 } else { 0 };
+            let left = a.wrapping_add(left_offset);
+            let right = b.wrapping_add(right_offset);
+            *destination = operation(left, right).wrapping_add(output_offset);
         }
     }
 }

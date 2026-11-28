@@ -11,6 +11,7 @@ pub(crate) struct AlphaDataInput<'a, P: Pixel> {
     pub(crate) mask: MaskStrategy<'a>,
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn facts<P: Pixel>(
     input: &AlphaDataInput<'_, P>,
 ) -> crate::compute::registry::support::StrategyInputs {
@@ -25,6 +26,7 @@ pub(crate) fn facts<P: Pixel>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn native_mask<'a, P: Pixel<Subpixel = u8>>(
     input: &AlphaDataInput<'a, P>,
 ) -> Option<MaskStrategy<'a>> {
@@ -38,7 +40,7 @@ pub(crate) fn native_mask<'a, P: Pixel<Subpixel = u8>>(
     .then_some(input.mask)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn luma_mask(luma: &GrayImage, mask: MaskStrategy<'_>) -> GrayAlphaImage {
     mask.with_samples(
         |samples| luma_mask_samples::<true>(luma, samples),
@@ -46,7 +48,7 @@ pub(crate) fn luma_mask(luma: &GrayImage, mask: MaskStrategy<'_>) -> GrayAlphaIm
     )
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn luma_mask_samples<const ONE: bool>(luma: &GrayImage, mask: &[u8]) -> GrayAlphaImage {
     let mut output = GrayAlphaImage::new(luma.width(), luma.height());
     for ((destination, source), alpha) in output.pixels_mut().zip(luma.pixels()).zip(mask) {
@@ -56,6 +58,7 @@ fn luma_mask_samples<const ONE: bool>(luma: &GrayImage, mask: &[u8]) -> GrayAlph
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn luma_alpha_mask(luma: &GrayAlphaImage, mask: MaskStrategy<'_>) -> GrayAlphaImage {
     mask.with_samples(
         |samples| luma_alpha_mask_samples::<true>(luma, samples),
@@ -63,6 +66,7 @@ pub(crate) fn luma_alpha_mask(luma: &GrayAlphaImage, mask: MaskStrategy<'_>) -> 
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn luma_alpha_mask_samples<const ONE: bool>(luma: &GrayAlphaImage, mask: &[u8]) -> GrayAlphaImage {
     let mut output = luma.clone();
     let hidden_lanes = output.take_hidden_pixel_lanes();
@@ -76,6 +80,7 @@ fn luma_alpha_mask_samples<const ONE: bool>(luma: &GrayAlphaImage, mask: &[u8]) 
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn rgba_mask(rgba: &RgbaImage, mask: MaskStrategy<'_>) -> RgbaImage {
     mask.with_samples(
         |samples| rgba_mask_samples::<true>(rgba, samples),
@@ -83,6 +88,7 @@ pub(crate) fn rgba_mask(rgba: &RgbaImage, mask: MaskStrategy<'_>) -> RgbaImage {
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn rgba_mask_samples<const ONE: bool>(rgba: &RgbaImage, mask: &[u8]) -> RgbaImage {
     let mut output = RgbaImage::new(rgba.width(), rgba.height());
     for ((destination, source), alpha) in output.pixels_mut().zip(rgba.pixels()).zip(mask) {
@@ -92,6 +98,7 @@ fn rgba_mask_samples<const ONE: bool>(rgba: &RgbaImage, mask: &[u8]) -> RgbaImag
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn native_rgba_mask(source: &RgbaImage, mask: MaskStrategy<'_>) -> RgbaImage {
     mask.with_samples(
         |samples| native_rgba_mask_samples::<true>(source, samples),
@@ -99,18 +106,21 @@ pub(crate) fn native_rgba_mask(source: &RgbaImage, mask: MaskStrategy<'_>) -> Rg
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn native_rgba_mask_samples<const ONE: bool>(source: &RgbaImage, mask: &[u8]) -> RgbaImage {
     let mut output = source.clone();
     replace_rgba_mask::<ONE>(&mut output, mask);
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn replace_rgba_mask<const ONE: bool>(output: &mut RgbaImage, mask: &[u8]) {
     for (pixel, alpha) in output.as_mut().chunks_exact_mut(4).zip(mask) {
         pixel[3] = normalize_sample::<ONE>(*alpha);
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn luma16_mask(
     image: &ImageBuffer<Luma<u16>, Vec<u16>>,
     mask: MaskStrategy<'_>,
@@ -121,6 +131,7 @@ pub(crate) fn luma16_mask(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn luma16_mask_samples<const ONE: bool>(
     image: &ImageBuffer<Luma<u16>, Vec<u16>>,
     mask: &[u8],
@@ -133,6 +144,7 @@ fn luma16_mask_samples<const ONE: bool>(
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn replace_luma_alpha16_mask(
     image: &ImageBuffer<LumaA<u16>, Vec<u16>>,
     mask: MaskStrategy<'_>,
@@ -143,6 +155,7 @@ pub(crate) fn replace_luma_alpha16_mask(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn replace_luma_alpha16_mask_samples<const ONE: bool>(
     image: &ImageBuffer<LumaA<u16>, Vec<u16>>,
     mask: &[u8],
@@ -155,6 +168,7 @@ fn replace_luma_alpha16_mask_samples<const ONE: bool>(
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn rgb16_mask(
     image: &ImageBuffer<Rgb<u16>, Vec<u16>>,
     mask: MaskStrategy<'_>,
@@ -165,6 +179,7 @@ pub(crate) fn rgb16_mask(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn rgb16_mask_samples<const ONE: bool>(
     image: &ImageBuffer<Rgb<u16>, Vec<u16>>,
     mask: &[u8],
@@ -181,6 +196,7 @@ fn rgb16_mask_samples<const ONE: bool>(
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn rgba16_mask(
     image: &ImageBuffer<Rgba<u16>, Vec<u16>>,
     mask: MaskStrategy<'_>,
@@ -191,6 +207,7 @@ pub(crate) fn rgba16_mask(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn rgba16_mask_samples<const ONE: bool>(
     image: &ImageBuffer<Rgba<u16>, Vec<u16>>,
     mask: &[u8],
@@ -202,6 +219,7 @@ fn rgba16_mask_samples<const ONE: bool>(
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn rgb32f_mask(image: &Rgb32FImage, mask: MaskStrategy<'_>) -> Rgba32FImage {
     mask.with_samples(
         |samples| rgb32f_mask_samples::<true>(image, samples),
@@ -209,6 +227,7 @@ pub(crate) fn rgb32f_mask(image: &Rgb32FImage, mask: MaskStrategy<'_>) -> Rgba32
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn rgb32f_mask_samples<const ONE: bool>(image: &Rgb32FImage, mask: &[u8]) -> Rgba32FImage {
     let mut output = Rgba32FImage::new(image.width(), image.height());
     for ((destination, source), alpha) in output.pixels_mut().zip(image.pixels()).zip(mask) {
@@ -222,6 +241,7 @@ fn rgb32f_mask_samples<const ONE: bool>(image: &Rgb32FImage, mask: &[u8]) -> Rgb
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn rgba32f_mask(image: &Rgba32FImage, mask: MaskStrategy<'_>) -> Rgba32FImage {
     mask.with_samples(
         |samples| rgba32f_mask_samples::<true>(image, samples),
@@ -229,6 +249,7 @@ pub(crate) fn rgba32f_mask(image: &Rgba32FImage, mask: MaskStrategy<'_>) -> Rgba
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn rgba32f_mask_samples<const ONE: bool>(image: &Rgba32FImage, mask: &[u8]) -> Rgba32FImage {
     let mut output = image.clone();
     for (pixel, alpha) in output.pixels_mut().zip(mask) {
@@ -237,6 +258,7 @@ fn rgba32f_mask_samples<const ONE: bool>(image: &Rgba32FImage, mask: &[u8]) -> R
     output
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn native_rgb_mask(source: &RgbImage, mask: MaskStrategy<'_>) -> RgbaImage {
     mask.with_samples(
         |samples| native_rgb_mask_samples::<true>(source, samples),
@@ -244,6 +266,7 @@ pub(crate) fn native_rgb_mask(source: &RgbImage, mask: MaskStrategy<'_>) -> Rgba
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn native_rgb_mask_samples<const ONE: bool>(source: &RgbImage, mask: &[u8]) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for ((destination, color), alpha) in output

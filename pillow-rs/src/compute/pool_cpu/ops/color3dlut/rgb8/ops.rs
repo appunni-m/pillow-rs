@@ -1,11 +1,22 @@
 //! `ImageRgb8` Color3DLut support and architecture strategy binding.
 
 use super::default::color3dlut_impl;
+#[cfg(any(
+    all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        target_feature = "avx2"
+    ),
+    all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        target_feature = "sse2"
+    ),
+    all(target_arch = "aarch64", target_feature = "neon"),
+    all(target_arch = "wasm32", target_feature = "simd128")
+))]
+use crate::compute::registry::support::StrategyGuard;
 use crate::compute::{
     Architecture, ExecutionContext,
-    registry::support::{
-        ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
-    },
+    registry::support::{ImplementationSupport, ModeSupport, OperationId, OutputModeRule},
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -93,7 +104,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     ARCHITECTURES,
 );
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     size: (u32, u32, u32),
@@ -114,7 +125,7 @@ pub(crate) fn prepare<'a>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     prepared: super::super::helpers::strategy::Strategy<'_>,
 ) -> Result<DynamicImage, PilError> {

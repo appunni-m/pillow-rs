@@ -194,6 +194,19 @@ pub(crate) fn rgb8(image: &RgbImage) -> BBox {
     Some((bbox_left, coordinate(top), bbox_right, bbox_bottom))
 }
 
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+// Scope: LAB treats raw chroma value 128 as internal zero for GetBBox.
+pub(crate) fn lab8(image: &RgbImage) -> BBox {
+    let (width, height) = image.dimensions();
+    let mut bounds = Bounds::new(width, height);
+    for (index, pixel) in image.pixels().enumerate() {
+        if pixel[0] != 0 || pixel[1] != 128 || pixel[2] != 128 {
+            bounds.include_index(index);
+        }
+    }
+    bounds.finish()
+}
+
 // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn rgba8(image: &RgbaImage, alpha_only: bool) -> BBox {
     let (width, height) = image.dimensions();

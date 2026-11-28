@@ -4,6 +4,7 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 pub(crate) fn execute<P, const CHANNELS: usize>(
     image: &ImageBuffer<P, Vec<u8>>,
     size: u32,
@@ -27,6 +28,7 @@ where
         .ok_or_else(|| PilError::InternalError("ModeFilter output shape mismatch".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 pub(super) fn mode_filter_native_bytes<const CHANNELS: usize>(
     raw: &[u8],
     width: usize,
@@ -54,6 +56,7 @@ pub(super) fn mode_filter_native_bytes<const CHANNELS: usize>(
     output
 }
 
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 fn accumulate_neighborhood<const CHANNELS: usize>(
     raw: &[u8],
     histograms: &mut [[u32; 256]; CHANNELS],
@@ -81,6 +84,7 @@ fn accumulate_neighborhood<const CHANNELS: usize>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 fn write_mode_pixel<const CHANNELS: usize>(
     raw: &[u8],
     output: &mut [u8],
@@ -92,8 +96,11 @@ fn write_mode_pixel<const CHANNELS: usize>(
     let pixel = ((y * width + x) as usize) * CHANNELS;
     for (channel, histogram) in histograms.iter().enumerate() {
         let (mode, max_count) = find_mode_with_count(histogram);
-        let original = raw[pixel + channel];
-        output[pixel + channel] = if max_count > 2 { mode } else { original };
+        output[pixel + channel] = if max_count > 2 {
+            mode
+        } else {
+            raw[pixel + channel]
+        };
     }
 }
 

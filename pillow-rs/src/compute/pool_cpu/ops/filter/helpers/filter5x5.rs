@@ -176,9 +176,7 @@ pub(crate) fn execute_filter5x5_rgb_vector_fast_path(
     if pixel_count > VECTOR_SMALL_UNIFORM_FILTER5X5_MAX_PIXELS
         && uniform5x5_parameters_match(kernel, scale, offset)
     {
-        if let Some(evidence) =
-            super::filter5x5_rgb_vector::scan_uniform(raw, width_usize, height_usize)
-        {
+        if let Some(evidence) = super::vector::scan_uniform(raw, width_usize, height_usize) {
             if evidence.vector_blocks != 0 {
                 crate::compute::record_pipeline_operation_path("vector");
                 crate::compute::record_pipeline_operation_vector_blocks(evidence.vector_blocks);
@@ -197,7 +195,7 @@ pub(crate) fn execute_filter5x5_rgb_vector_fast_path(
         return None;
     }
     let (output, vector_blocks, scalar_tail) =
-        super::filter5x5_rgb_vector::apply_blur_ring(raw, width_usize, height_usize)?;
+        super::vector::apply_blur_ring(raw, width_usize, height_usize)?;
     if vector_blocks != 0 {
         crate::compute::record_pipeline_operation_path("vector");
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);

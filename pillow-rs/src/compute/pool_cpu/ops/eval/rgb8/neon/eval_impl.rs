@@ -13,6 +13,7 @@ use crate::compute::pool_cpu::ops::eval::helpers::vector::{self, Kernel, Output}
 use crate::error::PilError;
 
 /// Execute the RGB NEON path selected by the exact mode strategy.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::eval::rgb8) fn execute(
     kernel: Kernel<'_, 3>,
 ) -> Result<Output, PilError> {
@@ -37,6 +38,7 @@ pub(in crate::compute::pool_cpu::ops::eval::rgb8) fn execute(
     vector::execute_neon(kernel)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[cfg(all(
     target_arch = "aarch64",
     target_feature = "neon",
@@ -53,6 +55,7 @@ fn neon_affine_coefficients(lut: &[u8]) -> Option<[(u8, u8); 3]> {
     ])
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[cfg(all(
     target_arch = "aarch64",
     target_feature = "neon",
@@ -80,6 +83,7 @@ fn neon_rgb_lut_map(kernel: &Kernel<'_, 3>) -> Option<Mapped> {
         })
     };
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn lookup(
         input: core::arch::aarch64::uint8x16_t,
         tables: &[core::arch::aarch64::uint8x16x4_t; 4],
@@ -150,6 +154,7 @@ fn neon_rgb_lut_map(kernel: &Kernel<'_, 3>) -> Option<Mapped> {
     })
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[cfg(all(
     target_arch = "aarch64",
     target_feature = "neon",

@@ -51,6 +51,52 @@ pub(crate) fn execute_into<const CHANNELS: usize>(
     quad: bool,
     output: &mut [u8],
 ) -> Result<(), PilError> {
+    execute_into_impl::<CHANNELS, false>(
+        source,
+        source_dimensions,
+        output_dimensions,
+        coefficients,
+        fill,
+        quad,
+        output,
+        &mut [],
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+pub(crate) fn execute_into_with_validity<const CHANNELS: usize>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    coefficients: &[f64],
+    fill: [u8; 4],
+    quad: bool,
+    output: &mut [u8],
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    execute_into_impl::<CHANNELS, true>(
+        source,
+        source_dimensions,
+        output_dimensions,
+        coefficients,
+        fill,
+        quad,
+        output,
+        validity,
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+fn execute_into_impl<const CHANNELS: usize, const TRACK_VALIDITY: bool>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    coefficients: &[f64],
+    fill: [u8; 4],
+    quad: bool,
+    output: &mut [u8],
+    validity: &mut [u8],
+) -> Result<(), PilError> {
     let (source_width, source_height) = source_dimensions;
     let (output_width, output_height) = output_dimensions;
     if !(1..=4).contains(&CHANNELS) {
@@ -63,6 +109,11 @@ pub(crate) fn execute_into<const CHANNELS: usize>(
     if output.len() != output_len {
         return Err(PilError::InternalError(
             "Transform vector projective destination buffer shape mismatch".into(),
+        ));
+    }
+    if TRACK_VALIDITY && validity.len() != output_len / CHANNELS {
+        return Err(PilError::InternalError(
+            "Transform projective nearest validity buffer shape mismatch".into(),
         ));
     }
     if source.len() != source_len || coefficients.len() != 8 {
@@ -87,13 +138,16 @@ pub(crate) fn execute_into<const CHANNELS: usize>(
                 let output_start = output_pixel * CHANNELS;
                 let input_x = nearest_coordinate(source_x[lane]);
                 let input_y = nearest_coordinate(source_y[lane]);
-                vector_samples::copy_nearest::<CHANNELS>(
+                let valid = vector_samples::copy_nearest::<CHANNELS>(
                     source,
                     &mut output[output_start..output_start + CHANNELS],
                     source_dimensions,
                     (input_x, input_y),
                     fill,
                 );
+                if TRACK_VALIDITY {
+                    validity[output_pixel] = u8::from(valid);
+                }
             }
             blocks = blocks.saturating_add(1);
         }

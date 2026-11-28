@@ -11,6 +11,8 @@ use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(crate) mod avx512f;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub(crate) mod avx_fma;
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 pub(crate) mod neon;
@@ -235,6 +237,8 @@ pub(super) fn blend_raw_sample(left: u8, right: u8, alpha: f32) -> u8 {
 
 /// Executes the archived sixteen-byte FMA loop with the selected arch kernel.
 /// The closure is statically dispatched and monomorphized into this loop.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+#[cfg(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64"))]
 #[inline(always)]
 pub(super) fn execute_vector<F>(
     source: &DynamicImage,
@@ -309,6 +313,67 @@ where
     )
 }
 
+/// Executes complete 64-byte dword blocks and blends the byte tail scalarly.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+#[inline(always)]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) fn execute_vector_avx512f<F>(
+    source: &DynamicImage,
+    other: &DynamicImage,
+    mode: Mode,
+    channels: u8,
+    alpha: f64,
+    mut blend_block: F,
+) -> Result<DynamicImage, PilError>
+where
+    F: FnMut([u8; 64], [u8; 64], f32) -> [u8; 64],
+{
+    let (width, height) = (source.width(), source.height());
+    let dimensions = CheckedDims::new_allow_empty(width, height, channels)?;
+    let source_bytes = source.as_bytes();
+    let other_bytes = other.as_bytes();
+    let alpha = alpha as f32;
+    if source.mode() != mode
+        || source_bytes.len() != dimensions.total_bytes()
+        || other_bytes.len() != dimensions.total_bytes()
+        || !alpha.is_finite()
+    {
+        return Err(PilError::InternalError(
+            "AVX-512F Blend strategy received an invalid prepared layout".into(),
+        ));
+    }
+    if source_bytes.is_empty() {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(source.clone());
+    }
+
+    let mut output = vec![0u8; source_bytes.len()];
+    let vector_end = source_bytes.len() / 64 * 64;
+    for start in (0..vector_end).step_by(64) {
+        let left: [u8; 64] = source_bytes[start..start + 64]
+            .try_into()
+            .expect("complete AVX-512F Blend block");
+        let right: [u8; 64] = other_bytes[start..start + 64]
+            .try_into()
+            .expect("complete AVX-512F Blend block");
+        output[start..start + 64].copy_from_slice(&blend_block(left, right, alpha));
+    }
+    for (index, output) in output[vector_end..].iter_mut().enumerate() {
+        *output = blend_raw_sample(
+            source_bytes[vector_end + index],
+            other_bytes[vector_end + index],
+            alpha,
+        );
+    }
+    crate::compute::record_pipeline_operation_vector_blocks((vector_end / 64) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail((source_bytes.len() - vector_end) as u64);
+    crate::compute::record_pipeline_operation_path("avx512f");
+    crate::compute::pool_cpu::ops::composite::helpers::native_bytes::construct(
+        width, height, mode, output,
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute_selected(
     source: &DynamicImage,
     other: &DynamicImage,
@@ -323,6 +388,10 @@ pub(crate) fn execute_selected(
     }
     let mut output = match selection.implementation.architecture {
         Architecture::Default => execute(source, other, mode, alpha, channels),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F if vector_mode(mode) => {
+            avx512f::execute(source, other, mode, channels, alpha)
+        }
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         Architecture::AvxFma if vector_mode(mode) => {
             avx_fma::execute(source, other, mode, channels, alpha)
@@ -339,6 +408,8 @@ pub(crate) fn execute_selected(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+#[cfg(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64"))]
 fn vector_mode(mode: Mode) -> bool {
     matches!(
         mode,

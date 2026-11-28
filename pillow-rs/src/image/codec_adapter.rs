@@ -15,7 +15,7 @@ use crate::raster::{
 ///
 /// The codec selects mode while inspecting headers; this exhaustive boundary
 /// translation keeps raster ownership and pixel semantics in Pillow.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(super) const fn raster_mode_from_codec_mode(mode: CodecMode) -> Mode {
     match mode {
         CodecMode::One => Mode::One,
@@ -48,6 +48,28 @@ pub(super) const fn raster_mode_from_codec_mode(mode: CodecMode) -> Mode {
         CodecMode::ImageRgba16 => Mode::ImageRgba16,
         CodecMode::ImageRgb32F => Mode::ImageRgb32F,
         CodecMode::ImageRgba32F => Mode::ImageRgba32F,
+    }
+}
+
+/// Maps codec storage metadata to the legacy Pillow spelling used by GPU input.
+///
+/// This fallback is not an operation mode identity; Pillow-owned decoded
+/// rasters use [`Mode`] translated from the codec header instead.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+#[cfg(feature = "gpu")]
+pub(super) const fn pillow_spelling_from_codec_image_mode(mode: CodecImageMode) -> &'static str {
+    match mode {
+        CodecImageMode::L1 => "1",
+        CodecImageMode::P8 => "P",
+        CodecImageMode::L8 => "L",
+        CodecImageMode::La8 | CodecImageMode::La16 => "LA",
+        CodecImageMode::Rgb8 | CodecImageMode::Rgb16 | CodecImageMode::Rgb32F => "RGB",
+        CodecImageMode::Rgba8 | CodecImageMode::Rgba16 | CodecImageMode::Rgba32F => "RGBA",
+        CodecImageMode::Cmyk8 => "CMYK",
+        CodecImageMode::L16 => "I;16",
+        CodecImageMode::F32 => "F",
+        CodecImageMode::I32 => "I",
+        _ => "unknown",
     }
 }
 
@@ -190,7 +212,7 @@ fn codec_color_type(color: ColorType) -> CodecColorType {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn decoded_pixels_to_raster(d: &DecodedImage) -> Option<DynamicImage> {
     if d.mode != d.color.into() || d.palette.is_some() {
         return None;
@@ -248,7 +270,7 @@ pub(crate) fn decoded_pixels_to_raster(d: &DecodedImage) -> Option<DynamicImage>
     Some(img)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(super) fn decoded_to_dynamic(
     decoded: &Decoded<DecodedImage>,
     expected_codec_mode: CodecImageMode,
@@ -315,7 +337,7 @@ pub(super) fn decoded_to_dynamic(
     Ok(image)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn attach_decoded_hidden_lanes(
     image: &mut DynamicImage,
     mode: Mode,
@@ -356,7 +378,7 @@ pub(crate) fn attach_decoded_hidden_lanes(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn retag_decoded_image(image: DynamicImage, header_mode: Mode) -> Result<DynamicImage, PilError> {
     if image.mode() == header_mode {
         return Ok(image);

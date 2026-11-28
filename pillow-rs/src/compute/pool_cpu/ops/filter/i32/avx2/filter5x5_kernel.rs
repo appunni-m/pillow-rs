@@ -2,6 +2,7 @@
 
 use wide::f32x8;
 
+// VERIFY: source=reviewed@2026-11-28; parity=pass@filter-architecture-closure-20261128; benchmark=pending
 #[inline]
 fn native_filter_5x5_i32_vector(
     raw: &[u8],
@@ -33,11 +34,14 @@ fn native_filter_5x5_i32_vector(
                     }
                 }))
             });
-            let sum = taps[1] * f32x8::splat(kernel[kernel_start + 1]);
-            let sum = taps[0].mul_add(f32x8::splat(kernel[kernel_start]), sum);
-            let sum = taps[2].mul_add(f32x8::splat(kernel[kernel_start + 2]), sum);
-            let sum = taps[3].mul_add(f32x8::splat(kernel[kernel_start + 3]), sum);
-            taps[4].mul_add(f32x8::splat(kernel[kernel_start + 4]), sum)
+            // Pillow's x86 C kernel rounds each product before adding the
+            // next tap. Keep these vector operations separate even when this
+            // strategy was compiled with FMA support.
+            let sum = taps[0] * f32x8::splat(kernel[kernel_start]);
+            let sum = sum + taps[1] * f32x8::splat(kernel[kernel_start + 1]);
+            let sum = sum + taps[2] * f32x8::splat(kernel[kernel_start + 2]);
+            let sum = sum + taps[3] * f32x8::splat(kernel[kernel_start + 3]);
+            sum + taps[4] * f32x8::splat(kernel[kernel_start + 4])
         };
 
         let mut total = f32x8::splat(rounding_bias);
@@ -69,11 +73,11 @@ fn native_filter_5x5_i32_vector(
                         as f32;
             }
         }
-        let sum = f32x8::from(samples[1]) * f32x8::splat(kernel[kernel_start + 1]);
-        let sum = f32x8::from(samples[0]).mul_add(f32x8::splat(kernel[kernel_start]), sum);
-        let sum = f32x8::from(samples[2]).mul_add(f32x8::splat(kernel[kernel_start + 2]), sum);
-        let sum = f32x8::from(samples[3]).mul_add(f32x8::splat(kernel[kernel_start + 3]), sum);
-        f32x8::from(samples[4]).mul_add(f32x8::splat(kernel[kernel_start + 4]), sum)
+        let sum = f32x8::from(samples[0]) * f32x8::splat(kernel[kernel_start]);
+        let sum = sum + f32x8::from(samples[1]) * f32x8::splat(kernel[kernel_start + 1]);
+        let sum = sum + f32x8::from(samples[2]) * f32x8::splat(kernel[kernel_start + 2]);
+        let sum = sum + f32x8::from(samples[3]) * f32x8::splat(kernel[kernel_start + 3]);
+        sum + f32x8::from(samples[4]) * f32x8::splat(kernel[kernel_start + 4])
     };
 
     let mut total = f32x8::splat(rounding_bias);

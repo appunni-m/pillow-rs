@@ -1,3 +1,3 @@
 mod lookup;
 
-pub(crate) use lookup::{alpha, color};
+pub(crate) use lookup::{alpha, cmyk, color};

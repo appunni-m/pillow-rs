@@ -114,7 +114,7 @@ fn paste_invalid_component(value: &Bound<'_, PyAny>) -> pillow_rs::PasteColorCom
     }
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
 pub(crate) fn paste_source_from_python(
     value: &Bound<'_, PyAny>,
     mode: pillow_rs::Mode,
@@ -122,7 +122,7 @@ pub(crate) fn paste_source_from_python(
     paste_source_from_python_with_image_wrappers(value, mode, true)
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
 pub(crate) fn paste_source_from_imaging_core(
     value: &Bound<'_, PyAny>,
     mode: pillow_rs::Mode,
@@ -130,7 +130,7 @@ pub(crate) fn paste_source_from_imaging_core(
     paste_source_from_python_with_image_wrappers(value, mode, false)
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
 fn paste_source_from_python_with_image_wrappers(
     value: &Bound<'_, PyAny>,
     mode: pillow_rs::Mode,
@@ -169,8 +169,12 @@ fn paste_source_from_python_with_image_wrappers(
     if value.is_instance_of::<PyFloat>() {
         return Ok(pillow_rs::PasteSourceInput::Float(value.extract::<f64>()?));
     }
-    if let Ok(value) = value.extract::<String>() {
-        return Ok(pillow_rs::PasteSourceInput::String(value));
+    // High-level Image.paste resolves color strings before calling ImagingCore;
+    // a direct core paste sends the string to getink, which rejects it.
+    if accept_image_wrappers {
+        if let Ok(value) = value.extract::<String>() {
+            return Ok(pillow_rs::PasteSourceInput::String(value));
+        }
     }
     if let Ok(values) = value.cast::<PyTuple>() {
         let mut components = Vec::with_capacity(values.len());
@@ -192,11 +196,10 @@ fn paste_source_from_python_with_image_wrappers(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
-pub(crate) fn paste_box_coordinate_from_python(value: &Bound<'_, PyAny>) -> PyResult<i64> {
-    // PyO3's c_long extractor calls PyLong_AsLong, matching the `(i)` field
-    // conversion used by Pillow's PyArg_ParseTuple parser. Check C-int range
-    // here so a failing value stops parsing before the next item is read.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
+fn c_int_coordinate_from_python(value: &Bound<'_, PyAny>) -> PyResult<i64> {
+    // Match PyArg_ParseTuple's `(i)` conversion, checking C-int range before
+    // the next sequence item is fetched.
     let coordinate = value.extract::<std::os::raw::c_long>()?;
     let coordinate = i32::try_from(coordinate).map_err(|_| {
         pyo3::exceptions::PyOverflowError::new_err(if coordinate < 0 {
@@ -208,21 +211,39 @@ pub(crate) fn paste_box_coordinate_from_python(value: &Bound<'_, PyAny>) -> PyRe
     Ok(i64::from(coordinate))
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
 pub(crate) fn paste_box_sequence_coordinates(
     value: &Bound<'_, PyAny>,
     _py: Python<'_>,
 ) -> PyResult<Vec<i64>> {
+    fixed_box_sequence_coordinates(value, 2)
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
+pub(crate) fn transform_box_sequence_coordinates(
+    value: &Bound<'_, PyAny>,
+) -> PyResult<(i64, i64, i64, i64)> {
+    let coordinates = fixed_box_sequence_coordinates(value, 1)?;
+    Ok((
+        coordinates[0],
+        coordinates[1],
+        coordinates[2],
+        coordinates[3],
+    ))
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
+fn fixed_box_sequence_coordinates(value: &Bound<'_, PyAny>, argument: usize) -> PyResult<Vec<i64>> {
     let Ok(sequence) = value.cast::<PySequence>() else {
         let type_name = value.get_type().name()?.to_string();
         return Err(pyo3::exceptions::PyTypeError::new_err(format!(
-            "argument 2 must be 4-item sequence, not {type_name}"
+            "argument {argument} must be 4-item sequence, not {type_name}"
         )));
     };
     if value.is_instance_of::<PyBytes>() {
         let type_name = value.get_type().name()?.to_string();
         return Err(pyo3::exceptions::PyTypeError::new_err(format!(
-            "argument 2 must be 4-item sequence, not {type_name}"
+            "argument {argument} must be 4-item sequence, not {type_name}"
         )));
     }
 
@@ -231,7 +252,7 @@ pub(crate) fn paste_box_sequence_coordinates(
     let length = sequence.len()?;
     if length != 4 {
         return Err(pyo3::exceptions::PyTypeError::new_err(format!(
-            "argument 2 must be sequence of length 4, not {length}"
+            "argument {argument} must be sequence of length 4, not {length}"
         )));
     }
 
@@ -243,11 +264,11 @@ pub(crate) fn paste_box_sequence_coordinates(
                 // Pillow clears failures from PySequence_GetItem and reports
                 // the argument parser's stable retrieval error.
                 return Err(pyo3::exceptions::PyTypeError::new_err(format!(
-                    "argument 2, item {index} is not retrievable"
+                    "argument {argument}, item {index} is not retrievable"
                 )));
             }
         };
-        coordinates.push(paste_box_coordinate_from_python(&item)?);
+        coordinates.push(c_int_coordinate_from_python(&item)?);
     }
     Ok(coordinates)
 }
@@ -290,18 +311,22 @@ pub(crate) fn paste_box_for_staged_plan(
     Ok((pillow_rs::PasteBoxInput::Values(vec![0; 4]), Some(pending)))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn paste_mask_from_python(
     value: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<pillow_rs::PasteMaskInput> {
     let Some(value) = value else {
         return Ok(pillow_rs::PasteMaskInput::None);
     };
-    if let Some(image) = image_from_python(value) {
-        return Ok(pillow_rs::PasteMaskInput::Image(Box::new(image)));
+    if let Ok(mask) = value.cast::<PyImage>() {
+        return Ok(pillow_rs::PasteMaskInput::Image(Box::new(
+            mask.borrow().inner.clone(),
+        )));
     }
-    Ok(pillow_rs::PasteMaskInput::Invalid(
-        value.get_type().name()?.to_string(),
-    ))
+    let type_name = value.get_type().name()?;
+    Err(pyo3::exceptions::PyTypeError::new_err(format!(
+        "argument 3 must be ImagingCore, not {type_name}"
+    )))
 }
 
 pub(crate) fn open_mode_input_from_python(

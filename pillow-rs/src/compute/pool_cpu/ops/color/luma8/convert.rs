@@ -328,6 +328,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &GrayImage,
     target: Mode,
@@ -350,6 +351,7 @@ pub(crate) fn execute(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_palette_target(
     source: &GrayImage,
     target: Mode,

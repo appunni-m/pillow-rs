@@ -131,7 +131,7 @@ impl PyDraw {
 
     #[new]
     #[pyo3(signature = (image, mode=None, execution_context=None))]
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn new(
         image: &Bound<'_, PyImage>,
         mode: Option<&Bound<'_, PyAny>>,
@@ -185,7 +185,8 @@ impl PyDraw {
             .map_err(map_error)
     }
 
-    #[pyo3(signature = (xy, fill=None, width=0, joint=None))]
+    // VERIFY: source=reviewed@2026-11-27; parity=pending; benchmark=pending
+    #[pyo3(signature = (xy, fill=None, width=1, joint=None))]
     fn line(
         &mut self,
         py: Python<'_>,

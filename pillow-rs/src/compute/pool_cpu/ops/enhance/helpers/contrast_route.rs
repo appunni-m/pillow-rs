@@ -35,7 +35,7 @@ const CONTRAST_PA_BLEND: &[OperationId] = &[
 ];
 const CONTRAST_ROUND_TRIP: &[OperationId] = &[OperationId::Convert, OperationId::Convert];
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn contrast_rejection(
     mode: Mode,
     scope: SupportScope,
@@ -58,7 +58,7 @@ fn contrast_rejection(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn classify_contrast_route(mode: Mode) -> OperationModeRoute {
     let prepared_support = classify_contrast_mode(mode);
     if matches!(prepared_support, ModeSupport::Supported { .. }) {
@@ -132,7 +132,8 @@ fn classify_contrast_route(mode: Mode) -> OperationModeRoute {
 }
 
 /// Complete public exact-mode routes and prepared support for Contrast.
-/// TODO(pillow-rs#3ptb): verify every route with CPU parity and architecture receipts.
+/// TODO(pillow-rs#3ptb): verify every source-reviewed route with CPU parity
+/// and architecture receipts.
 pub(crate) static CONTRAST_SUPPORT: OperationSupport = OperationSupport::routed(
     OperationId::Contrast,
     INPUTS,
@@ -140,7 +141,7 @@ pub(crate) static CONTRAST_SUPPORT: OperationSupport = OperationSupport::routed(
     CONTRAST_CHILDREN,
 );
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn prepare_contrast<'a>(
     input: OperationInputs<'a>,
     factor: f64,
@@ -154,7 +155,7 @@ fn prepare_contrast<'a>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_contrast_pipeline<'a>(
     input: OperationInputs<'a>,
     operation: &'a PipelineOp,

@@ -94,6 +94,7 @@ macro_rules! rank_median_architectures {
 rank_median_architectures!(MEDIAN_FILTER_ARCHITECTURES, OperationId::MedianFilter);
 rank_median_architectures!(RANK_FILTER_ARCHITECTURES, OperationId::RankFilter);
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         OperationId::Filter3x3 => ModeSupport::cpu(
@@ -167,6 +168,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -196,6 +198,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -246,6 +249,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     super::default::execute(image, request)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_rank(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -283,6 +287,7 @@ fn execute_rank(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_box_blur(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -301,6 +306,7 @@ fn execute_box_blur(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_gaussian_blur(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -324,6 +330,7 @@ fn execute_gaussian_blur(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_filter5x5(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -349,6 +356,7 @@ fn execute_filter5x5(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_filter3x3(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,

@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{GrayImage, RgbaImage};
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(input: &GrayImage, lut: &[f64]) -> Result<RgbaImage, PilError> {
     let mut raw = Vec::with_capacity(input.as_raw().len() * std::mem::size_of::<f32>());
     for &sample in input.as_raw() {

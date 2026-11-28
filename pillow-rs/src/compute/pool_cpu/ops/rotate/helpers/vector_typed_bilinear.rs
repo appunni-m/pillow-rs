@@ -8,6 +8,7 @@ use crate::error::PilError;
 use crate::raster::{Rgba, RgbaImage};
 use wide::{f32x8, f64x8, i32x8};
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<const FLOAT: bool>(
     image: &RgbaImage,
     request: RotateRequest,
@@ -141,6 +142,7 @@ fn scalar_sample<const FLOAT: bool>(source: &[u8], width: usize, x: usize, y: us
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn bilinear_vector<const FLOAT: bool>(samples: &TypedSamples) -> f64x8 {
     let difference = |right: [f64; LANES], left: [f64; LANES]| {
         if FLOAT {

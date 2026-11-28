@@ -26,6 +26,9 @@ pub(crate) const SUPPORT: ModeSupport =
 pub(crate) const CHANNELS: usize = 3;
 pub(crate) const FLOAT_MODE: bool = false;
 
+// TODO(pillow-rs#3ptb): verify LAB text masks with partial coverage against the
+// encoded a/b channels after this mode-owned ink conversion.
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 pub(crate) fn apply_text<const RGBA_MASK: bool>(
     selection: &StrategySelection,
     input: super::super::TextComposeInput<'_>,
@@ -38,15 +41,17 @@ pub(crate) fn apply_text<const RGBA_MASK: bool>(
         input.width,
         input.height,
         input.pixels.as_ref(),
-        input.fill,
+        crate::draw::lab_storage_ink(input.fill),
     )
     .map(super::super::TextComposeResult::Updated)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn support() -> ModeSupport {
     SUPPORT
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     ops: &[PipelineOp],

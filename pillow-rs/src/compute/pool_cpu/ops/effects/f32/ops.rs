@@ -67,6 +67,7 @@ pub(crate) const NOISE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     "Core-only dimension-carrier mode for EffectNoise.",
 );
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_spread<'a>(
     input: &'a Input,
     distance: u32,
@@ -113,6 +114,7 @@ fn from_spread_vector(output: spread_vector::Output) -> Result<Input, PilError> 
         .ok_or_else(|| PilError::InternalError("EffectSpread vector output shape mismatch".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_spread(plan: SpreadStrategy<'_>) -> Result<DynamicImage, PilError> {
     match plan.implementation {
         SpreadImplementation::Default(kernel) => {
@@ -130,6 +132,7 @@ pub(crate) fn execute_spread(plan: SpreadStrategy<'_>) -> Result<DynamicImage, P
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_noise<'a>(
     input: &'a Input,
     sigma: f64,
@@ -164,6 +167,7 @@ pub(crate) fn prepare_noise<'a>(
     Ok(Prepared::new(implementation, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_noise(plan: NoiseStrategy<'_>) -> Result<DynamicImage, PilError> {
     match plan.implementation {
         NoiseImplementation::Default(kernel) => {
@@ -204,6 +208,7 @@ pub(crate) enum LinearGradientImplementation {
 }
 pub(crate) type LinearGradientStrategy = Prepared<LinearGradientImplementation>;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_linear_gradient(
     selection: crate::compute::registry::support::StrategySelection,
 ) -> Result<LinearGradientStrategy, PilError> {
@@ -221,6 +226,7 @@ pub(crate) fn prepare_linear_gradient(
     Ok(Prepared::new(implementation, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_linear_gradient(
     plan: LinearGradientStrategy,
 ) -> Result<crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage, PilError> {
@@ -243,12 +249,14 @@ pub(crate) const RADIAL_GRADIENT_SUPPORT: ModeSupport = ModeSupport::cpu(
 );
 pub(crate) type RadialGradientStrategy = Prepared<()>;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_radial_gradient(
     selection: crate::compute::registry::support::StrategySelection,
 ) -> RadialGradientStrategy {
     Prepared::new((), selection)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_radial_gradient(
     plan: RadialGradientStrategy,
 ) -> Result<crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage, PilError> {

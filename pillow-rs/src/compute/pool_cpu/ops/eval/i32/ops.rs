@@ -36,7 +36,7 @@ pub(crate) struct Strategy<'a> {
     selection: StrategySelection,
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: &'a RgbaImage,
     lut: &'a [u8],
@@ -58,7 +58,7 @@ pub(crate) fn prepare<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     strategy: Strategy<'_>,
 ) -> Result<(DynamicImage, StrategySelection), PilError> {

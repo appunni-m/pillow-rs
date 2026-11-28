@@ -12,11 +12,12 @@ const INPUTS: &[InputContract] = &[InputContract::ReduceFactors {
     identity_only: true,
 }];
 
+// TODO(pillow-rs#3ptb): verify public factor-one full/crop outputs and
+// non-identity mode-error ordering in the frozen CPU parity matrix.
 /// Factor-one requests copy or crop; non-identity reductions are unsupported.
-/// Pillow 12.2 `_reduce` returns the factor-one crop before calling
-/// `ImagingReduce`, which rejects mode `1` with `image has wrong mode`.
-/// Neither accepted path processes samples, so averaging or thresholding is
-/// neither required for parity nor useful for performance.
+/// Pillow 13.0's public `Image.reduce` returns a crop for `(1, 1)` and otherwise
+/// delegates to `ImagingReduce`, which rejects mode `1` with `image has wrong
+/// mode`. Neither accepted path averages samples, so no reducer is needed.
 /// A malformed box reports its validation error before One-mode rejects
 /// non-identity reduction.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
@@ -33,7 +34,7 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: &'a crate::raster::GrayImage,
     facts: StrategyInputs,
@@ -46,7 +47,7 @@ pub(crate) fn prepare<'a>(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
         ArchitectureStrategy::Default { input } => super::default::reduce_impl::execute(input),

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use crate::compute::registry::support::OperationInputs;
-use crate::compute::{Backend, ExecutionContext};
+use crate::compute::{Backend, CpuExecutionRoute, ExecutionContext};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::paste::PasteSource;
@@ -19,7 +19,7 @@ impl Image {
     /// backend or architecture.
     // TODO(pillow-rs#3ptb): verify nested Draw Text Paste output, errors, and
     // context receipts against the frozen CPU mode/architecture matrix.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn execute_paste_at_with_context(
         &self,
         source: PasteSource,
@@ -29,12 +29,17 @@ impl Image {
         context: ExecutionContext,
     ) -> Result<Option<DynamicImage>, PilError> {
         let mut queued = self.clone();
-        queued.paste_at(source, Some(position), Some(mask))?;
+        queued.paste_at_with_execution_route(
+            source,
+            position,
+            Some(mask),
+            CpuExecutionRoute::new(requested_backend, context),
+        )?;
         self.execute_queued_paste_with_context(queued, requested_backend, context)
     }
 
     /// Admits and executes a compact solid-mask Bitmap child in its parent's context.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn execute_bitmap_paste_at_with_context(
         &self,
         source: PasteSource,
@@ -44,7 +49,12 @@ impl Image {
         context: ExecutionContext,
     ) -> Result<Option<DynamicImage>, PilError> {
         let mut queued = self.clone();
-        queued.paste_bitmap_solid_masked_at(source, position, mask)?;
+        queued.paste_bitmap_solid_masked_at_with_execution_route(
+            source,
+            position,
+            mask,
+            CpuExecutionRoute::new(requested_backend, context),
+        )?;
         self.execute_queued_paste_with_context(queued, requested_backend, context)
     }
 

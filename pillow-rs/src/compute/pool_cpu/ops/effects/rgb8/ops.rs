@@ -67,6 +67,7 @@ pub(crate) const NOISE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     "Core-only dimension-carrier mode for EffectNoise.",
 );
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_spread<'a>(
     input: &'a Input,
     distance: u32,
@@ -131,6 +132,7 @@ fn from_spread_vector(output: spread_vector::Output) -> Result<Input, PilError> 
     Ok(image)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_spread(plan: SpreadStrategy<'_>) -> Result<DynamicImage, PilError> {
     match plan.implementation {
         SpreadImplementation::Default(kernel) => {
@@ -148,6 +150,7 @@ pub(crate) fn execute_spread(plan: SpreadStrategy<'_>) -> Result<DynamicImage, P
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_noise<'a>(
     input: &'a Input,
     sigma: f64,
@@ -182,6 +185,7 @@ pub(crate) fn prepare_noise<'a>(
     Ok(Prepared::new(implementation, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_noise(plan: NoiseStrategy<'_>) -> Result<DynamicImage, PilError> {
     match plan.implementation {
         NoiseImplementation::Default(kernel) => {

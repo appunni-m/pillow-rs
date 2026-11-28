@@ -6,6 +6,7 @@ use wide::u8x16;
 
 const RGB_TO_RGBA_BYTES: u8x16 = u8x16::new([0, 1, 2, 15, 3, 4, 5, 15, 6, 7, 8, 15, 9, 10, 11, 15]);
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)

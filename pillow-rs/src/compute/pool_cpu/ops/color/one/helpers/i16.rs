@@ -5,6 +5,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage, ImageBuffer, Luma, Mode};
 use wide::{u8x16, u16x16};
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, PilError> {
     let dims = CheckedDims::new_allow_empty(source.width(), source.height(), 1)?;
     if source.as_raw().len() != dims.total_pixels() {

@@ -9,7 +9,7 @@ use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyResult, Python};
 use pyo3::types::{PyAnyMethods, PyIterator, PyString};
 
 #[allow(clippy::too_many_arguments)]
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(super) fn draw_multiline_text_impl<'py>(
     draw: &mut pillow_rs::Draw,
     xy: (f64, f64),
@@ -117,7 +117,7 @@ struct PythonLineIterator<'py> {
 }
 
 impl<'py> PythonDrawTextLinesCallbacks<'py> {
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn custom_mask(
         &mut self,
         line: &DrawTextLine<Bound<'py, PyAny>>,
@@ -186,7 +186,7 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn draw_direct(
         &mut self,
         requested_backend: Option<Backend>,
@@ -258,7 +258,7 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         self.embedded_color.is_truthy()
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn draw_custom_stroke(
         &mut self,
         line: &DrawTextLine<Self::Value>,
@@ -284,7 +284,7 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn draw_custom_fill(
         &mut self,
         line: &DrawTextLine<Self::Value>,
@@ -318,7 +318,7 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
 }
 
 #[allow(clippy::too_many_arguments)]
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(super) fn draw_text_lines<'py>(
     py: Python<'py>,
     py_draw: Py<PyDraw>,
@@ -384,7 +384,7 @@ pub(super) fn draw_text_lines<'py>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn color_from_draw_ink(draw: &pillow_rs::Draw, ink: i64) -> PyResult<(u8, u8, u8, u8)> {
     let ink = i32::try_from(ink).map_err(|_| {
         map_error(PilError::InternalError(

@@ -9,6 +9,7 @@ use crate::error::PilError;
 use crate::pipeline::{ResampleFilter, TransformMethod};
 use wide::f64x8;
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<const CHANNELS: usize, const ALPHA: bool>(
     source: &[u8],
     source_dimensions: (u32, u32),
@@ -17,17 +18,19 @@ pub(crate) fn execute<const CHANNELS: usize, const ALPHA: bool>(
     let (source_layout, destination, affine) =
         prepare::<CHANNELS>(source, source_dimensions, request)?;
     let mut output = destination.alloc_buffer();
-    execute_pixels::<CHANNELS, ALPHA>(
+    execute_pixels::<CHANNELS, ALPHA, false>(
         source,
         source_layout,
         destination,
         affine,
         normalize_fill::<CHANNELS>(request.fill),
         &mut output,
+        &mut [],
     )?;
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_into<const CHANNELS: usize, const ALPHA: bool>(
     source: &[u8],
     source_dimensions: (u32, u32),
@@ -36,13 +39,34 @@ pub(crate) fn execute_into<const CHANNELS: usize, const ALPHA: bool>(
 ) -> Result<(), PilError> {
     let (source_layout, destination, affine) =
         prepare::<CHANNELS>(source, source_dimensions, request)?;
-    execute_pixels::<CHANNELS, ALPHA>(
+    execute_pixels::<CHANNELS, ALPHA, false>(
         source,
         source_layout,
         destination,
         affine,
         normalize_fill::<CHANNELS>(request.fill),
         output,
+        &mut [],
+    )
+}
+
+pub(crate) fn execute_into_with_validity<const CHANNELS: usize, const ALPHA: bool>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    request: TransformRequest<'_>,
+    output: &mut [u8],
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    let (source_layout, destination, affine) =
+        prepare::<CHANNELS>(source, source_dimensions, request)?;
+    execute_pixels::<CHANNELS, ALPHA, true>(
+        source,
+        source_layout,
+        destination,
+        affine,
+        normalize_fill::<CHANNELS>(request.fill),
+        output,
+        validity,
     )
 }
 
@@ -87,17 +111,24 @@ fn normalize_fill<const CHANNELS: usize>(fill: Option<(u8, u8, u8, u8)>) -> (u8,
     }
 }
 
-fn execute_pixels<const CHANNELS: usize, const ALPHA: bool>(
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+fn execute_pixels<const CHANNELS: usize, const ALPHA: bool, const TRACK_VALIDITY: bool>(
     source: &[u8],
     source_layout: CheckedDims,
     destination: CheckedDims,
     affine: [f64; 6],
     fill: (u8, u8, u8, u8),
     output: &mut [u8],
+    validity: &mut [u8],
 ) -> Result<(), PilError> {
     if output.len() != destination.total_bytes() {
         return Err(PilError::InternalError(
             "Transform bilinear destination buffer shape mismatch".into(),
+        ));
+    }
+    if TRACK_VALIDITY && validity.len() != destination.total_pixels() {
+        return Err(PilError::InternalError(
+            "Transform bilinear validity buffer shape mismatch".into(),
         ));
     }
     let alpha_channel = ALPHA.then_some(CHANNELS - 1);
@@ -145,6 +176,11 @@ fn execute_pixels<const CHANNELS: usize, const ALPHA: bool>(
             let active_bytes = count * CHANNELS;
             output[output_start..output_start + active_bytes]
                 .copy_from_slice(&block[..active_bytes]);
+            if TRACK_VALIDITY {
+                for (lane, sample) in samples.iter().take(count).enumerate() {
+                    validity[y * width + x + lane] = u8::from(sample.valid);
+                }
+            }
             vector_blocks = vector_blocks.saturating_add(1);
             x += count;
         }
@@ -153,6 +189,9 @@ fn execute_pixels<const CHANNELS: usize, const ALPHA: bool>(
                 vector_interpolation::sample_coordinates(affine, source_width, source_height, x, y);
             let output_start = row_start + x * CHANNELS;
             sampler.scalar_pixel(&mut output[output_start..output_start + CHANNELS], sample);
+            if TRACK_VALIDITY {
+                validity[y * width + x] = u8::from(sample.valid);
+            }
             scalar_tail = scalar_tail.saturating_add(1);
             x += 1;
         }

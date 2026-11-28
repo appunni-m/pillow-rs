@@ -1,7 +1,7 @@
 //! Existing fixed-point and floating-point SIMD affine-nearest samplers.
 
 use crate::compute::pool_cpu::ops::transform::helpers::{
-    scalar::affine_nearest_fixed, vector_samples,
+    affine::nearest_sample_coordinate, scalar::affine_nearest_fixed, vector_samples,
 };
 use crate::error::PilError;
 use wide::{i64x8, u8x16};
@@ -45,6 +45,48 @@ pub(crate) fn execute_into<const CHANNELS: usize>(
     fill: [u8; 4],
     output: &mut [u8],
 ) -> Result<(), PilError> {
+    execute_into_impl::<CHANNELS, false>(
+        source,
+        source_dimensions,
+        output_dimensions,
+        affine,
+        fill,
+        output,
+        &mut [],
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+pub(crate) fn execute_into_with_validity<const CHANNELS: usize>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    affine: [f64; 6],
+    fill: [u8; 4],
+    output: &mut [u8],
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    execute_into_impl::<CHANNELS, true>(
+        source,
+        source_dimensions,
+        output_dimensions,
+        affine,
+        fill,
+        output,
+        validity,
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+fn execute_into_impl<const CHANNELS: usize, const TRACK_VALIDITY: bool>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    affine: [f64; 6],
+    fill: [u8; 4],
+    output: &mut [u8],
+    validity: &mut [u8],
+) -> Result<(), PilError> {
     let (source_width, source_height) = source_dimensions;
     let (output_width, output_height) = output_dimensions;
     if !(1..=4).contains(&CHANNELS) {
@@ -58,6 +100,11 @@ pub(crate) fn execute_into<const CHANNELS: usize>(
             "Transform affine nearest destination buffer shape mismatch".into(),
         ));
     }
+    if TRACK_VALIDITY && validity.len() != output_len / CHANNELS {
+        return Err(PilError::InternalError(
+            "Transform affine nearest validity buffer shape mismatch".into(),
+        ));
+    }
     if output_width == 0 || output_height == 0 {
         return Ok(());
     }
@@ -68,21 +115,23 @@ pub(crate) fn execute_into<const CHANNELS: usize>(
         ));
     }
     match affine_nearest_fixed(affine, output_width, output_height) {
-        Some(steps) => sample_fixed::<CHANNELS>(
+        Some(steps) => sample_fixed::<CHANNELS, TRACK_VALIDITY>(
             source,
             source_dimensions,
             output_dimensions,
             steps,
             fill,
             output,
+            validity,
         ),
-        None => sample_floating::<CHANNELS>(
+        None => sample_floating::<CHANNELS, TRACK_VALIDITY>(
             source,
             source_dimensions,
             output_dimensions,
             affine,
             fill,
             output,
+            validity,
         )?,
     }
     Ok(())
@@ -95,13 +144,15 @@ fn byte_len<const CHANNELS: usize>(width: u32, height: u32) -> Result<usize, Pil
         .ok_or_else(|| PilError::ValueError("transform image is too large".into()))
 }
 
-fn sample_fixed<const CHANNELS: usize>(
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+fn sample_fixed<const CHANNELS: usize, const TRACK_VALIDITY: bool>(
     source: &[u8],
     source_dimensions: (u32, u32),
     output_dimensions: (u32, u32),
     steps: [i64; 6],
     fill: [u8; 4],
     output: &mut [u8],
+    validity: &mut [u8],
 ) {
     let (output_width, _) = output_dimensions;
     let [step_x, step_y, origin_x, step_x_y, step_y_y, origin_y] = steps;
@@ -115,18 +166,24 @@ fn sample_fixed<const CHANNELS: usize>(
     {
         let mut x = i64x8::splat(origin_x + row_index as i64 * step_y) + offsets_x;
         let mut y = i64x8::splat(origin_y + row_index as i64 * step_y_y) + offsets_y;
+        let mut block_start = 0;
         for block in row.chunks_mut(VECTOR_PIXELS * CHANNELS) {
             let source_x = (x >> 16_i32).to_array();
             let source_y = (y >> 16_i32).to_array();
             for (lane, pixel) in block.chunks_exact_mut(CHANNELS).enumerate() {
-                vector_samples::copy_nearest::<CHANNELS>(
+                let valid = vector_samples::copy_nearest::<CHANNELS>(
                     source,
                     pixel,
                     source_dimensions,
                     (source_x[lane], source_y[lane]),
                     fill,
                 );
+                if TRACK_VALIDITY {
+                    validity[row_index * output_width as usize + block_start + lane] =
+                        u8::from(valid);
+                }
             }
+            block_start += block.len() / CHANNELS;
             x += step_x_vector;
             y += step_y_vector;
         }
@@ -134,13 +191,15 @@ fn sample_fixed<const CHANNELS: usize>(
     record_vector_work(output_dimensions, VECTOR_PIXELS);
 }
 
-fn sample_floating<const CHANNELS: usize>(
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+fn sample_floating<const CHANNELS: usize, const TRACK_VALIDITY: bool>(
     source: &[u8],
     source_dimensions: (u32, u32),
     output_dimensions: (u32, u32),
     affine: [f64; 6],
     fill: [u8; 4],
     output: &mut [u8],
+    validity: &mut [u8],
 ) -> Result<(), PilError> {
     let (output_width, output_height) = output_dimensions;
     let [a, b, c, d, e, f] = affine;
@@ -158,16 +217,20 @@ fn sample_floating<const CHANNELS: usize>(
                 let y = destination_y as f64 + 0.5;
                 let source_x = a * x + b * y + c;
                 let source_y = d * x + e * y + f;
-                let input_x = if source_x < 0.0 { -1 } else { source_x as i64 };
-                let input_y = if source_y < 0.0 { -1 } else { source_y as i64 };
+                let input_x = nearest_sample_coordinate(source_x);
+                let input_y = nearest_sample_coordinate(source_y);
                 let pixel_start = pixel * CHANNELS;
-                vector_samples::copy_nearest::<CHANNELS>(
+                let valid = vector_samples::copy_nearest::<CHANNELS>(
                     source,
                     &mut block[pixel_start..pixel_start + CHANNELS],
                     source_dimensions,
                     (input_x, input_y),
                     fill,
                 );
+                if TRACK_VALIDITY {
+                    validity[(destination_y * output_width as usize) + destination_x + pixel] =
+                        u8::from(valid);
+                }
             }
             let output_start = row_start + destination_x * CHANNELS;
             let bytes = count * CHANNELS;

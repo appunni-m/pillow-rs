@@ -1,3 +1,4 @@
+use super::super::projective::geometry_madd;
 use super::{PilError, ResampleFilter, sample_transform_scalar32};
 pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar32<
     const IS_FLOAT: bool,
@@ -43,6 +44,7 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar3
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar32_into<
     const IS_FLOAT: bool,
 >(
@@ -56,6 +58,66 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar3
     _fill_is_none: bool,
     quad: bool,
     output: &mut [u8],
+) -> Result<(), PilError> {
+    transform_projective_scalar32_into_impl::<IS_FLOAT, false>(
+        source,
+        source_dimensions,
+        dst_w,
+        dst_h,
+        data,
+        filter,
+        _fill,
+        _fill_is_none,
+        quad,
+        output,
+        &mut [],
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar32_into_with_validity<
+    const IS_FLOAT: bool,
+>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    fill: Option<(u8, u8, u8, u8)>,
+    fill_is_none: bool,
+    quad: bool,
+    output: &mut [u8],
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    transform_projective_scalar32_into_impl::<IS_FLOAT, true>(
+        source,
+        source_dimensions,
+        dst_w,
+        dst_h,
+        data,
+        filter,
+        fill,
+        fill_is_none,
+        quad,
+        output,
+        validity,
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+fn transform_projective_scalar32_into_impl<const IS_FLOAT: bool, const TRACK_VALIDITY: bool>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    _fill: Option<(u8, u8, u8, u8)>,
+    _fill_is_none: bool,
+    quad: bool,
+    output: &mut [u8],
+    validity: &mut [u8],
 ) -> Result<(), PilError> {
     let (src_w, src_h) = source_dimensions;
     let source_len = usize::try_from(src_w)
@@ -87,21 +149,26 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar3
             "Scalar32 projective destination buffer shape mismatch".into(),
         ));
     }
+    if TRACK_VALIDITY && validity.len() != output_pixels {
+        return Err(PilError::InternalError(
+            "Scalar32 projective validity buffer shape mismatch".into(),
+        ));
+    }
     let source_at = |dx: f64, dy: f64| -> Option<(f64, f64)> {
         let xin = dx + 0.5;
         let yin = dy + 0.5;
         let (sx, sy) = if quad {
-            let sx_linear = data[1].mul_add(xin, data[0]);
-            let sx_linear = data[2].mul_add(yin, sx_linear);
-            let sx = (data[3] * xin).mul_add(yin, sx_linear);
-            let sy_linear = data[5].mul_add(xin, data[4]);
-            let sy_linear = data[6].mul_add(yin, sy_linear);
-            let sy = (data[7] * xin).mul_add(yin, sy_linear);
+            let sx_linear = geometry_madd(data[1], xin, data[0]);
+            let sx_linear = geometry_madd(data[2], yin, sx_linear);
+            let sx = geometry_madd(data[3] * xin, yin, sx_linear);
+            let sy_linear = geometry_madd(data[5], xin, data[4]);
+            let sy_linear = geometry_madd(data[6], yin, sy_linear);
+            let sy = geometry_madd(data[7] * xin, yin, sy_linear);
             (sx, sy)
         } else {
-            let denominator = data[6].mul_add(xin, data[7] * yin) + 1.0;
-            let sx = (data[0].mul_add(xin, data[1] * yin) + data[2]) / denominator;
-            let sy = (data[3].mul_add(xin, data[4] * yin) + data[5]) / denominator;
+            let denominator = geometry_madd(data[6], xin, data[7] * yin) + 1.0;
+            let sx = (geometry_madd(data[0], xin, data[1] * yin) + data[2]) / denominator;
+            let sy = (geometry_madd(data[3], xin, data[4] * yin) + data[5]) / denominator;
             (sx, sy)
         };
         (sx.is_finite() && sy.is_finite()).then_some((sx, sy))
@@ -110,12 +177,13 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar3
     for dy in 0..dst_h {
         for dx in 0..dst_w {
             let output_index = (dy as usize) * dst_w as usize + dx as usize;
-            if let Some((sx, sy)) = source_at(f64::from(dx), f64::from(dy))
-                && sx >= 0.0
-                && sx < f64::from(src_w)
-                && sy >= 0.0
-                && sy < f64::from(src_h)
-            {
+            let coordinate = source_at(f64::from(dx), f64::from(dy)).filter(|(sx, sy)| {
+                *sx >= 0.0 && *sx < f64::from(src_w) && *sy >= 0.0 && *sy < f64::from(src_h)
+            });
+            if TRACK_VALIDITY {
+                validity[output_index] = u8::from(coordinate.is_some());
+            }
+            if let Some((sx, sy)) = coordinate {
                 let start = output_index * 4;
                 output[start..start + 4].copy_from_slice(&sample_transform_scalar32::<IS_FLOAT>(
                     source, src_w, src_h, sx, sy, filter,
@@ -221,6 +289,7 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_mesh_scalar32_reco
     );
 }
 
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
 #[inline]
 fn apply_mesh_scalar32_record_with_coefficients<const IS_FLOAT: bool>(
     source: &[u8],
@@ -247,12 +316,18 @@ fn apply_mesh_scalar32_record_with_coefficients<const IS_FLOAT: bool>(
         let local_y = (destination_y - y0) as f64 + 0.5;
         for destination_x in x0..x1 {
             let local_x = (destination_x - x0) as f64 + 0.5;
-            let sx_linear =
-                coefficients[2].mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0]));
-            let sx = (coefficients[3] * local_x).mul_add(local_y, sx_linear);
-            let sy_linear =
-                coefficients[6].mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4]));
-            let sy = (coefficients[7] * local_x).mul_add(local_y, sy_linear);
+            let sx_linear = geometry_madd(
+                coefficients[2],
+                local_y,
+                geometry_madd(coefficients[1], local_x, coefficients[0]),
+            );
+            let sx = geometry_madd(coefficients[3] * local_x, local_y, sx_linear);
+            let sy_linear = geometry_madd(
+                coefficients[6],
+                local_y,
+                geometry_madd(coefficients[5], local_x, coefficients[4]),
+            );
+            let sy = geometry_madd(coefficients[7] * local_x, local_y, sy_linear);
             let output_index =
                 destination_y as usize * destination_width as usize + destination_x as usize;
             if !sx.is_finite()

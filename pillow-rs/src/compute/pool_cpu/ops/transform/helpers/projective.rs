@@ -1,17 +1,33 @@
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+/// Match Pillow's projective-coordinate rounding on the compiled target.
+#[inline(always)]
+pub(super) fn geometry_madd(left: f64, right: f64, addend: f64) -> f64 {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        left * right + addend
+    }
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        left.mul_add(right, addend)
+    }
+}
+
 /// Apply a projective or quadrilateral transform to native 8-bit samples.
 ///
 /// Pillow represents perspective transforms as an inverse homography and
 /// quadrilateral transforms as a bilinear map from output coordinates to the
 /// four source corners. QUAD coefficients are prepared once at the public
 /// boundary and remain in that form in the lazy pipeline.
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
 #[inline(always)]
 fn projective_source_at(
     destination: (u32, u32),
     data: &[f64],
     quad: bool,
+    nearest: bool,
     dx: f64,
     dy: f64,
 ) -> Option<(f64, f64)> {
@@ -33,16 +49,19 @@ fn projective_source_at(
     // the inverse map at each destination pixel center.
     let dx = dx + 0.5;
     let dy = dy + 0.5;
-    // Keep Geometry.c's fused grouping: the first product is fused with the
-    // second product, then the constant term is added. Reassociation can move
-    // an edge coordinate by one ULP after an LA/RGBA premultiplied round trip.
-    let denominator = data[6].mul_add(dx, data[7] * dy) + 1.0;
-    if denominator == 0.0 || !denominator.is_finite() {
+    // Reassociation can move an edge coordinate by one ULP after an LA/RGBA
+    // premultiplied round trip, so preserve Pillow's target-specific grouping.
+    let denominator = geometry_madd(data[6], dx, data[7] * dy) + 1.0;
+    if !nearest && (denominator == 0.0 || !denominator.is_finite()) {
         return None;
     }
-    let x = (data[0].mul_add(dx, data[1] * dy) + data[2]) / denominator;
-    let y = (data[3].mul_add(dx, data[4] * dy) + data[5]) / denominator;
-    (x.is_finite() && y.is_finite()).then_some((x, y))
+    let x = (geometry_madd(data[0], dx, data[1] * dy) + data[2]) / denominator;
+    let y = (geometry_madd(data[3], dx, data[4] * dy) + data[5]) / denominator;
+    if nearest || (x.is_finite() && y.is_finite()) {
+        Some((x, y))
+    } else {
+        None
+    }
 }
 
 #[inline(always)]
@@ -57,9 +76,10 @@ fn projective_fill_sample(destination: &mut [u8], fill_color: (u8, u8, u8, u8)) 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
 #[inline(always)]
 fn projective_nearest_coordinate(value: f64) -> i64 {
-    if value < 0.0 { -1 } else { value as i64 }
+    super::affine::nearest_sample_coordinate(value)
 }
 
 #[inline(always)]
@@ -73,7 +93,7 @@ fn transform_projective_sample(
     filter: &ResampleFilter,
     sx: f64,
     sy: f64,
-) {
+) -> bool {
     let (src_w, src_h) = source_dimensions;
     if nearest {
         // Geometry.c defines COORD() as -1 for negative values and a C cast
@@ -86,7 +106,7 @@ fn transform_projective_sample(
         } else {
             projective_fill_sample(destination, fill_color);
         }
-        return;
+        return ix >= 0 && ix < i64::from(src_w) && iy >= 0 && iy < i64::from(src_h);
     }
 
     if src_w == 0
@@ -97,7 +117,7 @@ fn transform_projective_sample(
         || sy >= f64::from(src_h)
     {
         projective_fill_sample(destination, fill_color);
-        return;
+        return false;
     }
     // Geometry.c checks the unshifted coordinate, subtracts 0.5, then clips
     // the sample window. Horizontal interpolation precedes vertical, and the
@@ -157,6 +177,7 @@ fn transform_projective_sample(
                 .clamp(0.0, 255.0) as u8;
         }
     }
+    true
 }
 
 pub(super) fn transform_projective_generic(
@@ -197,6 +218,7 @@ pub(super) fn transform_projective_generic(
     Ok(out)
 }
 
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
 /// Apply the generic projective sampler into a caller-owned native output.
 pub(super) fn transform_projective_generic_into(
     raw: &[u8],
@@ -209,6 +231,35 @@ pub(super) fn transform_projective_generic_into(
     channels: usize,
     quad: bool,
     out: &mut [u8],
+) -> Result<(), PilError> {
+    transform_projective_generic_into_with_validity(
+        raw,
+        source_dimensions,
+        dst_w,
+        dst_h,
+        data,
+        filter,
+        fill,
+        channels,
+        quad,
+        out,
+        None,
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+pub(super) fn transform_projective_generic_into_with_validity(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    fill: Option<(u8, u8, u8, u8)>,
+    channels: usize,
+    quad: bool,
+    out: &mut [u8],
+    validity: Option<&mut [u8]>,
 ) -> Result<(), PilError> {
     let (src_w, src_h) = source_dimensions;
     let pixel_count = usize::try_from(dst_w)
@@ -227,20 +278,38 @@ pub(super) fn transform_projective_generic_into(
             "Transform projective destination buffer shape mismatch".into(),
         ));
     }
+    if channels == 0
+        || validity
+            .as_ref()
+            .is_some_and(|validity| validity.len() != pixel_count)
+    {
+        return Err(PilError::InternalError(
+            "Transform projective validity buffer shape mismatch".into(),
+        ));
+    }
     let fill_color = fill.unwrap_or((0, 0, 0, 255));
     let nearest = matches!(filter, ResampleFilter::Nearest);
 
+    let mut validity = validity;
     for dy in 0..dst_h {
         for dx in 0..dst_w {
             let out_idx = (dy as usize * dst_w as usize + dx as usize) * channels;
             let destination = &mut out[out_idx..out_idx + channels];
-            let Some((sx, sy)) =
-                projective_source_at((dst_w, dst_h), data, quad, f64::from(dx), f64::from(dy))
-            else {
+            let Some((sx, sy)) = projective_source_at(
+                (dst_w, dst_h),
+                data,
+                quad,
+                nearest,
+                f64::from(dx),
+                f64::from(dy),
+            ) else {
                 projective_fill_sample(destination, fill_color);
+                if let Some(validity) = validity.as_deref_mut() {
+                    validity[out_idx / channels] = 0;
+                }
                 continue;
             };
-            transform_projective_sample(
+            let valid = transform_projective_sample(
                 raw,
                 destination,
                 (src_w, src_h),
@@ -251,24 +320,34 @@ pub(super) fn transform_projective_generic_into(
                 sx,
                 sy,
             );
+            if let Some(validity) = validity.as_deref_mut() {
+                validity[out_idx / channels] = u8::from(valid);
+            }
         }
     }
 
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
 #[inline(always)]
 pub(super) fn transform_mesh_source_coordinate(
     coefficients: [f64; 8],
     local_x: f64,
     local_y: f64,
 ) -> (f64, f64) {
-    let sx_linear =
-        coefficients[2].mul_add(local_y, coefficients[1].mul_add(local_x, coefficients[0]));
-    let sx = (coefficients[3] * local_x).mul_add(local_y, sx_linear);
-    let sy_linear =
-        coefficients[6].mul_add(local_y, coefficients[5].mul_add(local_x, coefficients[4]));
-    let sy = (coefficients[7] * local_x).mul_add(local_y, sy_linear);
+    let sx_linear = geometry_madd(
+        coefficients[2],
+        local_y,
+        geometry_madd(coefficients[1], local_x, coefficients[0]),
+    );
+    let sx = geometry_madd(coefficients[3] * local_x, local_y, sx_linear);
+    let sy_linear = geometry_madd(
+        coefficients[6],
+        local_y,
+        geometry_madd(coefficients[5], local_x, coefficients[4]),
+    );
+    let sy = geometry_madd(coefficients[7] * local_x, local_y, sy_linear);
     (sx, sy)
 }
 

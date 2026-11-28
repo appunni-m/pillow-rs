@@ -8,6 +8,7 @@ use crate::raster::{ImageBuffer, Mode, Pixel};
 /// Pillow casts the scaled value to a C `int`, clips its low byte and shifted
 /// high byte independently, then stores those bytes in mode byte order. The
 /// exact-mode typed carrier represents the resulting logical sample directly.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn luma16_sample(
     value: &crate::image::PutDataValue,
     scale: f64,
@@ -42,6 +43,7 @@ pub(crate) enum ValueAtInput {
 }
 
 /// Normalizes CoreOnly multiband tuples directly into their native sample type.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn native_value_at_input(
     mode: Mode,
     value: &crate::image::PutDataValue,
@@ -63,6 +65,7 @@ pub(crate) fn native_value_at_input(
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn native_u16_components<const CHANNELS: usize>(
     value: &crate::image::PutDataValue,
     channels: usize,
@@ -97,6 +100,7 @@ pub(crate) fn native_u16_components<const CHANNELS: usize>(
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn native_f32_components<const CHANNELS: usize>(
     value: &crate::image::PutDataValue,
     channels: usize,
@@ -127,6 +131,7 @@ pub(crate) fn native_f32_components<const CHANNELS: usize>(
 // TODO(pillow-rs#3ptb): verify callback-visible partial writes and faults,
 // compact hidden lanes, and selected/fallback receipts for all 20 modes in
 // frozen CPU parity; retain the immediate write-before-next-coercion order.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn write_plain_bytes(
     samples: &mut [u8],
     pixel_index: usize,
@@ -146,6 +151,7 @@ pub(crate) fn write_plain_bytes(
     super::put_pixel::write_native_bytes(samples, pixel_index, bytes)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn write_compact_bytes<P, F, D>(
     image: &mut ImageBuffer<P, Vec<u8>>,
     pixel_index: usize,
@@ -190,6 +196,7 @@ where
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn write_luma16(
     samples: &mut [u16],
     pixel_index: usize,
@@ -202,6 +209,7 @@ pub(crate) fn write_luma16(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn write_native_pixel<T: Copy, const CHANNELS: usize>(
     samples: &mut [T],
     pixel_index: usize,
@@ -226,6 +234,7 @@ pub(crate) fn write_native_pixel<T: Copy, const CHANNELS: usize>(
 /// values are normalized immediately before their write, preserving partial
 /// writes when a later value is invalid.
 #[inline]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn write_native_values<T: Copy, const CHANNELS: usize, F>(
     samples: &mut [T],
     values: &[crate::image::PutDataValue],

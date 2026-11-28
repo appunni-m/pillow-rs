@@ -7,7 +7,7 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-27; parity=pending; benchmark=pending
 pub(crate) fn execute(
     context: &ExecutionContext,
     input: &RgbaImage,
@@ -23,5 +23,5 @@ pub(crate) fn execute(
             "ImageF32 NEON strategy received another architecture".into(),
         ));
     }
-    super::super::helpers::vector::execute(input, width, height, filter, bounds)
+    super::super::helpers::vector::execute::<4>(input, width, height, filter, bounds)
 }

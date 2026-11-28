@@ -21,6 +21,7 @@ declare_invert_native_mode!(
     Some("ImageOps.invert extends Pillow with native P index inversion"),
 );
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_quantize(
     image: &GrayImage,
     palette: PaletteInput<'_>,
@@ -67,8 +68,8 @@ const SOLARIZE_INPUTS: &[InputContract] = &[InputContract::CheckedByteDimensions
 
 static AUTOCONTRAST_ARCHITECTURES: [ImplementationSupport; 3] =
     strategy::native_byte_point_architectures(OperationId::Autocontrast, Mode::ImagePalette8, 1);
-static POSTERIZE_ARCHITECTURES: [ImplementationSupport; 3] =
-    strategy::native_byte_point_architectures(OperationId::Posterize, Mode::ImagePalette8, 1);
+static POSTERIZE_ARCHITECTURES: [ImplementationSupport; 4] =
+    strategy::posterize_architectures(OperationId::Posterize, Mode::ImagePalette8, 1);
 static SOLARIZE_ARCHITECTURES: [ImplementationSupport; 3] =
     strategy::native_byte_point_architectures(OperationId::Solarize, Mode::ImagePalette8, 1);
 
@@ -85,10 +86,11 @@ pub(crate) const AUTOCONTRAST_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
 
 // NO_PILLOW_SUPPORT: these low-level Rust operations transform native P index
 // bytes; Pillow's ImageOps wrappers instead transform palette entries.
-// TODO(pillow-rs#3ptb): add target-only parity for this direct Rust strategy's
-// P index output, palette retention, and Default/SSE2/NEON/Wasm SIMD128
-// selection and fallback. The Python ImageOps wrappers use a separate palette
-// transformation path and retain Pillow parity.
+// TODO(pillow-rs#fvsp): generate and run the test-api target-output contracts
+// for native P indices, then verify palette retention, architecture selection,
+// fallback, and the material workload. The Python ImageOps wrapper has a
+// separate palette-entry path and retains Pillow parity.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) const POSTERIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Posterize,
     Mode::ImagePalette8,
@@ -104,6 +106,7 @@ pub(crate) const POSTERIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
 // P index output, palette retention, and Default/SSE2/NEON/Wasm SIMD128
 // selection and fallback. The Python ImageOps wrapper uses a separate palette
 // transformation path and retains Pillow parity.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) const SOLARIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Solarize,
     Mode::ImagePalette8,
@@ -126,6 +129,7 @@ static EQUALIZE_ARCHITECTURES: [ImplementationSupport; 3] = strategy::cpu_archit
     Mode::ImagePalette8,
     StrategyGuard::Always,
 );
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) const EQUALIZE_SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Equalize,
     Mode::ImagePalette8,
@@ -154,6 +158,7 @@ impl<'a> PreparedAutocontrast<'a> {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.selection.implementation.architecture {
             Architecture::Default => {
@@ -179,6 +184,7 @@ pub(crate) struct PreparedEqualize {
 }
 
 impl PreparedEqualize {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn new(input: RgbImage, lut: Vec<u8>, selection: StrategySelection) -> Self {
         Self {
             input,
@@ -187,20 +193,27 @@ impl PreparedEqualize {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // TODO(pillow-rs#3ptb): refresh P Equalize parity and latency evidence for
+    // this owned P-to-RGB buffer path; prior receipts predate in-place LUT use.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        match self.selection.implementation.architecture {
+        let Self {
+            input,
+            lut,
+            selection,
+        } = self;
+        match selection.implementation.architecture {
             Architecture::Default => {
-                super::default::equalize_impl::execute_rgb(&self.input, &self.lut)
+                super::default::equalize_impl::execute_rgb_in_place(input, &lut)
             }
-            Architecture::Sse2 => super::sse2::equalize_impl::execute(&self.input, &self.lut),
-            Architecture::Neon => super::neon::equalize_impl::execute(&self.input, &self.lut),
-            Architecture::WasmSimd128 => {
-                super::wasm_simd128::equalize_impl::execute(&self.input, &self.lut)
-            }
+            Architecture::Sse2 => super::sse2::equalize_impl::execute(input, &lut),
+            Architecture::Neon => super::neon::equalize_impl::execute(input, &lut),
+            Architecture::WasmSimd128 => super::wasm_simd128::equalize_impl::execute(input, &lut),
             _ => Err(PilError::InternalError(
                 "native-byte point selection has no matching CPU kernel".into(),
             )),
@@ -216,6 +229,7 @@ pub(crate) struct PreparedPosterize<'a> {
 }
 
 impl<'a> PreparedPosterize<'a> {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn new(input: &'a GrayImage, bits: u8, selection: StrategySelection) -> Self {
         Self {
             input,
@@ -224,15 +238,17 @@ impl<'a> PreparedPosterize<'a> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.selection.implementation.architecture {
             Architecture::Default => super::default::posterize_impl::execute(self.input, self.bits),
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Architecture::Avx512F => super::avx512f::posterize_impl::execute(self.input, self.bits),
             Architecture::Sse2 => super::sse2::posterize_impl::execute(self.input, self.bits),
             Architecture::Neon => super::neon::posterize_impl::execute(self.input, self.bits),
             Architecture::WasmSimd128 => {
@@ -261,12 +277,12 @@ impl<'a> PreparedSolarize<'a> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.selection.implementation.architecture {
             Architecture::Default => {

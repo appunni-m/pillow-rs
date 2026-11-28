@@ -65,10 +65,12 @@ pub(crate) fn apply_text<const RGBA_MASK: bool>(
     .map(super::super::TextComposeResult::Updated)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn support() -> ModeSupport {
     SUPPORT
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     ops: &[PipelineOp],

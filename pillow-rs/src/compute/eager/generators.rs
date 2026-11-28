@@ -25,7 +25,7 @@ struct GeneratorRoute {
     timed: bool,
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn route_generator() -> Result<GeneratorRoute, PilError> {
     let timed = pipeline_telemetry_enabled();
     let route_start = timed.then(pipeline_timestamp).flatten();
@@ -124,12 +124,13 @@ fn record_generator_receipt(
     });
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn generator_fallback(
     operation: &'static str,
     route: &GeneratorRoute,
     selection: StrategySelection,
 ) -> Option<String> {
-    selection
+    let selected_fallback = selection
         .fallback
         .map(|reason| {
             format!(
@@ -138,17 +139,19 @@ fn generator_fallback(
             )
         })
         .or_else(|| {
-            (route.requested_backend == Some(Backend::Gpu))
-                .then(|| format!("{operation} has no GPU implementation; CPU Default was selected"))
-        })
-        .or_else(|| {
             (route.requested_backend == Some(Backend::Simd)
                 && selection.requested_architecture == crate::compute::Architecture::Default)
                 .then(|| format!("{operation} used CPU Default for a SIMD request"))
-        })
+        });
+    let routed_fallback = (route.requested_backend == Some(Backend::Gpu)).then(|| {
+        format!(
+            "{operation} has no GPU implementation; used CPU {:?}",
+            selection.implementation.architecture
+        )
+    });
+    super::merge_eager_fallback_reasons(routed_fallback, selected_fallback)
 }
-
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_linear_gradient(mode: Mode) -> Result<DynamicImage, PilError> {
     let route = route_generator()?;
     let validation_start = route.timed.then(pipeline_timestamp).flatten();
@@ -175,8 +178,7 @@ pub(crate) fn execute_eager_cpu_linear_gradient(mode: Mode) -> Result<DynamicIma
     );
     Ok(generated.image)
 }
-
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_radial_gradient(mode: Mode) -> Result<DynamicImage, PilError> {
     let route = route_generator()?;
     let validation_start = route.timed.then(pipeline_timestamp).flatten();
@@ -203,8 +205,7 @@ pub(crate) fn execute_eager_cpu_radial_gradient(mode: Mode) -> Result<DynamicIma
     );
     Ok(generated.image)
 }
-
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_eager_cpu_mandelbrot(
     size: (u32, u32),
     extent: (f64, f64, f64, f64),

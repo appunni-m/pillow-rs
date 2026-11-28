@@ -145,11 +145,9 @@ fn rgbx(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
 fn cmyk(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        let [red, green, blue] =
-            crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
-                index[0], palette,
-            );
-        *destination = Rgba([u8::MAX - red, u8::MAX - green, u8::MAX - blue, 0]);
+        *destination = Rgba(crate::compute::pool_cpu::helpers::palette::cmyk(
+            index[0], palette,
+        ));
     }
     output
 }

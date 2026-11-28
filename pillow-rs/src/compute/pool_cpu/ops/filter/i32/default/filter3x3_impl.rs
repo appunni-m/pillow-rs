@@ -110,6 +110,7 @@ pub(in crate::compute::pool_cpu::ops::filter::i32) const I32_UNIFORM_FILTER3X3_M
     1024 * 1024;
 
 /// Compare one uniform sample's exact normalized 3x3 result with its source.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter::i32) fn uniform_i32_filter3x3_sample_is_identity(
     sample_i32: i32,
     kernel: &[f32; 9],
@@ -130,6 +131,7 @@ pub(in crate::compute::pool_cpu::ops::filter::i32) fn uniform_i32_filter3x3_samp
 /// Prove a uniform I image is unchanged by this normalized 3x3 convolution.
 /// Use the same fused row expressions, vertical accumulation order, rounding
 /// bias, and truncation as [`filter_3x3_i32_row`].
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter::i32) fn uniform_i32_filter3x3_is_identity(
     raw: &[u8],
     width: usize,

@@ -42,6 +42,7 @@ pub(crate) fn execute<
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_into<
     const CHANNELS: usize,
     const FORCE_AFFINE_NEAREST: bool,
@@ -51,6 +52,27 @@ pub(crate) fn execute_into<
     request: TransformRequest<'_>,
     nearest_kernel: AffineNearestKernel,
     output: &mut [u8],
+) -> Result<(), PilError> {
+    execute_into_with_validity::<CHANNELS, FORCE_AFFINE_NEAREST, ALPHA>(
+        image,
+        request,
+        nearest_kernel,
+        output,
+        None,
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+pub(crate) fn execute_into_with_validity<
+    const CHANNELS: usize,
+    const FORCE_AFFINE_NEAREST: bool,
+    const ALPHA: bool,
+>(
+    image: &DynamicImage,
+    request: TransformRequest<'_>,
+    nearest_kernel: AffineNearestKernel,
+    output: &mut [u8],
+    validity: Option<&mut [u8]>,
 ) -> Result<(), PilError> {
     let expected = usize::try_from(request.width)
         .ok()
@@ -72,20 +94,27 @@ pub(crate) fn execute_into<
             request,
             nearest_kernel,
             output,
+            validity,
         ),
         TransformMethod::Perspective | TransformMethod::Quad => {
-            execute_projective_into::<CHANNELS, ALPHA>(image, request, output)
+            execute_projective_into::<CHANNELS, ALPHA>(image, request, output, validity)
         }
+        TransformMethod::Mesh if validity.is_some() => Err(PilError::InternalError(
+            "Transform MESH validity is reported by its record accumulator".into(),
+        )),
         TransformMethod::Mesh => execute_mesh_into::<CHANNELS, ALPHA>(image, request, output),
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_affine_into<const CHANNELS: usize, const FORCE_NEAREST: bool, const ALPHA: bool>(
     image: &DynamicImage,
     request: TransformRequest<'_>,
     nearest_kernel: AffineNearestKernel,
     output: &mut [u8],
+    validity: Option<&mut [u8]>,
 ) -> Result<(), PilError> {
+    let mut validity = validity;
     let dimensions = image.dimensions();
     let affine = [
         request.data[0],
@@ -96,6 +125,13 @@ fn execute_affine_into<const CHANNELS: usize, const FORCE_NEAREST: bool, const A
         request.data[5],
     ];
     let nearest = FORCE_NEAREST || matches!(request.filter, ResampleFilter::Nearest);
+    if let Some(validity) = validity.as_ref()
+        && validity.len() != output.len() / CHANNELS
+    {
+        return Err(PilError::InternalError(
+            "Transform affine validity buffer shape mismatch".into(),
+        ));
+    }
     if nearest
         && affine_nearest_into(
             nearest_kernel,
@@ -104,6 +140,7 @@ fn execute_affine_into<const CHANNELS: usize, const FORCE_NEAREST: bool, const A
             request,
             affine,
             output,
+            &mut validity,
         )?
     {
         return Ok(());
@@ -115,7 +152,7 @@ fn execute_affine_into<const CHANNELS: usize, const FORCE_NEAREST: bool, const A
     } else {
         image.as_bytes()
     };
-    affine::transform_affine_generic_into(
+    affine::transform_affine_generic_into_with_validity(
         source,
         dimensions,
         request.width,
@@ -131,6 +168,7 @@ fn execute_affine_into<const CHANNELS: usize, const FORCE_NEAREST: bool, const A
         nearest,
         matches!(request.filter, ResampleFilter::Bicubic),
         output,
+        validity,
     )?;
     if ALPHA && !nearest {
         alpha::unpremultiply(output, CHANNELS);
@@ -138,6 +176,7 @@ fn execute_affine_into<const CHANNELS: usize, const FORCE_NEAREST: bool, const A
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn affine_nearest_into(
     kernel: AffineNearestKernel,
     source: &[u8],
@@ -145,6 +184,7 @@ fn affine_nearest_into(
     request: TransformRequest<'_>,
     affine: [f64; 6],
     output: &mut [u8],
+    validity: &mut Option<&mut [u8]>,
 ) -> Result<bool, PilError> {
     match kernel {
         AffineNearestKernel::Generic => Ok(false),
@@ -156,6 +196,7 @@ fn affine_nearest_into(
             affine,
             request.fill,
             output,
+            validity.as_deref_mut(),
         ),
         AffineNearestKernel::LumaAlpha => affine::transform_affine_luma_alpha_nearest_into(
             source,
@@ -165,6 +206,7 @@ fn affine_nearest_into(
             affine,
             request.fill,
             output,
+            validity.as_deref_mut(),
         ),
         AffineNearestKernel::Rgb => affine::transform_affine_rgb_nearest_into(
             source,
@@ -174,14 +216,17 @@ fn affine_nearest_into(
             affine,
             request.fill,
             output,
+            validity.as_deref_mut(),
         ),
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_projective_into<const CHANNELS: usize, const ALPHA: bool>(
     image: &DynamicImage,
     request: TransformRequest<'_>,
     output: &mut [u8],
+    validity: Option<&mut [u8]>,
 ) -> Result<(), PilError> {
     let nearest = matches!(request.filter, ResampleFilter::Nearest);
     let premultiplied;
@@ -191,7 +236,7 @@ fn execute_projective_into<const CHANNELS: usize, const ALPHA: bool>(
     } else {
         image.as_bytes()
     };
-    projective::transform_projective_generic_into(
+    projective::transform_projective_generic_into_with_validity(
         source,
         image.dimensions(),
         request.width,
@@ -202,6 +247,7 @@ fn execute_projective_into<const CHANNELS: usize, const ALPHA: bool>(
         CHANNELS,
         matches!(request.method, TransformMethod::Quad),
         output,
+        validity,
     )?;
     if ALPHA && !nearest {
         alpha::unpremultiply(output, CHANNELS);

@@ -126,12 +126,12 @@ macro_rules! declare_rotate_modes {
             strategy: RotateStrategy<'a>,
         }
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         fn classify_mode(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::SUPPORT,)+ }
         }
 
-        // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         fn prepare_mode<'a>(
             image: &'a DynamicImage,
             request: RotateRequest,
@@ -144,12 +144,12 @@ macro_rules! declare_rotate_modes {
         }
 
         impl PreparedRotate<'_> {
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match &self.strategy { $(RotateStrategy::$mode(plan) => plan.selection(),)+ }
             }
 
-            // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let selection = *self.selection();
                 let Self { image, request, strategy } = self;
@@ -194,7 +194,7 @@ declare_rotate_modes! {
 pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Rotate, ROTATE_INPUTS, classify_mode);
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     request: RotateRequest,
@@ -208,7 +208,7 @@ pub(crate) fn prepare<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

@@ -13,9 +13,10 @@
 //! Default and SIMD routes and do not select an operation architecture.
 //! TODO(pillow-rs#3ptb): verify every mode/method/filter and architecture,
 //! including unavailable-architecture and Default fallback receipts; compare
-//! Python LA/RGBA recursive premultiplied-mode routing with direct typed Rust
-//! fused alpha strategies, including output and callback/error order; and verify
-//! empty-mesh P palette retention with a non-default source palette.
+//! public LA/RGBA recursive premultiplied-mode routing, including output and
+//! callback/error order; and verify public empty-mesh P/PA palette and pixel
+//! retention with non-default source palettes using the dedicated cases that
+//! observe output bytes and palette data.
 //! TODO(pillow-rs#3ptb): confirm the Wasm scalar floating-point compatibility
 //! helpers match the pinned oracle for NaNs and exceptional arithmetic before
 //! treating those compile-target semantics as closed.
@@ -23,9 +24,14 @@
 //! mode/architecture kernel. Nearest sampling follows that architecture's
 //! sampler; filtered LA/La/PA repeats the resulting first band into physical
 //! lanes 1 and 2, while filtered three-band modes retain the output fill byte.
-// TODO(pillow-rs#3ptb): verify public prepared Transform and deferred
-// PipelineOp routes preserve identical PA palette and palette-alpha metadata,
-// including empty results, in the frozen CPU output and receipt matrix.
+// TODO(pillow-rs#3ptb): verify public Image.transform apply/MESH results retain
+// or update PA palette and palette-alpha metadata as Pillow does, including
+// empty results, and retain a temporary P palette created from tuple
+// fillcolor only when no source palette is attached. Any attached source
+// palette, including an empty table, replaces the temporary one. The Python
+// wrapper still needs parity for palette truthiness/copy overrides. The
+// required contract is public Image.transform; do not add a separate
+// ImagingCore.transform parity lane.
 
 use crate::compute::pool_cpu::ops::transform::helpers::strategy::{self, Strategy};
 use crate::compute::registry::support::{
@@ -100,7 +106,7 @@ impl TransformRequest<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -165,12 +171,12 @@ pub(crate) struct PreparedTransform<'a> {
 }
 
 impl PreparedTransform<'_> {
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         strategy::selection(&self.strategy)
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let source = self.strategy.implementation.image;
         let request = self.strategy.implementation.request;
@@ -204,7 +210,7 @@ impl PreparedTransform<'_> {
         Ok(output)
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute_into(self, output: &mut DynamicImage) -> Result<(), PilError> {
         let source = self.strategy.implementation.image;
         let request = self.strategy.implementation.request;
@@ -240,6 +246,29 @@ impl PreparedTransform<'_> {
                 "rejected Transform mode {mode:?} reached direct destination execution"
             ))),
         }?;
+        super::helpers::hidden_lanes::finish(source, output, request, &selection)
+    }
+
+    /// Executes the selected native-mode kernel and records source validity
+    /// during that same pixel traversal for an in-place ImagingCore write.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    pub(crate) fn execute_into_with_validity(
+        self,
+        output: &mut DynamicImage,
+        validity: &mut [u8],
+    ) -> Result<(), PilError> {
+        let source = self.strategy.implementation.image;
+        let request = self.strategy.implementation.request;
+        let selection = *self.strategy.selection();
+        let expected = (request.width as usize)
+            .checked_mul(request.height as usize)
+            .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+        if validity.len() != expected {
+            return Err(PilError::InternalError(
+                "Transform validity buffer shape mismatch".into(),
+            ));
+        }
+        execute_mode_into_with_validity(self.mode, self.strategy, output, validity)?;
         super::helpers::hidden_lanes::finish(source, output, request, &selection)
     }
 
@@ -322,6 +351,59 @@ impl PreparedTransform<'_> {
                 "rejected Transform MESH mode {mode:?} reached execution"
             ))),
         }
+    }
+}
+
+fn execute_mode_into_with_validity(
+    mode: Mode,
+    strategy: Strategy<'_>,
+    output: &mut DynamicImage,
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    match mode {
+        Mode::One => super::one::ops::execute_into_with_validity(strategy, output, validity),
+        Mode::ImageLuma8 => {
+            super::luma8::ops::execute_into_with_validity(strategy, output, validity)
+        }
+        Mode::ImageLumaA8 => {
+            super::luma_a8::ops::execute_into_with_validity(strategy, output, validity)
+        }
+        Mode::ImageLaPremultiplied8 => {
+            super::la_premultiplied8::ops::execute_into_with_validity(strategy, output, validity)
+        }
+        Mode::ImagePalette8 => {
+            super::palette8::ops::execute_into_with_validity(strategy, output, validity)
+        }
+        Mode::ImagePaletteAlpha8 => {
+            super::palette_alpha8::ops::execute_into_with_validity(strategy, output, validity)
+        }
+        Mode::ImageRgb8 => super::rgb8::ops::execute_into_with_validity(strategy, output, validity),
+        Mode::ImageRgba8 => {
+            super::rgba8::ops::execute_into_with_validity(strategy, output, validity)
+        }
+        Mode::ImageRgbPremultiplied8 => {
+            super::rgb_premultiplied8::ops::execute_into_with_validity(strategy, output, validity)
+        }
+        Mode::ImageRgbx8 => {
+            super::rgbx8::ops::execute_into_with_validity(strategy, output, validity)
+        }
+        Mode::ImageCmyk8 => {
+            super::cmyk8::ops::execute_into_with_validity(strategy, output, validity)
+        }
+        Mode::ImageYCbCr8 => {
+            super::ycbcr8::ops::execute_into_with_validity(strategy, output, validity)
+        }
+        Mode::ImageLab8 => super::lab8::ops::execute_into_with_validity(strategy, output, validity),
+        Mode::ImageHsv8 => super::hsv8::ops::execute_into_with_validity(strategy, output, validity),
+        Mode::ImageI32 => super::i32::ops::execute_into_with_validity(strategy, output, validity),
+        Mode::ImageF32 => super::f32::ops::execute_into_with_validity(strategy, output, validity),
+        Mode::ImageI16 => super::i16::ops::execute_into_with_validity(strategy, output, validity),
+        Mode::ImageI16L => super::i16l::ops::execute_into_with_validity(strategy, output, validity),
+        Mode::ImageI16B => super::i16b::ops::execute_into_with_validity(strategy, output, validity),
+        Mode::ImageI16N => super::i16n::ops::execute_into_with_validity(strategy, output, validity),
+        mode => Err(PilError::InternalError(format!(
+            "rejected Transform mode {mode:?} reached validity execution"
+        ))),
     }
 }
 
@@ -433,7 +515,7 @@ fn apply_i16_mesh_record(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn prepare_mode<'a>(
     image: &'a DynamicImage,
     request: TransformRequest<'a>,
@@ -475,7 +557,7 @@ fn prepare_mode<'a>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     request: TransformRequest<'a>,
@@ -487,7 +569,7 @@ pub(crate) fn prepare<'a>(
     Ok(PreparedTransform { mode, strategy })
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -498,7 +580,7 @@ pub(crate) fn prepare_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_transform)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn finish_mesh_records(
     mode: Mode,
     output: &mut DynamicImage,

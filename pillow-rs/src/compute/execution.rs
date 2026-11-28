@@ -29,7 +29,7 @@ pub(crate) use terminals::{
 
 // ── Router ─────────────────────────────────────────────────────────────────
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn route_decision(
     ops: &[PipelineOp],
     explicit: Option<Backend>,
@@ -112,6 +112,8 @@ pub(crate) struct PreparedExecution {
     requested_backend: Option<Backend>,
     selected_backend: Backend,
     context: ExecutionContext,
+    /// Caller CPU policy for CPU-owned wrapper output after GPU routing.
+    cpu_fallback_context: Option<ExecutionContext>,
     route_ns: u64,
     validation_ns: u64,
     fallback_reason: Option<String>,
@@ -136,7 +138,7 @@ impl PreparedExecution {
 }
 
 /// Executes one family-prepared CPU operation using the pipeline's routed context.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute_prepared_cpu_arch_operation(
     prepared: &PreparedExecution,
     op: &PipelineOp,
@@ -163,7 +165,7 @@ pub(crate) fn execute_prepared_cpu_arch_operation(
 /// The raster strategy owns indices and per-pixel alpha. The Image wrapper
 /// owns the generated palette and source-metadata policy, so keep those
 /// results together across the lazy materialization boundary.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute_prepared_cpu_arch_convert_output(
     prepared: &PreparedExecution,
     op: &PipelineOp,
@@ -171,7 +173,9 @@ pub(crate) fn execute_prepared_cpu_arch_convert_output(
 ) -> Result<crate::compute::pool_cpu::ops::color::ops::PreparedConvertOutput, PilError> {
     let gpu_fallback = prepared.selected_backend == Backend::Gpu;
     let context = if gpu_fallback {
-        ExecutionContext::for_routed_backend(Backend::Cpu)
+        prepared
+            .cpu_fallback_context
+            .unwrap_or_else(|| ExecutionContext::for_routed_backend(Backend::Cpu))
     } else {
         prepared.context
     };
@@ -217,8 +221,8 @@ pub(crate) fn execute_prepared_cpu_arch_convert_output(
     )
 }
 
-/// Prepares a pipeline while retaining a context injected by its composed caller.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+/// Prepares a pipeline while retaining contexts injected by its composed caller.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare_execution_with_context(
     ops: &[PipelineOp],
     requested_backend: Option<Backend>,
@@ -228,6 +232,13 @@ pub(crate) fn prepare_execution_with_context(
     let route_start = timed.then(pipeline_timestamp).flatten();
     let (selected_backend, fallback_reason, support_checked) =
         route_decision(ops, requested_backend)?;
+    // GPU execution owns its own context. Keep an injected CPU policy beside
+    // it for operations whose wrapper-owned output must execute on CPU.
+    let cpu_fallback_context = if selected_backend == Backend::Gpu {
+        injected_context.filter(|context| context.backend() == Backend::Cpu)
+    } else {
+        None
+    };
     // A composed CPU context only governs CPU-owned execution. Preserve the
     // backend's own context whenever routing selects an actual GPU executor.
     let context = if selected_backend == Backend::Gpu {
@@ -247,6 +258,7 @@ pub(crate) fn prepare_execution_with_context(
         requested_backend,
         selected_backend,
         context,
+        cpu_fallback_context,
         route_ns,
         validation_ns,
         fallback_reason,
@@ -263,7 +275,7 @@ pub(crate) fn prepare_execution_with_context(
 ///
 /// Returns [`PilError::ValueError`] for an unavailable backend or the first
 /// operation without a native implementation on the selected backend.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<(), PilError> {
     let executor_backend = if backend == Backend::Simd {
         Backend::Cpu
@@ -320,6 +332,7 @@ pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<
     Ok(())
 }
 
+#[cfg(feature = "gpu")]
 pub(crate) fn merge_pipeline_resource_telemetry(
     total: &mut Option<PipelineResourceTelemetry>,
     next: Option<PipelineResourceTelemetry>,
@@ -498,7 +511,7 @@ fn reset_execution_telemetry() {
     let _ = take_pipeline_resize_coeff_cache_stats();
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_prepared_on_backend(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
@@ -611,7 +624,7 @@ fn clear_failed_execution_telemetry() {
 }
 
 /// Shared-result counterpart to [`execute_prepared_with_palette`].
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_prepared_shared_with_palette(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],

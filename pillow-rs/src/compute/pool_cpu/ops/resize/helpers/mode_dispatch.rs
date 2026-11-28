@@ -6,7 +6,7 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::DynamicImage;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_byte_mode(
     image: &DynamicImage,
     context: &ExecutionContext,
@@ -91,7 +91,7 @@ pub(crate) fn execute_byte_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_luma16_mode(
     image: &DynamicImage,
     context: &ExecutionContext,
@@ -120,7 +120,7 @@ pub(crate) fn execute_luma16_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_typed_mode(
     image: &DynamicImage,
     context: &ExecutionContext,

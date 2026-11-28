@@ -4,6 +4,7 @@ use crate::compute::helpers::enhance::ContrastBase;
 use crate::error::PilError;
 use crate::raster::GrayAlphaImage;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &GrayAlphaImage,
     base: &ContrastBase,

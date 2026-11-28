@@ -214,6 +214,7 @@ pub(crate) fn execute_filter3x3_small_uniform_bytes(
 
 /// Retains the packed-vector LA binomial specialization for architecture
 /// strategies that do not use the dedicated NEON kernel.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_filter3x3_la_binomial_vector_bytes(
     raw: &[u8],
     width: u32,
@@ -226,12 +227,8 @@ pub(crate) fn execute_filter3x3_la_binomial_vector_bytes(
         return None;
     }
     let mut output = raw.to_vec();
-    let (vector_blocks, scalar_tail) = super::filter3x3_vector::apply_la_binomial(
-        raw,
-        &mut output,
-        width as usize,
-        height as usize,
-    )?;
+    let (vector_blocks, scalar_tail) =
+        super::vector::apply_la_binomial(raw, &mut output, width as usize, height as usize)?;
     Some((output, vector_blocks, scalar_tail))
 }
 

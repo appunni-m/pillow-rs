@@ -7,5 +7,6 @@ declare_native_byte_transpose_mode!(
     super::default::flip_impl::execute,
     super::default::mirror_impl::execute,
     super::default::transpose_impl::execute,
-    4
+    4,
+    avx512f
 );

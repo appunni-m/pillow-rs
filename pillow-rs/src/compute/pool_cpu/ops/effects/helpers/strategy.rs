@@ -8,6 +8,7 @@ use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn facts<P: Pixel>(
     image: &ImageBuffer<P, Vec<P::Subpixel>>,
     request: RequestFacts,
@@ -24,6 +25,7 @@ pub(crate) fn facts<P: Pixel>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn select(
     support: ModeSupport,
     input: StrategyInputs,
@@ -38,6 +40,7 @@ pub(crate) fn select(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const fn vector_architectures_for(
     operation: OperationId,
     mode: crate::raster::Mode,

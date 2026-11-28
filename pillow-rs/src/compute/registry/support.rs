@@ -16,10 +16,10 @@ mod target;
 pub use operation::OperationId;
 use request::GuardAssessment;
 pub use request::{
-    BandIndexRule, DrawRequestKind, DrawTextMaskKind, ExpandFillRule, F32RankCompatibility,
-    InputContract, MergeBandModeRule, ModeChannelCapacity, PadFillRule, PaletteKnowledge,
-    PasteInputRules, PasteMaskRule, PixelWriteRunFacts, RequestFacts, SecondaryInputFacts,
-    StrategyGuard, StrategyInputs, UnresolvedGuard,
+    BandIndexRule, ConvertMatrixTarget, DrawRequestKind, DrawTextMaskKind, ExpandFillRule,
+    F32RankCompatibility, InputContract, MergeBandModeRule, ModeChannelCapacity, PadFillRule,
+    PaletteKnowledge, PasteInputRules, PasteMaskRule, PixelWriteRunFacts, RequestFacts,
+    SecondaryInputFacts, StrategyGuard, StrategyInputs, UnresolvedGuard,
 };
 pub use route::{
     OperationModeRoute, OperationRouteGuard, OperationRouteInputs, OperationRouteOutcome,
@@ -43,6 +43,11 @@ pub struct PaletteInput<'a> {
     pub rgb: Option<&'a [u8]>,
     /// Palette-entry alpha, separate from a PA image's per-pixel alpha.
     pub alpha: &'a [u8],
+    /// Exact Pillow-owned color model when the wrapper retains one.
+    ///
+    /// Encoded image-slash-star palettes remain RGB plus alpha and therefore
+    /// use `None`; their typed RGB/alpha slices remain available above.
+    pub data: Option<&'a crate::image::PaletteData>,
 }
 
 impl PaletteInput<'_> {
@@ -212,7 +217,7 @@ pub struct ImplementationSupport {
 
 impl ImplementationSupport {
     /// Binds a CPU implementation identity to its precise build and request contract.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub const fn cpu(
         operation: OperationId,
         mode: Mode,
@@ -239,7 +244,7 @@ impl ImplementationSupport {
 /// specialized siblings and permitted lower-architecture fallbacks.
 // TODO(pillow-rs#3ptb): verify exact/lower architecture selection and fallback
 // reasons across each operation's declared strategy set in the frozen parity.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn prioritized_implementations<'a>(
     architectures: &'a [ImplementationSupport],
     requested: Architecture,
@@ -529,6 +534,7 @@ impl OperationSupport {
 
     /// Returns this operation's explicit contract for one mode.
     #[must_use]
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub fn for_mode(&self, mode: Mode) -> ModeSupport {
         match self.classify_route {
             Some(classify_route) => classify_route(mode).prepared_support(),

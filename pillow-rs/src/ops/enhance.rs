@@ -126,6 +126,7 @@ impl Image {
             .map(|image| image.with_execution_context(context))
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn color_degenerate_with_context(
         &self,
         context: crate::compute::ExecutionContext,
@@ -151,10 +152,26 @@ impl Image {
             base.load()?;
             return Ok(base);
         }
-        let mut base = self
-            .convert_with_execution_context(intermediate, None, None, context)?
-            .with_execution_context(context);
+        let mut conversion_source = self.clone().with_execution_context(context);
+        let mut base = match conversion_source.convert_with_execution_context(
+            intermediate,
+            None,
+            None,
+            context,
+        ) {
+            Ok(base) => base.with_execution_context(context),
+            Err(error) => {
+                // Pillow's first Image.convert loads its source before route
+                // validation, including a rejected La -> L conversion.
+                conversion_source.load()?;
+                return Err(error);
+            }
+        };
         if mode == Mode::ImageRgbPremultiplied8 {
+            // Pillow completes RGBa -> L before attempting the unsupported
+            // L -> RGBa conversion. Materialize the first route so decode or
+            // conversion faults keep their observable precedence.
+            base.load()?;
             return Err(PilError::ValueError(
                 "conversion from L to RGBa not supported".into(),
             ));
@@ -181,9 +198,15 @@ impl Image {
         // prepared and executed as one batch, so its operations share one
         // Backend/Architecture context while retaining the construction-time
         // snapshot required by the stateful enhancer.
-        base = base
-            .convert_with_execution_context(mode, None, None, context)?
-            .with_execution_context(context);
+        base = match base.convert_with_execution_context(mode, None, None, context) {
+            Ok(base) => base.with_execution_context(context),
+            Err(error) => {
+                // Complete the first Convert before exposing a synchronous
+                // admission error from Pillow's second sequential Convert.
+                base.load()?;
+                return Err(error);
+            }
+        };
         base.load()?;
         Ok(base)
     }
@@ -196,6 +219,7 @@ impl Image {
     ///
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub fn enhance_brightness(&self, factor: f64) -> Result<Image, PilError> {
         validate_operation_mode(self, OperationId::Brightness)?;
         Ok(Image::push_op(self, PipelineOp::Brightness { factor }))
@@ -215,14 +239,14 @@ impl Image {
     /// error. Modes rejected by blending can still construct a base image.
     // TODO(pillow-rs#3ptb): verify base pixels, alpha, error order, and context
     // receipts across the frozen CPU mode/architecture matrix.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub fn contrast_degenerate(&self) -> Result<Image, PilError> {
         let (_, context) = self.cpu_arch_execution_route_advisory();
         self.contrast_degenerate_with_execution_context(context)
     }
 
     /// Builds Contrast's retained base under a route captured by its host wrapper.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn contrast_degenerate_with_execution_context(
         &self,
@@ -234,6 +258,7 @@ impl Image {
             .map(|image| image.with_execution_context(context))
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn contrast_degenerate_with_context(
         &self,
         context: crate::compute::ExecutionContext,
@@ -336,7 +361,7 @@ impl Image {
     // TODO(pillow-rs#3ptb): verify fallback Blend pixels, errors, and context
     // receipts for every frozen mode and CPU architecture. The base children
     // and queued Blend graph already receive the captured context.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub fn enhance_contrast(&self, factor: f64) -> Result<Image, PilError> {
         let mode = exact_mode(self)?;
         if has_prepared_mode_strategy(OperationId::Contrast, mode) {
@@ -354,7 +379,7 @@ impl Image {
     /// Adjusts contrast using the architecture captured by the host wrapper.
     // TODO(pillow-rs#3ptb): verify fallback Blend pixels, faults, and route
     // receipts for each frozen CPU mode/architecture case.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn enhance_contrast_with_execution_context(
         &self,
@@ -418,16 +443,16 @@ impl Image {
         Ok(inherit_pipeline_backend(&source, blended).with_execution_context(context))
     }
 
-    /// Checks mode errors that Pillow reports while constructing Sharpness.
+    /// Checks direct Rust Sharpness mode admission without executing pixels.
     ///
-    /// Palette images are rejected when Pillow builds the degenerate image.
-    /// Other unsupported modes remain deferred until `enhance_sharpness`,
-    /// matching the public error boundary while allowing native Sharpness
-    /// modes beyond the generic `SMOOTH` filter.
+    /// The Python enhancer uses public Filter and Blend calls to preserve
+    /// Pillow's load and constructor-snapshot boundaries; this query is not
+    /// used to preflight that host sequence.
     ///
     /// # Errors
     ///
-    /// Returns the palette-mode error raised during Pillow Sharpness construction.
+    /// Returns the declared rejection for a mode unsupported by Rust Sharpness.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub fn preflight_enhance_sharpness(&self) -> Result<(), PilError> {
         let mode = exact_mode(self)?;
         if mode == Mode::ImagePalette8 {
@@ -445,6 +470,7 @@ impl Image {
     ///
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub fn enhance_sharpness(&self, factor: f64) -> Result<Image, PilError> {
         validate_operation_mode(self, OperationId::Sharpness)?;
         Ok(Image::push_op(self, PipelineOp::Sharpness { factor }))

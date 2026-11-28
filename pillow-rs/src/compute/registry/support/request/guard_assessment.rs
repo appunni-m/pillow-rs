@@ -4,7 +4,7 @@ use super::{GuardAssessment, StrategyGuard, StrategyInputs, guards};
 use crate::raster::Mode;
 
 impl StrategyGuard {
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub(in crate::compute::registry::support) fn assess(
         self,
         input: StrategyInputs,
@@ -13,8 +13,11 @@ impl StrategyGuard {
             Self::Always => GuardAssessment::Satisfied,
             Self::DrawNativeSpans => guards::draw_native_spans_guard(input),
             Self::ResizeFilteredFma
+            | Self::ResizeFilteredAvx512F
             | Self::ResizeF32Vector
+            | Self::ResizeAvx512Nearest
             | Self::ThumbnailI32Stream2x2
+            | Self::ThumbnailI32Avx512F
             | Self::ResizeLuma16Vector
             | Self::ResizeByteNearestVector { .. }
             | Self::ResizeByteNativeVector { .. }
@@ -25,23 +28,30 @@ impl StrategyGuard {
             | Self::ContrastNativeBytesVectorizable { .. }
             | Self::SharpnessNativeBytesVectorizable { .. }
             | Self::ColorSaturationVector { .. }
+            | Self::ColorSaturationAvx512F { .. }
             | Self::ChopsEqualDimensions { .. }
             | Self::ChopsAddSubtractVector { .. }
             | Self::ChopsOffsetNativeBytes { .. }
             | Self::ChopsOffsetNativeI16
-            | Self::Color3DLutVector { .. } => self.assess_pointwise(input),
+            | Self::Color3DLutVector { .. }
+            | Self::BlendNativeAvx512F { .. } => self.assess_pointwise(input),
             Self::Filter3x3NativeBytesVectorizable { .. }
             | Self::Filter5x5NativeBytesVectorizable { .. }
             | Self::Filter5x5I32BinomialFma
             | Self::Filter5x5I32Vectorizable
             | Self::FilterNativeByteBlur { .. }
             | Self::FilterRgbaGaussianBlurRadiusSeven
+            | Self::FilterRgbaGaussianBlurRadiusSevenAvx512F
             | Self::FilterLumaRankWindow
             | Self::FilterNativeByteExtrema { .. }
             | Self::FilterNativeByteRankWindow { .. }
             | Self::FilterF32RankWindow { .. }
+            | Self::FilterF32Avx512RankWindow { .. }
+            | Self::FilterI32Avx512RankWindow { .. }
             | Self::FilterUnsharpRgb150
-            | Self::Filter3x3I32Vectorizable { .. } => self.assess_filter(input),
+            | Self::Filter3x3I32Vectorizable { .. }
+            | Self::Filter3x3I32Avx512F
+            | Self::Filter5x5I32Avx512F => self.assess_filter(input),
             Self::ConvertTargetMode(_)
             | Self::ConvertTargetModeNonEmpty(_)
             | Self::PutAlphaMaskBytes { .. }
@@ -54,16 +64,23 @@ impl StrategyGuard {
             | Self::RgbaPixelWriteRun
             | Self::TransposeRgbaAvx2
             | Self::TransposeRgbaX86_64Tiled { .. }
+            | Self::TransposeAvx512FNative32 { .. }
             | Self::TransposeNativeBytes { .. } => self.assess_mode_and_geometry(input),
             Self::ReduceNativeByteVector { .. }
-            | Self::ReduceF32Vector
+            | Self::ReduceAvx512Byte2x2 { .. }
+            | Self::ReduceF32Vector { .. }
+            | Self::ReduceI32Vector { .. }
             | Self::NativeBytePrefix { .. }
+            | Self::NativeByteAvx512Invert { .. }
+            | Self::NativeTypedAvx512Invert { .. }
             | Self::NativeMirrorRows { .. }
             | Self::NativePointwiseBytes { .. }
             | Self::NativePointwiseBytesIncludingEmpty { .. }
+            | Self::NativeByteAvx512Pointwise { .. }
             | Self::NativeCropBytes { .. }
             | Self::NativeCropBorderBytes { .. }
             | Self::ExactNativeRows { .. }
+            | Self::GetExtremaI32Avx512F
             | Self::PutDataNative { .. }
             | Self::EffectSpreadBytes { .. }
             | Self::EffectNoiseVector
@@ -73,19 +90,25 @@ impl StrategyGuard {
             | Self::CheckedNativeBytes { .. } => self.assess_native(input),
             Self::PasteLMaskNeon { .. }
             | Self::AlphaCompositeVector { .. }
+            | Self::AlphaCompositeAvx512F { .. }
             | Self::MergeRgbInterleave
             | Self::MergeNativeInterleave { .. }
+            | Self::MergeAvx512FInterleave { .. }
             | Self::BlendNativeVector { .. }
             | Self::CompositeNativeByteVector { .. }
             | Self::CompositeLMaskNeon { .. } => self.assess_composite(input),
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn assess_resize(self, input: StrategyInputs) -> GuardAssessment {
         match self {
             Self::ResizeFilteredFma => guards::resize_filtered_fma_guard(input),
+            Self::ResizeFilteredAvx512F => guards::resize_avx512f_filtered_guard(input),
             Self::ResizeF32Vector => guards::resize_f32_vector_guard(input),
+            Self::ResizeAvx512Nearest => guards::resize_avx512_nearest_guard(input),
             Self::ThumbnailI32Stream2x2 => guards::thumbnail_i32_stream_guard(input),
+            Self::ThumbnailI32Avx512F => guards::thumbnail_i32_avx512f_guard(input),
             Self::ResizeLuma16Vector => guards::resize_luma16_vector_guard(input),
             Self::ResizeByteNearestVector { channels } => {
                 guards::resize_byte_nearest_vector_guard(input, channels)
@@ -105,6 +128,7 @@ impl StrategyGuard {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn assess_pointwise(self, input: StrategyInputs) -> GuardAssessment {
         match self {
             Self::BrightnessVector { channels } => guards::brightness_vector_guard(input, channels),
@@ -116,6 +140,9 @@ impl StrategyGuard {
             }
             Self::ColorSaturationVector { channels } => {
                 guards::color_saturation_vector_guard(input, channels)
+            }
+            Self::ColorSaturationAvx512F { channels } => {
+                guards::color_saturation_avx512f_guard(input, channels)
             }
             Self::ChopsEqualDimensions { channels } => {
                 guards::chops_equal_dimensions_guard(input, channels)
@@ -130,10 +157,15 @@ impl StrategyGuard {
             Self::Color3DLutVector { source_channels } => {
                 guards::color3dlut_guard(input, source_channels)
             }
+            Self::BlendNativeAvx512F {
+                channels,
+                compatible_modes,
+            } => guards::blend_native_avx512f_guard(input, channels, compatible_modes),
             _ => unreachable!("pointwise assessment received another guard"),
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn assess_filter(self, input: StrategyInputs) -> GuardAssessment {
         match self {
             Self::Filter3x3NativeBytesVectorizable { channels } => {
@@ -150,6 +182,9 @@ impl StrategyGuard {
             Self::FilterRgbaGaussianBlurRadiusSeven => {
                 guards::filter_rgba_gaussian_blur_radius_seven_guard(input)
             }
+            Self::FilterRgbaGaussianBlurRadiusSevenAvx512F => {
+                guards::filter_rgba_gaussian_blur_radius_seven_avx512f_guard(input)
+            }
             Self::FilterLumaRankWindow => guards::filter_luma_rank_window_guard(input),
             Self::FilterNativeByteExtrema { channels } => {
                 guards::filter_native_byte_extrema_guard(input, channels)
@@ -160,15 +195,37 @@ impl StrategyGuard {
             Self::FilterF32RankWindow { max_size } => {
                 guards::filter_f32_rank_window_guard(input, max_size)
             }
+            Self::FilterF32Avx512RankWindow {
+                max_size,
+                minimum_width,
+                max_pixels,
+            } => guards::filter_f32_avx512_rank_window_guard(
+                input,
+                max_size,
+                minimum_width,
+                max_pixels,
+            ),
+            Self::FilterI32Avx512RankWindow {
+                max_size,
+                minimum_width,
+                max_pixels,
+            } => guards::filter_i32_avx512_rank_window_guard(
+                input,
+                max_size,
+                minimum_width,
+                max_pixels,
+            ),
             Self::FilterUnsharpRgb150 => guards::filter_unsharp_rgb150_guard(input),
             Self::Filter3x3I32Vectorizable { channels } => {
                 guards::filter3x3_i32_vectorizable_guard(input, channels)
             }
+            Self::Filter3x3I32Avx512F => guards::filter3x3_i32_avx512f_guard(input),
+            Self::Filter5x5I32Avx512F => guards::filter5x5_i32_avx512f_guard(input),
             _ => unreachable!("filter assessment received another guard"),
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn assess_mode_and_geometry(self, input: StrategyInputs) -> GuardAssessment {
         match self {
             Self::ConvertTargetMode(target) => guards::convert_target_guard(input, target, false),
@@ -219,6 +276,10 @@ impl StrategyGuard {
                 minimum_pixels,
                 block_size,
             ),
+            Self::TransposeAvx512FNative32 {
+                minimum_dimension,
+                max_pixels,
+            } => guards::transpose_avx512f_native32_guard(input, minimum_dimension, max_pixels),
             Self::TransposeNativeBytes {
                 channels,
                 allow_empty,
@@ -227,21 +288,35 @@ impl StrategyGuard {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn assess_native(self, input: StrategyInputs) -> GuardAssessment {
         match self {
             Self::ReduceNativeByteVector { channels } => {
                 guards::reduce_native_byte_vector_guard(input, channels)
             }
-            Self::ReduceF32Vector => guards::reduce_f32_vector_guard(input),
+            Self::ReduceAvx512Byte2x2 { channels } => {
+                guards::reduce_avx512_byte_2x2_guard(input, channels)
+            }
+            Self::ReduceF32Vector { lanes } => guards::reduce_f32_vector_guard(input, lanes),
+            Self::ReduceI32Vector { lanes } => guards::reduce_i32_vector_guard(input, lanes),
             Self::NativeBytePrefix { channels } => {
                 guards::native_byte_prefix_guard(input, channels)
             }
+            Self::NativeByteAvx512Invert { channels } => {
+                guards::native_byte_avx512_invert_guard(input, channels)
+            }
+            Self::NativeTypedAvx512Invert {
+                bytes_per_pixel,
+                sample_bytes,
+            } => guards::native_typed_avx512_invert_guard(input, bytes_per_pixel, sample_bytes),
             Self::NativeMirrorRows { channels } => {
                 guards::native_mirror_rows_guard(input, channels)
             }
             Self::NativePointwiseBytes { channels } => {
                 guards::native_pointwise_bytes_guard(input, channels)
+            }
+            Self::NativeByteAvx512Pointwise { channels } => {
+                guards::native_byte_avx512_pointwise_guard(input, channels)
             }
             Self::NativePointwiseBytesIncludingEmpty { channels } => {
                 guards::native_pointwise_bytes_including_empty_guard(input, channels)
@@ -251,6 +326,7 @@ impl StrategyGuard {
                 guards::native_crop_border_bytes_guard(input, channels)
             }
             Self::ExactNativeRows { channels } => guards::exact_native_rows_guard(input, channels),
+            Self::GetExtremaI32Avx512F => guards::get_extrema_i32_avx512f_guard(input),
             Self::PutDataNative { channels, payloads } => {
                 guards::put_data_native_guard(input, channels, payloads)
             }
@@ -268,6 +344,7 @@ impl StrategyGuard {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn assess_composite(self, input: StrategyInputs) -> GuardAssessment {
         match self {
             Self::PasteLMaskNeon {
@@ -278,11 +355,22 @@ impl StrategyGuard {
             Self::AlphaCompositeVector { channels } => {
                 guards::alpha_composite_vector_guard(input, channels)
             }
+            Self::AlphaCompositeAvx512F {
+                channels,
+                minimum_pixels,
+            } => guards::alpha_composite_avx512f_guard(input, channels, minimum_pixels),
             Self::MergeRgbInterleave => guards::merge_rgb_interleave_guard(input),
             Self::MergeNativeInterleave {
                 target_mode,
                 channels,
             } => guards::merge_native_interleave_guard(input, target_mode, channels),
+            Self::MergeAvx512FInterleave {
+                target_mode,
+                channels,
+                minimum_pixels,
+            } => {
+                guards::merge_avx512f_interleave_guard(input, target_mode, channels, minimum_pixels)
+            }
             Self::BlendNativeVector {
                 channels,
                 compatible_modes,
@@ -299,6 +387,7 @@ impl StrategyGuard {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(in crate::compute::registry::support) fn assess_for_mode(
         self,
         input: StrategyInputs,

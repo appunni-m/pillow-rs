@@ -36,9 +36,12 @@ use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
 mod backend;
+#[cfg(feature = "gpu")]
 pub use backend::preserve_mode;
 #[cfg(feature = "gpu")]
 pub(crate) use backend::{GpuPendingGraph, GpuResultMetadata};
+mod arrow;
+pub use arrow::{ArrowExportBuffer, ArrowImportLayout, validate_arrow_import_size};
 mod byte_export;
 pub use byte_export::{ImagingCoreBytesInput, imaging_core_to_bytes};
 mod channel_access;
@@ -60,28 +63,32 @@ mod materialization;
 mod metadata;
 pub(crate) mod mode_boundary;
 use data_access::validate_scalar_storage;
-use metadata::image_mode_name;
 pub use metadata::{ExifCompatFields, prepare_exif_compat};
 mod palette;
+pub use palette::{PaletteData, PaletteModel};
 pub(crate) use palette::{expand_palette, expand_palette_alpha};
 use palette::{operational_palette, padded_palette};
 #[path = "image/pipeline_admission.rs"]
 mod pipeline_admission;
 mod pipeline_ops;
 use pipeline_ops::known_pipeline_op_dimensions;
+#[cfg(feature = "gpu")]
+pub(crate) use pipeline_ops::known_pipeline_op_mode;
 pub use pipeline_ops::{
     MaterializationCache, PipelineModeCache, PipelineOps, PipelinePrefixCache, PipelineShapeCache,
 };
 pub(crate) use pipeline_ops::{
     PipelineModeState, PipelinePaletteOutput, cached_pipeline_mode, declared_pipeline_mode,
-    known_pipeline_op_mode, known_pipeline_op_mode_with_expansion, materialization_cache,
-    pipeline_mode_cache_for, pipeline_shape_cache,
+    known_pipeline_op_mode_with_expansion, materialization_cache, pipeline_mode_cache_for,
+    pipeline_shape_cache,
 };
 mod pixel_access;
 pub use pixel_access::{PaletteColorComponent, PutPixelValue};
 mod projection;
 mod statistics;
-pub use statistics::{StatResult, StatValue, stat_from_histogram, stat_from_list};
+pub use statistics::{
+    StatResult, StatValue, stat_from_histogram, stat_from_integer_histogram, stat_from_list,
+};
 
 /// A decoded P-mode (palette) image.
 /// `indices` holds one byte per pixel (the palette index, 0-255).
@@ -93,8 +100,15 @@ pub use statistics::{StatResult, StatValue, stat_from_histogram, stat_from_list}
 pub struct PalettedData {
     /// Mode-tagged palette index bytes, one byte per pixel.
     pub indices: DynamicImage,
+    /// Whether a palette object is attached, including an explicitly empty palette.
+    ///
+    /// This distinguishes `Image.new("P", ...)` from `putpalette([])`: both
+    /// contain zero palette bytes, but Pillow exposes different palette state.
+    pub palette_attached: bool,
     /// Retained palette data as RGB triples.
     pub palette: Vec<u8>,
+    /// Original Pillow palette model, with native CMYK entries retained when used.
+    pub palette_data: PaletteData,
     /// Optional per-entry alpha values retained from the encoded palette.
     pub palette_alpha: Vec<u8>,
     /// Encoded container format when this image was decoded from a source.
@@ -148,6 +162,8 @@ pub struct LoadedData {
     pub(crate) known_zero_fill: bool,
     /// Palette RGB entries attached to a `PA` image.
     pub palette: Option<Vec<u8>>,
+    /// Original palette color model, when palette metadata is attached.
+    pub palette_data: Option<PaletteData>,
     /// Optional per-entry alpha values for an attached `RGBA` palette.
     pub palette_alpha: Option<Vec<u8>>,
     /// Encoded container format when this image came from a source.
@@ -361,6 +377,8 @@ pub enum Image {
         palette: Option<Vec<u8>>,
         /// Per-entry palette alpha retained for index-preserving operations.
         palette_alpha: Option<Vec<u8>>,
+        /// Pillow-owned palette color model for the retained RGB projection.
+        palette_data: Option<PaletteData>,
         /// Generated ICC profile attached by an in-pipeline color transform.
         compatibility_icc_profile: Option<Arc<[u8]>>,
         /// Pipeline output initialized by the first implicit or explicit load.

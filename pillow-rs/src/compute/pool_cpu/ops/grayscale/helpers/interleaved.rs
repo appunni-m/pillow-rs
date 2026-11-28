@@ -10,7 +10,7 @@ pub(super) use crate::compute::pool_cpu::helpers::channel::gather::gather_interl
 
 pub(super) use crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[inline(always)]
 fn grayscale_block<const CHANNELS: usize>(source: &[u8]) -> [u8; 16] {
     let load = |offset| {
@@ -57,7 +57,7 @@ fn grayscale_block<const CHANNELS: usize>(source: &[u8]) -> [u8; 16] {
     simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array()
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn grayscale_interleaved<const CHANNELS: usize>(source: &[u8]) -> Vec<u8> {
     debug_assert!(matches!(CHANNELS, 2 | 3 | 4));
     debug_assert_eq!(source.len() % CHANNELS, 0);

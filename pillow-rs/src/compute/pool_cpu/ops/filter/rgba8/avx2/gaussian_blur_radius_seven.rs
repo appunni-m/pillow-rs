@@ -18,7 +18,9 @@ pub(super) struct Avx2Kernel;
 
 impl super::super::helpers::RadiusSevenHorizontalKernel for Avx2Kernel {
     const HAS_OPTIMIZED_MIDDLE_BLOCK: bool = true;
+    const BLOCK_PIXELS: usize = 8;
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn blur_middle_block(
         source: &[u8],
         destination: &mut [u8],

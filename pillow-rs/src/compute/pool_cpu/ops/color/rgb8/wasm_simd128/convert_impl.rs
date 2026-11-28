@@ -5,12 +5,12 @@ use crate::compute::pool_cpu::ops::grayscale::rgb8 as grayscale_rgb8;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => luma8(source),
         Mode::ImageLumaA8 => vector::luma_alpha(source, target),
         Mode::ImageLaPremultiplied8 => vector::luma_alpha(source, target),
-        Mode::ImageRgb8 => vector::identity(source),
         Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 => rgba(source, target),
         Mode::ImageCmyk8 => vector::cmyk(source),
         Mode::ImageYCbCr8 => vector::ycbcr(source),

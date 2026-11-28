@@ -1,3 +1,4 @@
+pub(crate) mod avx;
 pub(crate) mod avx2;
 pub(crate) mod default;
 pub(crate) mod neon;

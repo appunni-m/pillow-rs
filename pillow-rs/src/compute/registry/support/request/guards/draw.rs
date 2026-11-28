@@ -2,6 +2,7 @@
 
 use super::super::{DrawRequestKind, GuardAssessment, RequestFacts, StrategyInputs};
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn draw_native_spans_guard(input: StrategyInputs) -> GuardAssessment {
     match input.request {
         RequestFacts::Draw {

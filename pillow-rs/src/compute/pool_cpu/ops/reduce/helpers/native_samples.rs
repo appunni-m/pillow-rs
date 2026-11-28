@@ -1,5 +1,8 @@
 //! Typed reducers that preserve each source sample and image identity.
 
+// TODO(pillow-rs#3ptb): add target-only expected outputs for the internal
+// LumaA16, RGB16, RGBA16, RGB32F, and RGBA32F modes, including partial blocks.
+
 // Widen coordinates before flattening: a valid image can contain more than
 // `u32::MAX` pixels on 64-bit targets even though each axis is a `u32`.
 
@@ -7,7 +10,7 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn output_sample_capacity(
     width: u32,
     height: u32,
@@ -28,7 +31,7 @@ fn output_sample_capacity(
         .ok_or_else(|| PilError::DimensionError("typed reducer sample count overflow".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 /// Reduces unsigned 16-bit native samples with nearest, half-up integer rounding.
 pub(crate) fn reduce_u16<P>(
     image: &ImageBuffer<P, Vec<u16>>,
@@ -77,7 +80,7 @@ where
     })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 /// Reduces native f32 channels using f64 accumulation, without changing layout.
 pub(crate) fn reduce_f32<P>(
     image: &ImageBuffer<P, Vec<f32>>,

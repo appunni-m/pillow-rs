@@ -1,8 +1,10 @@
 use crate::error::PilError;
 
-// TODO(pillow-rs#3ptb): verify tie rounding and remaining error ordering for
-// Contain/Cover/Fit/Scale in the frozen CPU parity matrix.
+// TODO(pillow-rs#3ptb): verify public output, zero-size and overflow/error
+// ordering, and nested Resize selection/fallback receipts for all modes in the
+// frozen CPU parity matrix.
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=n/a
 pub(in crate::compute::pool_cpu::ops::geometry) fn contain_dimensions(
     source: (u32, u32),
     target: (u32, u32),
@@ -12,7 +14,7 @@ pub(in crate::compute::pool_cpu::ops::geometry) fn contain_dimensions(
     Ok(size)
 }
 
-// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=n/a
 pub(in crate::compute::pool_cpu::ops::geometry) fn cover_dimensions(
     source: (u32, u32),
     target: (u32, u32),
@@ -22,7 +24,7 @@ pub(in crate::compute::pool_cpu::ops::geometry) fn cover_dimensions(
     Ok(size)
 }
 
-// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=n/a
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=n/a
 pub(in crate::compute::pool_cpu::ops::geometry) fn fit_box(
     source: (u32, u32),
     target: (u32, u32),

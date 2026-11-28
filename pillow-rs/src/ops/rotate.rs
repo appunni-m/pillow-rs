@@ -342,7 +342,7 @@ impl Image {
         if let Some(palette) = prepared.output_palette
             && !output.has_attached_palette()
         {
-            output.set_pipeline_output_palette(Some(palette), None);
+            output.set_pipeline_output_palette(Some(palette), None, self.palette_data().cloned());
         }
         output
     }

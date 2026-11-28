@@ -8,6 +8,7 @@ use crate::error::PilError;
 use crate::raster::RgbImage;
 
 /// Quantizes the native RGB buffer without creating an intermediate raster.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &RgbImage,
     width: u32,
@@ -20,6 +21,7 @@ pub(crate) fn execute(
 }
 
 /// Quantizes RGB samples already produced by the source mode's operation path.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_rgb_samples(
     pixels: &[u8],
     width: u32,
@@ -40,6 +42,7 @@ pub(crate) fn execute_rgb_samples(
 }
 
 /// Maps native RGB samples to a caller-supplied RGB palette.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_with_palette(
     image: &RgbImage,
     palette: &[[u8; 3]],

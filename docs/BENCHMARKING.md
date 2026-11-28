@@ -127,11 +127,32 @@ from these counts; their mapping is tracked in the CPU refactor plan.
 
 The matrix crosses each eligible operation/mode/size/pattern input with its
 declared backend profiles. CPU parity and benchmark targets can replay the
-same indexed inputs under each of the nine architecture selectors (`default`,
-`neon`, `sse2`, `sse3`, `ssse3`, `avx`, `avx2`, `avx_fma`, and `avx2_fma`), and
-the run artifacts identify that selector. This keeps the stimulus identical
-while measuring each implementation path. GPU architecture means the physical
-WGPU adapter/model. `make migration-parity-test-gpu-adapters` and
+same indexed inputs under each configured architecture selector (`default`,
+`aarch64`, `x86_64`, `neon`, `wasm_simd128`, `sse2`, `sse3`, `ssse3`,
+`avx`, `avx2`, `avx_fma`, `avx2_fma`, and `avx512f`), and the run artifacts
+identify that selector.
+This keeps the stimulus identical while measuring each implementation path.
+AVX-512F has native F32/I32 and four-byte-mode Reduce strategies for guarded
+2x2 blocks with complete 16-output rows. The byte path preserves RGBA's
+premultiply/recover arithmetic and averages the stored RGBa, RGBX, and CMYK
+lanes directly. Native-byte Invert declares 64-byte AVX-512F XOR strategies
+for One, L, LA, P, PA, RGB, RGBA, and CMYK; each strategy requires a complete
+64-byte row block. The input generator declares below-block, full-block, and
+scalar-tail Pillow-comparable cases for L and RGB. Inputs, route receipts, and
+per-mode latency evidence remain pending. Mode One boundary coverage and
+target-only outputs for the `NO_PILLOW_SUPPORT` ImageOps modes remain TODO. ImageChops
+Invert uses the same guarded AVX-512F leaf for its eight Pillow byte modes;
+its input cases, route receipts, and per-mode latency remain pending. Unboxed nearest
+Resize strategies
+gather sixteen exact four-byte samples per block for F32, I32, RGBA, RGBa,
+RGBX, and CMYK, then copy the remaining row samples directly. The Resize
+guards exclude identity, boxed, filtered, and narrow-output requests. Dedicated
+complete-block, tail, and narrow-fallback parity outputs plus 1024x768 nearest
+workloads are declared in the input generator; they are not included in the
+indexed counts above until regenerated. Other operations select their declared
+lower-ISA specialization or report a fallback. The I32 Reduce parity set
+includes a wrapping-sum input. GPU architecture
+means the physical WGPU adapter/model. `make migration-parity-test-gpu-adapters` and
 `make migration-parity-benchmark-gpu-adapters` enumerate native adapters and
 replay the same selected inputs once per adapter. The `adapters.json` sidecar
 maps each adapter index to its reported name, vendor/device IDs, device type,

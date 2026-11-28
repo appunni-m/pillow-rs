@@ -1,9 +1,10 @@
 use super::{
-    Bound, Py, PyAny, PyBytes, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyString,
-    PyTuple, PyTypeError, PyValueError, Python, map_error,
+    Bound, Py, PyAny, PyBytes, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PySequence,
+    PyString, PyTuple, PyTypeError, PyValueError, Python,
 };
 use pyo3::types::PyAnyMethods;
 use pyo3::types::PyBytesMethods;
+use pyo3::types::PySequenceMethods;
 use pyo3::types::PyStringMethods;
 
 /// Classify Python text while preserving every Unicode codepoint accepted by
@@ -43,6 +44,11 @@ pub(crate) fn c_int_from_python(value: &Bound<'_, PyAny>) -> PyResult<i32> {
     // TODO(pillow-rs#3ptb): verify None, bool, custom __index__, C-long overflow,
     // and both signed C-int boundaries.
     let value_as_long = value.extract::<std::os::raw::c_long>()?;
+    c_int_from_c_long(value_as_long)
+}
+
+// VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=n/a
+pub(crate) fn c_int_from_c_long(value_as_long: std::os::raw::c_long) -> PyResult<i32> {
     i32::try_from(value_as_long).map_err(|_| {
         PyOverflowError::new_err(if value_as_long < 0 {
             "signed integer is less than minimum"
@@ -50,6 +56,27 @@ pub(crate) fn c_int_from_python(value: &Bound<'_, PyAny>) -> PyResult<i32> {
             "signed integer is greater than maximum"
         })
     })
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+pub(crate) fn imaging_core_transparency_key_from_python(
+    value: &Bound<'_, PyAny>,
+) -> PyResult<pillow_rs::ImagingCoreTransparencyKey> {
+    if let Ok(sequence) = value.cast::<PySequence>() {
+        if sequence.len()? != 3 {
+            return Err(PyTypeError::new_err(
+                "transparency must contain exactly three integer components",
+            ));
+        }
+        return Ok(pillow_rs::ImagingCoreTransparencyKey::Rgb(
+            c_int_from_python(&sequence.get_item(0)?)?,
+            c_int_from_python(&sequence.get_item(1)?)?,
+            c_int_from_python(&sequence.get_item(2)?)?,
+        ));
+    }
+    Ok(pillow_rs::ImagingCoreTransparencyKey::Scalar(
+        c_int_from_python(value)?,
+    ))
 }
 
 mod filters;

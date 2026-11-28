@@ -82,7 +82,9 @@ class ImagePalette:
             self.dirty = 1
             return index
 
-    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    # TODO(pillow-rs#3ptb): freeze reserved-index zero-fill, high reserved
+    # values, full-palette reuse, and Python equality callback effects in parity.
+    # VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     def _new_color_index(self, image=None, error=None):
         if not isinstance(self.palette, bytearray):
             self._palette = bytearray(self.palette)
@@ -99,9 +101,20 @@ class ImagePalette:
         if native_index is _NATIVE_ALLOCATION_UNAVAILABLE:
             index = entries
             while index in special_colors:
+                self._palette += bytearray(len(self.mode))
                 index += 1
         else:
-            index = 256 if native_index is None else native_index
+            if native_index is None:
+                index = entries
+                while index in special_colors:
+                    self._palette += bytearray(len(self.mode))
+                    index += 1
+            else:
+                index = native_index
+                if index > entries:
+                    self._palette += bytearray(
+                        (index - entries) * len(self.mode)
+                    )
         if index >= 256:
             if image:
                 histogram = image.histogram()
@@ -186,3 +199,14 @@ class ImagePalette:
             _core.palette_save_to_file(self.palette, self.mode, fp)
         else:
             fp.write(_core.palette_to_text(self.palette, self.mode))
+
+
+# VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+def raw(rawmode, data):
+    """Create a dirty palette whose bytes use ``rawmode``."""
+    palette = ImagePalette()
+    if rawmode != "RGB":
+        palette.rawmode = rawmode
+    palette.palette = data
+    palette.dirty = 1
+    return palette

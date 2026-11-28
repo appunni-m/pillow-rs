@@ -107,7 +107,7 @@ pub fn pad_fill_preflight(
 
 /// Runs the custom-protocol Pad fallback while keeping its decisions in core.
 #[doc(hidden)]
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 pub fn pad_fallback_with_callbacks<C: ImageOpsPadCallbacks>(
     callbacks: &mut C,
     size: &C::Value,
@@ -320,6 +320,7 @@ pub fn pad_with_preflight(
 }
 
 /// Executes Pad after its fill has been resolved before host centering hooks.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn pad_with_preflight_and_fill(
     image: &Image,
@@ -403,6 +404,7 @@ fn pad_contained_result(
     )))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn pad_with_resolved_preflight(
     image: &Image,
     preflight: PadPreflight,
@@ -427,7 +429,6 @@ fn pad_with_resolved_preflight(
     } = planned_geometry;
     // TODO(pillow-rs#3ptb): verify callback-driven source pixel/palette writes
     // and `getdata` identity in CPU parity.
-    let containment_axes = planned_geometry.containment_axes;
     let contained_size = planned_geometry.containment_dimensions.unwrap_or((
         planned_geometry.source_width,
         planned_geometry.source_height,
@@ -447,20 +448,9 @@ fn pad_with_resolved_preflight(
         return Ok(result);
     }
 
-    let (width_padded, height_padded) = containment_axes.unwrap_or((true, true));
     let color = fill.color;
     // Image.new validates the fill before ImageOps.pad indexes centering.
-    let (centering, position) = match centering {
-        CenteringInput::PadPosition(x, y) => {
-            let content_size = preflight.contained_size();
-            validate_pad_paste_position((x, y), content_size)?;
-            ((0.5, 0.5), Some((x, y)))
-        }
-        centering => (
-            resolve_pad_centering(centering, width_padded, height_padded)?,
-            None,
-        ),
-    };
+    let (centering, position) = resolve_pad_centering_position(preflight, centering)?;
     if contains_empty && (w == 0 || h == 0) {
         return Ok((
             Image::new_empty_with_mode(w, h, fill.mode)?,
@@ -469,6 +459,9 @@ fn pad_with_resolved_preflight(
     }
     if position.is_none() && filter_was_none && fill.color_was_none && centering == (0.5, 0.5) {
         return pad(source, w, h, None, color, centering).map(|mut result| {
+            if contains_empty {
+                result = inherit_pad_execution_route(result, image);
+            }
             result.suppress_pipeline_source_info();
             (result, false)
         });
@@ -502,11 +495,45 @@ fn pad_with_resolved_preflight(
         }
     };
     let mut output = Image::push_op(source, op);
+    if contains_empty {
+        output = inherit_pad_execution_route(output, image);
+    }
     output.suppress_pipeline_source_info();
     if let Some((palette, alpha)) = fill.output_palette {
-        output.set_pipeline_output_palette(Some(palette), alpha);
+        output.set_pipeline_output_palette(Some(palette), alpha, source.palette_data().cloned());
     }
     Ok((output, false))
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+fn resolve_pad_centering_position(
+    preflight: PadPreflight,
+    centering: CenteringInput,
+) -> Result<((f64, f64), Option<(i32, i32)>), PilError> {
+    let (width_padded, height_padded) = preflight.padded_axes();
+    match centering {
+        CenteringInput::PadPosition(x, y) => {
+            let content_size = preflight.contained_size();
+            validate_pad_paste_position((x, y), content_size)?;
+            Ok(((0.5, 0.5), Some((x, y))))
+        }
+        centering => Ok((
+            resolve_pad_centering(centering, width_padded, height_padded)?,
+            None,
+        )),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+fn inherit_pad_execution_route(output: Image, source: &Image) -> Image {
+    let backend = source.backend();
+    match source.injected_execution_context() {
+        Some(context) => output.with_backend_and_execution_context(backend, context),
+        None => match backend {
+            Some(backend) => output.use_backend(backend),
+            None => output,
+        },
+    }
 }
 
 fn validate_pad_paste_position(
@@ -539,6 +566,7 @@ fn pad_fill_rule(mode: crate::raster::Mode) -> Result<PadFillRule, PilError> {
         })
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 /// Resizes and pads an image to exactly `(w, h)`.
 ///
 /// # Errors
@@ -595,12 +623,16 @@ pub fn pad(
             centering,
         },
     );
+    if contains_empty {
+        output = inherit_pad_execution_route(output, image);
+    }
     if geometry.containment_axes != Some((false, false)) {
         output.suppress_pipeline_source_info();
     }
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 /// `ImageOps.pad` with filter and centering validation owned by core.
 pub fn pad_with_input(
     image: &Image,
@@ -614,6 +646,7 @@ pub fn pad_with_input(
         .map(|(result, _is_contained)| result)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 /// `ImageOps.pad` plus whether the result is its metadata-preserving contain
 /// result or a newly created padded canvas.
 pub fn pad_with_input_and_containment(

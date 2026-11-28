@@ -7,6 +7,7 @@ use crate::error::PilError;
 use crate::raster::GrayImage;
 
 /// Quantizes L samples using Pillow's grayscale-as-RGB quantizer semantics.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &GrayImage,
     width: u32,
@@ -26,6 +27,7 @@ pub(crate) fn execute(
 }
 
 /// Maps native L samples to a caller-supplied RGB palette.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_with_palette(
     image: &GrayImage,
     palette: &[[u8; 3]],

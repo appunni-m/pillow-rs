@@ -24,7 +24,7 @@ where
 }
 
 /// Maps each signed I sample through Pillow's clamped I-to-L byte table.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn to_luma(input: &RgbaImage, lut: &[u8]) -> Result<GrayImage, PilError> {
     let pixel_count = (input.width() as usize)
         .checked_mul(input.height() as usize)

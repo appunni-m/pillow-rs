@@ -21,7 +21,7 @@ pub struct ImageDraw {
 impl ImageDraw {
     /// Creates a drawing context for `img`, optionally selecting a drawing mode.
     #[wasm_bindgen(constructor)]
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn new(img: &Image, mode: Option<String>) -> Result<ImageDraw, JsValue> {
         let mode = mode
             .map(|mode| {

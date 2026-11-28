@@ -10,7 +10,7 @@ use crate::raster::Mode;
 ///
 /// Each mode passes its exact storage width. The guard only admits a vector
 /// route after its destination bytes match that mode's declared layout.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn cpu_architectures_for(mode: Mode, channels: u8) -> [ImplementationSupport; 3] {
     [
         ImplementationSupport::cpu(
@@ -48,7 +48,7 @@ pub(crate) const fn cpu_architectures_for(mode: Mode, channels: u8) -> [Implemen
 /// The two NEON entries share one architecture identity: the first makes the
 /// exact subkernel admission visible in support introspection, and the second
 /// retains the generic vector fallback for every other valid Paste request.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn cpu_architectures_for_l_mask_neon(
     mode: Mode,
     channels: u8,
@@ -98,7 +98,7 @@ pub(crate) const fn cpu_architectures_for_l_mask_neon(
 }
 
 /// Reports whether the prepared operation selected the exact NEON L-mask row strategy.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn l_mask_neon_selected(
     selection: &StrategySelection,
     mode: Mode,
@@ -123,7 +123,7 @@ pub(crate) fn l_mask_neon_selected(
 
 macro_rules! byte_architecture_impl {
     ($channels:literal, $image_type:path, $variant:ident) => {
-        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(crate) fn execute<I>(
             strategy: $crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan<'_, I>,
         ) -> Result<$crate::raster::DynamicImage, $crate::error::PilError>
@@ -149,7 +149,7 @@ pub(crate) use byte_architecture_impl;
 
 macro_rules! luma16_architecture_impl {
     ($variant:ident) => {
-        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         pub(crate) fn execute(
             strategy: $crate::compute::pool_cpu::ops::paste::helpers::plan::Luma16Plan<'_>,
         ) -> Result<$crate::raster::DynamicImage, $crate::error::PilError> {

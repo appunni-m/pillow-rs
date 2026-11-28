@@ -51,7 +51,8 @@ MIGRATION_PARITY_INPUT_STORE ?= fixtures
 MIGRATION_PARITY_INPUT_SPECIFICATION_DIGEST ?=
 MIGRATION_PARITY_OUTPUTS ?= $(MIGRATION_PARITY_OUTPUT)
 MIGRATION_PARITY_AGGREGATE_ARGS = $(foreach output,$(MIGRATION_PARITY_OUTPUTS),--parity $(output))
-MIGRATION_CPU_ARCHITECTURES ?= default aarch64 neon sse2 sse3 ssse3 avx avx2 avx_fma avx2_fma
+MIGRATION_CPU_ARCHITECTURES ?= default aarch64 x86_64 neon wasm_simd128 \
+	sse2 sse3 ssse3 avx avx2 avx_fma avx2_fma avx512f
 MIGRATION_CPU_ARCH_PARITY_DIR ?= build/migration-parity/cpu-architecture
 MIGRATION_CPU_ARCH_BENCHMARK_DIR ?= build/migration-parity/cpu-architecture-benchmark
 MIGRATION_CPU_BENCHMARK_ARCHITECTURES ?= $(MIGRATION_CPU_ARCHITECTURES)

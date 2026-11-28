@@ -5,6 +5,7 @@ use crate::raster::{DynamicImage, RgbImage};
 use wide::u8x16;
 
 /// Builds Pillow's three 256-entry colorize tables with floor division.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn lookup_tables(
     black: &(u8, u8, u8),
     white: &(u8, u8, u8),
@@ -44,6 +45,7 @@ pub(crate) fn lookup_tables(
     lut
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn interpolate(index: i32, start: i32, end: i32, from: i32, to: i32) -> i32 {
     let span = end - start;
     if span == 0 {
@@ -54,6 +56,7 @@ fn interpolate(index: i32, start: i32, end: i32, from: i32, to: i32) -> i32 {
 }
 
 /// Applies the prepared tables to the source's Pillow-compatible luma bytes.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_default(
     gray: &[u8],
     width: u32,
@@ -75,6 +78,7 @@ pub(crate) fn execute_default(
 }
 
 /// Applies the existing vectorized native-L LUT path selected by an ISA owner.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_native_luma(
     gray: &[u8],
     width: u32,
@@ -114,6 +118,7 @@ pub(crate) fn execute_native_luma(
         .ok_or_else(|| PilError::InternalError("SIMD colorize buffer mismatch".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn vectorize_large_pixels(
     gray: &[u8],
     tables: &[[u8x16; 16]; 3],
@@ -136,6 +141,7 @@ fn vectorize_large_pixels(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn vectorize_small_pixels(
     gray: &[u8],
     tables: &[[u8x16; 16]; 3],
@@ -188,6 +194,7 @@ fn vectorize_small_pixels(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn native_lut_tables(lut: &[u8; 256]) -> [u8x16; 16] {
     std::array::from_fn(|table| {
         let start = table * 16;
@@ -195,6 +202,7 @@ fn native_lut_tables(lut: &[u8; 256]) -> [u8x16; 16] {
     })
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline]
 fn colorize_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     let low = input & u8x16::splat(0x0f);

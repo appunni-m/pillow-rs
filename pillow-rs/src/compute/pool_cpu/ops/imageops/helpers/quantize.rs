@@ -77,12 +77,14 @@ impl PreparedQuantize<'_, '_> {
     }
 
     /// Executes the selected source-mode route and constructs the P result.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<Image, PilError> {
         self.validate_selection()?;
         let (width, height) = (self.image.width(), self.image.height());
         if width == 0 || height == 0 {
-            // Pillow returns an empty P image before validating colors/methods
-            // or entering a quantizer; its new palette has zero entries.
+            // Pillow's ImagingCore quantize short-circuits empty input before
+            // checking palette size, method identifiers, or running a reducer.
+            // The public wrapper still checks RGBA method and k-means validity.
             return build_paletted_image(
                 width,
                 height,
@@ -107,6 +109,7 @@ impl PreparedQuantize<'_, '_> {
         build_paletted_image(width, height, quantized)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn validate_selection(&self) -> Result<(), PilError> {
         if self.image.mode() != self.mode {
             return Err(PilError::InternalError(
@@ -132,7 +135,7 @@ impl PreparedQuantize<'_, '_> {
 }
 
 /// Selects the exact mode's serial implementation before running the algorithm.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare<'image, 'palette>(
     image: &'image DynamicImage,
     palette: PaletteInput<'palette>,
@@ -167,7 +170,7 @@ pub(crate) fn prepare<'image, 'palette>(
 }
 
 /// Maps a wrapper-admitted source carrier through supplied or mode-default P metadata.
-// VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_with_palette(
     image: &DynamicImage,
     palette_image: Option<&Image>,
@@ -258,7 +261,9 @@ pub(crate) fn execute_with_palette(
     Ok((
         Image::Paletted(PalettedData {
             indices: DynamicImage::ImagePalette8(indices),
+            palette_attached: true,
             palette: palette_rgb.into_owned(),
+            palette_data: crate::image::PaletteData::from_alpha(&palette_alpha),
             palette_alpha: palette_alpha.into_owned(),
             source_format: None,
             info: None,
@@ -270,7 +275,7 @@ pub(crate) fn execute_with_palette(
 }
 
 /// Borrows or builds Pillow's default palette bytes from the source mode.
-// VERIFY: source=reviewed@2026-11-12; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pass@migration-parity-8c3385ccbd7043bcbc13eebfa0daf52f; benchmark=pending
 fn default_palette_rgb(source_mode: Mode) -> Result<Cow<'static, [u8]>, PilError> {
     match quantize_mode_strategy(source_mode).source {
         QuantizeSource::Luma => Ok(Cow::Owned(
@@ -288,7 +293,7 @@ fn default_palette_rgb(source_mode: Mode) -> Result<Cow<'static, [u8]>, PilError
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
 fn select_quantize_request(
     image: &DynamicImage,
     source_palette: PaletteKnowledge,
@@ -331,6 +336,7 @@ struct QuantizedColors {
     alpha: Option<Vec<u8>>,
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn quantize_by_method(
     image: &DynamicImage,
     palette: PaletteInput<'_>,
@@ -417,6 +423,7 @@ fn quantize_by_method(
 }
 
 /// Quantizes RGBX without interpreting its padding byte as alpha.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn quantize_rgbx_source(
     image: &DynamicImage,
     selection: &StrategySelection,
@@ -448,6 +455,7 @@ fn quantize_rgbx_source(
 }
 
 /// Quantizes CoreOnly exact modes through their native mode strategies.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn quantize_native_source(
     image: &DynamicImage,
     palette: PaletteInput<'_>,
@@ -552,6 +560,7 @@ fn quantize_native_source(
 }
 
 /// Quantizes Rust-only four-byte modes with the established alpha-aware octree.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn quantize_rgb_premultiplied_source(
     image: &DynamicImage,
     selection: &StrategySelection,
@@ -584,16 +593,17 @@ fn quantize_rgb_premultiplied_source(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn build_paletted_image(
     width: u32,
     height: u32,
     quantized: QuantizedColors,
 ) -> Result<Image, PilError> {
-    let mut output = crate::raster::GrayImage::new(width, height);
-    for (index, pixel) in output.pixels_mut().enumerate() {
-        pixel[0] = quantized.indices.get(index).copied().unwrap_or(0);
-    }
+    let output = crate::raster::GrayImage::from_raw(width, height, quantized.indices)
+        .ok_or_else(|| PilError::InternalError("Quantize index buffer shape mismatch".into()))?;
+    let palette_data = Some(crate::image::PaletteData::from_alpha(
+        quantized.alpha.as_deref().unwrap_or_default(),
+    ));
     Ok(Image::Pipeline {
         source: Arc::new(Image::from_dynamic(DynamicImage::ImagePalette8(output))),
         ops: PipelineOps::empty(),
@@ -601,6 +611,7 @@ fn build_paletted_image(
         backend: None,
         palette: Some(quantized.palette),
         palette_alpha: quantized.alpha,
+        palette_data,
         compatibility_icc_profile: None,
         materialized: crate::image::materialization_cache(),
         shape: crate::image::pipeline_shape_cache(),

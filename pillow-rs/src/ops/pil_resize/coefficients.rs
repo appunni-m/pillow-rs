@@ -362,17 +362,18 @@ pub(crate) fn precompute_coeffs_f64(
     cached_filter_coeffs_f64(in_size, out_size, kernel, support)
 }
 
-/// Precompute double-precision coefficients for a resize with a fractional
-/// source box. Pillow receives these boundaries as `float` before computing
-/// the f64 kernel centers, just as it does for the byte boxed-resample path.
-pub(crate) fn precompute_coeffs_f64_boxed(
+/// Precompute boxed f64 coefficients with an explicitly selected filter kernel.
+/// Architecture strategies use this entry point to match their reference
+/// coefficient arithmetic while sharing Pillow's geometry and normalization.
+// VERIFY: source=reviewed@2026-11-28; parity=passed@2026-11-28; benchmark=pending
+pub(crate) fn precompute_coeffs_f64_boxed_with_kernel(
     out_size: u32,
     in_size: u32,
     box_start: f64,
     box_end: f64,
-    filter: ResampleFilter,
+    kernel: fn(f64) -> f64,
+    support: f64,
 ) -> FilterCoeffsF64 {
-    let (kernel, support) = filter_from_resample(filter);
     let box_start = box_start as f32 as f64;
     let box_end = box_end as f32 as f64;
     let scale = (box_end as f32 - box_start as f32) as f64 / f64::from(out_size);

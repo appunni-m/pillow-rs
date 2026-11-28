@@ -8,6 +8,7 @@ use crate::error::PilError;
 use crate::raster::{RgbImage, RgbaImage};
 use wide::{u8x16, u16x16};
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_wide(source: &RgbaImage) -> Result<RgbImage, PilError> {
     let mut output = prepare_output(source)?;
     let mut vector_blocks = 0u64;
@@ -19,6 +20,7 @@ pub(crate) fn execute_wide(source: &RgbaImage) -> Result<RgbImage, PilError> {
 }
 
 #[cfg(target_arch = "x86_64")]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_ssse3(source: &RgbaImage) -> Result<RgbImage, PilError> {
     let mut output = prepare_output(source)?;
     let mut vector_blocks = 0u64;
@@ -33,6 +35,7 @@ pub(crate) fn execute_ssse3(source: &RgbaImage) -> Result<RgbImage, PilError> {
     finish_output(source, output, vector_blocks, 0)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn prepare_output(source: &RgbaImage) -> Result<Vec<u8>, PilError> {
     let input = CheckedDims::new_allow_empty(source.width(), source.height(), 4)?;
     let output = CheckedDims::new_allow_empty(source.width(), source.height(), 3)?;
@@ -44,6 +47,7 @@ fn prepare_output(source: &RgbaImage) -> Result<Vec<u8>, PilError> {
     Ok(Vec::with_capacity(output.total_bytes()))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn append_wide_block(source: &[u8], active_pixels: usize, output: &mut Vec<u8>) {
     let mut padded = [0u8; 64];
     padded[..source.len()].copy_from_slice(source);
@@ -69,6 +73,7 @@ fn append_wide_block(source: &[u8], active_pixels: usize, output: &mut Vec<u8>) 
     unsafe_code,
     reason = "the SSSE3 mode strategy validates the host feature before this kernel is selected"
 )]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn append_ssse3_block(source: &[u8], output: &mut Vec<u8>) {
     let mut channels = [[0u8; 16]; 4];
     for (channel, samples) in channels.iter_mut().enumerate() {
@@ -94,6 +99,7 @@ fn append_ssse3_block(source: &[u8], output: &mut Vec<u8>) {
     );
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn append_channels(
     cyan: [u8; 16],
     magenta: [u8; 16],
@@ -119,6 +125,7 @@ fn append_channels(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn finish_output(
     source: &RgbaImage,
     output: Vec<u8>,

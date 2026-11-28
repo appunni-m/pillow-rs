@@ -41,7 +41,7 @@ impl ModeSupport {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     /// Rejects unsupported source modes through this operation's declaration.
     pub(crate) fn validate_mode(self) -> Result<(), PilError> {
         match self {
@@ -51,6 +51,7 @@ impl ModeSupport {
     }
 
     /// Validates a target identity against a mode-changing operation contract.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn validate_set_mode_target(self, target: Mode) -> Result<(), PilError> {
         let Self::Supported {
             default, inputs, ..
@@ -69,6 +70,35 @@ impl ModeSupport {
         }
         Err(PilError::InternalError(
             "setmode support omitted its target-mode contract".into(),
+        ))
+    }
+
+    /// Validates RemapPalette's destination-map length from this mode's declaration.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    pub(crate) fn validate_remap_palette_destination_map(
+        self,
+        entries: usize,
+    ) -> Result<(), PilError> {
+        self.validate_mode()?;
+        let Self::Supported { inputs, .. } = self else {
+            unreachable!("validated RemapPalette mode was rejected")
+        };
+        for contract in inputs {
+            let InputContract::RemapPaletteDestinationMap {
+                max_entries,
+                rejection_reason,
+            } = *contract
+            else {
+                continue;
+            };
+            return if entries <= max_entries {
+                Ok(())
+            } else {
+                Err(PilError::ValueError(rejection_reason.into()))
+            };
+        }
+        Err(PilError::InternalError(
+            "RemapPalette support omitted its destination-map contract".into(),
         ))
     }
 
@@ -133,7 +163,7 @@ impl ModeSupport {
         ))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     /// Validates an ImageChops secondary identity from this mode's declaration.
     ///
     /// The secondary identity is supplied lazily so source rejection can
@@ -171,6 +201,7 @@ impl ModeSupport {
     ///
     /// A returned guard means the caller does not yet have enough facts to
     /// complete admission; materialized preparation resolves it later.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn assess_inputs(
         self,
         input: StrategyInputs,
@@ -215,6 +246,7 @@ impl ModeSupport {
     }
 
     /// Returns the declared scope of an accepted conversion target pair.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[must_use]
     pub fn scope_for_target(self, target: Mode) -> Option<SupportScope> {
         let Self::Supported { scope, inputs, .. } = self else {
@@ -242,6 +274,30 @@ impl ModeSupport {
                 }
                 return Some(SupportScope::Pillow);
             }
+            if let InputContract::ConvertMatrixTarget { targets, .. } = input {
+                let mut target_rules = targets.iter().filter(|rule| rule.mode == target);
+                let first = target_rules.next()?;
+                if let SupportScope::CoreOnly { .. } = scope {
+                    return Some(scope);
+                }
+                if !target.is_pillow_mode() {
+                    return Some(SupportScope::CoreOnly {
+                        reason: first
+                            .core_only_reason
+                            .unwrap_or("this matrix target is a native core extension"),
+                    });
+                }
+                if first.core_only_reason.is_none()
+                    || target_rules.any(|rule| rule.core_only_reason.is_none())
+                {
+                    return Some(SupportScope::Pillow);
+                }
+                return Some(SupportScope::CoreOnly {
+                    reason: first
+                        .core_only_reason
+                        .unwrap_or("this matrix target is a native core extension"),
+                });
+            }
         }
         None
     }
@@ -256,7 +312,7 @@ impl ModeSupport {
         Self::cpu(operation, mode, OutputModeRule::Preserve, inputs, &[])
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     /// Declares a Pillow-defined strategy for this exact operation and mode.
     ///
     /// Use this only when Pillow defines the operation/mode behavior. A Pillow
@@ -280,7 +336,7 @@ impl ModeSupport {
         Self::cpu_with_scope(operation, mode, output, inputs, architectures, scope)
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     /// Declares a native strategy that extends Pillow's operation/mode contract.
     pub const fn cpu_core_only(
         operation: OperationId,
@@ -300,7 +356,7 @@ impl ModeSupport {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     const fn cpu_with_scope(
         operation: OperationId,
         mode: Mode,
@@ -345,7 +401,7 @@ impl ModeSupport {
     }
 
     /// Assesses known metadata without treating unknown guards as a fallback.
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn assess(
         self,
         ctx: &ExecutionContext,
@@ -400,7 +456,7 @@ impl ModeSupport {
     /// Selects only from this declaration using captured capabilities and source facts.
     /// A Default request may choose a declared target-baseline strategy when
     /// its build target matches; the selected implementation remains explicit.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn select(
         self,
         ctx: &ExecutionContext,

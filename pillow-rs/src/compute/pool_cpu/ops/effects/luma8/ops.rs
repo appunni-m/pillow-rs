@@ -64,6 +64,7 @@ pub(crate) const NOISE_SUPPORT: ModeSupport = ModeSupport::cpu(
     &NOISE_ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_spread<'a>(
     input: &'a Input,
     distance: u32,
@@ -110,6 +111,7 @@ fn from_spread_vector(output: spread_vector::Output) -> Result<Input, PilError> 
         .ok_or_else(|| PilError::InternalError("EffectSpread vector output shape mismatch".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_spread(plan: SpreadStrategy<'_>) -> Result<DynamicImage, PilError> {
     match plan.implementation {
         SpreadImplementation::Default(kernel) => {
@@ -127,6 +129,7 @@ pub(crate) fn execute_spread(plan: SpreadStrategy<'_>) -> Result<DynamicImage, P
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_noise<'a>(
     input: &'a Input,
     sigma: f64,
@@ -161,6 +164,7 @@ pub(crate) fn prepare_noise<'a>(
     Ok(Prepared::new(implementation, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_noise(plan: NoiseStrategy<'_>) -> Result<DynamicImage, PilError> {
     match plan.implementation {
         NoiseImplementation::Default(kernel) => {
@@ -201,6 +205,7 @@ pub(crate) enum LinearGradientImplementation {
 }
 pub(crate) type LinearGradientStrategy = Prepared<LinearGradientImplementation>;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_linear_gradient(
     selection: crate::compute::registry::support::StrategySelection,
 ) -> Result<LinearGradientStrategy, PilError> {
@@ -218,6 +223,7 @@ pub(crate) fn prepare_linear_gradient(
     Ok(Prepared::new(implementation, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_linear_gradient(
     plan: LinearGradientStrategy,
 ) -> Result<crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage, PilError> {
@@ -254,6 +260,7 @@ pub(crate) enum RadialGradientImplementation {
 }
 pub(crate) type RadialGradientStrategy = Prepared<RadialGradientImplementation>;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_radial_gradient(
     selection: crate::compute::registry::support::StrategySelection,
 ) -> Result<RadialGradientStrategy, PilError> {
@@ -271,6 +278,7 @@ pub(crate) fn prepare_radial_gradient(
     Ok(Prepared::new(implementation, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_radial_gradient(
     plan: RadialGradientStrategy,
 ) -> Result<crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage, PilError> {
@@ -291,8 +299,7 @@ static MANDELBROT_ARCHITECTURES: [ImplementationSupport; 4] = [
         Architecture::Avx,
         cfg!(all(
             any(target_arch = "x86", target_arch = "x86_64"),
-            target_feature = "avx",
-            not(target_feature = "avx512f")
+            target_feature = "avx"
         )),
         &[Architecture::Avx],
         StrategyGuard::EffectMandelbrotVector,
@@ -304,8 +311,7 @@ static MANDELBROT_ARCHITECTURES: [ImplementationSupport; 4] = [
         cfg!(all(
             any(target_arch = "x86", target_arch = "x86_64"),
             target_feature = "sse2",
-            not(target_feature = "avx"),
-            not(target_feature = "avx512f")
+            not(target_feature = "avx")
         )),
         &[Architecture::Sse2],
         StrategyGuard::EffectMandelbrotVector,
@@ -345,6 +351,7 @@ pub(crate) enum MandelbrotImplementation {
 }
 pub(crate) type MandelbrotStrategy = Prepared<MandelbrotImplementation>;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_mandelbrot(
     selection: crate::compute::registry::support::StrategySelection,
 ) -> Result<MandelbrotStrategy, PilError> {
@@ -363,6 +370,7 @@ pub(crate) fn prepare_mandelbrot(
     Ok(Prepared::new(implementation, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_mandelbrot(
     plan: MandelbrotStrategy,
     size: (u32, u32),

@@ -346,6 +346,7 @@ struct MultilineAnchor {
     vertical_direction: bool,
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn multiline_text_positions<'a>(
     x: f64,
     y: f64,
@@ -417,6 +418,7 @@ pub(crate) fn text_layout_font_mode(mode: Mode, embedded_color: bool) -> Mode {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn multiline_line_spacing(
     font: &crate::font::FreeTypeFont,
     options: &crate::font::ImageFontTextOptions,
@@ -454,7 +456,7 @@ fn vertical_text_positions<'a>(
         .collect()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 // TODO(pillow-rs#3ptb): add long-advance, fractional-anchor, and RGBA-font receipts.
 fn horizontal_text_positions<'a>(
     x: f64,

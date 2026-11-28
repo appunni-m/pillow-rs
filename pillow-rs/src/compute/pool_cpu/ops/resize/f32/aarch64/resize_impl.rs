@@ -8,7 +8,7 @@ use crate::ops::pil_resize::PortableFma;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(
     context: &ExecutionContext,
     input: &RgbaImage,

@@ -9,7 +9,7 @@
 mod alpha;
 
 mod coefficients;
-mod filters;
+pub(crate) mod filters;
 mod float;
 mod horizontal_passes;
 
@@ -23,7 +23,7 @@ pub(crate) use alpha::unpremultiply_channel;
 pub(crate) use coefficients::{
     FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, fixed_point_to_u8,
     precompute_coeffs, precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
-    precompute_coeffs_f64_boxed,
+    precompute_coeffs_f64_boxed_with_kernel,
 };
 pub(crate) use filters::filter_from_resample;
 #[cfg(target_arch = "x86_64")]
@@ -33,6 +33,7 @@ pub(crate) use float::{
     f_resize_samples_allow_finite_fma,
 };
 pub(crate) use horizontal_passes::horizontal_pass_rgb_row;
+#[cfg(feature = "gpu")]
 pub(crate) use luma16::luma16_resample_big_endian;
 
 pub(crate) use samples::{f32_samples_from_le_bytes, i32_samples_from_le_bytes};

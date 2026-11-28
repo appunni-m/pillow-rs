@@ -13,6 +13,7 @@ use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
     unsafe_code,
     reason = "the SSSE3 mode strategy validates the host feature before this kernel is selected"
 )]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) unsafe fn execute(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)
@@ -63,6 +64,7 @@ pub(crate) unsafe fn execute(source: &RgbaImage) -> Result<DynamicImage, PilErro
     target_feature = "ssse3",
     not(target_feature = "avx2")
 ))]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_luma(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let kernel =
         crate::compute::pool_cpu::ops::grayscale::rgba8::default::grayscale_impl::prepare(source)?;
@@ -80,6 +82,7 @@ pub(crate) fn execute_luma(source: &RgbaImage) -> Result<DynamicImage, PilError>
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "ssse3")]
 #[allow(unsafe_code)]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 unsafe fn rgba_to_rgb_ssse3(source: &[u8], vector_pixels: usize, output: &mut Vec<u8>) {
     use core::arch::x86_64::{
         _mm_and_si128, _mm_loadu_si128, _mm_or_si128, _mm_setr_epi8, _mm_shuffle_epi8,

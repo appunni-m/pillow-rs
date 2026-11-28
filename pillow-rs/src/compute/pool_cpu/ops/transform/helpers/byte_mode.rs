@@ -57,6 +57,39 @@ macro_rules! byte_mode_default {
             )
         }
 
+        pub(crate) fn execute_into_with_validity(
+            input: &$crate::raster::DynamicImage,
+            request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
+            output: &mut $crate::raster::DynamicImage,
+            validity: &mut [u8],
+        ) -> Result<(), $crate::error::PilError> {
+            let (
+                $crate::raster::DynamicImage::$variant(_),
+                $crate::raster::DynamicImage::$variant(_),
+            ) = (input, &*output)
+            else {
+                return Err($crate::error::PilError::InternalError(
+                    "Transform mode strategy received a different destination raster identity".into(),
+                ));
+            };
+            let destination = output.as_bytes_mut().ok_or_else(|| {
+                $crate::error::PilError::InternalError(
+                    "Transform destination does not expose byte storage".into(),
+                )
+            })?;
+            $crate::compute::pool_cpu::ops::transform::helpers::byte::execute_into_with_validity::<
+                $channels,
+                $force_nearest,
+                $alpha,
+            >(
+                input,
+                request,
+                $crate::compute::pool_cpu::ops::transform::helpers::byte::AffineNearestKernel::$kernel,
+                destination,
+                Some(validity),
+            )
+        }
+
     };
 }
 
@@ -170,6 +203,31 @@ macro_rules! byte_mode_nearest {
                 $channels,
             >(source.as_raw(), source.dimensions(), request, destination)
         }
+
+        pub(crate) fn execute_into_with_validity(
+            input: &$crate::raster::DynamicImage,
+            request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
+            output: &mut $crate::raster::DynamicImage,
+            validity: &mut [u8],
+        ) -> Result<(), $crate::error::PilError> {
+            let (
+                $crate::raster::DynamicImage::$variant(source),
+                $crate::raster::DynamicImage::$variant(_),
+            ) = (input, &*output)
+            else {
+                return Err($crate::error::PilError::InternalError(
+                    concat!("Transform mode strategy expected exact ", $mode_name, " buffers").into(),
+                ));
+            };
+            let destination = output.as_bytes_mut().ok_or_else(|| {
+                $crate::error::PilError::InternalError(
+                    "Transform destination does not expose byte storage".into(),
+                )
+            })?;
+            $crate::compute::pool_cpu::ops::transform::helpers::byte_nearest::execute_into_with_validity::<
+                $channels,
+            >(source.as_raw(), source.dimensions(), request, destination, validity)
+        }
     };
 }
 
@@ -237,6 +295,40 @@ macro_rules! byte_mode_vector {
             }
         }
 
+        pub(crate) fn execute_into_with_validity(
+            input: &$crate::raster::DynamicImage,
+            request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
+            output: &mut $crate::raster::DynamicImage,
+            validity: &mut [u8],
+        ) -> Result<(), $crate::error::PilError> {
+            let (
+                $crate::raster::DynamicImage::$variant(source),
+                $crate::raster::DynamicImage::$variant(_),
+            ) = (input, &*output)
+            else {
+                return Err($crate::error::PilError::InternalError(
+                    concat!("Transform mode strategy expected exact ", $mode_name, " buffers").into(),
+                ));
+            };
+            let destination = output.as_bytes_mut().ok_or_else(|| {
+                $crate::error::PilError::InternalError(
+                    "Transform destination does not expose byte storage".into(),
+                )
+            })?;
+            if matches!(request.method, $crate::pipeline::TransformMethod::Affine)
+                && matches!(request.filter, $crate::pipeline::ResampleFilter::Bilinear)
+            {
+                $crate::compute::pool_cpu::ops::transform::helpers::vector_affine_bilinear::execute_into_with_validity::<
+                    $channels,
+                    $alpha,
+                >(source.as_raw(), source.dimensions(), request, destination, validity)
+            } else {
+                $crate::compute::pool_cpu::ops::transform::helpers::byte_nearest::execute_into_with_validity::<
+                    $channels,
+                >(source.as_raw(), source.dimensions(), request, destination, validity)
+            }
+        }
+
     };
 }
 
@@ -269,6 +361,36 @@ macro_rules! luma16_mode_default_into {
                 request,
                 $crate::compute::pool_cpu::ops::transform::helpers::luma16::ByteOrder::$order,
                 destination.as_mut(),
+            )
+        }
+
+        pub(crate) fn execute_into_with_validity(
+            input: &$crate::raster::DynamicImage,
+            request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
+            output: &mut $crate::raster::DynamicImage,
+            validity: &mut [u8],
+        ) -> Result<(), $crate::error::PilError> {
+            let (
+                $crate::raster::DynamicImage::$variant(source),
+                $crate::raster::DynamicImage::$variant(destination),
+            ) = (input, output)
+            else {
+                return Err($crate::error::PilError::InternalError(
+                    concat!(
+                        "Transform mode strategy expected exact ",
+                        $mode_name,
+                        " buffers"
+                    )
+                    .into(),
+                ));
+            };
+            $crate::compute::pool_cpu::ops::transform::helpers::luma16::execute_into_with_validity(
+                source.as_raw(),
+                source.dimensions(),
+                request,
+                $crate::compute::pool_cpu::ops::transform::helpers::luma16::ByteOrder::$order,
+                destination.as_mut(),
+                validity,
             )
         }
     };
@@ -325,6 +447,31 @@ macro_rules! luma16_mode_vector {
                 request,
                 $crate::compute::pool_cpu::ops::transform::helpers::luma16::ByteOrder::$order,
                 destination.as_mut(),
+            )
+        }
+
+        pub(crate) fn execute_into_with_validity(
+            input: &$crate::raster::DynamicImage,
+            request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
+            output: &mut $crate::raster::DynamicImage,
+            validity: &mut [u8],
+        ) -> Result<(), $crate::error::PilError> {
+            let (
+                $crate::raster::DynamicImage::$variant(source),
+                $crate::raster::DynamicImage::$variant(destination),
+            ) = (input, &mut *output)
+            else {
+                return Err($crate::error::PilError::InternalError(
+                    concat!("Transform mode strategy expected exact ", $mode_name, " buffers").into(),
+                ));
+            };
+            $crate::compute::pool_cpu::ops::transform::helpers::vector_luma16::execute_into_with_validity(
+                source.as_raw(),
+                source.dimensions(),
+                request,
+                $crate::compute::pool_cpu::ops::transform::helpers::luma16::ByteOrder::$order,
+                destination.as_mut(),
+                validity,
             )
         }
     };

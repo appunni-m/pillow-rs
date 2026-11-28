@@ -23,6 +23,17 @@ const ARCHITECTURES: &[ImplementationSupport] = &[
     ImplementationSupport::cpu(
         OperationId::AlphaComposite,
         Mode::ImageLumaA8,
+        Architecture::Avx512F,
+        cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+        &[Architecture::Avx512F],
+        StrategyGuard::AlphaCompositeAvx512F {
+            channels: 2,
+            minimum_pixels: 32,
+        },
+    ),
+    ImplementationSupport::cpu(
+        OperationId::AlphaComposite,
+        Mode::ImageLumaA8,
         Architecture::Sse2,
         cfg!(all(
             any(target_arch = "x86", target_arch = "x86_64"),
@@ -60,6 +71,8 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
 #[derive(Clone, Copy)]
 enum ArchitectureStrategy {
     Default,
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    Avx512F,
     #[cfg(all(
         any(target_arch = "x86", target_arch = "x86_64"),
         target_feature = "sse2"
@@ -79,10 +92,12 @@ pub(crate) struct Strategy<'a> {
 }
 
 impl Strategy<'_> {
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let DynamicImage::ImageLumaA8(source) = self.source.as_ref() else {
             return Err(PilError::InternalError(
@@ -92,6 +107,10 @@ impl Strategy<'_> {
         let mut output = match self.architecture {
             ArchitectureStrategy::Default => {
                 super::default::alpha_composite_impl::execute(source, self.destination)?
+            }
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            ArchitectureStrategy::Avx512F => {
+                super::avx512f::alpha_composite_impl::execute(source, self.destination)?
             }
             #[cfg(all(
                 any(target_arch = "x86", target_arch = "x86_64"),
@@ -118,6 +137,7 @@ impl Strategy<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     destination: &'a GrayAlphaImage,
     source: Arc<DynamicImage>,
@@ -137,6 +157,8 @@ pub(crate) fn prepare<'a>(
     }
     let architecture = match selection.implementation.architecture {
         Architecture::Default => ArchitectureStrategy::Default,
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => ArchitectureStrategy::Avx512F,
         #[cfg(all(
             any(target_arch = "x86", target_arch = "x86_64"),
             target_feature = "sse2"
@@ -168,6 +190,8 @@ pub(crate) fn merge(
     super::super::helpers::strategy::require_operation_mode(selection, OperationId::Merge, MODE)?;
     match selection.implementation.architecture {
         Architecture::Default => super::default::operations::merge(source, remaining),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => super::avx512f::merge_impl::merge(source, remaining, selection),
         #[cfg(all(
             any(target_arch = "x86", target_arch = "x86_64"),
             target_feature = "sse2"
@@ -183,6 +207,7 @@ pub(crate) fn merge(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn blend(
     source: &DynamicImage,
     other: &DynamicImage,

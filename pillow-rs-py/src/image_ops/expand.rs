@@ -2,7 +2,7 @@ use super::PythonBorderCallbacks;
 use crate::{PyImage, c_int_from_python, imageops_fill_from_python, map_error};
 use pyo3::basic::CompareOp;
 use pyo3::exceptions::PyValueError;
-use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
+use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyRef, PyResult, Python};
 use pyo3::types::{PyAnyMethods, PyInt, PyModuleMethods, PyTuple, PyTupleMethods};
 use pyo3::{pyfunction, wrap_pyfunction};
 
@@ -156,7 +156,7 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn palette_get_color(
         &mut self,
         palette: &Self::Palette,
@@ -214,6 +214,25 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
         imageops_fill_from_python(self.geometry.py, Some(value), mode).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    fn canvas_execution_route(
+        &mut self,
+    ) -> Option<(Option<pillow_rs::Backend>, pillow_rs::ExecutionContext)> {
+        let context = self
+            .geometry
+            .image
+            .call_method0("_current_execution_context")
+            .ok()?;
+        if context.is_none() {
+            return None;
+        }
+        let context = context
+            .extract::<PyRef<'_, crate::image::PyExecutionContext>>()
+            .ok()?;
+        Some((context.pinned_backend, context.inner))
+    }
+
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn capture_wrapper_constructor(&mut self) -> Result<Self::WrapperConstructor, Self::Error> {
         self.wrapper_type.call0().map_err(Into::into)
     }
@@ -241,7 +260,7 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn copy_transparency_info(&mut self, output: &mut Self::Output) -> Result<(), Self::Error> {
         let source_info = self.geometry.image.getattr("info")?;
         if source_info.contains("transparency")? {
@@ -252,7 +271,7 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
         Ok(())
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn paste(
         &mut self,
         output: &mut Self::Output,
@@ -276,7 +295,7 @@ fn expand_callback_error(error: ExpandCallbackError) -> PyErr {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_expand_with_callbacks(
     py: Python<'_>,

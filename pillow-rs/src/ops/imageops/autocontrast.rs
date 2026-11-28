@@ -612,13 +612,13 @@ fn validate_autocontrast_mode_after_histogram(
 ///
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
     autocontrast_with_options(image, AutocontrastOptions::symmetric(cutoff))
 }
 
 /// Normalizes image contrast using independent cutoffs, ignored bins, and tone-preserving luma statistics.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn autocontrast_with_options(
     image: &Image,
     options: AutocontrastOptions,
@@ -634,7 +634,7 @@ pub fn autocontrast_with_options(
 }
 
 /// Normalizes contrast after validating an optional Pillow mask.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn autocontrast_with_mask(
     image: &Image,
     cutoff: f64,
@@ -644,7 +644,7 @@ pub fn autocontrast_with_mask(
 }
 
 /// Normalizes image contrast using typed options after validating an optional Pillow mask.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn autocontrast_with_options_and_mask(
     image: &Image,
     options: AutocontrastOptions,

@@ -238,7 +238,7 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn new_canvas(
         &mut self,
         size: &Self::Value,
@@ -444,12 +444,12 @@ impl<'py> pillow_rs::ImageOpsPadRouteCallbacks for PythonPadCallbacks<'py> {
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn run_core<T: Send>(&mut self, operation: impl FnOnce() -> T + Send) -> T {
         self.aspect.py.detach(operation)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn native_image_snapshot(&mut self) -> Result<pillow_rs::Image, PadCallbackError> {
         super::wrapped_image_snapshot(&self.aspect.image).map_err(Into::into)
     }
@@ -489,12 +489,18 @@ impl<'py> pillow_rs::ImageOpsPadRouteCallbacks for PythonPadCallbacks<'py> {
         Ok(crate::inputs::centering_from_python(centering))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn wrap_native_pad_result(
         &mut self,
         image: pillow_rs::Image,
         contained: bool,
     ) -> Result<Bound<'py, PyAny>, PadCallbackError> {
+        // The padded route constructs `Image(result)` directly, bypassing
+        // `Image._new`; bind the active route before handing it to that wrapper.
+        let image = crate::image::route_pending_image(
+            image,
+            crate::image::route_from_active_wrapper(self.aspect.py),
+        );
         let result = Py::new(self.aspect.py, PyImage { inner: image })?;
         if contained {
             self.aspect
@@ -519,7 +525,7 @@ fn pad_callback_error(error: PadCallbackError) -> PyErr {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_pad_with_route_callbacks(
     py: Python<'_>,

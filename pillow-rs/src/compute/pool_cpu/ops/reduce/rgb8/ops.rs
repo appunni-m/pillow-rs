@@ -1,4 +1,7 @@
 //! Exact-mode support and architecture selection for ImageRgb8 Reduce.
+// TODO(pillow-rs#3ptb): verify public RGB output bytes and exact architecture
+// /Default fallback receipts across reduction factors, edge blocks, and tails;
+// compare latency in the frozen CPU gate.
 
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::registry::support::{
@@ -66,7 +69,7 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: &'a crate::raster::RgbImage,
     facts: StrategyInputs,
@@ -124,7 +127,7 @@ pub(crate) fn prepare<'a>(
     Ok(Prepared::new(implementation, selection))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
         ArchitectureStrategy::Default {

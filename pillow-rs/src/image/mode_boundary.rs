@@ -8,6 +8,7 @@ use crate::raster::Mode;
 /// TODO(pillow-rs#3ptb): replace the remaining GPU result-metadata caller with
 /// a typed `Mode` when the GPU compatibility route adopts the raster contract.
 /// CPU operation selection reads the mode carried by `DynamicImage` directly.
+#[cfg(feature = "gpu")]
 pub(crate) fn parse_pillow_mode(name: &str) -> Option<Mode> {
     Mode::from_pillow_name(name)
 }

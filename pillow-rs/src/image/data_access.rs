@@ -152,6 +152,36 @@ fn append_three_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Resul
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+// Pillow's public LAB PutData values store A/B with the mode's +128 byte offset.
+fn append_lab_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<(), PilError> {
+    match value {
+        PutDataValue::Packed(packed) => {
+            let bytes = packed.to_le_bytes();
+            data.extend_from_slice(&[
+                bytes[0],
+                bytes[1].wrapping_add(128),
+                bytes[2].wrapping_add(128),
+            ]);
+        }
+        PutDataValue::Components(components) => match components.as_slice() {
+            [luma] => data.extend_from_slice(&[putdata_clip_component(*luma), 128, 128]),
+            [luma, a, b] | [luma, a, b, _] => data.extend_from_slice(&[
+                putdata_clip_component(*luma),
+                putdata_clip_component(*a).wrapping_add(128),
+                putdata_clip_component(*b).wrapping_add(128),
+            ]),
+            _ => {
+                return Err(PilError::TypeError(
+                    "color must be int, or tuple of one, three or four elements".into(),
+                ));
+            }
+        },
+        _ => return Err(PilError::TypeError("color must be int or tuple".into())),
+    }
+    Ok(())
+}
+
 // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 fn append_four_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<(), PilError> {
     match value {
@@ -178,7 +208,7 @@ fn append_four_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 fn append_putdata_value(
     mode: Mode,
     value: &PutDataValue,
@@ -193,7 +223,8 @@ fn append_putdata_value(
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
             append_two_channel_value(value, data)
         }
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
+        Mode::ImageLab8 => append_lab_value(value, data),
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => {
             append_three_channel_value(value, data)
         }
         Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 | Mode::ImageCmyk8 => {

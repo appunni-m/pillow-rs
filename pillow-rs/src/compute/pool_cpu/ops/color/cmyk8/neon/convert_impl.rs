@@ -10,14 +10,14 @@ use fearless_simd::{Neon, u8x16 as SafeU8x16, u16x8 as SafeU16x8};
     unsafe_code,
     reason = "the prepared Convert strategy verifies the host's NEON capability"
 )]
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(source: &RgbaImage) -> Result<DynamicImage, PilError> {
-    // SAFETY: this function is reached only through the prepared Convert
-    // strategy whose requirements include the host's NEON capability.
     // SAFETY: this function is reached only through the prepared Convert
     // strategy whose requirements include the host's NEON capability.
     unsafe { execute_neon(source) }.map(DynamicImage::ImageRgb8)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[cfg(target_arch = "aarch64")]
 #[target_feature(enable = "neon")]
 #[allow(unsafe_code)]
@@ -63,6 +63,7 @@ unsafe fn execute_neon(source: &RgbaImage) -> Result<RgbImage, PilError> {
 
 #[cfg(target_arch = "aarch64")]
 #[inline(always)]
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn convert_vector_blocks(neon: Neon, source: &[u8], output: &mut [u8]) {
     for (source_block, output_block) in source.chunks_exact(64).zip(output.chunks_exact_mut(48)) {
         let channels = SafeU8x16::<Neon>::load_four_interleaved(
@@ -91,6 +92,7 @@ fn convert_vector_blocks(neon: Neon, source: &[u8], output: &mut [u8]) {
 
 #[cfg(target_arch = "aarch64")]
 #[inline(always)]
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn muldiv255_neon(neon: Neon, value: SafeU8x16<Neon>, ink: SafeU8x16<Neon>) -> SafeU8x16<Neon> {
     let (value_low, value_high) = value.widen();
     let (ink_low, ink_high) = ink.widen();
@@ -102,6 +104,7 @@ fn muldiv255_neon(neon: Neon, value: SafeU8x16<Neon>, ink: SafeU8x16<Neon>) -> S
 }
 
 #[cfg(target_arch = "aarch64")]
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn convert_scalar_tail(source: &[u8], output: &mut [u8], start: usize, end: usize) {
     for pixel in start..end {
         let source_start = pixel * 4;

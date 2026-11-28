@@ -43,8 +43,26 @@ from .image import (
     SupportsGetData,
 )
 from .operations import (
-    alpha_composite, blend, composite, convert, crop, effect_mandelbrot, effect_noise, eval, fromarray, frombuffer, frombytes,
-    linear_gradient, merge, new, open, radial_gradient, resize, rotate, save,
+    alpha_composite,
+    blend,
+    composite,
+    convert,
+    crop,
+    effect_mandelbrot,
+    effect_noise,
+    eval,
+    fromarray,
+    fromarrow,
+    frombuffer,
+    frombytes,
+    linear_gradient,
+    merge,
+    new,
+    open,
+    radial_gradient,
+    resize,
+    rotate,
+    save,
 )
 
 from .gpu_batch import GpuBatchExecutor, GpuImage, BatchResult, BatchError, QueueFull, ResultBackpressure, Results
@@ -60,7 +78,15 @@ __all__ = [
     "Resampling", "Transform", "Transpose", "Dither", "Palette",
     "ImagePointHandler", "ImagePointTransform", "ImageTransformHandler", "SupportsGetData",
     "open", "new", "save", "resize", "crop", "rotate", "convert", "merge", "blend", "composite",
-    "linear_gradient", "radial_gradient", "effect_mandelbrot", "effect_noise", "eval", "frombuffer", "fromarray", "frombytes",
+    "linear_gradient",
+    "radial_gradient",
+    "effect_mandelbrot",
+    "effect_noise",
+    "eval",
+    "frombuffer",
+    "fromarray",
+    "fromarrow",
+    "frombytes",
     "alpha_composite",
 ]
 

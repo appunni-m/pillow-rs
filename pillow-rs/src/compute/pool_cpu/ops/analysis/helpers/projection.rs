@@ -94,6 +94,39 @@ pub(crate) fn project_native_bytes(
     }
     Ok((horizontal, vertical))
 }
+
+/// Project LAB pixels after accounting for the stored neutral a/b offsets.
+// VERIFY: source=reviewed@2026-11-27; parity=pass@cpu-default-closure-2026-11-27; benchmark=pending
+pub(crate) fn project_lab_bytes(
+    bytes: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<ProjectionAxes, crate::error::PilError> {
+    let width = width as usize;
+    let height = height as usize;
+    let sample_count = width.checked_mul(height).ok_or_else(|| {
+        crate::error::PilError::DimensionError("getprojection sample count overflow".into())
+    })?;
+    let expected_bytes = sample_count.checked_mul(3).ok_or_else(|| {
+        crate::error::PilError::DimensionError("getprojection byte count overflow".into())
+    })?;
+    if bytes.len() != expected_bytes {
+        return Err(crate::error::PilError::InternalError(
+            "GetProjection LAB storage did not match its dimensions".into(),
+        ));
+    }
+
+    let mut horizontal = vec![0; width];
+    let mut vertical = vec![0; height];
+    for (index, pixel) in bytes.chunks_exact(3).enumerate() {
+        if pixel[0] != 0 || pixel[1] != 128 || pixel[2] != 128 {
+            horizontal[index % width] = 1;
+            vertical[index / width] = 1;
+        }
+    }
+    Ok((horizontal, vertical))
+}
+
 // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 /// Preserve Pillow's I/F stored-word test, including F negative-zero bits.
 pub(crate) fn project_stored_words(

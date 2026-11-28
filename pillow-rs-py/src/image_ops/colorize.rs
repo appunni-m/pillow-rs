@@ -13,23 +13,27 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
     type Range = Bound<'py, PyAny>;
     type Iterator = Bound<'py, PyIterator>;
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn image_mode_is_luma(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
-        Ok(image
+        // Pillow's guard evaluates `image.mode != "L"` before formatting errors.
+        let is_not_luma = image
             .getattr("mode")?
-            .rich_compare(PyString::new(self.py, "L"), CompareOp::Eq)?
-            .is_truthy()?)
+            .rich_compare(PyString::new(self.py, "L"), CompareOp::Ne)?
+            .is_truthy()?;
+        Ok(!is_not_luma)
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn image_mode_name(&mut self, image: &Self::Image) -> Result<String, Self::Error> {
         image.getattr("mode")?.str()?.extract().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn point_is_nonnegative(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
         PyInt::new(self.py, 0).le(value).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn point_is_at_most(
         &mut self,
         left: &Self::Value,
@@ -38,10 +42,12 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
         left.le(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn point_is_at_most_255(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
         value.le(255).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn resolve_color(&mut self, color: &Self::Value) -> Result<Self::Value, Self::Error> {
         let is_instance = imageops_global_or_builtin(self.py, "isinstance")?;
         let string_type = imageops_global_or_builtin(self.py, "str")?;
@@ -57,14 +63,17 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn integer(&mut self, value: i64) -> Result<Self::Value, Self::Error> {
         Ok(PyInt::new(self.py, value).into_any())
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn new_channel(&mut self) -> Result<Self::Sequence, Self::Error> {
         Ok(PyList::empty(self.py))
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn append(
         &mut self,
         channel: &mut Self::Sequence,
@@ -74,16 +83,19 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn range(&mut self, stop: &Self::Value) -> Result<Self::Range, Self::Error> {
         imageops_global_or_builtin(self.py, "range")?
             .call1((stop,))
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn range_values(&mut self, range: &Self::Range) -> Result<Self::Iterator, Self::Error> {
         PyIterator::from_object(range).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn next_range_value(
         &mut self,
         values: &mut Self::Iterator,
@@ -91,16 +103,19 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
         values.next().transpose().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn range_length(&mut self, range: &Self::Range) -> Result<Self::Value, Self::Error> {
         imageops_global_or_builtin(self.py, "len")?
             .call1((range,))
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn component(&mut self, color: &Self::Value, index: usize) -> Result<Self::Value, Self::Error> {
         color.get_item(index).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn subtract(
         &mut self,
         left: &Self::Value,
@@ -109,6 +124,7 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
         left.sub(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn multiply(
         &mut self,
         left: &Self::Value,
@@ -117,6 +133,7 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
         left.mul(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn floor_divide(
         &mut self,
         left: &Self::Value,
@@ -125,10 +142,12 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
         left.floor_div(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error> {
         left.add(right).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn combine_channels(
         &mut self,
         red: Self::Sequence,
@@ -139,12 +158,13 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
         red_green.add(blue.as_any()).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn convert_to_rgb(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error> {
         image.call_method1("convert", ("RGB",)).map_err(Into::into)
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_imageops_colorize_with_callbacks(
     py: Python<'_>,

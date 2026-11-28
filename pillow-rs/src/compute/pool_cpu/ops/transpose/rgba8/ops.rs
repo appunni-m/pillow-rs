@@ -57,6 +57,17 @@ const TRANSPOSE_ARCHITECTURES: &[ImplementationSupport] = &[
     ImplementationSupport::cpu(
         OperationId::Transpose,
         Mode::ImageRgba8,
+        Architecture::Avx512F,
+        cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+        &[Architecture::Avx512F],
+        StrategyGuard::TransposeAvx512FNative32 {
+            minimum_dimension: 16,
+            max_pixels: i32::MAX as u64,
+        },
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Transpose,
+        Mode::ImageRgba8,
         Architecture::Avx2,
         cfg!(target_arch = "x86_64"),
         &[Architecture::Avx2],
@@ -146,6 +157,8 @@ enum MirrorArchitecture<'a> {
 }
 enum TransposeArchitecture<'a> {
     Default(&'a Input, TransposeMethod),
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    Avx512F(&'a Input, TransposeMethod),
     #[cfg(target_arch = "x86_64")]
     X86_64(&'a Input, TransposeMethod),
     #[cfg(target_arch = "x86_64")]
@@ -171,6 +184,7 @@ pub(crate) struct TransposeStrategy<'a> {
     prepared: Prepared<TransposeArchitecture<'a>>,
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_flip<'a>(
     image: &'a Input,
     ctx: &ExecutionContext,
@@ -181,6 +195,7 @@ pub(crate) fn prepare_flip<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_mirror<'a>(
     image: &'a Input,
     ctx: &ExecutionContext,
@@ -215,7 +230,7 @@ pub(crate) fn prepare_mirror<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare_transpose<'a>(
     image: &'a Input,
     method: &TransposeMethod,
@@ -233,6 +248,8 @@ pub(crate) fn prepare_transpose<'a>(
     let selection = TRANSPOSE_SUPPORT.select(ctx, facts)?;
     let method = *method;
     let implementation = match selection.implementation.architecture {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => TransposeArchitecture::Avx512F(image, method),
         #[cfg(target_arch = "x86_64")]
         Architecture::X86_64 => TransposeArchitecture::X86_64(image, method),
         #[cfg(target_arch = "x86_64")]
@@ -259,10 +276,12 @@ pub(crate) fn prepare_transpose<'a>(
 }
 
 impl FlipStrategy<'_> {
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         self.prepared.selection()
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> DynamicImage {
         match self.prepared.implementation {
             FlipArchitecture::Default(image) => super::default::flip_impl::execute(image),
@@ -271,10 +290,12 @@ impl FlipStrategy<'_> {
 }
 
 impl MirrorStrategy<'_> {
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         self.prepared.selection()
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> DynamicImage {
         match self.prepared.implementation {
             MirrorArchitecture::Default(image) => super::default::mirror_impl::execute(image),
@@ -291,6 +312,7 @@ impl MirrorStrategy<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_native_mirror(image: &Input) -> DynamicImage {
     let Some((output, vector_blocks, scalar_tail)) =
         crate::compute::pool_cpu::ops::transpose::helpers::native_mirror::mirror_image(image, 4)
@@ -308,10 +330,13 @@ fn execute_native_mirror(image: &Input) -> DynamicImage {
 }
 
 impl TransposeStrategy<'_> {
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         self.prepared.selection()
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+    #[cfg(target_arch = "x86_64")]
     #[allow(
         unsafe_code,
         reason = "the prepared AVX2 strategy validates host capability and transpose inputs"
@@ -330,7 +355,7 @@ impl TransposeStrategy<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[allow(
         unsafe_code,
         reason = "the prepared AVX2 strategy validates host capability and transpose inputs"
@@ -339,6 +364,10 @@ impl TransposeStrategy<'_> {
         match self.prepared.implementation {
             TransposeArchitecture::Default(image, method) => {
                 super::default::transpose_impl::execute(image, &method)
+            }
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            TransposeArchitecture::Avx512F(image, method) => {
+                super::avx512f::execute(image, &method)
             }
             #[cfg(target_arch = "x86_64")]
             TransposeArchitecture::X86_64(image, method) => {

@@ -69,3 +69,18 @@ pub(crate) fn execute_into(plan: Strategy<'_>, output: &mut DynamicImage) -> Res
         Some(super::helpers::transform_impl::execute_into),
     )
 }
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+pub(crate) fn execute_into_with_validity(
+    plan: Strategy<'_>,
+    output: &mut DynamicImage,
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    strategy::execute_into_with_validity(
+        plan,
+        output,
+        validity,
+        super::default::transform_impl::execute_into_with_validity,
+        Some(super::helpers::transform_impl::execute_into_with_validity),
+    )
+}

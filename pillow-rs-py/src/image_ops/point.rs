@@ -4,7 +4,7 @@ use super::{
 };
 use crate::map_error;
 use pyo3::basic::CompareOp;
-use pyo3::exceptions::PyAssertionError;
+use pyo3::exceptions::{PyAssertionError, PyValueError};
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
 use pyo3::types::{PyAnyMethods, PyModuleMethods};
 use pyo3::types::{PyInt, PyIterator, PyList, PyListMethods};
@@ -37,21 +37,25 @@ impl<'py> pillow_rs::ImageOpsLutCallbacks for PythonImageOpsCallbacks<'py> {
     type Output = Bound<'py, PyAny>;
     type Error = ImageOpsCallbackError;
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn image_mode_is_palette(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
         let mode = image.getattr("mode")?;
         imageops_mode_equals(self.py, &mode, "P").map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn image_mode_is_luma_or_rgb(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
         let mode = image.getattr("mode")?;
         imageops_mode_is_luma_or_rgb(self.py, &mode).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn image_mode_is_rgb(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
         let mode = image.getattr("mode")?;
         imageops_mode_equals(self.py, &mode, "RGB").map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn unsupported_mode_error(&mut self, image: &Self::Image) -> Result<Self::Error, Self::Error> {
         let mode = image.getattr("mode")?;
         Ok(ImageOpsCallbackError::Python(
@@ -59,6 +63,7 @@ impl<'py> pillow_rs::ImageOpsLutCallbacks for PythonImageOpsCallbacks<'py> {
         ))
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn lut_length(&mut self, lut: &Self::Lut) -> Result<usize, Self::Error> {
         imageops_global_or_builtin(self.py, "len")?
             .call1((lut,))?
@@ -66,11 +71,13 @@ impl<'py> pillow_rs::ImageOpsLutCallbacks for PythonImageOpsCallbacks<'py> {
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn repeat_lut(&mut self, lut: Self::Lut) -> Result<Self::Lut, Self::Error> {
         let doubled = lut.add(&lut)?;
         doubled.add(&lut).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn point(&mut self, image: &Self::Image, lut: Self::Lut) -> Result<Self::Output, Self::Error> {
         image.call_method1("point", (lut,)).map_err(Into::into)
     }
@@ -83,22 +90,22 @@ impl<'py> pillow_rs::ImageOpsPaletteLutCallbacks for PythonImageOpsCallbacks<'py
     type PaletteEntry = Bound<'py, PyAny>;
     type PaletteBuilder = Bound<'py, PyList>;
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn copy_palette_image(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error> {
         image.call_method0("copy").map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn palette_is_none(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
         Ok(image.getattr("palette")?.is_none())
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn palette_assertion_error(&mut self) -> Self::Error {
         ImageOpsCallbackError::Python(PyAssertionError::new_err(""))
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn palette_mode(&mut self, image: &Self::Image) -> Result<Self::PaletteMode, Self::Error> {
         image
             .getattr("palette")?
@@ -106,14 +113,14 @@ impl<'py> pillow_rs::ImageOpsPaletteLutCallbacks for PythonImageOpsCallbacks<'py
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn palette_values(&mut self, image: &Self::Image) -> Result<Self::PaletteValues, Self::Error> {
         image
             .call_method1("getpalette", (self.py.None(),))
             .map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn palette_values_are_none(
         &mut self,
         values: &Self::PaletteValues,
@@ -121,7 +128,7 @@ impl<'py> pillow_rs::ImageOpsPaletteLutCallbacks for PythonImageOpsCallbacks<'py
         Ok(values.is_none())
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn palette_values_iter(
         &mut self,
         values: Self::PaletteValues,
@@ -129,7 +136,7 @@ impl<'py> pillow_rs::ImageOpsPaletteLutCallbacks for PythonImageOpsCallbacks<'py
         values.try_iter().map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn next_palette_entry(
         &mut self,
         values: &mut Self::PaletteIterator,
@@ -137,7 +144,7 @@ impl<'py> pillow_rs::ImageOpsPaletteLutCallbacks for PythonImageOpsCallbacks<'py
         values.next().transpose().map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn palette_entry_is_alpha(
         &mut self,
         mode: &Self::PaletteMode,
@@ -151,7 +158,7 @@ impl<'py> pillow_rs::ImageOpsPaletteLutCallbacks for PythonImageOpsCallbacks<'py
         Ok(!is_not_alpha)
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn palette_lut_entry(
         &mut self,
         lut: &Self::Lut,
@@ -160,12 +167,12 @@ impl<'py> pillow_rs::ImageOpsPaletteLutCallbacks for PythonImageOpsCallbacks<'py
         lut.get_item(entry).map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn new_palette_builder(&mut self) -> Result<Self::PaletteBuilder, Self::Error> {
         Ok(PyList::empty(self.py))
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn append_palette_entry(
         &mut self,
         builder: &mut Self::PaletteBuilder,
@@ -174,7 +181,7 @@ impl<'py> pillow_rs::ImageOpsPaletteLutCallbacks for PythonImageOpsCallbacks<'py
         builder.append(entry).map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-9f188c313fb74b1e8652a1b1fbd627c7; benchmark=pending
     fn put_palette(
         &mut self,
         image: Self::Image,
@@ -187,6 +194,7 @@ impl<'py> pillow_rs::ImageOpsPaletteLutCallbacks for PythonImageOpsCallbacks<'py
 }
 
 impl<'py> pillow_rs::ImageOpsInvertCallbacks for PythonImageOpsCallbacks<'py> {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn invert_lut(&mut self) -> Result<Self::Lut, Self::Error> {
         let list = imageops_global_or_builtin(self.py, "list")?;
         let range = imageops_global_or_builtin(self.py, "range")?;
@@ -194,6 +202,7 @@ impl<'py> pillow_rs::ImageOpsInvertCallbacks for PythonImageOpsCallbacks<'py> {
         list.call1((values,)).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn image_mode_is_one(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
         let mode = image.getattr("mode")?;
         imageops_mode_equals(self.py, &mode, "1").map_err(Into::into)
@@ -205,16 +214,19 @@ impl<'py> pillow_rs::ImageOpsLutBuildCallbacks for PythonImageOpsCallbacks<'py> 
     type Iterator = Bound<'py, PyIterator>;
     type Builder = Bound<'py, PyList>;
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn new_lut_builder(&mut self) -> Result<Self::Builder, Self::Error> {
         Ok(PyList::empty(self.py))
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn lut_samples(&mut self) -> Result<Self::Iterator, Self::Error> {
         let range = imageops_global_or_builtin(self.py, "range")?;
         let samples = range.call1((256,))?;
         samples.try_iter().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn next_lut_sample(
         &mut self,
         samples: &mut Self::Iterator,
@@ -222,6 +234,7 @@ impl<'py> pillow_rs::ImageOpsLutBuildCallbacks for PythonImageOpsCallbacks<'py> 
         samples.next().transpose().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn append_lut_value(
         &mut self,
         builder: &mut Self::Builder,
@@ -230,6 +243,7 @@ impl<'py> pillow_rs::ImageOpsLutBuildCallbacks for PythonImageOpsCallbacks<'py> 
         builder.append(value).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn finish_lut(&mut self, builder: Self::Builder) -> Result<Self::Lut, Self::Error> {
         Ok(builder.into_any())
     }
@@ -238,6 +252,21 @@ impl<'py> pillow_rs::ImageOpsLutBuildCallbacks for PythonImageOpsCallbacks<'py> 
 impl<'py> pillow_rs::ImageOpsPosterizeCallbacks for PythonImageOpsCallbacks<'py> {
     type Bits = Bound<'py, PyAny>;
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    fn validate_bits(&mut self, bits: &Self::Bits) -> Result<(), Self::Error> {
+        let lower_bound = PyInt::new(self.py, 1)
+            .as_any()
+            .rich_compare(bits, CompareOp::Le)?
+            .is_truthy()?;
+        let in_range = lower_bound && bits.rich_compare(8, CompareOp::Le)?.is_truthy()?;
+        if in_range {
+            Ok(())
+        } else {
+            Err(PyValueError::new_err("bits must be between or equal to 1 and 8").into())
+        }
+    }
+
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn eight_minus_bits(&mut self, bits: &Self::Bits) -> Result<Self::Value, Self::Error> {
         PyInt::new(self.py, 8)
             .as_any()
@@ -245,6 +274,7 @@ impl<'py> pillow_rs::ImageOpsPosterizeCallbacks for PythonImageOpsCallbacks<'py>
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn two_to_power(&mut self, exponent: &Self::Value) -> Result<Self::Value, Self::Error> {
         PyInt::new(self.py, 2)
             .as_any()
@@ -252,14 +282,17 @@ impl<'py> pillow_rs::ImageOpsPosterizeCallbacks for PythonImageOpsCallbacks<'py>
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn subtract_one(&mut self, power: &Self::Value) -> Result<Self::Value, Self::Error> {
         power.sub(1).map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn invert_mask(&mut self, value: &Self::Value) -> Result<Self::Value, Self::Error> {
         value.bitnot().map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn and_sample_with_mask(
         &mut self,
         sample: &Self::Value,
@@ -272,6 +305,7 @@ impl<'py> pillow_rs::ImageOpsPosterizeCallbacks for PythonImageOpsCallbacks<'py>
 impl<'py> pillow_rs::ImageOpsSolarizeCallbacks for PythonImageOpsCallbacks<'py> {
     type Threshold = Bound<'py, PyAny>;
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn sample_is_below_threshold(
         &mut self,
         sample: &Self::Value,
@@ -283,6 +317,7 @@ impl<'py> pillow_rs::ImageOpsSolarizeCallbacks for PythonImageOpsCallbacks<'py> 
             .map_err(Into::into)
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn invert_sample(&mut self, sample: &Self::Value) -> Result<Self::Value, Self::Error> {
         PyInt::new(self.py, 255)
             .as_any()
@@ -298,6 +333,7 @@ pub(super) fn map_imageops_callback_error(error: ImageOpsCallbackError) -> PyErr
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_invert(py: Python<'_>, image: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     let mut callbacks = PythonImageOpsCallbacks { py };
@@ -306,6 +342,7 @@ fn ops_invert(py: Python<'_>, image: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         .map_err(map_imageops_callback_error)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_posterize(
     py: Python<'_>,
@@ -318,6 +355,7 @@ fn ops_posterize(
         .map_err(map_imageops_callback_error)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_solarize(
     py: Python<'_>,

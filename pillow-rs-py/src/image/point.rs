@@ -1,7 +1,8 @@
 use super::execution::{PyExecutionContext, route_from_context, route_pending_image};
 use crate::*;
 use pyo3::basic::CompareOp;
-use pyo3::types::{PyAnyMethods, PyInt, PyString};
+use pyo3::exceptions::{PyTypeError, PyValueError};
+use pyo3::types::{PyAnyMethods, PyInt, PyList, PyListMethods, PyString, PyTuple, PyTupleMethods};
 use pyo3::{pyclass, pymethods};
 
 /// Affine transform object passed to scalar Image.point callables.
@@ -233,7 +234,7 @@ fn execute_point(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn point_lut_items_from_python(input: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyAny>>> {
     if input.is_callable() {
         let mut values = Vec::with_capacity(256);
@@ -249,7 +250,37 @@ fn point_lut_items_from_python(input: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyAn
         .collect()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+#[allow(unsafe_code)] // PySequence_Check preserves the ImagingCore protocol order.
+fn point_float_lut_items_from_python(input: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyAny>>> {
+    // Pillow's float-LUT core path checks PySequence_Check, then calls
+    // PySequence_Size before snapshotting or converting any item.
+    // SAFETY: `input` is a live Python object and this adapter holds the GIL.
+    if unsafe { pyo3::ffi::PySequence_Check(input.as_ptr()) } == 0 {
+        return Err(PyTypeError::new_err("argument must be a sequence"));
+    }
+    if input.len()? != 256 {
+        return Err(PyValueError::new_err("wrong number of lut entries"));
+    }
+
+    let values = if let Ok(items) = input.cast::<PyList>() {
+        (0..256)
+            .map(|index| items.get_item(index).map(|item| item.unbind()))
+            .collect::<PyResult<Vec<_>>>()?
+    } else if let Ok(items) = input.cast::<PyTuple>() {
+        (0..256)
+            .map(|index| items.get_item(index).map(|item| item.unbind()))
+            .collect::<PyResult<Vec<_>>>()?
+    } else {
+        point_lut_items_from_python(input)?
+    };
+    if values.len() != 256 {
+        return Err(PyValueError::new_err("wrong number of lut entries"));
+    }
+    Ok(values)
+}
+
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn point_round_lut_items(values: Vec<Py<PyAny>>, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
     let round = py.import("builtins")?.getattr("round")?;
     values
@@ -258,7 +289,7 @@ fn point_round_lut_items(values: Vec<Py<PyAny>>, py: Python<'_>) -> PyResult<Vec
         .collect()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn point_lut_to_bytes(values: &[Py<PyAny>], py: Python<'_>) -> PyResult<Vec<u8>> {
     values
         .iter()
@@ -266,12 +297,13 @@ fn point_lut_to_bytes(values: &[Py<PyAny>], py: Python<'_>) -> PyResult<Vec<u8>>
             value
                 .bind(py)
                 .extract::<std::os::raw::c_long>()
-                .map(|value| value.clamp(0, 255) as u8)
+                // Pillow narrows PyLong_AsLong to C `int` before CLIP8.
+                .map(|value| (value as i32).clamp(0, 255) as u8)
         })
         .collect()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn point_lut_to_floats(values: &[Py<PyAny>], py: Python<'_>) -> PyResult<Vec<f64>> {
     values
         .iter()
@@ -279,7 +311,7 @@ fn point_lut_to_floats(values: &[Py<PyAny>], py: Python<'_>) -> PyResult<Vec<f64
         .collect()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn point_mode_rounds_lut(mode: Option<&Bound<'_, PyAny>>, py: Python<'_>) -> PyResult<bool> {
     let Some(mode) = mode else {
         return Ok(true);
@@ -288,7 +320,7 @@ fn point_mode_rounds_lut(mode: Option<&Bound<'_, PyAny>>, py: Python<'_>) -> PyR
         .is_truthy()
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn point_target_mode(mode: Option<&Bound<'_, PyAny>>) -> PyResult<Option<pillow_rs::Mode>> {
     let Some(mode) = mode else {
         return Ok(None);
@@ -301,7 +333,7 @@ fn point_target_mode(mode: Option<&Bound<'_, PyAny>>) -> PyResult<Option<pillow_
 // same native-u16 operation to endian-specific I;16 identities.
 // NO_PILLOW_SUPPORT: Pillow 13 rejects callable I;16L/B/N point routes.
 // TODO(pillow-rs#3ptb): add target-only output and fault records for I;16L/B/N.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn point_uses_affine_transform(mode: pillow_rs::Mode) -> bool {
     matches!(
         mode,
@@ -321,7 +353,7 @@ impl PyImage {
     // without consulting the supplied mode. Rust additionally supports native
     // u16 transforms for I;16L/B/N. Byte LUTs compare with "F" after callable
     // evaluation and extract the typed mode after optional round.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[pyo3(signature = (input, mode=None, execution_context=None))]
     fn point(
         slf: Py<Self>,
@@ -351,9 +383,17 @@ impl PyImage {
                 .then(|| point_lut_items_from_python(input))
                 .transpose()?;
             let round_lut = point_mode_rounds_lut(mode, py)?;
+            // The core parser checks the mode argument before reading a
+            // non-rounded F LUT; rounded LUTs are iterated before core parsing.
+            let early_target_mode = if round_lut {
+                None
+            } else {
+                Some(point_target_mode(mode)?)
+            };
             let values = match callback_values {
                 Some(values) => values,
-                None => point_lut_items_from_python(input)?,
+                None if round_lut => point_lut_items_from_python(input)?,
+                None => point_float_lut_items_from_python(input)?,
             };
             let values = if round_lut {
                 point_round_lut_items(values, py)?
@@ -364,7 +404,10 @@ impl PyImage {
             // and LUT exceptions against Pillow's post-round core argument parsing.
             // This typed conversion follows Pillow's LUT callback, mode comparison,
             // and optional round calls. Unknown strings retain the source mode.
-            let target_mode = point_target_mode(mode)?;
+            let target_mode = match early_target_mode {
+                Some(target_mode) => target_mode,
+                None => point_target_mode(mode)?,
+            };
             if !round_lut {
                 PointExecution::FloatLut(point_lut_to_floats(&values, py)?)
             } else {

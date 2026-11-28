@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, LumaA};
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_value_at(
     image: &mut ImageBuffer<LumaA<u16>, Vec<u16>>,
     pixel_index: usize,
@@ -15,6 +16,7 @@ pub(crate) fn execute_value_at(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_values(
     image: &mut ImageBuffer<LumaA<u16>, Vec<u16>>,
     values: &[crate::image::PutDataValue],

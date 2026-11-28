@@ -27,7 +27,7 @@ fn cpu_point_context(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_scalar_point<F>(
     image: &Image,
     operation: &'static str,
@@ -37,9 +37,17 @@ fn execute_scalar_point<F>(
 where
     F: FnOnce(scalar::PreparedScalarPoint) -> Result<Image, PilError>,
 {
-    let (requested_backend, context) = cpu_point_context(image, injected)?;
     let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-    let prepared = scalar::prepare(image, &context)?;
+    let declared_mode = image.known_mode_identity();
+    let input = image.materialize()?;
+    let mode = input.mode();
+    if declared_mode.is_some_and(|declared| declared != mode) {
+        return Err(PilError::InternalError(
+            "scalar point mode did not match its DynamicImage variant".into(),
+        ));
+    }
+    let (requested_backend, context) = cpu_point_context(image, injected)?;
+    let prepared = scalar::prepare(input, &context)?;
     operation_receipts.capture();
     let selection = prepared.selection();
     if !Backend::pipeline_telemetry_enabled() {
@@ -72,24 +80,27 @@ where
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_float_point(
     image: &Image,
     lut: &[f64],
     injected: Option<ExecutionContext>,
 ) -> Result<Image, PilError> {
-    let (requested_backend, context) = cpu_point_context(image, injected)?;
     let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-    let mode = match image.known_mode_identity() {
-        Some(mode) => mode,
-        None => image.materialized_shared()?.mode(),
-    };
-    crate::compute::pool_cpu::ops::eval::ops::validate_float_lut_length(mode, lut)?;
-
+    let declared_mode = image.known_mode_identity();
+    // Pillow's Image.point loads before source-mode and LUT validation.
     let input = image.materialized_shared()?;
-    if input.mode() != mode {
+    let mode = input.mode();
+    if declared_mode.is_some_and(|declared| declared != mode) {
         return Err(PilError::InternalError(
             "point float source mode did not match its DynamicImage variant".into(),
+        ));
+    }
+    let (requested_backend, context) = cpu_point_context(image, injected)?;
+    crate::compute::pool_cpu::ops::eval::ops::validate_float_lut_length(lut)?;
+    if mode == Mode::ImageF32 {
+        return Err(PilError::ValueError(
+            "point operation not supported for this mode".into(),
         ));
     }
     operation_receipts.capture();
@@ -131,25 +142,24 @@ fn execute_float_point(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_mode_point(
     image: &Image,
     target: Mode,
     lut: &[u8],
     injected: Option<ExecutionContext>,
 ) -> Result<Image, PilError> {
-    let (requested_backend, context) = cpu_point_context(image, injected)?;
     let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
-    let mode = match image.known_mode_identity() {
-        Some(mode) => mode,
-        None => image.materialized_shared()?.mode(),
-    };
+    let declared_mode = image.known_mode_identity();
     let input = image.materialized_shared()?;
-    if input.mode() != mode {
+    let mode = input.mode();
+    if declared_mode.is_some_and(|declared| declared != mode) {
         return Err(PilError::InternalError(
             "point output source mode did not match its DynamicImage variant".into(),
         ));
     }
+    // Resolve the actual source mode before preparing its CPU execution route.
+    let (requested_backend, context) = cpu_point_context(image, injected)?;
     operation_receipts.capture();
     let execute = || {
         crate::compute::pool_cpu::ops::eval::ops::execute_point_mode_output(
@@ -223,7 +233,7 @@ pub fn validate_eval_input(kind: EvalInputKind) -> Result<(), PilError> {
 ///
 /// Currently returns `Ok(Image)`; LUT length validation is handled by pipeline
 /// execution.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn eval(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image,
@@ -242,7 +252,7 @@ pub fn eval(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::ValueError`] when `n_bands` is outside `1..=4` or `lut`
 /// has neither 256 nor `256 * n_bands` entries.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Image, PilError> {
     if n_bands == 0 || n_bands > 4 {
         return Err(PilError::ValueError("invalid band count".into()));
@@ -320,7 +330,7 @@ where
 /// applies `value * scale + offset` in the input's native scalar domain; these
 /// buffers are not represented by the byte-oriented `Eval` pipeline.
 // NO_PILLOW_SUPPORT: Rust accepts callable affine transforms for I;16L/B/N.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
     execute_scalar_point(image, "PointScalar", None, |prepared| {
         scalar::execute_affine(prepared, scale, offset)
@@ -328,7 +338,7 @@ pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Im
 }
 
 /// Applies an affine scalar transform under a composed caller's CPU route.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn eval_point_transform_with_execution_context(
     image: &Image,
     scale: f64,
@@ -345,7 +355,7 @@ pub fn eval_point_transform_with_execution_context(
 /// Unlike byte-valued point operations, scalar images do not have a bounded
 /// 256-entry lookup table. The caller owns the callback; Rust owns image
 /// materialization, sample decoding, and output conversion.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn eval_point_callable<F>(image: &Image, callback: F) -> Result<Image, PilError>
 where
     F: FnMut(f64) -> Result<f64, PilError>,
@@ -431,13 +441,13 @@ fn eval_validated_with_context(
 ///
 /// Returns [`PilError::ValueError`] when the LUT length or source mode does
 /// not match Pillow's single-band floating-output path.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn eval_float(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
     execute_float_point(image, lut, None)
 }
 
 /// Applies a floating LUT under a composed caller's CPU route.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn eval_float_with_execution_context(
     image: &Image,
     lut: &[f64],
@@ -450,14 +460,15 @@ pub fn eval_float_with_execution_context(
 ///
 /// Supported source/target pairs are `L -> 1`, `P -> 1`, and `I -> L`. The I
 /// route consumes exactly 65,536 entries over the signed sample's clamped
-/// lookup domain; the byte routes consume one 256-entry table per source band.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+/// lookup domain; the byte routes each consume one 256-entry table for their
+/// single-band target.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn eval_point_mode(image: &Image, target: Mode, lut: &[u8]) -> Result<Image, PilError> {
     execute_mode_point(image, target, lut, None)
 }
 
 /// Applies a byte LUT mode transition under a composed caller's CPU route.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn eval_point_mode_with_execution_context(
     image: &Image,
     target: Mode,
@@ -472,7 +483,7 @@ pub fn eval_point_mode_with_execution_context(
 /// Pillow repeats callable results across source bands before dispatch. This
 /// entry point performs that expansion in core; sequence LUTs use
 /// [`eval_point_mode`] and must already have their exact expanded length.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn eval_point_mode_replicated_for_image(
     image: &Image,
     target: Mode,
@@ -482,7 +493,7 @@ pub fn eval_point_mode_replicated_for_image(
 }
 
 /// Expands a callable LUT and applies it under a composed caller's CPU route.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn eval_point_mode_replicated_for_image_with_execution_context(
     image: &Image,
     target: Mode,
@@ -492,6 +503,7 @@ pub fn eval_point_mode_replicated_for_image_with_execution_context(
     eval_point_mode_replicated_for_image_with_context(image, target, lut, Some(context))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn eval_point_mode_replicated_for_image_with_context(
     image: &Image,
     target: Mode,

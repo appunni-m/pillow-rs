@@ -5,7 +5,7 @@ use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn require_default_architecture(
     context: &ExecutionContext,
     selection: &StrategySelection,
@@ -33,7 +33,7 @@ pub(crate) fn require_default_architecture(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn require_architecture(
     context: &ExecutionContext,
     selection: &StrategySelection,
@@ -66,7 +66,7 @@ pub(crate) fn require_architecture(
 }
 
 /// Selects a declared native-byte nearest kernel or the mode's Default route.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
     context: &ExecutionContext,
     selection: &StrategySelection,
@@ -90,21 +90,22 @@ pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
         ));
     }
     require_architecture(context, selection)?;
-    match architecture {
+    let architecture_supported = match architecture {
         #[cfg(all(
             any(target_arch = "x86", target_arch = "x86_64"),
             target_feature = "sse2"
         ))]
-        Architecture::Sse2 => (),
+        Architecture::Sse2 => true,
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-        Architecture::Neon => (),
+        Architecture::Neon => true,
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-        Architecture::WasmSimd128 => (),
-        _ => {
-            return Err(PilError::InternalError(format!(
-                "native-byte Resize received unsupported architecture {architecture:?}"
-            )));
-        }
+        Architecture::WasmSimd128 => true,
+        _ => false,
+    };
+    if !architecture_supported {
+        return Err(PilError::InternalError(format!(
+            "native-byte Resize received unsupported architecture {architecture:?}"
+        )));
     }
     let output = match bounds {
         Some(bounds) => super::native_nearest::execute_boxed::<CHANNELS>(
@@ -119,7 +120,7 @@ pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
 }
 
 /// Selects the mode's serial Default route or its declared native-byte strategy.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize_byte_native<T, const CHANNELS: usize>(
     context: &ExecutionContext,
     selection: &StrategySelection,

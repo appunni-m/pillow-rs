@@ -42,23 +42,35 @@ pub(crate) fn sample_coordinates(
     }
 }
 
-/// Applies fused multiply-add lane arithmetic within the already selected
-/// mode/architecture Rotate strategy. Target features choose vector lowering;
-/// the fallback keeps the same fused scalar operation per lane.
-// TODO(pillow-rs#3ptb): verify Rotate output and selected-architecture receipts
-// for every bilinear mode/architecture pair in the frozen CPU parity matrix.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+/// Applies fused multiply-add lane arithmetic within an admitted architecture
+/// strategy. x86 FMA builds expose separate FMA strategies in Rotate and
+/// Transform; AArch64 uses its NEON strategy, while other targets use fused
+/// scalar lane arithmetic.
+// TODO(pillow-rs#3ptb): verify Rotate and Transform output plus selected-architecture
+// receipts for every FMA-bearing mode/architecture pair in the frozen CPU matrix.
+// Global `target_feature="avx512f"` builds are rejected at the crate root:
+// `wide` changes shared vector representations under that flag, bypassing the
+// injected Architecture and making portable Default paths unsafe to dispatch.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn fused_mul_add(a: f64x8, b: f64x8, c: f64x8) -> f64x8 {
     #[cfg(any(
-        target_feature = "fma",
+        all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx",
+            target_feature = "fma"
+        ),
         all(target_arch = "aarch64", target_feature = "neon")
     ))]
     {
         a.mul_add(b, c)
     }
     #[cfg(not(any(
-        target_feature = "fma",
+        all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx",
+            target_feature = "fma"
+        ),
         all(target_arch = "aarch64", target_feature = "neon")
     )))]
     {
@@ -69,6 +81,7 @@ pub(crate) fn fused_mul_add(a: f64x8, b: f64x8, c: f64x8) -> f64x8 {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn bilinear_vector(neighbors: [f64x8; 4], fx: f64x8, fy: f64x8) -> f64x8 {
     let top = fused_mul_add(neighbors[1] - neighbors[0], fx, neighbors[0]);
     let bottom = fused_mul_add(neighbors[3] - neighbors[2], fx, neighbors[2]);

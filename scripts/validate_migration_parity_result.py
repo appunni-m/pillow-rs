@@ -28,6 +28,7 @@ ARCHITECTURE_NAMES = frozenset(
         "avx2",
         "avx_fma",
         "avx2_fma",
+        "avx512f",
         "wasm_simd128",
     }
 )

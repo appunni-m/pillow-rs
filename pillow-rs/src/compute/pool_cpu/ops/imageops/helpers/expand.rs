@@ -9,6 +9,7 @@ use crate::pipeline::{ExpandMargins, NativeColorInput};
 use crate::raster::DynamicImage;
 use crate::raster::{ImageBuffer, Pixel, Primitive};
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn expanded_dimensions(
     width: u32,
     height: u32,
@@ -260,6 +261,7 @@ macro_rules! declare_expand_modes {
             $($mode(super::super::$module::expand::Strategy<'a>),)+
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         fn prepare_image<'a>(
             image: &'a DynamicImage,
             border: crate::pipeline::ExpandMargins,
@@ -317,6 +319,7 @@ declare_expand_modes! {
     ImageRgba32F => rgba32f,
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     border: crate::pipeline::ExpandMargins,
@@ -328,6 +331,7 @@ pub(crate) fn prepare<'a>(
 
 // TODO(pillow-rs#3ptb): Freeze CoreOnly typed component fills and
 // Default/lower-architecture fallback receipts in CPU parity.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_with_native_fill<'a>(
     image: &'a DynamicImage,
     border: crate::pipeline::ExpandMargins,

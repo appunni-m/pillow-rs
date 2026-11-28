@@ -132,7 +132,7 @@ impl ColorOutputMode {
 ///
 /// Returns [`crate::PilError::ValueError`] when `hex_str` is present but cannot
 /// be parsed as a color.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 pub fn resolve_new_color(
     mode: Mode,
     hex_str: Option<&str>,
@@ -170,7 +170,12 @@ pub fn resolve_new_color(
         return Ok((bytes[0], bytes[1], 0, 0));
     }
     if let Some(v) = single_value {
-        // PIL: single int for multi-band images = first band = value, rest = 0
+        // PIL's scalar fill uses neutral chroma for LAB, while other ordinary
+        // multiband modes fill their remaining channels with zero.
+        if mode == Mode::ImageLab8 {
+            // LAB's neutral black/gray uses centered chroma channels.
+            return Ok((v, 128, 128, 0));
+        }
         return Ok((v, 0, 0, 0));
     }
     if let Some((l, a)) = la {
@@ -217,7 +222,12 @@ pub fn resolve_new_color(
     if let Some(rgba) = rgba {
         return Ok(rgba);
     }
-    Ok((0, 0, 0, 0)) // default: black
+    if mode == Mode::ImageLab8 {
+        // LAB's default black is neutral: L=0, a=128, b=128.
+        Ok((0, 128, 128, 0))
+    } else {
+        Ok((0, 0, 0, 0)) // default: black
+    }
 }
 
 /// Resolves an RGB color for a Pillow `ImageColor.getcolor` destination mode.

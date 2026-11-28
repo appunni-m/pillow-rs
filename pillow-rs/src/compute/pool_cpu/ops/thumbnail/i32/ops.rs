@@ -9,14 +9,24 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, Mode};
 
-const ARCHITECTURES: &[ImplementationSupport] = &[ImplementationSupport::cpu(
-    OperationId::Thumbnail,
-    Mode::ImageI32,
-    Architecture::AvxFma,
-    cfg!(target_arch = "x86_64"),
-    &[Architecture::AvxFma],
-    StrategyGuard::ThumbnailI32Stream2x2,
-)];
+const ARCHITECTURES: &[ImplementationSupport] = &[
+    ImplementationSupport::cpu(
+        OperationId::Thumbnail,
+        Mode::ImageI32,
+        Architecture::Avx512F,
+        cfg!(target_arch = "x86_64"),
+        &[Architecture::Avx512F, Architecture::AvxFma],
+        StrategyGuard::ThumbnailI32Avx512F,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Thumbnail,
+        Mode::ImageI32,
+        Architecture::AvxFma,
+        cfg!(target_arch = "x86_64"),
+        &[Architecture::AvxFma],
+        StrategyGuard::ThumbnailI32Stream2x2,
+    ),
+];
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Thumbnail,
@@ -26,7 +36,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     ARCHITECTURES,
 );
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::thumbnail) fn streams_two_by_two(
     source: (u32, u32),
     output: (u32, u32),
@@ -37,7 +47,7 @@ pub(in crate::compute::pool_cpu::ops::thumbnail) fn streams_two_by_two(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     output: (u32, u32),
@@ -53,6 +63,10 @@ pub(crate) fn execute(
     let architecture = super::helpers::strategy::selected_architecture(selection)?;
     let output_image = match architecture {
         Architecture::Default => super::default::thumbnail_impl::execute(input, output, filter),
+        #[cfg(target_arch = "x86_64")]
+        Architecture::Avx512F => {
+            super::avx512f::thumbnail_impl::execute(_context, input, output, filter, selection)
+        }
         #[cfg(target_arch = "x86_64")]
         Architecture::AvxFma => {
             super::avx::thumbnail_impl::execute(_context, input, output, filter, selection)

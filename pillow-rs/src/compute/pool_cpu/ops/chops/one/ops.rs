@@ -18,9 +18,10 @@ declare_byte_binary_architectures!(MODE, CHANNELS);
 declare_byte_invert_architectures!(MODE, CHANNELS);
 declare_logical_architectures!(MODE);
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+// Scope: logical Chops declares architecture support only for exact mode One.
 pub(crate) fn support(operation: OperationId) -> ModeSupport {
-    let architectures = match operation {
+    let architectures: &[_] = match operation {
         OperationId::ChopsLogicalAnd => &LOGICAL_AND_ARCHITECTURES,
         OperationId::ChopsLogicalOr => &LOGICAL_OR_ARCHITECTURES,
         OperationId::ChopsLogicalXor => &LOGICAL_XOR_ARCHITECTURES,
@@ -30,7 +31,8 @@ pub(crate) fn support(operation: OperationId) -> ModeSupport {
     super::super::ops::mode_support_with_architectures(MODE, operation, architectures)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+// Scope: One dispatch retains the selected backend architecture and typed mode.
 pub(crate) fn execute(
     image: &DynamicImage,
     request: super::super::ops::ChopsRequest,
@@ -81,6 +83,10 @@ pub(crate) fn execute(
                 }
             };
             match architecture {
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                Architecture::Avx512F => {
+                    super::avx512f::execute(buffer, request, other).map(DynamicImage::One)
+                }
                 Architecture::Sse2 => {
                     super::sse2::execute(buffer, request, other).map(DynamicImage::One)
                 }

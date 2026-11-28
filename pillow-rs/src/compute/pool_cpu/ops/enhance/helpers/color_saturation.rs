@@ -8,6 +8,9 @@ use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 use wide::{u8x16, u16x16};
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(crate) mod avx512f;
+
 pub(crate) const BASE_LUMA: u8 = 0;
 pub(crate) const BASE_RGB: u8 = 1;
 pub(crate) const BASE_RGBX: u8 = 2;

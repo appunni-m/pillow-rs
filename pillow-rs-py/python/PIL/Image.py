@@ -50,6 +50,7 @@ alpha_composite = _operations.alpha_composite
 fromarray = _operations.fromarray
 frombuffer = _operations.frombuffer
 frombytes = _operations.frombytes
+fromarrow = _operations.fromarrow
 linear_gradient = _operations.linear_gradient
 radial_gradient = _operations.radial_gradient
 effect_mandelbrot = _operations.effect_mandelbrot
@@ -101,6 +102,7 @@ __all__ = [
     "fromarray",
     "frombuffer",
     "frombytes",
+    "fromarrow",
     "linear_gradient",
     "radial_gradient",
     "effect_mandelbrot",

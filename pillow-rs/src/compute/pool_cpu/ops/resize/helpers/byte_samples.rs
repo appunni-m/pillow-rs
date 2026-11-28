@@ -22,7 +22,7 @@ struct ResizePlan<'a> {
     need_vertical: bool,
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -41,7 +41,7 @@ pub(crate) fn resize<const CHANNELS: usize>(
 }
 
 /// Execute a boxed byte-sample resize while skipping rows proven to contain only zeros.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize_boxed_with_sparse_source_rows<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -60,7 +60,7 @@ pub(crate) fn resize_boxed_with_sparse_source_rows<const CHANNELS: usize>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn resize_with_sparse_source_rows<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -118,12 +118,12 @@ fn resize_with_sparse_source_rows<const CHANNELS: usize>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn is_empty(source_size: (u32, u32), destination_size: (u32, u32)) -> bool {
     source_size.0 == 0 || source_size.1 == 0 || destination_size.0 == 0 || destination_size.1 == 0
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn checked_channels<const CHANNELS: usize>() -> Result<u8, PilError> {
     u8::try_from(CHANNELS)
         .ok()
@@ -131,7 +131,7 @@ fn checked_channels<const CHANNELS: usize>() -> Result<u8, PilError> {
         .ok_or_else(|| PilError::DimensionError("invalid byte-sample channel count".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn boxed_early<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -168,7 +168,7 @@ fn boxed_early<const CHANNELS: usize>(
     None
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn integer_crop<const CHANNELS: usize>(
     source: &[u8],
     source_width: u32,
@@ -194,7 +194,7 @@ fn integer_crop<const CHANNELS: usize>(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn nearest<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -239,7 +239,7 @@ fn nearest<const CHANNELS: usize>(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn nearest_boxed<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -277,7 +277,7 @@ fn nearest_boxed<const CHANNELS: usize>(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn filtered<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -299,7 +299,7 @@ fn filtered<const CHANNELS: usize>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn filtered_standard<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -317,7 +317,7 @@ fn filtered_standard<const CHANNELS: usize>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filtered_standard_with_coefficients<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -373,7 +373,7 @@ pub(crate) fn filtered_standard_with_coefficients<const CHANNELS: usize>(
 }
 
 /// Writes a standard filtered resize into a caller-owned native-byte window.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filtered_standard_into<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -420,7 +420,7 @@ pub(crate) fn filtered_standard_into<const CHANNELS: usize>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn filtered_boxed<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
@@ -497,7 +497,7 @@ fn filtered_boxed<const CHANNELS: usize>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn filtered_with_coefficients<const CHANNELS: usize>(
     plan: ResizePlan<'_>,
 ) -> Result<Vec<u8>, PilError> {
@@ -511,7 +511,7 @@ fn filtered_with_coefficients<const CHANNELS: usize>(
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn filtered_with_coefficients_into<const CHANNELS: usize>(
     plan: ResizePlan<'_>,
     output: &mut [u8],
@@ -589,7 +589,7 @@ fn filtered_with_coefficients_into<const CHANNELS: usize>(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn horizontal_row<const CHANNELS: usize>(
     source: &[u8],
     coefficients: &FilterCoeffs,
@@ -616,7 +616,7 @@ fn horizontal_row<const CHANNELS: usize>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn vertical_row_major<const CHANNELS: usize>(
     intermediate: &[u8],
     output_width: usize,
@@ -664,7 +664,7 @@ fn vertical_row_major<const CHANNELS: usize>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn sparse_source_row_is_nonzero(
     nonzero_source_rows: &[bool],
     first_source_row: u32,
@@ -679,7 +679,7 @@ fn sparse_source_row_is_nonzero(
     nonzero_source_rows.get(source_row).copied().unwrap_or(true)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn vertical_span_has_nonzero_source(
     coefficients: &FilterCoeffs,
     first_source_row: u32,
@@ -715,7 +715,7 @@ fn vertical_span_has_nonzero_source(
     false
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn vertical_transposed<const CHANNELS: usize>(
     intermediate: &[u8],
     source_height: usize,
@@ -748,7 +748,7 @@ fn vertical_transposed<const CHANNELS: usize>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn transpose_samples<const CHANNELS: usize>(
     source: &[u8],
     source_height: u32,
@@ -792,13 +792,13 @@ pub(crate) fn transpose_samples<const CHANNELS: usize>(
     transposed
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn weights(coefficients: &FilterCoeffs, index: usize) -> &[i64] {
     let start = coefficients.offsets[index];
     &coefficients.weights[start..start + coefficients.count[index]]
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn should_transpose_vertical(source_rows: u32, output_width: u32) -> bool {
     source_rows > 1
         && output_width > 1

@@ -15,6 +15,7 @@ declare_invert_native_mode!(
     Some("ImageOps.invert extends Pillow with native RGBA inversion"),
 );
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_quantize(
     image: &RgbaImage,
     width: u32,
@@ -39,6 +40,7 @@ pub(crate) fn execute_quantize(
 /// Maps the stored RGB lanes to a supplied palette without expanding pixels.
 // Pillow wrapper-mode overrides can admit visible L/RGB while the exact raster
 // remains RGBA; the native palette mapper reads its stored RGB lanes directly.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_quantize_with_palette(
     image: &RgbaImage,
     palette: &[[u8; 3]],

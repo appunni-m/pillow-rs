@@ -11,7 +11,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::{
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<I>(plan: BytePlan<'_, I>) -> Result<Vec<u8>, PilError>
 where
     I: Deref<Target = DynamicImage>,
@@ -88,7 +88,7 @@ where
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn blend_pa_row(source: &[u8], destination: &mut [u8], mask: &[u8]) -> u64 {
     debug_assert_eq!(source.len(), destination.len());
     debug_assert_eq!(source.len() % 2, 0);
@@ -122,7 +122,7 @@ fn blend_pa_row(source: &[u8], destination: &mut [u8], mask: &[u8]) -> u64 {
     blocks.saturating_add(blend_pa_tail(source, destination, mask, vector_len8))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn blend_pa_tail(source: &[u8], destination: &mut [u8], mask: &[u8], start: usize) -> u64 {
     let tail = source.len() - start;
     if tail == 0 {
@@ -138,7 +138,7 @@ fn blend_pa_tail(source: &[u8], destination: &mut [u8], mask: &[u8], start: usiz
     1
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn expand_mask<const LANES: usize>(mask: &[u8], byte_start: usize, active: usize) -> [u8; LANES] {
     std::array::from_fn(|lane| {
         if lane < active {
@@ -149,7 +149,7 @@ fn expand_mask<const LANES: usize>(mask: &[u8], byte_start: usize, active: usize
     })
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 const fn luma_mask_layout() -> MaskLayout {
     MaskLayout {
         channels: 1,
@@ -159,7 +159,7 @@ const fn luma_mask_layout() -> MaskLayout {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn checked_stride(width: u32, channels: usize, role: &str) -> Result<usize, PilError> {
     usize::try_from(width)
         .ok()
@@ -167,7 +167,7 @@ fn checked_stride(width: u32, channels: usize, role: &str) -> Result<usize, PilE
         .ok_or_else(|| PilError::OverflowError(format!("PA Paste {role} stride overflowed")))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn invalid_row(role: &str) -> PilError {
     PilError::InternalError(format!(
         "PA NEON Paste {role} row was outside its validated storage"

@@ -2,7 +2,7 @@
 
 use wide::u8x16;
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn copy_native_bytes(source: &[u8], output: &mut [u8]) -> Option<(u64, u64)> {
     if source.len() != output.len() {

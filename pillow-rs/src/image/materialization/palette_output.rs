@@ -10,7 +10,7 @@ use crate::raster::{DynamicImage, Mode};
 
 // TODO(pillow-rs#3ptb): freeze direct lazy P/PA output, palette, wrapper
 // metadata, and CPU architecture/fallback receipts in the parity matrix.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(super) fn evaluate_palette_target_convert(
     source: &Image,
     image: &DynamicImage,
@@ -18,6 +18,7 @@ pub(super) fn evaluate_palette_target_convert(
     prepared: &PreparedExecution,
     palette: &Option<Vec<u8>>,
     palette_alpha: &Option<Vec<u8>>,
+    palette_data: &Option<crate::image::PaletteData>,
 ) -> Result<Option<(Arc<DynamicImage>, PipelinePaletteOutput)>, PilError> {
     let [
         PipelineOp::Convert {
@@ -42,6 +43,7 @@ pub(super) fn evaluate_palette_target_convert(
         palette: crate::compute::registry::support::PaletteInput {
             rgb: resolved_palette.as_deref(),
             alpha: &resolved_alpha,
+            data: palette_data.as_ref().or_else(|| source.palette_data()),
         },
     };
     let output =
@@ -57,22 +59,41 @@ pub(super) fn evaluate_palette_target_convert(
     } else {
         (output.palette, output.palette_alpha)
     };
+    let output_palette_data = if matches!(
+        wrapper_metadata,
+        crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSourceLoaded
+    ) || (image.mode() == Mode::ImagePalette8
+        && *target == Mode::ImagePaletteAlpha8)
+    {
+        palette_data
+            .clone()
+            .or_else(|| source.palette_data().cloned())
+    } else {
+        output_palette.as_ref().map(|_| {
+            crate::image::PaletteData::from_alpha(
+                output_palette_alpha.as_deref().unwrap_or_default(),
+            )
+        })
+    };
     Ok(Some((
         Arc::new(output.image),
         PipelinePaletteOutput {
             mode: *target,
             palette: output_palette,
             palette_alpha: output_palette_alpha,
+            palette_data: output_palette_data,
             wrapper_metadata,
         },
     )))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(super) fn retain_preserved_palette_metadata(
     source: &Image,
     result: &DynamicImage,
     palette: &Option<Vec<u8>>,
     palette_alpha: &Option<Vec<u8>>,
+    palette_data: &Option<crate::image::PaletteData>,
     preserves_palette: bool,
 ) -> Option<PipelinePaletteOutput> {
     if !preserves_palette
@@ -85,6 +106,16 @@ pub(super) fn retain_preserved_palette_metadata(
     }
     let output_palette = palette.clone().or_else(|| source.palette());
     let output_palette_alpha = palette_alpha.clone().or_else(|| source.palette_alpha());
+    let output_palette_data = palette_data
+        .clone()
+        .or_else(|| source.palette_data().cloned())
+        .or_else(|| {
+            output_palette.as_ref().map(|_| {
+                crate::image::PaletteData::from_alpha(
+                    output_palette_alpha.as_deref().unwrap_or_default(),
+                )
+            })
+        });
     let missing_required_palette = result.mode() == Mode::ImagePalette8 && output_palette.is_none();
     if missing_required_palette || (output_palette.is_none() && output_palette_alpha.is_none()) {
         return None;
@@ -93,6 +124,7 @@ pub(super) fn retain_preserved_palette_metadata(
         mode: result.mode(),
         palette: output_palette,
         palette_alpha: output_palette_alpha,
+        palette_data: output_palette_data,
         wrapper_metadata:
             crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSource,
     })

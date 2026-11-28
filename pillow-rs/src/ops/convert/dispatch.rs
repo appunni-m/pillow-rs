@@ -1,3 +1,4 @@
+use crate::compute::CpuExecutionRoute;
 use crate::compute::registry::support::{
     OperationTargetComposition, OperationTargetCompositionKind, OutputModeRule,
 };
@@ -6,11 +7,12 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(super) fn try_convert_scalar_to_rgbx(
     image: &Image,
     source_mode: Mode,
     context_override: Option<crate::compute::ExecutionContext>,
+    route_override: Option<CpuExecutionRoute>,
 ) -> Result<Option<Image>, PilError> {
     if !matches!(source_mode, Mode::ImageI32 | Mode::ImageF32) {
         return Ok(None);
@@ -23,7 +25,10 @@ pub(super) fn try_convert_scalar_to_rgbx(
     }
     // TODO(pillow-rs#3ptb): parity-check I/F→RGBX for every CPU Architecture
     // request and verify the exact output identity plus fallback receipt.
-    let (requested_backend, routed_context) = image.cpu_arch_execution_route()?;
+    let (requested_backend, routed_context) = match route_override {
+        Some(route) => (route.requested_backend(), route.context()),
+        None => image.cpu_arch_execution_route()?,
+    };
     let context = context_override.unwrap_or(routed_context);
     if requested_backend == Some(crate::compute::Backend::Gpu) {
         // TODO(pillow-rs#3ptb): route GPU-selected I/F→RGBX through a native
@@ -42,6 +47,7 @@ pub(super) fn try_convert_scalar_to_rgbx(
         palette: crate::compute::registry::support::PaletteInput {
             rgb: None,
             alpha: &[],
+            data: None,
         },
     };
     let raster = crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
@@ -60,13 +66,14 @@ pub(super) fn try_convert_scalar_to_rgbx(
     Image::from_dynamic_with_mode(raster, Some(Mode::ImageRgbx8)).map(Some)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(super) fn try_convert_early_modes(
     image: &Image,
     source_mode: Mode,
     target_mode: Mode,
     dither: Option<&str>,
     context: Option<crate::compute::ExecutionContext>,
+    route: Option<CpuExecutionRoute>,
 ) -> Result<Option<Image>, PilError> {
     if source_mode == Mode::ImageRgb8
         && matches!(
@@ -132,17 +139,18 @@ pub(super) fn try_convert_early_modes(
     if let Some(composition) = crate::compute::pool_cpu::ops::color::ops::CONVERT_SUPPORT
         .target_composition_for(source_mode, target_mode)
     {
-        return execute_target_composition(image, dither, composition, context).map(Some);
+        return execute_target_composition(image, dither, composition, context, route).map(Some);
     }
     Ok(None)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_target_composition(
     image: &Image,
     dither: Option<&str>,
     composition: OperationTargetComposition,
     context: Option<crate::compute::ExecutionContext>,
+    route: Option<CpuExecutionRoute>,
 ) -> Result<Image, PilError> {
     if let crate::compute::registry::support::OperationRouteOutcome::Rejects {
         reason, kind, ..
@@ -165,6 +173,7 @@ fn execute_target_composition(
             composition.target_mode,
             dither,
             context,
+            route,
         ),
         OperationTargetCompositionKind::ConvertGuard => Err(PilError::InternalError(
             "Convert guard route unexpectedly declared a successful composition".into(),
@@ -172,7 +181,7 @@ fn execute_target_composition(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn with_execution_context(
     image: Image,
     context: Option<crate::compute::ExecutionContext>,

@@ -10,6 +10,7 @@ use crate::error::PilError;
 use crate::pipeline::{ResampleFilter, TransformMethod};
 use wide::{f64x8, u16x8};
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &[u16],
     source_dimensions: (u32, u32),
@@ -18,7 +19,7 @@ pub(crate) fn execute(
 ) -> Result<Vec<u16>, PilError> {
     let (source_layout, destination, fill) = prepare(source, source_dimensions, request)?;
     let mut output = vec![0; destination.total_pixels()];
-    execute_prepared(
+    execute_prepared::<false>(
         source,
         source_layout,
         destination,
@@ -26,10 +27,12 @@ pub(crate) fn execute(
         order,
         fill,
         &mut output,
+        &mut [],
     )?;
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_into(
     source: &[u16],
     source_dimensions: (u32, u32),
@@ -43,7 +46,7 @@ pub(crate) fn execute_into(
             "I;16 Transform destination buffer shape mismatch".into(),
         ));
     }
-    execute_prepared(
+    execute_prepared::<false>(
         source,
         source_layout,
         destination,
@@ -51,6 +54,33 @@ pub(crate) fn execute_into(
         order,
         fill,
         output,
+        &mut [],
+    )
+}
+
+pub(crate) fn execute_into_with_validity(
+    source: &[u16],
+    source_dimensions: (u32, u32),
+    request: TransformRequest<'_>,
+    order: ByteOrder,
+    output: &mut [u16],
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    let (source_layout, destination, fill) = prepare(source, source_dimensions, request)?;
+    if output.len() != destination.total_pixels() || validity.len() != destination.total_pixels() {
+        return Err(PilError::InternalError(
+            "I;16 Transform output or validity shape mismatch".into(),
+        ));
+    }
+    execute_prepared::<true>(
+        source,
+        source_layout,
+        destination,
+        request,
+        order,
+        fill,
+        output,
+        validity,
     )
 }
 
@@ -77,7 +107,8 @@ fn prepare(
     Ok((source_layout, destination, fill))
 }
 
-fn execute_prepared(
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+fn execute_prepared<const TRACK_VALIDITY: bool>(
     source: &[u16],
     source_layout: CheckedDims,
     destination: CheckedDims,
@@ -85,12 +116,19 @@ fn execute_prepared(
     order: ByteOrder,
     fill: u16,
     output: &mut [u16],
+    validity: &mut [u8],
 ) -> Result<(), PilError> {
     match request.filter {
-        ResampleFilter::Nearest => {
-            execute_nearest_into(source, source_layout, destination, request, fill, output)
-        }
-        ResampleFilter::Bilinear => execute_bilinear_into(
+        ResampleFilter::Nearest => execute_nearest_into::<TRACK_VALIDITY>(
+            source,
+            source_layout,
+            destination,
+            request,
+            fill,
+            output,
+            validity,
+        ),
+        ResampleFilter::Bilinear => execute_bilinear_into::<TRACK_VALIDITY>(
             source,
             source_layout,
             destination,
@@ -98,6 +136,7 @@ fn execute_prepared(
             order,
             fill,
             output,
+            validity,
         ),
         _ => Err(PilError::InternalError(
             "I;16 architecture Transform received an unsupported filter".into(),
@@ -105,13 +144,15 @@ fn execute_prepared(
     }
 }
 
-fn execute_nearest_into(
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+fn execute_nearest_into<const TRACK_VALIDITY: bool>(
     source: &[u16],
     source_layout: CheckedDims,
     destination: CheckedDims,
     request: TransformRequest<'_>,
     fill: u16,
     output: &mut [u16],
+    validity: &mut [u8],
 ) -> Result<(), PilError> {
     let [a, b, c, d, e, f] = request.data else {
         return Err(PilError::InternalError(
@@ -152,12 +193,15 @@ fn execute_nearest_into(
             for lane in 0..count {
                 let input_x = floor_coordinate(source_x[lane]);
                 let input_y = floor_coordinate(source_y[lane]);
-                if input_x >= 0
+                let valid = input_x >= 0
                     && input_x < source_width as i64
                     && input_y >= 0
-                    && input_y < source_height as i64
-                {
+                    && input_y < source_height as i64;
+                if valid {
                     samples[lane] = source[input_y as usize * source_width + input_x as usize];
+                }
+                if TRACK_VALIDITY {
+                    validity[y * width + x + lane] = u8::from(valid);
                 }
             }
             let output_start = y * width + x;
@@ -171,7 +215,7 @@ fn execute_nearest_into(
     Ok(())
 }
 
-fn execute_bilinear_into(
+fn execute_bilinear_into<const TRACK_VALIDITY: bool>(
     source: &[u16],
     source_layout: CheckedDims,
     destination: CheckedDims,
@@ -179,6 +223,7 @@ fn execute_bilinear_into(
     order: ByteOrder,
     fill: u16,
     output: &mut [u16],
+    validity: &mut [u8],
 ) -> Result<(), PilError> {
     let fill_bytes = order.encode(fill);
     let source_width = source_layout.width as usize;
@@ -197,11 +242,23 @@ fn execute_bilinear_into(
     // Pillow's I;16 filtered affine path samples the first `width` bytes of
     // each native row, then restores the untouched second fill byte. Keep this
     // scratch byte plane local; the input and output remain typed I;16 images.
-    let output_plane = vector_affine_bilinear::execute::<1, false>(
-        &source_plane,
-        (source_layout.width, source_layout.height),
-        byte_plane_request,
-    )?;
+    let output_plane = if TRACK_VALIDITY {
+        let mut output_plane = vec![fill_bytes[0]; destination.total_pixels()];
+        vector_affine_bilinear::execute_into_with_validity::<1, false>(
+            &source_plane,
+            (source_layout.width, source_layout.height),
+            byte_plane_request,
+            &mut output_plane,
+            validity,
+        )?;
+        output_plane
+    } else {
+        vector_affine_bilinear::execute::<1, false>(
+            &source_plane,
+            (source_layout.width, source_layout.height),
+            byte_plane_request,
+        )?
+    };
     if output_plane.len() != destination.total_pixels() {
         return Err(PilError::InternalError(
             "I;16 bilinear Transform output plane shape mismatch".into(),

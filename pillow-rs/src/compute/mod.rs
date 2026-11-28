@@ -31,6 +31,8 @@ pub(crate) mod eager;
 mod execution;
 mod execution_context;
 pub(crate) mod helpers;
+#[doc(hidden)]
+pub use execution_context::CpuExecutionRoute;
 pub use execution_context::{Architecture, ExecutionContext};
 #[cfg(feature = "test-api")]
 pub(crate) fn set_test_cpu_architecture(architecture: Architecture) {
@@ -43,6 +45,8 @@ mod telemetry;
 
 #[doc(hidden)]
 pub use telemetry::PipelineTelemetryOrigin;
+#[cfg(feature = "gpu")]
+pub(crate) use telemetry::record_pipeline_backend_fallback;
 pub use telemetry::{
     GpuShaderDispatchTelemetry, PipelineAllocationTelemetry, PipelineOperationTelemetry,
     PipelineResourceTelemetry,
@@ -56,14 +60,14 @@ pub(crate) use telemetry::{
     finish_pipeline_operation_telemetry, host_resource_telemetry,
     record_eager_cpu_operation_receipt_with_selection,
     record_eager_cpu_operation_receipt_with_selection_and_receipts, record_pipeline_allocation,
-    record_pipeline_backend_fallback, record_pipeline_operation_handoff,
-    record_pipeline_operation_mode_conversion, record_pipeline_operation_path,
-    record_pipeline_operation_scalar_tail, record_pipeline_operation_selection,
-    record_pipeline_operation_unsupported, record_pipeline_operation_vector_blocks,
-    record_pipeline_resize_coeff_cache_hit, record_pipeline_resize_coeff_cache_miss,
-    record_pipeline_resource_telemetry, reset_pipeline_allocation_telemetry,
-    reset_pipeline_operation_telemetry, restore_pipeline_operation_telemetry_order,
-    take_pipeline_allocation_telemetry, take_pipeline_operation_telemetry,
+    record_pipeline_operation_handoff, record_pipeline_operation_mode_conversion,
+    record_pipeline_operation_path, record_pipeline_operation_scalar_tail,
+    record_pipeline_operation_selection, record_pipeline_operation_unsupported,
+    record_pipeline_operation_vector_blocks, record_pipeline_resize_coeff_cache_hit,
+    record_pipeline_resize_coeff_cache_miss, record_pipeline_resource_telemetry,
+    reset_pipeline_allocation_telemetry, reset_pipeline_operation_telemetry,
+    restore_pipeline_operation_telemetry_order, take_pipeline_allocation_telemetry,
+    take_pipeline_operation_telemetry,
 };
 use telemetry::{
     PipelineTelemetry, elapsed_ns, pipeline_telemetry_enabled, pipeline_timestamp,

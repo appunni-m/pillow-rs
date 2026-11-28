@@ -24,7 +24,7 @@ use crate::compute::registry::support::{
 };
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_resize(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -55,7 +55,7 @@ fn classify_resize(mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_boxed_resize(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::BOXED_SUPPORT,
@@ -123,7 +123,7 @@ const REDUCING_GAP_RGBA_PATHS: &[OperationRoutePath] =
         )),
     }];
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_resize_route_paths(mode: Mode) -> &'static [OperationRoutePath] {
     match mode {
         Mode::One | Mode::ImagePalette8 => &[],
@@ -154,7 +154,7 @@ fn classify_resize_route_paths(mode: Mode) -> &'static [OperationRoutePath] {
 }
 
 /// Selects the declared reducing-gap child and any specialized child support.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn select_reducing_gap_child(
     mode: Mode,
     pre_reduction_selected: bool,
@@ -178,7 +178,7 @@ pub(crate) fn select_reducing_gap_child(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_resize_route(mode: Mode) -> OperationModeRoute {
     OperationModeRoute::Prepared {
         support: classify_resize(mode),

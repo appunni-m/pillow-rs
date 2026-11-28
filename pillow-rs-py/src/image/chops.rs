@@ -1,5 +1,6 @@
 use super::PyImage;
 use super::execution::{ExecutionRoute, route_from_context, route_pending_image};
+use crate::inputs::c_int_from_c_long;
 use crate::{Bound, Py, PyResult, Python, map_error};
 use pyo3::pymethods;
 
@@ -160,38 +161,38 @@ impl PyImage {
     }
 
     // Pillow's `O!|fi` binding parses scale as a C float and offset as a C int.
-    // PyO3's scalar extraction preserves those native argument conversions.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+    // VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=n/a
     #[pyo3(signature = (other, scale=1.0, offset=0, execution_context=None))]
     fn chop_add(
         slf: Py<Self>,
         other: &Bound<'_, PyImage>,
         scale: f32,
-        offset: i32,
+        offset: std::os::raw::c_long,
         execution_context: Option<pyo3::PyRef<'_, super::PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let first = slf.bind(py).borrow().inner.clone();
         let second = other.borrow().inner.clone();
+        let offset = c_int_from_c_long(offset)?;
         binary_chop(first, second, execution_context, py, move |a, b| {
             pillow_rs::chops_add(a, b, f64::from(scale), f64::from(offset))
         })
     }
 
     // Pillow's `O!|fi` binding parses scale as a C float and offset as a C int.
-    // PyO3's scalar extraction preserves those native argument conversions.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+    // VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=n/a
     #[pyo3(signature = (other, scale=1.0, offset=0, execution_context=None))]
     fn chop_subtract(
         slf: Py<Self>,
         other: &Bound<'_, PyImage>,
         scale: f32,
-        offset: i32,
+        offset: std::os::raw::c_long,
         execution_context: Option<pyo3::PyRef<'_, super::PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let first = slf.bind(py).borrow().inner.clone();
         let second = other.borrow().inner.clone();
+        let offset = c_int_from_c_long(offset)?;
         binary_chop(first, second, execution_context, py, move |a, b| {
             pillow_rs::chops_subtract(a, b, f64::from(scale), f64::from(offset))
         })

@@ -13,6 +13,18 @@
 //! implementation. F32 and I32 use exact typed owners; all other modes
 //! compose native Reduce and Resize. No active caller uses the archived
 //! adapter.
+//! The archived F32 SIMD full-bound guard and the active CPU F32 policy were
+//! compared at source level. The archived path unboxes any exact full-bound
+//! reduction; CPU currently unboxes the 2x2 case and retains boxed bounds for
+//! other reductions. Keep this narrower route until parity and latency justify
+//! expanding it.
+//! TODO(pillow-rs#3ptb): use focused parity and latency evidence to decide
+//! whether exact full-bound F32 reductions beyond 2x2 need another strategy.
+//! The archived I32 eight-lane f64x8 resampler was compared with the active
+//! injected Default and AVX/FMA streams; keep the current typed strategies
+//! unless parity and latency justify adding another vector owner.
+//! TODO(pillow-rs#3ptb): record the I32 Thumbnail parity and focused latency
+//! decision before adding or ruling out another vector architecture owner.
 //! TODO(pillow-rs#3ptb): complete Thumbnail parity for every declared exact
 //! mode and architecture in the operation × mode × architecture matrix.
 //! TODO(pillow-rs#3ptb): verify the PA filter/reducing-gap matrix against each
@@ -47,7 +59,7 @@ const COMPOSED_OPERATIONS: &[OperationId] = &[
     OperationId::ResizeBoxed,
 ];
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -88,7 +100,7 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(
 
 /// Whether a validated RGB PutPixel prefix can use Thumbnail's serial sparse 2x2 path.
 /// Other architecture contexts execute their prepared Reduce and Resize children.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn rgb_putpixel_fusion_supported(
     image: &DynamicImage,
     writes: &[PipelineOp],
@@ -153,12 +165,12 @@ pub(crate) struct PreparedRgbPutPixelThumbnail<'a> {
 }
 
 impl PreparedRgbPutPixelThumbnail<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.resize_selection
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         super::rgb8::ops::execute_putpixel_thumbnail(
             self.image,
@@ -171,7 +183,7 @@ impl PreparedRgbPutPixelThumbnail<'_> {
 }
 
 /// Select the supported fusion and its exact child Resize strategy.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_rgb_putpixel_thumbnail<'a>(
     image: &'a DynamicImage,
     writes: &'a [PipelineOp],
@@ -277,7 +289,7 @@ struct ThumbnailResizeRequest {
 }
 
 impl ThumbnailResizeRequest {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn bounds(self) -> (f64, f64, f64, f64) {
         (
             0.0,
@@ -299,7 +311,7 @@ impl PreparedThumbnail<'_> {
         &self.composed_selections
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let is_composite = !self.stream_i32;
         let result = execute_thumbnail(self);
@@ -310,7 +322,7 @@ impl PreparedThumbnail<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn select_mode(
     inputs: OperationInputs<'_>,
     mode: Mode,
@@ -335,7 +347,7 @@ fn select_mode(
 }
 
 /// Prepares a mode-preserving Thumbnail operation and its nested strategies.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -398,7 +410,7 @@ pub(crate) fn prepare_pipeline<'a>(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn prepare_composed_strategies<'a>(
     inputs: OperationInputs<'a>,
     mode: Mode,
@@ -514,7 +526,7 @@ fn reduced_resize_facts(
     Ok(facts)
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn select_child_mode(
     support: ModeSupport,
     facts: crate::compute::registry::support::StrategyInputs,
@@ -529,7 +541,7 @@ fn select_child_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn execute_thumbnail(plan: PreparedThumbnail<'_>) -> Result<DynamicImage, PilError> {
     if plan.width == 0 || plan.height == 0 {
         return Err(PilError::ValueError("thumbnail size must be > 0".into()));

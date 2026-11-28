@@ -56,6 +56,7 @@ pub(crate) fn write_native_luma16(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn facts<P: Pixel<Subpixel = u8>>(
     image: &ImageBuffer<P, Vec<u8>>,
     write: PixelWrite,
@@ -72,6 +73,7 @@ pub(crate) fn facts<P: Pixel<Subpixel = u8>>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn batch_facts<P: Pixel<Subpixel = u8>>(
     image: &ImageBuffer<P, Vec<u8>>,
     ops: &[PipelineOp],
@@ -88,6 +90,7 @@ pub(crate) fn batch_facts<P: Pixel<Subpixel = u8>>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 /// Only the RGBA specialization needs this inspection; serial preparation does not scan.
 #[cfg(any(
     all(
@@ -134,7 +137,7 @@ pub(crate) fn write<P: Pixel<Subpixel = u8>>(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn write_with_hidden_lanes<P, F>(
     input: PixelInput<'_, P>,
     pixel: P,
@@ -170,7 +173,7 @@ where
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 /// Attach the mode-owned physical lanes after an architecture kernel rebuilt the logical buffer.
 pub(crate) fn preserve_hidden_lanes_after_write<P, F>(
     source: &ImageBuffer<P, Vec<u8>>,
@@ -204,6 +207,7 @@ where
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn write_batch<P: Pixel<Subpixel = u8>>(
     input: BatchInput<'_, P>,
@@ -223,7 +227,7 @@ pub(crate) fn write_batch<P: Pixel<Subpixel = u8>>(
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn write_batch_with_hidden_lanes<P, F, G>(
     input: BatchInput<'_, P>,
     mut pixel_from_color: F,

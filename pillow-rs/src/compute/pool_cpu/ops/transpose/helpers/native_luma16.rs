@@ -4,6 +4,7 @@ use crate::raster::{EncodableLayout, ImageBuffer, Pixel};
 use wide::u16x8;
 
 /// Vertically flips an exact typed u16 raster without changing sample bits.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn flip_image<P>(
     image: &ImageBuffer<P, Vec<u16>>,
 ) -> Option<(ImageBuffer<P, Vec<u16>>, u64, u64)>
@@ -41,6 +42,7 @@ where
 }
 
 /// Mirrors exact u16 samples while retaining each sample's native byte order.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn mirror_image<P>(
     image: &ImageBuffer<P, Vec<u16>>,
 ) -> Option<(ImageBuffer<P, Vec<u16>>, u64, u64)>
@@ -68,6 +70,7 @@ where
     Some((output, vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn copy_samples(source: &[u16], output: &mut [u16]) -> Option<(u64, u64)> {
     if source.len() != output.len() {
         return None;

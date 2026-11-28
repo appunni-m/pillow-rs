@@ -26,6 +26,7 @@ use pyo3::types::PyInt;
 use pyo3::types::PyList;
 use pyo3::types::PyListMethods;
 use pyo3::types::PyModuleMethods;
+use pyo3::types::PySequence;
 use pyo3::types::PyString;
 use pyo3::types::PyTuple;
 use pyo3::types::PyType;

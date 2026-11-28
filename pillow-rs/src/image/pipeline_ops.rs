@@ -6,12 +6,14 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
-use super::Image;
+use super::{Image, PaletteData};
 
 mod dimensions;
 pub(super) use dimensions::known_pipeline_op_dimensions;
 mod mode;
-pub(crate) use mode::{known_pipeline_op_mode, known_pipeline_op_mode_with_expansion};
+#[cfg(feature = "gpu")]
+pub(crate) use mode::known_pipeline_op_mode;
+pub(crate) use mode::known_pipeline_op_mode_with_expansion;
 
 /// Persistent operation list used by lazy image nodes.
 ///
@@ -42,6 +44,7 @@ pub(crate) struct PipelinePaletteOutput {
     pub(crate) mode: Mode,
     pub(crate) palette: Option<Vec<u8>>,
     pub(crate) palette_alpha: Option<Vec<u8>>,
+    pub(crate) palette_data: Option<super::PaletteData>,
     pub(crate) wrapper_metadata: crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata,
 }
 
@@ -77,6 +80,11 @@ impl PipelineOps {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=n/a
+    pub(crate) fn is_empty(&self) -> bool {
+        self.chain.len == 0
+    }
+
     pub(crate) fn one(op: PipelineOp) -> Self {
         let origin = Self::capture_origin();
         Self::one_with_origin(op, origin)
@@ -108,7 +116,7 @@ impl PipelineOps {
         self.append_with_origin(op, origin)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn append_with_origin(
         &self,
         op: PipelineOp,
@@ -229,7 +237,7 @@ impl PipelineOps {
     }
 
     /// Returns a CPU execution context injected by a composed image operation.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execution_context(&self) -> Option<crate::compute::ExecutionContext> {
         self.execution_context
     }
@@ -238,7 +246,7 @@ impl PipelineOps {
     ///
     /// Context changes invalidate any prefix pixels and palette output produced
     /// under a different architecture.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn with_execution_context(
         mut self,
         execution_context: crate::compute::ExecutionContext,
@@ -450,26 +458,26 @@ pub struct PipelineModeCache {
 }
 
 impl PipelineModeCache {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn new() -> Self {
         Self {
             state: Arc::new(OnceLock::new()),
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn with_declared_mode(mode: Mode) -> Self {
         let cache = Self::new();
         let _ = cache.state.set(Ok(PipelineModeState::Declared(mode)));
         cache
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn get(&self) -> Option<&Result<PipelineModeState, PilError>> {
         self.state.get()
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn get_or_init<F>(&self, initialize: F) -> &Result<PipelineModeState, PilError>
     where
         F: FnOnce() -> Result<PipelineModeState, PilError>,
@@ -486,14 +494,14 @@ pub(crate) fn pipeline_shape_cache() -> PipelineShapeCache {
     Arc::new(OnceLock::new())
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn pipeline_mode_cache() -> PipelineModeCache {
     PipelineModeCache::new()
 }
 
 /// Creates the single pipeline mode cache, optionally seeded with an output
 /// identity already known while constructing or updating the lazy graph.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn pipeline_mode_cache_for(output_mode: Option<Mode>) -> PipelineModeCache {
     match output_mode {
         Some(mode) => PipelineModeCache::with_declared_mode(mode),
@@ -503,7 +511,7 @@ pub(crate) fn pipeline_mode_cache_for(output_mode: Option<Mode>) -> PipelineMode
 
 /// Returns a mode already carried by the graph or resolved by a prior metadata
 /// query, without triggering planning or materialization.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn cached_pipeline_mode(cache: &PipelineModeCache) -> Option<Mode> {
     cache
         .get()
@@ -518,7 +526,7 @@ pub(crate) fn cached_pipeline_mode(cache: &PipelineModeCache) -> Option<Mode> {
 
 /// Returns only the output identity carried by the graph, not one inferred by
 /// a later metadata query.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn declared_pipeline_mode(cache: &PipelineModeCache) -> Option<Mode> {
     cache
         .get()
@@ -536,10 +544,11 @@ struct PipelineOutputMetadata {
     output_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
+    palette_data: Option<PaletteData>,
     preserves_palette: bool,
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMetadata {
     let source_is_paletted = source.has_palette_samples();
     let palette_safe = source_is_paletted
@@ -558,7 +567,7 @@ fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMe
             }
         );
     let output_mode = pipeline_output_mode(source, op, source_is_paletted, palette_safe);
-    let (palette, palette_alpha, preserves_palette) =
+    let (palette, palette_alpha, palette_data, preserves_palette) =
         pipeline_output_palette(source, op, palette_safe);
     PipelineOutputMetadata {
         source_is_paletted,
@@ -567,11 +576,27 @@ fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMe
         output_mode,
         palette,
         palette_alpha,
+        palette_data,
         preserves_palette,
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+fn generated_pipeline_icc_profile(source: &Image, op: &PipelineOp) -> Option<Arc<[u8]>> {
+    match op {
+        PipelineOp::ConvertLab { icc_profile } => Some(Arc::clone(icc_profile)),
+        PipelineOp::Convert {
+            mode: Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageRgbx8,
+            matrix: None,
+            ..
+        } if source.known_mode_identity() == Some(Mode::ImageLab8) => {
+            Some(crate::lab::output_srgb_profile().into())
+        }
+        _ => source.compatibility_icc_profile().map(Arc::from),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn new_pipeline_node(
     source: Arc<Image>,
     ops: PipelineOps,
@@ -579,6 +604,7 @@ fn new_pipeline_node(
     output_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
+    palette_data: Option<PaletteData>,
     preserves_palette: bool,
 ) -> Image {
     // Carry an injected route across nodes that split a logical operation at
@@ -593,6 +619,7 @@ fn new_pipeline_node(
         backend,
         palette,
         palette_alpha,
+        palette_data,
         compatibility_icc_profile: None,
         materialized: materialization_cache(),
         shape: pipeline_shape_cache(),
@@ -604,7 +631,7 @@ fn new_pipeline_node(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn append_pipeline_op(
     source: &Arc<Image>,
     ops: &PipelineOps,
@@ -615,6 +642,7 @@ fn append_pipeline_op(
     output_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
+    palette_data: Option<PaletteData>,
     preserves_palette: bool,
 ) -> Image {
     let output_matches_source_mode = match (source.known_mode_identity(), output_mode) {
@@ -653,11 +681,12 @@ fn append_pipeline_op(
         output_mode,
         palette,
         palette_alpha,
+        palette_data,
         preserves_palette,
     )
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn pipeline_output_mode(
     source: &Image,
     op: &PipelineOp,
@@ -709,12 +738,14 @@ fn pipeline_output_mode(
     output_mode
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// TODO(pillow-rs#3ptb): parity-check P/PA PutAlpha palette and wrapper
+// metadata retention, including errors after Python promotion.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn pipeline_output_palette(
     source: &Image,
     op: &PipelineOp,
     palette_safe: bool,
-) -> (Option<Vec<u8>>, Option<Vec<u8>>, bool) {
+) -> (Option<Vec<u8>>, Option<Vec<u8>>, Option<PaletteData>, bool) {
     let palette_chop = matches!(
         op,
         PipelineOp::Add { .. }
@@ -740,7 +771,12 @@ fn pipeline_output_palette(
         // ImageChops wraps a new indexed core with Image._new. The wrapper's
         // palette object remains attached, while the core palette exposed by
         // getpalette() is empty; retain that observable empty result here.
-        return (Some(Vec::new()), Some(Vec::new()), false);
+        return (
+            Some(Vec::new()),
+            Some(Vec::new()),
+            Some(PaletteData::Rgb),
+            false,
+        );
     }
     // Pillow `Image.transform` copies the source palette for both P and PA
     // results when one is attached. Transform therefore stays on the ordinary
@@ -761,7 +797,17 @@ fn pipeline_output_palette(
             PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => true,
             _ => false,
         };
-    let preserve_palette = palette_safe
+    // PutAlpha changes P pixels from one-byte indices to PA index/alpha pairs,
+    // but the attached palette still resolves those indices. Keep this
+    // metadata-preservation decision separate from `palette_safe`, which
+    // controls whether the indexed operation can stay on the same sample
+    // layout and therefore whether a mode boundary is required.
+    let putalpha_preserves_indexed_palette = source.has_palette_samples()
+        && matches!(
+            op,
+            PipelineOp::PutAlpha { .. } | PipelineOp::PutAlphaData { .. }
+        );
+    let preserve_palette = (palette_safe || putalpha_preserves_indexed_palette)
         && !matches!(op, PipelineOp::ExtractBand { .. })
         && !palette_dropped_by_pa_operation;
     let palette = if preserve_palette {
@@ -774,7 +820,16 @@ fn pipeline_output_palette(
     } else {
         None
     };
-    (palette, palette_alpha, preserve_palette)
+    let palette_data = if preserve_palette {
+        source.has_attached_palette().then(|| {
+            source.palette_data().cloned().unwrap_or_else(|| {
+                PaletteData::from_alpha(palette_alpha.as_deref().unwrap_or_default())
+            })
+        })
+    } else {
+        None
+    };
+    (palette, palette_alpha, palette_data, preserve_palette)
 }
 
 impl Image {
@@ -785,19 +840,23 @@ impl Image {
     }
 
     /// Replaces palette metadata on an already queued pipeline operation.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn set_pipeline_output_palette(
         &mut self,
         output_palette: Option<Vec<u8>>,
         output_palette_alpha: Option<Vec<u8>>,
+        output_palette_data: Option<PaletteData>,
     ) {
         if let Image::Pipeline {
             palette,
             palette_alpha,
+            palette_data,
             ..
         } = self
         {
             *palette = output_palette;
             *palette_alpha = output_palette_alpha;
+            *palette_data = output_palette_data;
         }
     }
 
@@ -809,22 +868,9 @@ impl Image {
     /// source of a new pipeline. Mode metadata and palettes are carried forward
     /// when the operation can preserve them; mode-changing operations declare
     /// a replacement output identity when the contract can resolve it.
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
-        let generated_icc_profile = match &op {
-            PipelineOp::ConvertLab { icc_profile } => Some(Arc::clone(icc_profile)),
-            PipelineOp::Convert {
-                mode:
-                    crate::raster::Mode::ImageRgb8
-                    | crate::raster::Mode::ImageRgba8
-                    | crate::raster::Mode::ImageRgbx8,
-                matrix: None,
-                ..
-            } if source.known_mode_identity() == Some(crate::raster::Mode::ImageLab8) => {
-                Some(crate::lab::output_srgb_profile().into())
-            }
-            _ => source.compatibility_icc_profile().map(Arc::from),
-        };
+        let generated_icc_profile = generated_pipeline_icc_profile(source, &op);
         let PipelineOutputMetadata {
             source_is_paletted,
             palette_safe,
@@ -832,6 +878,7 @@ impl Image {
             output_mode,
             palette,
             palette_alpha,
+            palette_data,
             preserves_palette,
         } = pipeline_output_metadata(source, &op);
         let palette_conversion = matches!(
@@ -875,6 +922,7 @@ impl Image {
                     output_mode,
                     palette,
                     palette_alpha,
+                    palette_data,
                     preserves_palette,
                 )
             }
@@ -894,6 +942,7 @@ impl Image {
                 output_mode,
                 palette,
                 palette_alpha,
+                palette_data,
                 preserves_palette,
             ),
             other => new_pipeline_node(
@@ -903,6 +952,7 @@ impl Image {
                 output_mode,
                 palette,
                 palette_alpha,
+                palette_data,
                 preserves_palette,
             ),
         };
@@ -921,7 +971,7 @@ impl Image {
     /// A separate node is required for mode-changing operations: flattening
     /// into an existing pipeline would pass the final mode tag to operations
     /// that execute before the mode transition.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn push_mode_changing_op(
         source: &Image,
         op: PipelineOp,
@@ -934,6 +984,7 @@ impl Image {
             backend: source.backend(),
             palette: None,
             palette_alpha: None,
+            palette_data: None,
             compatibility_icc_profile: None,
             materialized: materialization_cache(),
             shape: pipeline_shape_cache(),

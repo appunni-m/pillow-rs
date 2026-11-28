@@ -245,6 +245,7 @@ fn imageops_native_f32_fill_from_python(
 /// P-mode strings pass through ImageColor, then RGB(A) integer lists and tuples
 /// use the temporary palette callback path. Other values retain the
 /// destination-specific typed conversion.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn imageops_fill_from_python(
     py: Python<'_>,
     value: Option<&Bound<'_, PyAny>>,
@@ -489,7 +490,7 @@ pub(crate) fn convert_palette_is_adaptive_from_python(
     value.rich_compare(adaptive, CompareOp::Eq)?.is_truthy()
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn convert_matrix_from_python(value: &Bound<'_, PyAny>) -> PyResult<Vec<f64>> {
     let length = value.len()?;
     if !matches!(length, 4 | 12) {

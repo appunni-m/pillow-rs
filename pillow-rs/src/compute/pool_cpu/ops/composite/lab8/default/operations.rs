@@ -7,12 +7,12 @@ use std::sync::Arc;
 
 const MODE: Mode = Mode::ImageLab8;
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
 ) -> Result<DynamicImage, PilError> {
-    crate::compute::pool_cpu::ops::composite::helpers::merge::interleave(
+    crate::compute::pool_cpu::ops::composite::helpers::merge::interleave_lab(
         source,
         remaining,
         MODE,

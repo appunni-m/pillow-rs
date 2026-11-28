@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, Mode, RgbImage, RgbaImage};
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageRgb8 => super::expand_color::to_rgb(source).map(DynamicImage::ImageRgb8),

@@ -13,12 +13,12 @@ use crate::raster::{DynamicImage, Mode, RgbImage};
     unsafe_code,
     reason = "the caller's strategy selection validates the NEON feature precondition"
 )]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) unsafe fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => luma8(source),
         Mode::ImageLumaA8 => super::super::helpers::vector::luma_alpha(source, target),
         Mode::ImageLaPremultiplied8 => super::super::helpers::vector::luma_alpha(source, target),
-        Mode::ImageRgb8 => super::super::helpers::vector::identity(source),
         Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 => {
             // SAFETY: the strategy is selected only by the NEON support entry.
             let output = unsafe { super::rgba_impl::execute(source)? };

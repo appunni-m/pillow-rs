@@ -40,6 +40,7 @@ fn register_composite_eval(m: &mut Registry) {
     );
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn register_part_2(m: &mut Registry) {
     m.insert(
         "EffectNoise",

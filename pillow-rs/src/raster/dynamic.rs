@@ -13,6 +13,7 @@ use super::traits::{GenericImageView, Pixel, Primitive};
 
 use crate::raster::color::FromColor;
 
+mod masked_copy;
 mod mode;
 mod transform;
 
@@ -58,6 +59,19 @@ macro_rules! dynamic_map_dispatch {
     ) => {
         match $dynimage {
             $(DynamicImage::$variant($image) => $action,)+
+        }
+    };
+}
+
+macro_rules! dynamic_copy_masked_region_dispatch {
+    (($destination:expr, $source:expr, $x:expr, $y:expr, $mask:expr); $( $(#[$attribute:meta])* $variant:ident($image_ty:ty), )+) => {
+        match ($destination, $source) {
+            $(
+                (DynamicImage::$variant(destination), DynamicImage::$variant(source)) => {
+                    destination.copy_masked_region_from(source, $x, $y, $mask)
+                }
+            )+
+            _ => false,
         }
     };
 }
@@ -123,7 +137,7 @@ pub(crate) fn crop_buffer<P: Pixel>(
 
 impl DynamicImage {
     /// Returns the exact raster identity from this image's existing variant tag.
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[must_use]
     pub const fn mode(&self) -> Mode {
         for_each_raster_identity!(dynamic_image_mode, self)
@@ -380,12 +394,17 @@ impl DynamicImage {
 
     /// Return a mutable view of native image storage when it is byte-addressable.
     ///
-    /// Acquiring the view invalidates any omitted physical-lane payload through
-    /// the carrier's generic mutable access. Mode-specific callers that must
-    /// preserve those lanes need to snapshot and restore or recompute them.
+    /// Acquiring the view discards omitted physical-lane payload because
+    /// arbitrary byte writes cannot track those values. Mode-specific callers
+    /// that need the lanes must snapshot and restore or recompute them.
     /// Keeping the method limited to 8-bit rasters prevents a byte-oriented
     /// kernel from accidentally reinterpreting typed samples.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn as_bytes_mut(&mut self) -> Option<&mut [u8]> {
+        // Generic byte writes cannot preserve the compact carrier's omitted
+        // lanes. Callers that need them snapshot the sidecar first and restore
+        // or recompute it after the write.
+        let _ = self.take_hidden_pixel_lanes();
         match self {
             DynamicImage::One(image)
             | DynamicImage::ImageLuma8(image)
@@ -484,6 +503,43 @@ impl DynamicImage {
             None => None,
         };
         self.replace_hidden_pixel_lanes(hidden_lanes)
+    }
+
+    /// Copies a same-mode region selected by a row-major source mask.
+    ///
+    /// Native samples and omitted physical lanes move together. The caller
+    /// supplies the mode-owned transform result and its validity policy.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    pub(crate) fn copy_masked_region_from(
+        &mut self,
+        source: &Self,
+        x: u32,
+        y: u32,
+        mask: &[u8],
+    ) -> bool {
+        let source_pixels = (source.width() as usize).checked_mul(source.height() as usize);
+        let (Some(source_pixels), Some(right), Some(bottom)) = (
+            source_pixels,
+            x.checked_add(source.width()),
+            y.checked_add(source.height()),
+        ) else {
+            return false;
+        };
+        if self.mode() != source.mode()
+            || mask.len() != source_pixels
+            || right > self.width()
+            || bottom > self.height()
+        {
+            return false;
+        }
+        let Some(hidden_lanes) = masked_copy::merge_hidden_lanes(self, source, x, y, mask) else {
+            return false;
+        };
+        let copied = for_each_raster_identity!(
+            dynamic_copy_masked_region_dispatch,
+            (&mut *self, source, x, y, mask)
+        );
+        copied && self.replace_hidden_pixel_lanes(hidden_lanes)
     }
 
     /// Return this image's color type.

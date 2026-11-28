@@ -462,6 +462,7 @@ fn color_support(id: OperationId) -> &'static OperationSupport {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn effects_support(id: OperationId) -> &'static OperationSupport {
     match id {
         OperationId::EffectSpread => &cpu_ops::effects::ops::EFFECT_SPREAD_SUPPORT,

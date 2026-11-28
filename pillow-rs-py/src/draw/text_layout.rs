@@ -150,6 +150,7 @@ impl<'py> PythonDrawTextRouteCallbacks<'py> {
 }
 
 #[allow(clippy::too_many_arguments)]
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(super) fn uses_direct_text_route(
     py: Python<'_>,
     draw_mode: Mode,
@@ -192,6 +193,7 @@ pub(super) fn uses_direct_text_route(
 impl DrawTextRouteCallbacks for PythonDrawTextRouteCallbacks<'_> {
     type Error = PyErr;
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn begin(&mut self) -> Result<(), Self::Error> {
         let imagetext_module = PyModule::import(self.py, "pillow_rs.imagetext")?;
         self.image_text_type = Some(imagetext_module.getattr("Text")?);
@@ -199,6 +201,7 @@ impl DrawTextRouteCallbacks for PythonDrawTextRouteCallbacks<'_> {
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn check(&mut self, check: DrawTextRouteCheck) -> Result<bool, Self::Error> {
         match check {
             DrawTextRouteCheck::NativeTextInput => Ok(self.native_text_input),
@@ -269,6 +272,7 @@ impl DrawTextRouteCallbacks for PythonDrawTextRouteCallbacks<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn text_mode(&mut self) -> Result<Option<Mode>, Self::Error> {
         let mode = self.image_text.getattr("mode")?;
         Ok(mode

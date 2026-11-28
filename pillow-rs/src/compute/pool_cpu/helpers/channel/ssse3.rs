@@ -4,6 +4,7 @@
 ///
 /// The caller must establish SSSE3 support, channels in 2..=4, a channel
 /// inside that layout, and a source length divisible by the channel count.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[target_feature(enable = "ssse3")]
 #[allow(unsafe_code)]
 pub(crate) unsafe fn gather_interleaved_channel_ssse3(
@@ -34,6 +35,7 @@ pub(crate) unsafe fn gather_interleaved_channel_ssse3(
 /// 4, validate `channel < channels`, ensure the source length is divisible by
 /// `channels`, provide writable output for every source pixel, and ensure the
 /// output region does not overlap the source region.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) unsafe fn gather_interleaved_channel_ssse3_into_raw(
     source: &[u8],
     output: *mut u8,

@@ -41,6 +41,7 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: &'a RgbImage,
     lut: &'a [u8],
@@ -79,11 +80,13 @@ pub(crate) fn prepare<'a>(
     Ok(Prepared::new(implementation, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn from_vector(output: vector::Output) -> Result<super::default::Input, PilError> {
     super::default::Input::from_raw(output.width, output.height, output.bytes)
         .ok_or_else(|| PilError::InternalError("Eval LUT output dimensions were invalid".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
         ArchitectureStrategy::Default(kernel) => {

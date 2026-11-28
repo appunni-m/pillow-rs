@@ -1,6 +1,5 @@
 //! Signed-I implementation for the 5x5 convolution filter.
 
-use crate::compute::pool_cpu::ops::filter::helpers::pillow_kernel_row_5;
 use crate::error::PilError;
 
 use crate::ops::pil_resize::i32_samples_from_le_bytes;
@@ -8,6 +7,19 @@ use crate::raster::DynamicImage;
 
 pub(in crate::compute::pool_cpu::ops::filter::i32) trait F32MulAdd {
     fn mul_add(&self, sample: f32, weight: f32, accumulator: f32) -> f32;
+
+    #[inline(always)]
+    fn kernel_row_5(&self, pixels: [f32; 5], kernel: &[f32]) -> f32 {
+        let sum = pixels[1] * kernel[1];
+        let sum = self.mul_add(pixels[0], kernel[0], sum);
+        let sum = self.mul_add(pixels[2], kernel[2], sum);
+        let sum = self.mul_add(pixels[3], kernel[3], sum);
+        self.mul_add(pixels[4], kernel[4], sum)
+    }
+
+    fn supports_binomial_factorization(&self) -> bool {
+        true
+    }
 }
 
 struct PortableF32Fma;
@@ -19,13 +31,10 @@ impl F32MulAdd for PortableF32Fma {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[inline(always)]
 fn pillow_kernel_row_5_with_fma<F: F32MulAdd>(pixels: [f32; 5], kernel: &[f32], fma: &F) -> f32 {
-    let sum = pixels[1] * kernel[1];
-    let sum = fma.mul_add(pixels[0], kernel[0], sum);
-    let sum = fma.mul_add(pixels[2], kernel[2], sum);
-    let sum = fma.mul_add(pixels[3], kernel[3], sum);
-    fma.mul_add(pixels[4], kernel[4], sum)
+    fma.kernel_row_5(pixels, kernel)
 }
 
 // ── 5x5 filter (I-mode) ──
@@ -41,6 +50,7 @@ fn filter_5x5_i32_row(
     height: i32,
     kernel: &[f32; 25],
     offset: f32,
+    fma: &impl F32MulAdd,
 ) {
     if y < 2 || y >= height - 2 || width < 5 {
         return;
@@ -62,11 +72,11 @@ fn filter_5x5_i32_row(
     }
 
     for x in 2..width - 2 {
-        let bottom0 = pillow_kernel_row_5(windows[0], &kernel[0..5]);
-        let bottom1 = pillow_kernel_row_5(windows[1], &kernel[5..10]);
-        let middle = pillow_kernel_row_5(windows[2], &kernel[10..15]);
-        let top1 = pillow_kernel_row_5(windows[3], &kernel[15..20]);
-        let top0 = pillow_kernel_row_5(windows[4], &kernel[20..25]);
+        let bottom0 = pillow_kernel_row_5_with_fma(windows[0], &kernel[0..5], fma);
+        let bottom1 = pillow_kernel_row_5_with_fma(windows[1], &kernel[5..10], fma);
+        let middle = pillow_kernel_row_5_with_fma(windows[2], &kernel[10..15], fma);
+        let top1 = pillow_kernel_row_5_with_fma(windows[3], &kernel[15..20], fma);
+        let top0 = pillow_kernel_row_5_with_fma(windows[4], &kernel[20..25], fma);
         let mut value = offset + 0.5;
         value += bottom0;
         value += bottom1;
@@ -130,6 +140,7 @@ fn filter_5x5_i32_output_with_copied_border(
 /// scalings of the weight-one row, and the weight-six row is twice a row
 /// weighted by three. Power-of-two scaling commutes with these finite normal
 /// f32 FMA results, while preserving Pillow's horizontal and vertical order.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn filter_5x5_i32_f32_binomial_scaled_rows_ring_with_fma<F: F32MulAdd>(
     raw: &[u8],
     samples: &[i32],
@@ -143,7 +154,9 @@ fn filter_5x5_i32_f32_binomial_scaled_rows_ring_with_fma<F: F32MulAdd>(
     if samples.len() != pixel_count || raw.len() != pixel_count.checked_mul(4)? {
         return None;
     }
-    if !i32_filter5x5_binomial_kernel_is_applicable(kernel) {
+    if !fma.supports_binomial_factorization()
+        || !i32_filter5x5_binomial_kernel_is_applicable(kernel)
+    {
         return None;
     }
 
@@ -379,6 +392,7 @@ fn filter_5x5_i32_f32_equal_rows_ring_with_fma<F: F32MulAdd>(
     Some(output)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn filter_5x5_i32_f32_ring_with_fma<F: F32MulAdd>(
     raw: &[u8],
     width: usize,
@@ -488,6 +502,26 @@ pub(crate) fn uniform_i32_filter5x5_is_identity(
     kernel: &[f32; 25],
     rounding_bias: f32,
 ) -> bool {
+    uniform_i32_filter5x5_is_identity_with_fma(
+        raw,
+        width,
+        height,
+        kernel,
+        rounding_bias,
+        &PortableF32Fma,
+    )
+}
+
+pub(in crate::compute::pool_cpu::ops::filter::i32) fn uniform_i32_filter5x5_is_identity_with_fma<
+    F: F32MulAdd,
+>(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    rounding_bias: f32,
+    fma: &F,
+) -> bool {
     if width < 5 || height < 5 {
         return false;
     }
@@ -510,11 +544,11 @@ pub(crate) fn uniform_i32_filter5x5_is_identity(
 
     let sample_i32 = i32::from_le_bytes([first[0], first[1], first[2], first[3]]);
     let sample = sample_i32 as f32;
-    let row0 = pillow_kernel_row_5([sample; 5], &kernel[0..5]);
-    let row1 = pillow_kernel_row_5([sample; 5], &kernel[5..10]);
-    let row2 = pillow_kernel_row_5([sample; 5], &kernel[10..15]);
-    let row3 = pillow_kernel_row_5([sample; 5], &kernel[15..20]);
-    let row4 = pillow_kernel_row_5([sample; 5], &kernel[20..25]);
+    let row0 = pillow_kernel_row_5_with_fma([sample; 5], &kernel[0..5], fma);
+    let row1 = pillow_kernel_row_5_with_fma([sample; 5], &kernel[5..10], fma);
+    let row2 = pillow_kernel_row_5_with_fma([sample; 5], &kernel[10..15], fma);
+    let row3 = pillow_kernel_row_5_with_fma([sample; 5], &kernel[15..20], fma);
+    let row4 = pillow_kernel_row_5_with_fma([sample; 5], &kernel[20..25], fma);
     let mut value = rounding_bias;
     value += row0;
     value += row1;
@@ -525,6 +559,7 @@ pub(crate) fn uniform_i32_filter5x5_is_identity(
     filtered == sample_i32
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn filter_5x5_i32_fast_path(
     raw: &[u8],
     width: usize,
@@ -533,7 +568,7 @@ fn filter_5x5_i32_fast_path(
     offset: f32,
     fma: &impl F32MulAdd,
 ) -> Option<(Vec<u8>, bool)> {
-    if uniform_i32_filter5x5_is_identity(raw, width, height, kernel, offset + 0.5) {
+    if uniform_i32_filter5x5_is_identity_with_fma(raw, width, height, kernel, offset + 0.5, fma) {
         return Some((raw.to_vec(), true));
     }
 
@@ -541,7 +576,10 @@ fn filter_5x5_i32_fast_path(
         i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]).unsigned_abs()
             <= I32_BINOMIAL_FILTER5X5_MAX_ABS_SAMPLE
     });
-    if first_sample_is_bounded && let Some(pixel_count) = width.checked_mul(height) {
+    if fma.supports_binomial_factorization()
+        && first_sample_is_bounded
+        && let Some(pixel_count) = width.checked_mul(height)
+    {
         let samples = i32_samples_from_le_bytes(raw, pixel_count);
         if i32_filter5x5_bounded_binomial_kernel_is_applicable(
             samples.len(),
@@ -575,6 +613,7 @@ pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute(
     execute_with_fma(img, kernel, scale, offset, &PortableF32Fma).map(|(image, _)| image)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute_with_fma(
     img: &DynamicImage,
     kernel: &[f32; 25],
@@ -621,6 +660,7 @@ pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute_with_fma(
             h,
             &kd,
             offset,
+            fma,
         );
     }
 

@@ -10,6 +10,7 @@ declare_strategies! {
 
 use super::super::helpers::put_data_strategy::declare_strategies as declare_data_strategies;
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 declare_data_strategies! {
     ImageRgba16, 0, &[];
 }

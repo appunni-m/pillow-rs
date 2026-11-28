@@ -24,7 +24,7 @@ const COLOR_SATURATION_INPUTS: &[InputContract] = &[InputContract::ExactNativeBy
     mismatch_reason: "ColorSaturation source bytes did not match its dimensions",
 }];
 const COLOR_SATURATION_ARCHITECTURES: [ImplementationSupport; 2] =
-    crate::compute::pool_cpu::ops::enhance::helpers::strategy::color_saturation_architectures(
+    crate::compute::pool_cpu::ops::enhance::helpers::strategy::color_saturation_luma_architectures(
         OperationId::ColorSaturation,
         Mode::ImageLuma8,
         1,
@@ -104,6 +104,7 @@ pub(crate) fn prepare_color_saturation<'a>(
     Ok(Prepared::new((source, factor), selection))
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute_color_saturation(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     let architecture = strategy.selection().implementation.architecture;
     let (source, factor) = strategy.implementation;

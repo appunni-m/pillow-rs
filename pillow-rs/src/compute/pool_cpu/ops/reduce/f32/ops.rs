@@ -13,7 +13,7 @@ const INPUTS: &[InputContract] = &[InputContract::ReduceFactors {
     identity_only: false,
 }];
 
-static ARCHITECTURES: [ImplementationSupport; 4] =
+static ARCHITECTURES: [ImplementationSupport; 5] =
     super::super::helpers::strategy::native_f32_architectures(OperationId::Reduce, Mode::ImageF32);
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
@@ -32,6 +32,12 @@ pub(crate) enum ArchitectureStrategy<'a> {
     },
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     Avx {
+        input: &'a crate::raster::RgbaImage,
+        x_factor: u32,
+        y_factor: u32,
+    },
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    Avx512F {
         input: &'a crate::raster::RgbaImage,
         x_factor: u32,
         y_factor: u32,
@@ -62,7 +68,7 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-reduce-neon-pillow; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: &'a crate::raster::RgbaImage,
     facts: StrategyInputs,
@@ -85,6 +91,12 @@ pub(crate) fn prepare<'a>(
         },
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         Architecture::Avx => ArchitectureStrategy::Avx {
+            input,
+            x_factor,
+            y_factor,
+        },
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => ArchitectureStrategy::Avx512F {
             input,
             x_factor,
             y_factor,
@@ -120,7 +132,7 @@ pub(crate) fn prepare<'a>(
     Ok(Prepared::new(implementation, selection))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-reduce-neon-pillow; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
         ArchitectureStrategy::Default {
@@ -134,6 +146,12 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
             x_factor,
             y_factor,
         } => super::avx::reduce_impl::execute(input, x_factor, y_factor),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        ArchitectureStrategy::Avx512F {
+            input,
+            x_factor,
+            y_factor,
+        } => super::avx512f::reduce_impl::execute(input, x_factor, y_factor),
         #[cfg(all(
             any(target_arch = "x86", target_arch = "x86_64"),
             target_feature = "sse2",

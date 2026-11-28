@@ -109,7 +109,7 @@ fn average(sum: u64, rounding: Rounding) -> u8 {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline(always)]
 fn premultiply(sample: u8, alpha: u8) -> u8 {
     let value = (u16::from(sample) * u16::from(alpha) + 127) / 255;
@@ -122,7 +122,7 @@ fn premultiply(sample: u8, alpha: u8) -> u8 {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline(always)]
 fn unpremultiply(sample: u8, alpha: u8) -> u8 {
     if alpha == 0 {
@@ -138,7 +138,7 @@ fn unpremultiply(sample: u8, alpha: u8) -> u8 {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline(always)]
 fn rgba_block_sums(
     source: &[u8],
@@ -163,7 +163,7 @@ fn rgba_block_sums(
     sums
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline(always)]
 fn average_rgba_block(
     source: &[u8],
@@ -190,15 +190,14 @@ fn average_rgba_block(
 /// `convert to La/RGBa → reduce → convert back` route: color samples are
 /// premultiplied before averaging and restored using the averaged alpha.
 /// With `false`, samples are averaged as stored, including premultiplied modes
-/// and layouts without alpha. The LAB strategy uses `LAB_CHROMA_BIAS` to map
-/// its signed chroma samples into and out of Pillow's byte sample domain.
-/// Source: Pillow 12.2.0 `Image.reduce`.
-// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
+/// and layouts without alpha. LAB selects `LAB_CHROMA` to rotate its two
+/// centered chroma samples into Pillow's native arithmetic space.
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 #[inline(always)]
 fn average_interleaved_block<
     const CHANNELS: usize,
     const PREMULTIPLIED: bool,
-    const LAB_CHROMA_BIAS: bool,
+    const LAB_CHROMA: bool,
 >(
     source: &[u8],
     width: usize,
@@ -214,15 +213,11 @@ fn average_interleaved_block<
             let index = ((source_y + dy) * width + source_x + dx) * CHANNELS;
             let alpha = source[index + CHANNELS - 1];
             for channel in 0..CHANNELS {
+                let offset = if LAB_CHROMA && channel != 0 { 128 } else { 0 };
                 let sample = if PREMULTIPLIED && channel + 1 < CHANNELS {
                     premultiply(source[index + channel], alpha)
                 } else {
-                    source[index + channel]
-                };
-                let sample = if LAB_CHROMA_BIAS && (channel == 1 || channel == 2) {
-                    sample ^ 0x80
-                } else {
-                    sample
+                    source[index + channel].wrapping_add(offset)
                 };
                 sums[channel] += u64::from(sample);
             }
@@ -231,38 +226,30 @@ fn average_interleaved_block<
     let mut output = [0u8; 4];
     let alpha = average(sums[CHANNELS - 1], rounding);
     for channel in 0..CHANNELS {
+        let offset = if LAB_CHROMA && channel != 0 { 128 } else { 0 };
         let value = average(sums[channel], rounding);
         let sample = if PREMULTIPLIED && channel + 1 < CHANNELS {
             unpremultiply(value, alpha)
         } else {
             value
         };
-        output[channel] = if LAB_CHROMA_BIAS && (channel == 1 || channel == 2) {
-            sample ^ 0x80
-        } else {
-            sample
-        };
+        output[channel] = sample.wrapping_add(offset);
     }
     output
 }
 
 /// Prepared native byte geometry shared by Default and architecture kernels.
-pub(crate) struct ByteReduceContext<
-    'a,
-    const CHANNELS: usize,
-    const PREMULTIPLIED: bool,
-    const LAB_CHROMA_BIAS: bool = false,
-> {
+pub(crate) struct ByteReduceContext<'a, const CHANNELS: usize, const PREMULTIPLIED: bool> {
     source: &'a [u8],
     geometry: Geometry,
     output_width: u32,
     output_height: u32,
 }
 
-impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool, const LAB_CHROMA_BIAS: bool>
-    ByteReduceContext<'a, CHANNELS, PREMULTIPLIED, LAB_CHROMA_BIAS>
+impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool>
+    ByteReduceContext<'a, CHANNELS, PREMULTIPLIED>
 {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn new(
         source: &'a [u8],
         width: u32,
@@ -381,7 +368,7 @@ impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool, const LAB_CHROMA_BIAS
         clippy::arithmetic_side_effects,
         reason = "the checked output row bounds each native destination range"
     )]
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn write_row_range(&self, y: u32, row: &mut [u8], start_x: u32, end_x: u32) {
         for x in start_x..end_x {
             let (source_x, source_y, block_width, block_height, rounding) =
@@ -397,7 +384,7 @@ impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool, const LAB_CHROMA_BIAS
                     rounding,
                 )
             } else {
-                average_interleaved_block::<CHANNELS, PREMULTIPLIED, LAB_CHROMA_BIAS>(
+                average_interleaved_block::<CHANNELS, PREMULTIPLIED, false>(
                     self.source,
                     self.geometry.width as usize,
                     source_x as usize,
@@ -414,7 +401,7 @@ impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool, const LAB_CHROMA_BIAS
 }
 
 /// Reduces one exact byte-layout strategy without interpreting its mode.
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn reduce_bytes<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     source: &[u8],
     width: u32,
@@ -422,35 +409,7 @@ pub(crate) fn reduce_bytes<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     x_factor: u32,
     y_factor: u32,
 ) -> Result<Vec<u8>, PilError> {
-    reduce_bytes_with_bias::<CHANNELS, PREMULTIPLIED, false>(
-        source, width, height, x_factor, y_factor,
-    )
-}
-
-// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
-pub(crate) fn reduce_lab_bytes(
-    source: &[u8],
-    width: u32,
-    height: u32,
-    x_factor: u32,
-    y_factor: u32,
-) -> Result<Vec<u8>, PilError> {
-    reduce_bytes_with_bias::<3, false, true>(source, width, height, x_factor, y_factor)
-}
-
-// VERIFY: source=reviewed@2026-11-14; parity=pending; benchmark=pending
-fn reduce_bytes_with_bias<
-    const CHANNELS: usize,
-    const PREMULTIPLIED: bool,
-    const LAB_CHROMA_BIAS: bool,
->(
-    source: &[u8],
-    width: u32,
-    height: u32,
-    x_factor: u32,
-    y_factor: u32,
-) -> Result<Vec<u8>, PilError> {
-    let context = ByteReduceContext::<CHANNELS, PREMULTIPLIED, LAB_CHROMA_BIAS>::new(
+    let context = ByteReduceContext::<CHANNELS, PREMULTIPLIED>::new(
         source, width, height, x_factor, y_factor,
     );
     let (output_width, output_height) = context.output_dimensions();
@@ -466,6 +425,46 @@ fn reduce_bytes_with_bias<
     for y in 0..output_height {
         let start = y as usize * row_stride;
         context.write_row_range(y, &mut output[start..start + row_stride], 0, output_width);
+    }
+    Ok(output)
+}
+
+/// Reduces LAB bytes in Pillow's centered chroma sample space.
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+pub(crate) fn reduce_lab_bytes<const CHANNELS: usize>(
+    source: &[u8],
+    width: u32,
+    height: u32,
+    x_factor: u32,
+    y_factor: u32,
+) -> Result<Vec<u8>, PilError> {
+    let x_factor = x_factor.max(1);
+    let y_factor = y_factor.max(1);
+    let output_width = width.div_ceil(x_factor);
+    let output_height = height.div_ceil(y_factor);
+    let dimensions = CheckedDims::new(output_width, output_height, CHANNELS as u8)?;
+    let mut output = dimensions.alloc_buffer();
+    if output_width == 0 || output_height == 0 {
+        return Ok(output);
+    }
+    let geometry = Geometry::new(width, height, x_factor, y_factor);
+    let row_stride = output_width as usize * CHANNELS;
+    for y in 0..output_height {
+        let output_row = &mut output[y as usize * row_stride..(y as usize + 1) * row_stride];
+        for x in 0..output_width {
+            let (source_x, source_y, block_width, block_height, rounding) = geometry.block(x, y);
+            let pixel = average_interleaved_block::<CHANNELS, false, true>(
+                source,
+                width as usize,
+                source_x as usize,
+                source_y as usize,
+                block_width as usize,
+                block_height as usize,
+                rounding,
+            );
+            let destination = x as usize * CHANNELS;
+            output_row[destination..destination + CHANNELS].copy_from_slice(&pixel[..CHANNELS]);
+        }
     }
     Ok(output)
 }

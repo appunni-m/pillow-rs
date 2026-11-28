@@ -58,6 +58,7 @@ try:
         CROP_CORE_ONLY_MODES,
         CROP_PILLOW_MODE_CASES,
         CORE_ONLY_RAW_MODES,
+        DIRECT_POSTERIZE_MODES,
         DIRECT_ROTATE_MODES,
         REDUCE_CORE_ONLY_MODES,
         REDUCE_MATRIX_FACTORS,
@@ -90,6 +91,7 @@ except ModuleNotFoundError:
         CROP_CORE_ONLY_MODES,
         CROP_PILLOW_MODE_CASES,
         CORE_ONLY_RAW_MODES,
+        DIRECT_POSTERIZE_MODES,
         DIRECT_ROTATE_MODES,
         REDUCE_CORE_ONLY_MODES,
         REDUCE_MATRIX_FACTORS,
@@ -113,6 +115,15 @@ from migration_parity_inventory import (
 )
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
+AVX512F_STRATEGY_SURFACES = frozenset(
+    {
+        "PIL.Image",
+        "PIL.Image.Image",
+        "PIL.ImageChops",
+        "PIL.ImageEnhance.Color",
+        "PIL.ImageOps",
+    }
+)
 CHOPS_BINARY_SOURCE_PATHS = frozenset(
     f"PIL.ImageChops.{operation}" for operation in CHOPS_BINARY_OPERATIONS
 )
@@ -640,6 +651,8 @@ def target_candidates(endpoint: Endpoint) -> list[str]:
     if endpoint.authority == "target-only-contract":
         if endpoint.operation == "_migration_direct_rotate":
             return ["pillow_rs._core.Image._migration_direct_rotate"]
+        if endpoint.operation == "_migration_direct_posterize":
+            return ["pillow_rs._core.Image._migration_direct_posterize"]
         if endpoint.operation == "get_child_images":
             return ["pillow_rs.Image.get_child_images"]
         if endpoint.kind == "type":
@@ -743,7 +756,10 @@ def result_shape(
     endpoint: Endpoint,
     signature: inspect.Signature,
 ) -> tuple[str, list[str]]:
-    if endpoint.operation == "_migration_direct_rotate":
+    if endpoint.operation in {
+        "_migration_direct_rotate",
+        "_migration_direct_posterize",
+    }:
         return "image", ["image"]
     if endpoint.source_path == "PIL.ImageText.Text":
         # Text is a public value object. Compare its exposed constructor state,
@@ -1007,7 +1023,7 @@ def looks_like_error(edge: str) -> bool:
     )
 
 
-# VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=n/a
 def operation_requirements(
     endpoint: Endpoint,
     parameters: list[dict[str, Any]],
@@ -1111,6 +1127,11 @@ def operation_requirements(
             *MODE_SIZE_PILLOW_MODES,
             *(mode for mode, _mode_id, _sample_kind in REDUCE_CORE_ONLY_MODES),
         ]))
+    elif endpoint.source_path == "PIL.Image.Image.transform":
+        # Transform's maintained source contract has a native strategy for
+        # every exact Pillow raster mode, including premultiplied, color-space,
+        # and endian-specific I;16 identities.
+        supported_modes = list(MODE_SIZE_PILLOW_MODES)
     elif endpoint.source_path == "PIL.Image.Image.putdata":
         # PutData has a mode-owned writer for every Pillow raster identity.
         # Keep the Pillow denominator and all native typed CoreOnly extensions
@@ -1216,6 +1237,8 @@ def operation_requirements(
                 if mode_name == mode
             )
         elif endpoint.source_path == "PIL.Image.Image.resize":
+            mode_id = mode_slug(str(mode))
+        elif endpoint.source_path == "PIL.Image.Image.transform":
             mode_id = mode_slug(str(mode))
         elif endpoint.source_path == "PIL.ImageDraw.ImageDraw.regular_polygon":
             # This endpoint includes both premultiplied and byte-order mode
@@ -1545,7 +1568,11 @@ def operation_requirements(
 def component_for(endpoint: Endpoint) -> str:
     surface = endpoint.surface
     if endpoint.authority == "target-only-contract":
-        if endpoint.operation in {"get_child_images", "_migration_direct_rotate"}:
+        if endpoint.operation in {
+            "get_child_images",
+            "_migration_direct_rotate",
+            "_migration_direct_posterize",
+        }:
             return "image-core"
         return "gpu-batch"
     if surface.startswith("PIL.ImageText"):
@@ -1682,6 +1709,77 @@ def operation_contract(
                 "fault_contract": {
                     "applicability": "not_applicable",
                     "reason": "The direct Rotate hook has no injected fault contract.",
+                },
+            }
+        if endpoint.operation == "_migration_direct_posterize":
+            result = result_contract(endpoint, target_signature)
+            requirements = [
+                requirement(
+                    "PIL.Image.Image._migration_direct_posterize.behavior.default",
+                    "success_path",
+                    "Run the direct Rust Posterize operation and preserve the exact mode.",
+                    ["target_output", "coverage"],
+                ),
+                *[
+                    requirement(
+                        f"PIL.Image.Image._migration_direct_posterize.mode.{mode_id}",
+                        "mode",
+                        f"Direct Rust Posterize applies its byte mask to native {mode} samples.",
+                        ["target_output", "benchmark", "coverage"],
+                    )
+                    for mode, mode_id, _channels, _width in DIRECT_POSTERIZE_MODES
+                ],
+                requirement(
+                    "PIL.Image.Image._migration_direct_posterize.block-tail.avx512f",
+                    "boundary",
+                    "Direct Rust Posterize AVX-512F block with scalar byte tail.",
+                    ["target_output", "coverage"],
+                ),
+                requirement(
+                    "PIL.Image.Image._migration_direct_posterize.material.avx512f",
+                    "performance",
+                    "Direct Rust Posterize full-call workload on a 1024x768 native byte image.",
+                    ["target_output", "benchmark", "coverage"],
+                ),
+            ]
+            return {
+                "id": endpoint.operation,
+                "kind": endpoint.kind,
+                "classification": endpoint.classification,
+                "lifecycle": {"status": "current"},
+                "source": {
+                    "oracle_id": None,
+                    "path": endpoint.source_path,
+                    "signature": signature_text(endpoint, target_signature),
+                    "parameters": parameters,
+                    "result": result,
+                },
+                "targets": [
+                    {
+                        "target_id": TARGET_ID,
+                        "path": target_path,
+                        "signature": signature_text(endpoint, target_signature),
+                        "support": {"status": "supported"},
+                    }
+                ],
+                "requirements": requirements,
+                "parity": {
+                    "applicability": "not_applicable",
+                    "reason": "Pillow ImageOps transforms P palette entries instead of exposing this direct Rust operation.",
+                },
+                "coverage": {
+                    "applicability": "required",
+                    "target_profiles": [TARGET_PROFILE],
+                    "component_ids": [component_for(endpoint)],
+                },
+                "benchmark": {
+                    "applicability": "required",
+                    "target_profiles": ["python-cpu", "python-simd"],
+                    "metrics": ["latency", "throughput"],
+                },
+                "fault_contract": {
+                    "applicability": "not_applicable",
+                    "reason": "The direct Posterize hook has no injected fault contract.",
                 },
             }
         if endpoint.operation == "get_child_images":
@@ -2198,6 +2296,8 @@ def build_manifest() -> dict[str, Any]:
                 ],
             }
         )
+
+    input_index["parity"].append("inputs/parity/avx512f-strategy-cases.json")
 
     # The input builder emits the cross-surface PipelineOp benchmark document
     # after the per-surface documents. Keep that maintained artifact in the

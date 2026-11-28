@@ -35,6 +35,7 @@ enum Region {
     Clamped,
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(super) fn execute<const CHANNELS: usize>(
     image: &DynamicImage,
     mode: Mode,

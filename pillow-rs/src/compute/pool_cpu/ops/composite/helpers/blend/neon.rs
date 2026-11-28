@@ -4,6 +4,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
 /// Runs the archived block and tail policy after the injected context selected NEON.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 pub(crate) fn execute(
     source: &DynamicImage,
@@ -29,6 +30,7 @@ pub(crate) fn execute(
 #[allow(unsafe_code)]
 #[inline]
 #[target_feature(enable = "neon")]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 unsafe fn blend_block(left: [u8; 16], right: [u8; 16], alpha: f32) -> [u8; 16] {
     use core::arch::aarch64::{
         vandq_u32, vcvtq_f32_u32, vcvtq_s32_f32, vdupq_n_f32, vdupq_n_u32, vfmaq_f32, vld1q_u8,

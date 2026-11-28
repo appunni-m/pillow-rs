@@ -112,6 +112,7 @@ pub fn registry() -> Result<&'static HashMap<&'static str, OpEntry>, PilError> {
 ///
 /// The key must match the string used during operation registration. It is kept
 /// static so backend support checks avoid allocation.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn variant_key(op: &PipelineOp) -> &'static str {
     match op {
         PipelineOp::Resize { .. } | PipelineOp::ResizeBoxed { .. } => "Resize",
@@ -204,7 +205,7 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
 }
 
 /// Returns whether the CPU backend has an implementation for `op`.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
     Ok(registry()?
         .get(variant_key(op))
@@ -218,7 +219,7 @@ pub fn cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
 /// Returns [`PilError::ValueError`] when the operation is unknown to the
 /// registry or has no CPU implementation. Propagates the operation's existing
 /// input errors. A context for another backend is an internal routing error.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn prepare_cpu<'a>(
     op: &'a PipelineOp,
     input: OperationInputs<'a>,

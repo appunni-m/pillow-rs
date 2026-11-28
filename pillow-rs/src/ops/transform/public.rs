@@ -11,7 +11,8 @@ const TRANSFORM_RESAMPLE_GUIDANCE: &str = concat!(
     "Image.Resampling.BICUBIC (3)"
 );
 
-fn parse_transform_resample(code: i32) -> Result<ResampleFilter, PilError> {
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+pub(crate) fn parse_transform_resample(code: i32) -> Result<ResampleFilter, PilError> {
     match code {
         0 => Ok(ResampleFilter::Nearest),
         2 => Ok(ResampleFilter::Bilinear),
@@ -45,6 +46,17 @@ pub(crate) fn validate_transform_resample_filter(filter: ResampleFilter) -> Resu
         ResampleFilter::Mks2021 => 7,
     };
     parse_transform_resample(code).map(|_| ())
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+fn public_transform_filter(mode: Mode, requested: ResampleFilter) -> ResampleFilter {
+    // Pillow's public Image.transform forces nearest for modes 1 and P after
+    // validating the requested filter. PA keeps the requested filter.
+    if matches!(mode, Mode::One | Mode::ImagePalette8) {
+        ResampleFilter::Nearest
+    } else {
+        requested
+    }
 }
 
 /// Formats a Pillow `Image.transform` resampling error using the host value's
@@ -172,6 +184,7 @@ fn validate_extent_data(extent: &[f64], size: (u32, u32)) -> Result<(), PilError
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn quad_coefficients(size: (u32, u32), corners: &[f64]) -> Result<[f64; 8], PilError> {
     if size.0 == 0 || size.1 == 0 {
         return Err(PilError::ZeroDivisionError("division by zero".into()));
@@ -268,7 +281,7 @@ pub struct PreparedTransformOutput {
 
 impl TransformMeshAccumulator {
     /// Returns the allocated destination image after the streamed records run.
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub fn finish(mut self) -> Result<Image, PilError> {
         let mode = self.prepared.mode;
         let data = [0.0; 12];
@@ -288,6 +301,9 @@ impl TransformMeshAccumulator {
         };
         let output = output_dynamic_mut(&mut self.output)?;
         ops::finish_mesh_records(mode, output, request, self.i16_output_plane.as_deref())?;
+        if mode == crate::raster::Mode::ImageLab8 {
+            crate::compute::pool_cpu::ops::transform::lab8::default::transform_impl::remove_output_chroma_bias(output)?;
+        }
         crate::compute::pool_cpu::ops::transform::helpers::hidden_lanes::attach_mesh_output(
             output,
             self.output_lanes,
@@ -296,6 +312,7 @@ impl TransformMeshAccumulator {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn output_dynamic_mut(image: &mut Image) -> Result<&mut DynamicImage, PilError> {
     match image {
         Image::Loaded(data) => Ok(std::sync::Arc::make_mut(&mut data.image)),
@@ -307,8 +324,9 @@ fn output_dynamic_mut(image: &mut Image) -> Result<&mut DynamicImage, PilError> 
 }
 
 impl Image {
-    /// Applies a Pillow public transform method after host values have been
-    /// converted to neutral Rust inputs.
+    /// Applies a transform after host values have been converted to neutral
+    /// Rust inputs. Rust callers provide raw QUAD corners; the host-prepared
+    /// output API accepts Pillow-normalized QUAD coefficients instead.
     ///
     /// Methods `0` through `4` cover affine, extent, perspective, quad, and
     /// mesh transforms. Resampling is parsed and retained in the core pipeline
@@ -317,7 +335,7 @@ impl Image {
     /// Pillow's `fill` argument is unused for these built-in transform methods;
     /// `fillcolor` controls pixels outside the transformed area. Keep `_fill`
     /// at this boundary because the host binding forwards Pillow's signature.
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub fn transform_public(
         &self,
         size: (u32, u32),
@@ -334,7 +352,7 @@ impl Image {
 
     /// Resolves a transform destination fill after the wrapper has captured
     /// the output mode and before it evaluates method data callbacks.
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_fill_for_mode(
         &self,
@@ -352,7 +370,7 @@ impl Image {
     }
 
     /// Allocates the MESH destination and captures its backend and architecture route.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_mesh_public(
         &self,
@@ -364,7 +382,7 @@ impl Image {
     }
 
     /// Allocates an exact-mode destination and captures its backend/architecture context.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_output_public(
         &self,
@@ -375,7 +393,7 @@ impl Image {
     }
 
     /// Allocates a Transform destination with the host wrapper's captured route.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_output_public_with_context(
         &self,
@@ -401,7 +419,7 @@ impl Image {
     }
 
     /// Starts a MESH accumulator from the destination allocated before callbacks.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_transform_mesh_from_output_public(
         &self,
@@ -432,7 +450,7 @@ impl Image {
     }
 
     /// Applies one QUAD-shaped MESH record to the reusable destination.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn apply_transform_mesh_record_public(
         &self,
@@ -446,11 +464,7 @@ impl Image {
         if source.mode() != mode {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
-        let filter = if matches!(mode, Mode::ImagePalette8 | Mode::One) {
-            ResampleFilter::Nearest
-        } else {
-            filter
-        };
+        let filter = public_transform_filter(mode, filter);
         let mut data = [0.0; 12];
         data[..4].copy_from_slice(&[
             box_coordinates.0 as f64,
@@ -503,7 +517,7 @@ impl Image {
     }
 
     /// Executes the built-in Transform method with a previously resolved fill.
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn transform_prepared_public(
         &self,
@@ -530,16 +544,11 @@ impl Image {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
         let mode = prepared.mode;
-        // Pillow's indexed affine transform keeps the raw palette index and
-        // therefore uses nearest-neighbor sampling regardless of the public
-        // filter code. Keep the operation palette-safe so materialization does
-        // not expand P into RGB before the backend runs.
-        let filter = if matches!(mode, Mode::ImagePalette8 | Mode::One) {
-            ResampleFilter::Nearest
-        } else {
-            requested_filter
-        };
-        self.apply_public_transform_method(
+        // Pillow's public Image.transform forces nearest sampling for modes 1
+        // and P after it validates the requested filter. Keep the operation
+        // palette-safe so materializing P does not expand it into RGB first.
+        let filter = public_transform_filter(mode, requested_filter);
+        let output = self.apply_public_transform_method(
             size,
             method,
             data,
@@ -547,12 +556,14 @@ impl Image {
             prepared.palette_fill,
             filter,
             prepared.fill_is_none,
-        )
+        )?;
+        Ok(output)
     }
 
-    /// Executes a non-MESH host Transform into the destination prepared before
-    /// Python method-data callbacks ran.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    /// Executes normalized non-MESH host Transform data into a destination
+    /// prepared before Python method-data callbacks ran. QUAD data arrives as
+    /// coefficients after Pillow's observable Python arithmetic.
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn transform_prepared_output_public(
         &self,
@@ -573,22 +584,23 @@ impl Image {
         let Some(TransformData::Affine(coefficients)) = data else {
             return Err(PilError::ValueError("missing method data".into()));
         };
-        let transform_method = match method {
-            0 => TransformMethod::Affine,
-            2 => TransformMethod::Perspective,
-            3 => TransformMethod::Quad,
+        let (transform_method, request_data) = match method {
+            0 => (TransformMethod::Affine, coefficients.as_slice()),
+            2 => (TransformMethod::Perspective, &coefficients[..8]),
+            3 => {
+                // The Python Image.transform boundary already computed QUAD
+                // coefficients using its observable sequence/numeric protocol.
+                // Treating them as corners and converting again changes the map.
+                (TransformMethod::Quad, &coefficients[..8])
+            }
             _ => unreachable!("non-MESH method was validated"),
         };
-        let filter = if matches!(mode, Mode::ImagePalette8 | Mode::One) {
-            ResampleFilter::Nearest
-        } else {
-            filter
-        };
+        let filter = public_transform_filter(mode, filter);
         let request = TransformRequest {
             width: destination.size.0,
             height: destination.size.1,
             method: &transform_method,
-            data: &coefficients,
+            data: request_data,
             filter,
             fill: destination
                 .prepared
@@ -619,6 +631,7 @@ impl Image {
         Ok(destination.output)
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn apply_public_transform_method(
         &self,
         size: (u32, u32),
@@ -660,6 +673,7 @@ impl Image {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn transform_public_affine_method(
         &self,
         size: (u32, u32),
@@ -689,6 +703,7 @@ impl Image {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn transform_public_extent_method(
         &self,
         size: (u32, u32),
@@ -733,6 +748,7 @@ impl Image {
         )
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn transform_public_projective_method(
         &self,
         size: (u32, u32),
@@ -778,6 +794,7 @@ impl Image {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn transform_public_mesh(
     image: &Image,
     size: (u32, u32),
@@ -827,6 +844,7 @@ fn transform_public_mesh(
     image.transform_mesh_with_filter(size, data, fill, filter, fill_is_none)
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn empty_transform_output(
     image: &Image,
     size: (u32, u32),
@@ -837,12 +855,13 @@ fn empty_transform_output(
     if mode == crate::raster::Mode::ImagePalette8 {
         // Pillow copies P's source palette immediately after allocating its
         // output, before method-data callbacks can mutate the source.
-        return Ok(Image::new_palette_index_from_source(
+        let output = Image::new_palette_index_from_source(
             image,
             size.0,
             size.1,
             palette_fill.unwrap_or(fill.0),
-        ));
+        );
+        return Ok(output);
     }
     // Transform normalizes two-band fill to `(luma, alpha, 0, 0)` for kernels,
     // while Image.new stores its alpha in the fourth slot.

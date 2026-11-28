@@ -132,7 +132,7 @@ fn rank_filter_native_bytes(
     let mut output = vec![0u8; dimensions.total_bytes()];
     for y in 0..height {
         let row_start = y * row_stride;
-        super::rank_vector_kernel::execute_row(
+        super::vector::execute_rank_vector_row(
             raw,
             &mut output[row_start..row_start + row_stride],
             row_stride,

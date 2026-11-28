@@ -22,6 +22,7 @@ declare_pixel_strategies! {
 
 use super::super::helpers::put_data_strategy::declare_strategies as declare_data_strategies;
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 declare_data_strategies! {
     ImageI32, 4, super::super::helpers::put_data::FOUR_BYTE_PAYLOADS;
     Sse2, sse2, all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"), &[crate::compute::Architecture::Sse2];

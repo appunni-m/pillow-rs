@@ -5,6 +5,7 @@ use wide::u8x16;
 
 /// Reduce a native L byte slice to its extrema using portable vector lanes.
 /// AutoContrast at cutoff zero needs only these two bins, not a full histogram.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn native_luma_minmax(raw: &[u8]) -> Option<(u8, u8)> {
     if raw.is_empty() {
         return None;
@@ -26,6 +27,7 @@ fn native_luma_minmax(raw: &[u8]) -> Option<(u8, u8)> {
     Some((minimum, maximum))
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn native_luma_lut_tables(lut: &[u8]) -> Option<[u8x16; 16]> {
     if lut.len() != 256 {
         return None;
@@ -41,6 +43,7 @@ pub(crate) fn native_luma_lut_tables(lut: &[u8]) -> Option<[u8x16; 16]> {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn native_luma_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     let low = input & u8x16::splat(0x0f);
     let high: u8x16 = input >> 4u32;
@@ -58,6 +61,7 @@ fn native_luma_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     bit3.select(level3[0], level3[1])
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn apply_native_luma_lut_row(
     source: &[u8],
     destination: &mut [u8],
@@ -78,6 +82,7 @@ pub(crate) fn apply_native_luma_lut_row(
 /// callers can apply the resulting byte LUT with a backend-specific data
 /// kernel. Keeping this control plane shared prevents the CPU and SIMD paths
 /// from drifting on cutoff rounding, masked selection, or identity channels.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn autocontrast_lut(
     img: &DynamicImage,
     options: &crate::pipeline::AutocontrastOptions,
@@ -107,6 +112,7 @@ pub(crate) fn autocontrast_lut(
 /// The Python ImageOps facade computes the histogram before coercing
 /// `ignore` and `cutoff`, matching Pillow's observable fault order. This
 /// entrypoint keeps the bin arithmetic and LUT construction in Rust.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn autocontrast_lut_from_histogram(
     histogram: &[u32],
     options: &crate::pipeline::AutocontrastOptions,
@@ -138,6 +144,7 @@ struct AutocontrastHistogram {
     zero_cutoff_luma_bounds: Option<(u8, u8)>,
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn collect_autocontrast_histogram(
     img: &DynamicImage,
     mask: Option<&std::sync::Arc<crate::image::Image>>,
@@ -211,6 +218,7 @@ fn collect_autocontrast_histogram(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn fill_native_autocontrast_histogram(
     img: &DynamicImage,
     unmasked: bool,
@@ -248,6 +256,7 @@ fn fill_native_autocontrast_histogram(
     true
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn normalize_ignored_bins(ignore: &Option<Vec<i64>>) -> Result<Vec<usize>, PilError> {
     let Some(ignore) = ignore else {
         return Ok(Vec::new());
@@ -264,6 +273,7 @@ fn normalize_ignored_bins(ignore: &Option<Vec<i64>>) -> Result<Vec<usize>, PilEr
         .collect()
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn validate_cutoff(total: usize, cutoff: f64) -> Result<(), PilError> {
     let count = total as f64 * cutoff / 100.0;
     if count.is_nan() {
@@ -279,6 +289,7 @@ fn validate_cutoff(total: usize, cutoff: f64) -> Result<(), PilError> {
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn cutoff_count(total: usize, cutoff: f64) -> Result<(bool, usize), PilError> {
     validate_cutoff(total, cutoff)?;
     let count = (total as f64 * cutoff / 100.0).floor();
@@ -292,6 +303,7 @@ fn cutoff_count(total: usize, cutoff: f64) -> Result<(bool, usize), PilError> {
     Ok((negative, magnitude))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn trim_histogram_edge(histogram: &mut [usize; 256], cutoff: (bool, usize), high: bool) {
     if cutoff.0 {
         let edge = if high {
@@ -324,6 +336,7 @@ fn trim_histogram_edge(histogram: &mut [usize; 256], cutoff: (bool, usize), high
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn build_autocontrast_lut(
     histogram: &AutocontrastHistogram,
     cutoff: (f64, f64),
@@ -350,6 +363,7 @@ fn build_autocontrast_lut(
     Ok(lut)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn build_lut_channel(
     lut: &mut [u8],
     mut bins: [usize; 256],
@@ -373,10 +387,12 @@ fn build_lut_channel(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn fill_channel_from_bounds(channel: &mut [u8], low: u8, high: u8) {
     fill_autocontrast_lut_from_bounds(channel, usize::from(low), usize::from(high));
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn fill_autocontrast_lut_from_bounds(channel: &mut [u8], low: usize, high: usize) {
     if high <= low {
         fill_identity_channel(channel);
@@ -385,12 +401,14 @@ pub(crate) fn fill_autocontrast_lut_from_bounds(channel: &mut [u8], low: usize, 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn fill_identity_channel(channel: &mut [u8]) {
     for (index, value) in channel.iter_mut().enumerate() {
         *value = index as u8;
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn fill_contrast_channel(channel: &mut [u8], low: f64, high: f64) {
     let scale = 255.0 / (high - low);
     let offset = -low * scale;
@@ -407,6 +425,7 @@ fn fill_contrast_channel(channel: &mut [u8], low: f64, high: f64) {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn equalize_histogram<const BANKS: usize>(raw: &[u8], channels: usize) -> [[u32; 256]; 3] {
     let mut banks = [[[0u32; 260]; 3]; BANKS];
     if channels == 1 {
@@ -467,6 +486,7 @@ fn equalize_histogram<const BANKS: usize>(raw: &[u8], channels: usize) -> [[u32;
 /// Histogram construction is scalar reduction/control work. The returned
 /// native-band table is intentionally separate from applying it so SIMD can
 /// keep the complete pixel pass in its vector LUT data plane.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn equalize_lut(
     img: &DynamicImage,
     channels: usize,
@@ -475,6 +495,7 @@ pub(crate) fn equalize_lut(
     equalize_lut_for_bytes(img.as_bytes(), img.width(), img.height(), channels, mask)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn equalize_lut_for_bytes(
     raw: &[u8],
     width: u32,
@@ -522,6 +543,7 @@ pub(crate) fn equalize_lut_for_bytes(
 }
 
 /// Builds an Equalize LUT from the eager public histogram result.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn equalize_lut_from_histogram(histogram: &[u32]) -> Option<Vec<u8>> {
     if histogram.len() % 256 != 0 {
         return None;
@@ -533,6 +555,7 @@ pub(crate) fn equalize_lut_from_histogram(histogram: &[u32]) -> Option<Vec<u8>> 
     Some(lut)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn fill_equalize_lut_channel(histogram: &[u32], lut: &mut [u8]) {
     for (value, output) in lut.iter_mut().enumerate() {
         *output = value as u8;
@@ -563,6 +586,7 @@ fn fill_equalize_lut_channel(histogram: &[u32], lut: &mut [u8]) {
         cumulative += count;
     }
 }
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn lut_is_identity(lut: &[u8], channels: usize) -> bool {
     lut.len() == channels.saturating_mul(256)
         && lut.chunks_exact(256).all(|table| {
@@ -575,6 +599,7 @@ pub(crate) fn lut_is_identity(lut: &[u8], channels: usize) -> bool {
 
 /// Applies native L/RGB lookup tables using the archived portable-vector path.
 /// Partial L blocks and RGB pixel groups are padded without exposing padding.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn apply_native_lut(
     source: &[u8],
     width: usize,
@@ -634,6 +659,53 @@ pub(crate) fn apply_native_lut(
     Some((output, blocks, 0))
 }
 
+/// Applies a three-band RGB table to the already allocated P-to-RGB result.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn apply_native_rgb_lut_in_place(
+    bytes: &mut [u8],
+    width: usize,
+    height: usize,
+    lut: &[u8],
+) -> Option<(u64, u64)> {
+    if lut.len() != 3 * 256 {
+        return None;
+    }
+    let row_stride = width.checked_mul(3)?;
+    if bytes.len() != row_stride.checked_mul(height)? {
+        return None;
+    }
+    let tables = [
+        native_luma_lut_tables(&lut[..256])?,
+        native_luma_lut_tables(&lut[256..512])?,
+        native_luma_lut_tables(&lut[512..])?,
+    ];
+    if row_stride != 0 {
+        for row in bytes.chunks_mut(row_stride) {
+            for block in row.chunks_mut(48) {
+                let active_pixels = block.len() / 3;
+                let mut input = [[0u8; 16]; 3];
+                for (lane, pixel) in block.chunks_exact(3).enumerate() {
+                    input[0][lane] = pixel[0];
+                    input[1][lane] = pixel[1];
+                    input[2][lane] = pixel[2];
+                }
+                let mapped: [[u8; 16]; 3] = std::array::from_fn(|channel| {
+                    native_luma_lut_chunk(u8x16::new(input[channel]), &tables[channel]).to_array()
+                });
+                for lane in 0..active_pixels {
+                    let start = lane * 3;
+                    block[start] = mapped[0][lane];
+                    block[start + 1] = mapped[1][lane];
+                    block[start + 2] = mapped[2][lane];
+                }
+            }
+        }
+    }
+    let blocks = width.div_ceil(16).saturating_mul(3).saturating_mul(height) as u64;
+    Some((blocks, 0))
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn apply_luma_architecture(
     input: &GrayImage,
     lut: &[u8],
@@ -667,6 +739,7 @@ pub(crate) fn apply_luma_architecture(
     crate::image_utils::raw_bytes_to_image(width, height, output, 1)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn apply_rgb_architecture(
     input: &RgbImage,
     lut: &[u8],
@@ -690,10 +763,31 @@ pub(crate) fn apply_rgb_architecture(
     crate::image_utils::raw_bytes_to_image(width, height, output, 3)
 }
 
+/// Applies a selected RGB kernel to an owned palette-expanded result buffer.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn apply_rgb_architecture_in_place(
+    mut input: RgbImage,
+    lut: &[u8],
+) -> Result<DynamicImage, PilError> {
+    let (width, height) = input.dimensions();
+    if width == 0 || height == 0 || lut_is_identity(lut, 3) {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(DynamicImage::ImageRgb8(input));
+    }
+    let (blocks, tail) =
+        apply_native_rgb_lut_in_place(input.as_mut(), width as usize, height as usize, lut)
+            .ok_or_else(|| PilError::InternalError("histogram RGB buffer shape mismatch".into()))?;
+    crate::compute::record_pipeline_operation_vector_blocks(blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(tail);
+    crate::compute::record_pipeline_operation_path("vector");
+    Ok(DynamicImage::ImageRgb8(input))
+}
+
 /// Applies a one-channel LUT to P-mode indices with the selected vector path.
 ///
 /// The palette is wrapper metadata; this kernel deliberately transforms the
 /// stored index bytes and keeps the output's exact P identity.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn apply_palette_architecture(
     input: &GrayImage,
     lut: &[u8],

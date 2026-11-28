@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
-use super::input::{
-    coordinate, invalid_component_error, paste_float_source_error, paste_invalid_type_error,
-    paste_list_source_error, paste_scalar_source, paste_source_from_color_string,
-    paste_tuple_source, wide_integer_scalar_source,
-};
+use super::input::coordinate;
+use super::source::resolve_image_source;
+use super::source_plan::PasteSourcePlan;
 use super::types::{
     AlphaCompositeBox, PasteBoxInput, PasteMaskInput, PastePlacement, PasteSource,
     PasteSourceInput, ResolvedPasteColor,
 };
 use crate::checked_dims::CheckedDims;
+use crate::compute::CpuExecutionRoute;
 use crate::compute::registry::support::{
     OperationId, PaletteKnowledge, RequestFacts, SecondaryInputFacts, StrategyInputs,
 };
@@ -31,16 +30,6 @@ pub struct PasteBoxPlan {
     abbreviated_mask: Option<Box<Image>>,
 }
 
-/// Source captured before destination and mask preparation complete.
-/// Python conversion overrides may intentionally supply a different mode.
-#[doc(hidden)]
-#[derive(Debug, Clone)]
-pub struct PasteSourcePlan {
-    destination_mode: Mode,
-    source: PasteSource,
-    resolved_color: Option<ResolvedPasteColor>,
-}
-
 struct PreparedPasteSource {
     image: Option<Image>,
     color: Option<ResolvedPasteColor>,
@@ -53,6 +42,7 @@ impl Image {
     /// and solid-color resolution are prepared before the caller realizes the
     /// destination and mask; the final method then validates dimensions and
     /// queues the mode-preserving Paste operation.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub fn paste_with_input(
         &mut self,
         source: PasteSourceInput,
@@ -69,6 +59,7 @@ impl Image {
     }
 
     /// Validates Paste box syntax before source loading or conversion.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_paste_box(
         box_input: PasteBoxInput,
@@ -120,114 +111,8 @@ impl Image {
         })
     }
 
-    /// Applies base-image Paste conversion rules and resolves solid inputs.
-    #[doc(hidden)]
-    pub fn prepare_paste_source(
-        &self,
-        source_input: PasteSourceInput,
-    ) -> Result<PasteSourcePlan, PilError> {
-        let destination_mode = self.mode_identity()?;
-        Self::prepare_paste_source_for_mode(destination_mode, source_input)
-    }
-
-    /// Prepares a non-image Paste source after the host captured destination mode.
-    #[doc(hidden)]
-    pub fn prepare_paste_source_for_mode(
-        destination_mode: Mode,
-        source_input: PasteSourceInput,
-    ) -> Result<PasteSourcePlan, PilError> {
-        let source = match source_input {
-            PasteSourceInput::Image(image) => PasteSource::from_parts(Some(*image), 0, 0, 0, 255),
-            PasteSourceInput::Scalar(value) => paste_scalar_source(value, destination_mode),
-            PasteSourceInput::WideInteger { float_value, .. } => {
-                wide_integer_scalar_source(destination_mode, float_value)?
-            }
-            PasteSourceInput::Float(value) => {
-                if destination_mode == Mode::ImageF32 {
-                    PasteSource::RawFloat(value)
-                } else {
-                    return Err(paste_float_source_error(destination_mode));
-                }
-            }
-            PasteSourceInput::TupleComponents(values) => {
-                paste_tuple_source(&values, destination_mode)?
-            }
-            PasteSourceInput::List => return Err(paste_list_source_error(destination_mode)),
-            PasteSourceInput::InvalidType(type_name) => {
-                return Err(paste_invalid_type_error(destination_mode, &type_name));
-            }
-            PasteSourceInput::Components(values) => match values.as_slice() {
-                [value] => paste_scalar_source(*value, destination_mode),
-                [luma, alpha] => match (u8::try_from(*luma), u8::try_from(*alpha)) {
-                    (Ok(luma), Ok(alpha)) => PasteSource::LumaAlpha(luma, alpha),
-                    _ => PasteSource::RawLumaAlpha(*luma, *alpha),
-                },
-                [r, g, b] => match (u8::try_from(*r), u8::try_from(*g), u8::try_from(*b)) {
-                    (Ok(r), Ok(g), Ok(b)) => PasteSource::Rgb(r, g, b),
-                    _ => PasteSource::RawRgb(*r, *g, *b),
-                },
-                [r, g, b, a] => match (
-                    u8::try_from(*r),
-                    u8::try_from(*g),
-                    u8::try_from(*b),
-                    u8::try_from(*a),
-                ) {
-                    (Ok(r), Ok(g), Ok(b), Ok(a)) => PasteSource::from_parts(None, r, g, b, a),
-                    _ => PasteSource::RawRgba(*r, *g, *b, *a),
-                },
-                _ => return Err(invalid_component_error(destination_mode)),
-            },
-            PasteSourceInput::String(value) => {
-                paste_source_from_color_string(&value, destination_mode)?
-            }
-            PasteSourceInput::Invalid => {
-                return Err(invalid_component_error(destination_mode));
-            }
-        };
-        let (source, resolved_color) = match source {
-            PasteSource::Image(image) => (
-                PasteSource::Image(Box::new(resolve_image_source(image, destination_mode)?)),
-                None,
-            ),
-            solid => {
-                let color = solid.solid_color(destination_mode)?;
-                (solid, Some(color))
-            }
-        };
-        Ok(PasteSourcePlan {
-            destination_mode,
-            source,
-            resolved_color,
-        })
-    }
-
-    /// Captures an image source whose Pillow mode conversion has already run.
-    ///
-    /// The Python adapter uses this after Pillow's virtual `Image.convert`
-    /// call, or when Pillow keeps the original source core by reference. This
-    /// captures the Python-selected raster before destination/mask callbacks.
-    /// The returned source mode is retained as-is, including a mode-changing
-    /// override result. This reproduces Pillow 12.3.0's observed, undocumented
-    /// compatibility behavior: Paste admits matching physical pixel sizes;
-    /// unmasked paths copy raw bytes and masked paths blend physical lanes.
-    /// The parity input builder models an instance override that returns this
-    /// same image and emits the RGBA→CMYK, RGB→RGBA, L→P, RGBA→L, and masked
-    /// LA→RGBA cases. The active shared oracle is Pillow 12.2.0; the user has
-    /// independently reproduced the same behavior on Pillow 12.3.0. Runtime
-    /// parity remains gated on CPU source completion.
-    #[doc(hidden)]
-    pub fn prepare_resolved_paste_image_source(
-        &self,
-        image: Image,
-    ) -> Result<PasteSourcePlan, PilError> {
-        Ok(PasteSourcePlan {
-            destination_mode: self.mode_identity()?,
-            source: PasteSource::Image(Box::new(image)),
-            resolved_color: None,
-        })
-    }
-
     /// Executes a Paste after box/source preparation and destination/mask loads.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn paste_prepared(
         &mut self,
@@ -239,7 +124,7 @@ impl Image {
     }
 
     /// Queues Paste while retaining a composed caller's execution context.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn paste_prepared_with_execution_context(
         &mut self,
@@ -253,7 +138,22 @@ impl Image {
         Ok(())
     }
 
+    /// Queues Paste with its complete requested-backend and CPU-context route.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    #[doc(hidden)]
+    pub fn paste_prepared_with_execution_route(
+        &mut self,
+        box_plan: PasteBoxPlan,
+        mut source_plan: PasteSourcePlan,
+        mask_input: PasteMaskInput,
+        route: CpuExecutionRoute,
+    ) -> Result<(), PilError> {
+        source_plan.execution_route = Some(route);
+        self.paste_prepared_with_box_mask(box_plan, source_plan, mask_input, None, true)
+    }
+
     /// Applies a staged Paste with the already-loaded abbreviated box mask.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn paste_prepared_with_box_mask(
         &mut self,
@@ -263,6 +163,9 @@ impl Image {
         loaded_box_mask: Option<Box<Image>>,
         use_planned_box_mask: bool,
     ) -> Result<(), PilError> {
+        let route = source_plan
+            .execution_route
+            .unwrap_or_else(|| self.cpu_execution_route_advisory());
         let abbreviated_mask = match (
             box_plan.abbreviated_mask,
             loaded_box_mask,
@@ -319,10 +222,14 @@ impl Image {
                 ));
             }
         };
-        self.paste_prepared_source(source_plan, placement, mask.as_ref())
+        self.paste_prepared_source(source_plan, placement, mask.as_ref())?;
+        *self = self
+            .clone()
+            .with_backend_and_execution_context(Some(route.child_backend()), route.context());
+        Ok(())
     }
 
-    // VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn paste_prepared_source(
         &mut self,
         plan: PasteSourcePlan,
@@ -562,7 +469,7 @@ impl Image {
         let placement = box_coords.map_or(PastePlacement::Position(0, 0), |coords| {
             PastePlacement::Region(coords.0, coords.1, coords.2, coords.3)
         });
-        self.paste_impl(source, placement, mask, false)
+        self.paste_impl(source, placement, mask, false, None)
     }
 
     /// Queues a paste using Pillow's two-coordinate upper-left form.
@@ -581,10 +488,28 @@ impl Image {
         mask: Option<&Image>,
     ) -> Result<(), PilError> {
         let (x, y) = position.unwrap_or((0, 0));
-        self.paste_impl(source, PastePlacement::Position(x, y), mask, false)
+        self.paste_impl(source, PastePlacement::Position(x, y), mask, false, None)
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    /// Queues a position Paste with its parent operation route.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    pub(crate) fn paste_at_with_execution_route(
+        &mut self,
+        source: PasteSource,
+        position: (i32, i32),
+        mask: Option<&Image>,
+        route: CpuExecutionRoute,
+    ) -> Result<(), PilError> {
+        self.paste_impl(
+            source,
+            PastePlacement::Position(position.0, position.1),
+            mask,
+            false,
+            Some(route),
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     /// Queues a bitmap solid-color source as one pixel for native masked-Paste
     /// backends. The mask defines the full region; CPU fallback expands the
     /// sample before applying the ordinary Paste semantics.
@@ -602,16 +527,41 @@ impl Image {
             PastePlacement::Position(position.0, position.1),
             Some(mask),
             true,
+            None,
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    /// Queues a compact masked Bitmap Paste with its parent operation route.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    pub(crate) fn paste_bitmap_solid_masked_at_with_execution_route(
+        &mut self,
+        source: PasteSource,
+        position: (i32, i32),
+        mask: &Image,
+        route: CpuExecutionRoute,
+    ) -> Result<(), PilError> {
+        if !matches!(mask.mode_identity()?, Mode::One | Mode::ImageLuma8) {
+            return Err(PilError::ValueError("bad transparency mask".to_owned()));
+        }
+        self.paste_impl(
+            source,
+            PastePlacement::Position(position.0, position.1),
+            Some(mask),
+            true,
+            Some(route),
+        )
+    }
+
+    // TODO(pillow-rs#3ptb): verify selected and fallback Backend/Architecture
+    // receipts for eager source Convert and the queued Paste.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn paste_impl(
         &mut self,
         source: PasteSource,
         placement: PastePlacement,
         mask: Option<&Image>,
         compact_solid_source: bool,
+        route_override: Option<CpuExecutionRoute>,
     ) -> Result<(), PilError> {
         let destination_mode = self.mode_identity()?;
         let source_size = match &source {
@@ -631,10 +581,11 @@ impl Image {
         {
             return Err(PilError::ValueError("images do not match".to_owned()));
         }
+        let route = route_override.unwrap_or_else(|| self.cpu_execution_route_advisory());
 
         let source = match source {
             PasteSource::Image(image) => PreparedPasteSource {
-                image: Some(resolve_image_source(image, destination_mode)?),
+                image: Some(resolve_image_source(image, destination_mode, route)?),
                 color: None,
             },
             solid => PreparedPasteSource {
@@ -688,7 +639,8 @@ impl Image {
                 mask_alpha,
             },
         );
-        *self = new_self;
+        *self = new_self
+            .with_backend_and_execution_context(Some(route.child_backend()), route.context());
         Ok(())
     }
 
@@ -701,13 +653,17 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when source and destination dimensions
     /// differ, or another [`PilError`] when size lookup fails.
+    // TODO(pillow-rs#3ptb): verify direct Rust mode/size admission before
+    // queueing, deferred pixel execution, and selection/fallback receipts
+    // separately from the Pillow static wrapper's load-before-admission route.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub fn alpha_composite(
         &mut self,
         source: &Image,
         dest: (i32, i32),
         src: (i32, i32),
     ) -> Result<(), PilError> {
-        // Pillow 12.2.0 `libImaging/AlphaComposite.c::ImagingAlphaComposite`
+        // Pillow 13.0.0 `libImaging/AlphaComposite.c::ImagingAlphaComposite`
         // validates the destination mode first, then requires the source mode
         // and dimensions to match exactly.
         let dest_mode = self.mode_identity()?;
@@ -815,7 +771,7 @@ fn resolve_paste_placement(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn paste_mask_uses_alpha(destination_mode: Mode, mask: Option<&Image>) -> Result<bool, PilError> {
     let Some(mask_image) = mask else {
         return Ok(false);
@@ -828,6 +784,7 @@ fn paste_mask_uses_alpha(destination_mode: Mode, mask: Option<&Image>) -> Result
 
 /// Validate resolved Python sources before lazy pipeline queuing.
 /// Prepared execution applies this same mode declaration after materialization.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn validate_paste_source_contract(
     destination_mode: Mode,
     source: &Image,
@@ -897,31 +854,6 @@ fn paste_region_intersects_destination(
     let clipped_right = right.min(i64::from(destination_size.0));
     let clipped_bottom = bottom.min(i64::from(destination_size.1));
     clipped_left < clipped_right && clipped_top < clipped_bottom
-}
-
-fn resolve_image_source(image: Box<Image>, destination_mode: Mode) -> Result<Image, PilError> {
-    let source_mode = image.mode_identity()?;
-    // Pillow skips conversion for LA, RGBA, and RGBa pasted into RGB because
-    // those modes already use the destination's four-byte physical pixel. Its
-    // low-level Paste copies or blends these lanes and leaves RGBa premultiplied.
-    if source_mode == destination_mode
-        || (destination_mode == Mode::ImageRgb8
-            && matches!(
-                source_mode,
-                Mode::ImageLumaA8 | Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8
-            ))
-    {
-        Ok(*image)
-    } else if destination_mode == Mode::ImagePaletteAlpha8 && source_mode == Mode::ImagePalette8 {
-        // Pillow promotes P sources to opaque PA samples and retains each index.
-        let mut promoted = *image;
-        promoted.putalpha(255)?;
-        Ok(promoted)
-    } else {
-        // Pillow converts every other mismatched base-image source here,
-        // including RGB to RGBA regardless of whether a mask is present.
-        image.convert(destination_mode, None, None, None, None)
-    }
 }
 
 // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending

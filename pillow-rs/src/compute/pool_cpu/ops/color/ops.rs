@@ -3,8 +3,8 @@
 use crate::compute::{
     ExecutionContext,
     registry::support::{
-        InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule,
-        RejectionKind, StrategySelection, SupportAssessment,
+        ConvertMatrixTarget, InputContract, ModeSupport, OperationId, OperationInputs,
+        OperationSupport, OutputModeRule, RejectionKind, StrategySelection, SupportAssessment,
     },
 };
 use crate::error::PilError;
@@ -247,15 +247,45 @@ pub(super) const SCALAR_TARGETS: &[Mode] = &[
     Mode::ImagePalette8,
     Mode::ImagePaletteAlpha8,
 ];
-// NO_PILLOW_SUPPORT: a 12-coefficient RGB matrix can feed the native LAB
-// encoder directly without materializing an intermediate RGB image.
-const MATRIX_TARGETS: &[Mode] = &[Mode::ImageLuma8, Mode::ImageRgb8, Mode::ImageLab8];
-const MATRIX_CORE_ONLY_TARGETS: &[Mode] = &[Mode::ImageLab8];
-const MATRIX_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
+// NO_PILLOW_SUPPORT: RGB/4 is deterministic Rust-only behavior; Pillow's
+// four-coefficient RGB result does not define the remaining two channel rows.
+// A twelve-coefficient RGB matrix may feed LAB without an intermediate image.
+const MATRIX_TARGETS: &[ConvertMatrixTarget] = &[
+    ConvertMatrixTarget {
+        mode: Mode::ImageLuma8,
+        coefficients: 4,
+        core_only_reason: None,
+    },
+    ConvertMatrixTarget {
+        mode: Mode::ImageLuma8,
+        coefficients: 12,
+        core_only_reason: None,
+    },
+    ConvertMatrixTarget {
+        mode: Mode::ImageRgb8,
+        coefficients: 4,
+        core_only_reason: Some(
+            "four-coefficient RGB matrix output is a deterministic Rust extension",
+        ),
+    },
+    ConvertMatrixTarget {
+        mode: Mode::ImageRgb8,
+        coefficients: 12,
+        core_only_reason: None,
+    },
+    ConvertMatrixTarget {
+        mode: Mode::ImageLab8,
+        coefficients: 12,
+        core_only_reason: Some(
+            "direct matrix conversion to LAB extends Pillow's RGB matrix contract",
+        ),
+    },
+];
+const MATRIX_INPUTS: &[InputContract] = &[InputContract::ConvertMatrixTarget {
     targets: MATRIX_TARGETS,
-    core_only_targets: MATRIX_CORE_ONLY_TARGETS,
-    core_only_reason: Some("direct matrix conversion to LAB extends Pillow's RGB matrix contract"),
-    rejection_reason: "image has wrong mode",
+    length_rejection_reason: "matrix must be tuple of length 4 or 12",
+    target_rejection_reason: "image has wrong mode",
+    coefficient_rejection_reason: "matrix coefficient count does not match target mode",
 }];
 
 pub(crate) const LA_PREMULTIPLIED_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
@@ -264,7 +294,7 @@ pub(crate) const LA_PREMULTIPLIED_INPUTS: &[InputContract] = &[InputContract::Co
     core_only_reason: Some(LA_PREMULTIPLIED_CORE_ONLY_REASON),
     rejection_reason: "conversion from La to L not supported",
 }];
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -321,12 +351,13 @@ pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
 // path. P/PA conversion produces wrapper-owned palette/alpha metadata; the
 // Image boundary publishes those sidecars. Internal high-depth identities
 // and cross-high-depth targets are CoreOnly.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) static CONVERT_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Convert, &[], classify_mode)
         .with_rejected_output(OutputModeRule::ByTargetMode)
         .with_target_compositions(super::helpers::convert::classify_target_composition);
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn classify_convert_transparent_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::CONVERT_TRANSPARENT_SUPPORT,
@@ -358,12 +389,12 @@ pub(crate) struct PreparedConvertTransparent<'a> {
 }
 
 impl PreparedConvertTransparent<'_> {
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) const fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.source {
             DynamicImage::One(source) => super::one::ops::execute_transparent(
@@ -400,7 +431,7 @@ impl PreparedConvertTransparent<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_convert_transparent<'a>(
     input: OperationInputs<'a>,
     target: Mode,
@@ -428,7 +459,7 @@ pub(crate) fn prepare_convert_transparent<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn validate_convert_transparent_target(
     source: Mode,
     target: Mode,
@@ -446,16 +477,18 @@ pub(crate) fn validate_convert_transparent_target(
     )))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_matrix_mode(mode: Mode) -> ModeSupport {
     match mode {
-        Mode::ImageRgb8 => ModeSupport::cpu(
-            OperationId::ConvertMatrix,
-            mode,
-            crate::compute::registry::support::OutputModeRule::ByTargetMode,
-            MATRIX_INPUTS,
-            &[],
-        ),
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
+            ModeSupport::cpu(
+                OperationId::ConvertMatrix,
+                mode,
+                crate::compute::registry::support::OutputModeRule::ByTargetMode,
+                MATRIX_INPUTS,
+                &[],
+            )
+        }
         Mode::One
         | Mode::ImageLuma8
         | Mode::ImageLumaA8
@@ -466,9 +499,6 @@ fn classify_matrix_mode(mode: Mode) -> ModeSupport {
         | Mode::ImageRgbPremultiplied8
         | Mode::ImageRgbx8
         | Mode::ImageCmyk8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8
         | Mode::ImageI32
         | Mode::ImageF32
         | Mode::ImageI16
@@ -547,7 +577,7 @@ pub(crate) static SUPPORT: OperationSupport =
 /// Prepared Convert plan exported through the color-family registry facade.
 pub(crate) type PreparedConvert<'a> = Prepared<'a>;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn classify_remap_palette(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageLuma8 => super::luma8::ops::SUPPORT,
@@ -586,6 +616,12 @@ fn classify_remap_palette(mode: Mode) -> ModeSupport {
 pub(crate) static REMAP_PALETTE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::RemapPalette, &[], classify_remap_palette)
         .with_rejected_output(OutputModeRule::Fixed(Mode::ImagePalette8));
+
+pub(crate) const REMAP_PALETTE_DESTINATION_MAP_INPUT: InputContract =
+    InputContract::RemapPaletteDestinationMap {
+        max_entries: 256,
+        rejection_reason: "byte must be in range(0, 256)",
+    };
 
 /// Prepared RGB-family-to-LAB execution with exact mode and backend selection.
 pub(crate) struct PreparedConvertLab<'a> {
@@ -663,7 +699,7 @@ pub(crate) enum PreparedRemapPalette<'a> {
 }
 
 impl PreparedRemapPalette<'_> {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::Luma8(plan) => plan.selection(),
@@ -671,7 +707,7 @@ impl PreparedRemapPalette<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self {
             Self::Luma8(plan) => plan.execute(),
@@ -681,12 +717,15 @@ impl PreparedRemapPalette<'_> {
 }
 
 /// Selects the native L/P mode strategy for a typed remap request.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_remap_palette<'a>(
     input: OperationInputs<'a>,
     dest_map: &'a [u8],
     ctx: &ExecutionContext,
 ) -> Result<PreparedRemapPalette<'a>, PilError> {
+    REMAP_PALETTE_SUPPORT
+        .for_mode(input.mode())
+        .validate_remap_palette_destination_map(dest_map.len())?;
     match input.image {
         DynamicImage::ImageLuma8(_) => {
             super::luma8::ops::prepare(input, dest_map, ctx).map(PreparedRemapPalette::Luma8)
@@ -707,7 +746,7 @@ pub(crate) fn prepare_remap_palette<'a>(
 }
 
 /// Registry entry for RemapPalette, retaining wrapper palette ownership.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_remap_palette_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -716,7 +755,6 @@ pub(crate) fn prepare_remap_palette_pipeline<'a>(
     let PipelineOp::RemapPalette { dest_map } = op else {
         return Err(PilError::ValueError("expected RemapPalette op".into()));
     };
-    let map = &dest_map[..dest_map.len().min(256)];
-    prepare_remap_palette(input, map, ctx)
+    prepare_remap_palette(input, dest_map, ctx)
         .map(crate::compute::registry::PreparedOperation::from_remap_palette)
 }

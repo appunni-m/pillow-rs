@@ -46,7 +46,7 @@ pub(crate) enum PreparedPaste<'a> {
     ImageRgba32F(super::rgba32f::ops::Strategy<'a>),
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -82,7 +82,7 @@ pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Paste, &[], classify_mode);
 
 impl PreparedPaste<'_> {
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::One(strategy) => &strategy.selection,
@@ -113,7 +113,7 @@ impl PreparedPaste<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self {
             Self::One(strategy) => super::one::ops::execute(strategy),
@@ -149,7 +149,7 @@ impl PreparedPaste<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -216,7 +216,7 @@ pub(crate) fn prepare_pipeline<'a>(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn prepare_mode<'a>(
     image: &'a DynamicImage,
     source: Arc<DynamicImage>,
@@ -272,7 +272,7 @@ fn prepare_mode<'a>(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn secondary_facts(image: &DynamicImage) -> SecondaryInputFacts {
     SecondaryInputFacts {
         mode: image.mode(),

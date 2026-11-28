@@ -15,6 +15,7 @@ pub(crate) fn prepare(input: scalar::Kernel<'_>) -> Kernel<'_> {
 /// # Safety
 ///
 /// Preparation must establish SSE2/SSSE3 and the exact native source/index guard.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 pub(crate) unsafe fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     #[cfg(target_arch = "x86_64")]

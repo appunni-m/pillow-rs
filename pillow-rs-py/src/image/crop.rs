@@ -4,7 +4,7 @@ use crate::{Bound, Py, PyAny, PyResult, Python, c_int_from_python, map_error};
 use pyo3::pymethods;
 use pyo3::types::PyAnyMethods;
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn crop_box_from_python<'py>(value: &Bound<'py, PyAny>) -> PyResult<(i32, i32, i32, i32)> {
     let (left, top, right, bottom): (
         Bound<'py, PyAny>,
@@ -26,7 +26,7 @@ impl PyImage {
     // selected/fallback receipts for each declared CPU architecture.
     // The shared binding parser applies Pillow's fixed C-int conversion;
     // Rust then applies the default crop extent and allocation guards.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[pyo3(signature = (box_coords=None))]
     fn crop(
         slf: Py<Self>,
@@ -51,7 +51,7 @@ impl PyImage {
     // The facade has completed Pillow's comparisons, load, `round()`, `int()`,
     // and arbitrary-precision bomb check before this C-int extraction. This
     // separate entry cannot disable the default guard on direct `_core` crop.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[pyo3(signature = (box_coords, max_image_pixels, execution_context=None))]
     fn _crop_with_max_pixels(
         slf: Py<Self>,

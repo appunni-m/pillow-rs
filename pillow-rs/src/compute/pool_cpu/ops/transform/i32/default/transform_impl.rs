@@ -128,6 +128,72 @@ pub(crate) fn execute_into(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+pub(crate) fn execute_into_with_validity(
+    input: &DynamicImage,
+    request: TransformRequest<'_>,
+    output: &mut DynamicImage,
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    let (DynamicImage::ImageI32(source), DynamicImage::ImageI32(_)) = (input, &*output) else {
+        return Err(PilError::InternalError(
+            "Transform I destination mode mismatch".into(),
+        ));
+    };
+    if matches!(request.method, TransformMethod::Mesh) {
+        return Err(PilError::InternalError(
+            "Transform MESH must use the record accumulator".into(),
+        ));
+    }
+    let destination = output.as_bytes_mut().ok_or_else(|| {
+        PilError::InternalError("Transform I destination storage mismatch".into())
+    })?;
+    if matches!(request.filter, ResampleFilter::Nearest) {
+        return byte::execute_into_with_validity::<4, true, false>(
+            input,
+            request,
+            byte::AffineNearestKernel::Generic,
+            destination,
+            Some(validity),
+        );
+    }
+    match request.method {
+        TransformMethod::Affine => {
+            let mut projective_data = request.data.to_vec();
+            projective_data.extend([0.0, 0.0]);
+            scalar::transform_projective_scalar32_into_with_validity::<false>(
+                source.as_raw(),
+                source.dimensions(),
+                request.width,
+                request.height,
+                &projective_data,
+                &request.filter,
+                request.fill,
+                request.fill_is_none,
+                false,
+                destination,
+                validity,
+            )
+        }
+        TransformMethod::Perspective | TransformMethod::Quad => {
+            scalar::transform_projective_scalar32_into_with_validity::<false>(
+                source.as_raw(),
+                source.dimensions(),
+                request.width,
+                request.height,
+                request.data,
+                &request.filter,
+                request.fill,
+                request.fill_is_none,
+                matches!(request.method, TransformMethod::Quad),
+                destination,
+                validity,
+            )
+        }
+        TransformMethod::Mesh => unreachable!(),
+    }
+}
+
 pub(crate) fn apply_mesh_record(
     input: &DynamicImage,
     output: &mut DynamicImage,

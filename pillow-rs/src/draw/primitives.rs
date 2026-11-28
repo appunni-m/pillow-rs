@@ -16,7 +16,7 @@ impl Draw {
     ///
     /// Returns `ValueError("mode mismatch")` for an incompatible explicit
     /// drawing context. Deferred pipeline execution reports later failures.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-27; parity=pass@cpu-default-closure-2026-11-27; benchmark=pending
     pub fn line(
         &mut self,
         x0: i32,
@@ -283,9 +283,10 @@ impl Draw {
     /// `ValueError("mode mismatch")` when an operation is queued with an
     /// incompatible explicit context. Deferred pipeline execution reports
     /// later materialization failures.
-    // TODO(pillow-rs#3ptb): verify typed-slice minimum-vertex faults and
-    // direct mode-fault ordering through the Rust parity adapter.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // The typed Rust API checks the vertex count before resolving explicit
+    // mode; Python validates the mode in its constructor before this call.
+    // TODO(pillow-rs#3ptb): verify both public boundaries' fault order.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn polygon(
         &mut self,
         points: &[(i32, i32)],
@@ -324,9 +325,10 @@ impl Draw {
     /// Returns `ValueError("mode mismatch")` when an outline is queued with
     /// an incompatible explicit context. Coordinate and materialization
     /// errors retain their existing boundaries.
-    // TODO(pillow-rs#3ptb): verify invalid explicit modes on the F wide-outline
-    // no-op path and retain the existing F output contract.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // A valid explicit outline resolves the context before the F wide-outline
+    // no-op; an empty outline input can return before that mode check.
+    // TODO(pillow-rs#3ptb): verify both fault orders and the F output contract.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn polygon_outline_with_input(
         &mut self,
@@ -482,15 +484,19 @@ impl Draw {
     /// has no Draw strategy and no default ink can be selected. An explicit
     /// ink reaches the queued Draw operation and its rejection is deferred
     /// until materialization.
-    // TODO(pillow-rs#3ptb): verify direct Rust no-ink defaults, CoreOnly
-    // rejection timing, and the explicit-ink materialization fault.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // No-ink calls resolve their mode before selecting a default; explicit ink
+    // queues the typed operation and defers unsupported-mode rejection.
+    // TODO(pillow-rs#3ptb): verify these direct Rust timing/output contracts.
+    // VERIFY: source=reviewed@2026-11-26; parity=pass@draw-rerun-3; benchmark=pending
     pub fn shape(
         &mut self,
         points: &[(i32, i32)],
         fill: Option<(u8, u8, u8, u8)>,
         outline: Option<(u8, u8, u8, u8)>,
     ) -> Result<(), PilError> {
+        if points.is_empty() {
+            return Ok(());
+        }
         // Pillow's ImageDraw._getink() supplies the context's default ink
         // when both arguments are omitted. This is deliberately shape-only:
         // the experimental API calls draw_outline directly, and its default

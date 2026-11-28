@@ -27,6 +27,7 @@ impl PreparedAutocontrast<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let mut output = match self {
             Self::Luma(prepared) => prepared.execute()?,
@@ -38,6 +39,7 @@ impl PreparedAutocontrast<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     options: &AutocontrastOptions,

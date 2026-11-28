@@ -19,6 +19,7 @@ pub(crate) fn identity_can_defer_output(image: &crate::raster::DynamicImage) -> 
 
 /// Remap omitted physical pixel lanes with the same source pixel mapping as a
 /// mode-preserving transpose-family operation.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn remap_hidden_lanes(
     source: &DynamicImage,
     output: &mut DynamicImage,
@@ -230,6 +231,7 @@ pub(crate) fn transpose_bytes<const CHANNELS: usize>(
     Ok(Some((output_width, output_height, output)))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn should_tile_transpose(width: u32, height: u32) -> bool {
     width >= TRANSPOSE_TILE_SIZE as u32
         && height >= TRANSPOSE_TILE_SIZE as u32

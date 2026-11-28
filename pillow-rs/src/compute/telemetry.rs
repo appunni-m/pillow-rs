@@ -127,7 +127,7 @@ pub struct PipelineOperationTelemetry {
     pub scalar_tail_count: u64,
     /// Number of logical mode conversions attributable to this operation.
     pub mode_conversion_count: u64,
-    /// Number of CPU↔SIMD handoffs attributable to this operation.
+    /// Number of backend handoffs attributable to this operation.
     pub handoff_count: u64,
     /// Public workflow call that created this operation, when captured.
     #[doc(hidden)]
@@ -498,6 +498,7 @@ pub(crate) fn begin_pipeline_operation_telemetry(operation: &'static str) {
 }
 
 /// Mark the active operation's data path.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
 pub(crate) fn record_pipeline_operation_path(path: &'static str) {
     if !pipeline_telemetry_enabled() {
         return;
@@ -570,7 +571,8 @@ pub(crate) fn record_pipeline_operation_mode_conversion(count: u64) {
     }
 }
 
-/// Add an operation-local CPU↔SIMD handoff count.
+/// Add an operation-local backend handoff count.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
 pub(crate) fn record_pipeline_operation_handoff(count: u64) {
     if !pipeline_telemetry_enabled() {
         return;
@@ -626,6 +628,7 @@ pub(crate) fn record_pipeline_operation_unsupported(operation: &'static str) {
 }
 
 /// Record the concrete mode/architecture strategy selected for an operation.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
 pub(crate) fn record_pipeline_operation_selection(selection: &StrategySelection) {
     if !pipeline_telemetry_enabled() {
         return;
@@ -753,6 +756,7 @@ pub(super) fn take_pipeline_resource_telemetry() -> Option<PipelineResourceTelem
 
 /// Record a backend-internal fallback so the public receipt reports the
 /// executor that actually produced pixels, not only the router's request.
+#[cfg(feature = "gpu")]
 pub(crate) fn record_pipeline_backend_fallback(reason: impl Into<String>) {
     if !pipeline_telemetry_enabled() {
         return;
@@ -773,6 +777,7 @@ pub(super) fn take_pipeline_backend_override() -> Option<(Backend, String)> {
 /// still useful evidence. Segmentation uses this setter after it has observed
 /// the suffix executor; unlike [`record_pipeline_backend_fallback`], it does
 /// not count another backend handoff.
+#[cfg(feature = "gpu")]
 pub(crate) fn restore_pipeline_backend_override(override_value: (Backend, String)) {
     if !pipeline_telemetry_enabled() {
         return;

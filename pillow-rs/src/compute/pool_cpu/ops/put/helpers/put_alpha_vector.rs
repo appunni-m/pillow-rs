@@ -13,6 +13,7 @@ use wide::{u8x16, u16x16};
 const NATIVE_BYTE_RGBA_MASK: [u8; 16] = [
     255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 0,
 ];
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn cmyk_block(source_block: [u8; 16], mask_block: [u8; 16]) -> [u8; 16] {
     // Pillow converts C/M/Y/K to RGB with MULDIV255 before writing
     // the new alpha sample. Keep the native CMYK bytes until this
@@ -62,6 +63,7 @@ fn cmyk_block(source_block: [u8; 16], mask_block: [u8; 16]) -> [u8; 16] {
     .to_array()
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn simd_put_alpha_block<const SOURCE: usize, const OUTPUT: usize, const CMYK: bool>(
     source_block: [u8; 16],
     mask_block: [u8; 16],
@@ -113,6 +115,7 @@ pub(crate) fn simd_put_alpha_block<const SOURCE: usize, const OUTPUT: usize, con
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn write_put_alpha_scalar<const SOURCE: usize, const OUTPUT: usize, const CMYK: bool>(
     source: &[u8],
     source_start: usize,
@@ -143,6 +146,7 @@ pub(crate) fn write_put_alpha_scalar<const SOURCE: usize, const OUTPUT: usize, c
     Some(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn native_byte_transform_copy_bytes<F>(input: &[u8], output: &mut [u8], transform: &F)
 where
     F: Fn(u8x16) -> u8x16,
@@ -164,6 +168,7 @@ where
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn simd_put_alpha_rgba_constant_bytes(
     source: &[u8],
     width: u32,
@@ -185,6 +190,7 @@ pub(crate) fn simd_put_alpha_rgba_constant_bytes(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn simd_put_alpha_rgb_constant_bytes(
     source: &[u8],
     width: u32,
@@ -215,6 +221,7 @@ pub(crate) fn simd_put_alpha_rgb_constant_bytes(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn simd_put_alpha_constant_bytes<const SOURCE: usize, const OUTPUT: usize, const CMYK: bool>(
     source: &[u8],
     pixels: usize,
@@ -263,12 +270,14 @@ fn simd_put_alpha_constant_bytes<const SOURCE: usize, const OUTPUT: usize, const
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn unsupported() -> PilError {
     PilError::NotImplementedError(
         "SIMD PutAlpha is unsupported for the validated image layout/parameters".into(),
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn finish<P: Pixel<Subpixel = u8>>(
     width: u32,
     height: u32,
@@ -278,6 +287,7 @@ fn finish<P: Pixel<Subpixel = u8>>(
     crate::image_utils::typed_bytes_to_buffer(dimensions, bytes)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn rgb_constant(input: AlphaInput<'_, Rgb<u8>>) -> Result<RgbaImage, PilError> {
     let source = input.image;
     let (output, vectors, tail) = simd_put_alpha_rgb_constant_bytes(
@@ -292,6 +302,7 @@ pub(crate) fn rgb_constant(input: AlphaInput<'_, Rgb<u8>>) -> Result<RgbaImage, 
     finish(source.width(), source.height(), output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn rgba_constant(input: AlphaInput<'_, Rgba<u8>>) -> Result<RgbaImage, PilError> {
     let source = input.image;
     let (output, vectors) = simd_put_alpha_rgba_constant_bytes(
@@ -305,6 +316,7 @@ pub(crate) fn rgba_constant(input: AlphaInput<'_, Rgba<u8>>) -> Result<RgbaImage
     finish(source.width(), source.height(), output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn native_constant<
     const SOURCE: usize,
     const OUTPUT: usize,

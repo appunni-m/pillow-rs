@@ -137,6 +137,7 @@ TARGET_ARCHITECTURE_NAMES = {
     "avx2",
     "avx_fma",
     "avx2_fma",
+    "avx512f",
     "wasm_simd128",
 }
 TARGET_FEATURES = ["pillow-rs-py/default", "pillow-rs/default"]

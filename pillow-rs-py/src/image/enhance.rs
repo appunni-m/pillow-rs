@@ -7,37 +7,41 @@ use pyo3::types::PyAnyMethods;
 
 #[pymethods]
 impl PyImage {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=n/a
-    fn preflight_enhance_sharpness(&self) -> PyResult<()> {
-        self.inner.preflight_enhance_sharpness().map_err(map_error)
+    // VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+    fn _has_core_only_enhancement_strategy(&self, operation: &str) -> PyResult<bool> {
+        let operation = match operation {
+            "brightness" => pillow_rs::OperationId::Brightness,
+            "sharpness" => pillow_rs::OperationId::Sharpness,
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "unknown enhancement operation",
+                ));
+            }
+        };
+        let mode = self.inner.mode_identity().map_err(map_error)?;
+        Ok(matches!(
+            operation.support().for_mode(mode).scope(),
+            Some(pillow_rs::SupportScope::CoreOnly { .. })
+        ))
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    fn enhance_brightness(slf: Py<Self>, factor: f64, py: Python<'_>) -> PyResult<PyImage> {
-        let route = route_from_context(None, py);
-        let inner = slf.bind(py).borrow().inner.clone();
-        let rs = py
-            .detach(move || inner.enhance_brightness(factor))
-            .map_err(map_error)?;
-        Ok(PyImage {
-            inner: route_pending_image(rs, route),
-        })
-    }
-
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    #[pyo3(signature = (execution_context=None))]
-    fn contrast_degenerate(
+    // VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+    #[pyo3(signature = (factor, execution_context=None))]
+    fn enhance_brightness(
         &self,
+        factor: f64,
         execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let route = route_from_context(execution_context, py);
         let inner = route_pending_image(self.inner.clone(), route);
-        let execution_context = route.map(|route| route.context);
+        let context = route.map(|route| route.context);
         let rs = py
-            .detach(move || match execution_context {
-                Some(context) => inner.contrast_degenerate_with_execution_context(context),
-                None => inner.contrast_degenerate(),
+            .detach(move || match context {
+                Some(context) => inner
+                    .enhance_brightness(factor)
+                    .map(|image| image.with_execution_context(context)),
+                None => inner.enhance_brightness(factor),
             })
             .map_err(map_error)?;
         Ok(PyImage {
@@ -45,33 +49,23 @@ impl PyImage {
         })
     }
 
-    // TODO(pillow-rs#3ptb): verify fallback Blend output, error order, and
-    // selected/fallback receipts across declared modes and architectures.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    fn enhance_contrast(slf: Py<Self>, factor: f64, py: Python<'_>) -> PyResult<PyImage> {
-        let route = route_from_context(None, py);
-        let inner = route_pending_image(slf.bind(py).borrow().inner.clone(), route);
+    // VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+    #[pyo3(signature = (factor, execution_context=None))]
+    fn enhance_sharpness(
+        &self,
+        factor: f64,
+        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
+        let route = route_from_context(execution_context, py);
+        let inner = route_pending_image(self.inner.clone(), route);
+        let context = route.map(|route| route.context);
         let rs = py
-            .detach(move || match route {
-                Some(route) => inner.enhance_contrast_with_execution_context(factor, route.context),
-                None => inner.enhance_contrast(factor),
-            })
-            .map_err(map_error)?;
-        Ok(PyImage {
-            inner: route_pending_image(rs, route),
-        })
-    }
-
-    // TODO(pillow-rs#3ptb): verify fallback Blend output, error order, and
-    // selected/fallback receipts across declared modes and architectures.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    fn enhance_color(slf: Py<Self>, factor: f64, py: Python<'_>) -> PyResult<PyImage> {
-        let route = route_from_context(None, py);
-        let inner = route_pending_image(slf.bind(py).borrow().inner.clone(), route);
-        let rs = py
-            .detach(move || match route {
-                Some(route) => inner.enhance_color_with_execution_context(factor, route.context),
-                None => inner.enhance_color(factor),
+            .detach(move || match context {
+                Some(context) => inner
+                    .enhance_sharpness(factor)
+                    .map(|image| image.with_execution_context(context)),
+                None => inner.enhance_sharpness(factor),
             })
             .map_err(map_error)?;
         Ok(PyImage {
@@ -133,17 +127,5 @@ impl PyImage {
         }
         .map_err(map_error)?;
         image_info_value_to_python(py, value)
-    }
-
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    fn enhance_sharpness(slf: Py<Self>, factor: f64, py: Python<'_>) -> PyResult<PyImage> {
-        let route = route_from_context(None, py);
-        let inner = slf.bind(py).borrow().inner.clone();
-        let rs = py
-            .detach(move || inner.enhance_sharpness(factor))
-            .map_err(map_error)?;
-        Ok(PyImage {
-            inner: route_pending_image(rs, route),
-        })
     }
 }

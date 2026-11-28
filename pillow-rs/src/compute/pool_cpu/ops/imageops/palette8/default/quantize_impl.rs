@@ -6,7 +6,11 @@ use crate::compute::registry::support::PaletteInput;
 use crate::error::PilError;
 use crate::raster::GrayImage;
 
-/// Quantizes P indices after resolving each index through the attached palette.
+/// Quantizes P indices through the attached palette's RGB entries.
+// Source contract: P quantization discards palette alpha and returns an RGB P
+// palette. Keep an alpha-bearing P source in the frozen parity matrix.
+// TODO(pillow-rs#3ptb): add the P palette-alpha source case to parity.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &GrayImage,
     palette: PaletteInput<'_>,
@@ -30,6 +34,7 @@ pub(crate) fn execute(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn palette_color_table(palette: Option<&[u8]>) -> [[u8; 3]; 256] {
     let palette = palette.unwrap_or_default();
     let mut colors = [[0u8; 3]; 256];
@@ -56,6 +61,7 @@ impl RgbPixelSource for PaletteSamples<'_> {
     }
 
     #[inline(always)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn rgb_at(&self, index: usize) -> [u8; 3] {
         self.colors[usize::from(self.indices[index])]
     }

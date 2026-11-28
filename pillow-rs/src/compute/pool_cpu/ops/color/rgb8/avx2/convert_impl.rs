@@ -11,6 +11,7 @@ use crate::raster::{DynamicImage, RgbImage};
 /// The caller must use an AVX2 architecture selected from this mode's
 /// support declaration for the same source and target.
 #[allow(unsafe_code)]
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) unsafe fn execute(source: &RgbImage) -> Result<DynamicImage, PilError> {
     let kernel = grayscale_rgb8::default::grayscale_impl::prepare(source)?;
     let pixels = kernel.dimensions.total_pixels();

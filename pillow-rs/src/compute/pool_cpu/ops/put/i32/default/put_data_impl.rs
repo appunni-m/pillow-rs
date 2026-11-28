@@ -17,6 +17,7 @@ pub(crate) fn prepare<'a>(input: &'a Input, data: &'a [u8], payload: PayloadLayo
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     let image = input.image;

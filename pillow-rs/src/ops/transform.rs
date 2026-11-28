@@ -11,6 +11,7 @@ use crate::raster::Mode;
 mod fill;
 mod public;
 pub(crate) use fill::public_transform_fill;
+pub(crate) use public::parse_transform_resample;
 pub(crate) use public::validate_transform_resample_filter;
 pub use public::{
     PreparedTransformOutput, TransformMeshAccumulator, transform_resample_public_error,
@@ -59,6 +60,7 @@ pub enum TransformFill {
 }
 
 /// Mode-resolved destination fill staged before Transform data callbacks.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct PreparedTransformFill {

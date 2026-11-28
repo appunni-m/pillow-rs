@@ -23,6 +23,7 @@ pub(crate) struct Output {
     pub(crate) hidden_lanes: Option<HiddenPixelLanes>,
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     source: &'a [u8],
     width: u32,
@@ -40,6 +41,7 @@ pub(crate) fn prepare<'a>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_with_hidden_lanes<'a>(
     source: &'a [u8],
     width: u32,
@@ -58,19 +60,22 @@ pub(crate) fn prepare_with_hidden_lanes<'a>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_sse2(kernel: Kernel<'_>) -> Result<Output, PilError> {
     execute_vector(kernel)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_neon(kernel: Kernel<'_>) -> Result<Output, PilError> {
     execute_vector(kernel)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_wasm_simd128(kernel: Kernel<'_>) -> Result<Output, PilError> {
     execute_vector(kernel)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_vector(kernel: Kernel<'_>) -> Result<Output, PilError> {
     let width = kernel.width;
     let height = kernel.height;
@@ -169,6 +174,7 @@ fn execute_vector(kernel: Kernel<'_>) -> Result<Output, PilError> {
     })
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn validate_source(
     width: u32,
     height: u32,
@@ -192,6 +198,7 @@ fn validate_source(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn copy_vectorized(
     width: u32,
     height: u32,
@@ -200,6 +207,7 @@ fn copy_vectorized(
 ) -> Result<Output, PilError> {
     let mut output = vec![0u8; source.len()];
     let vector_len = source.len() / 16 * 16;
+    let mut vector_blocks = 0u64;
     for (input, destination) in source[..vector_len]
         .chunks_exact(16)
         .zip(output[..vector_len].chunks_exact_mut(16))
@@ -208,11 +216,20 @@ fn copy_vectorized(
             PilError::InternalError("SIMD EffectSpread vector width mismatch".into())
         })?);
         destination.copy_from_slice(&vector.to_array());
+        vector_blocks = vector_blocks.saturating_add(1);
     }
-    output[vector_len..].copy_from_slice(&source[vector_len..]);
+    let scalar_tail = source.len() - vector_len;
+    if scalar_tail != 0 {
+        // Keep the legacy padded-vector tail path while counting tail bytes in the receipt.
+        let mut padded = [0u8; 16];
+        padded[..scalar_tail].copy_from_slice(&source[vector_len..]);
+        let vector = u8x16::new(padded);
+        output[vector_len..].copy_from_slice(&vector.to_array()[..scalar_tail]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
     crate::compute::record_pipeline_operation_path("native-copy");
-    crate::compute::record_pipeline_operation_vector_blocks((vector_len / 16) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail((source.len() - vector_len) as u64);
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
     Ok(Output {
         width,
         height,
@@ -221,7 +238,7 @@ fn copy_vectorized(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn carry_hidden_lanes(
     source: &HiddenPixelLanes,
     width: u32,
@@ -260,7 +277,7 @@ fn carry_hidden_lanes(
         .ok_or_else(|| PilError::InternalError("SIMD EffectSpread lane output was invalid".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn update_spread_lanes(
     source: &HiddenPixelLanes,
     output: &mut [u8],
@@ -295,6 +312,7 @@ fn update_spread_lanes(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn copy_lane_pixel(
     source: &HiddenPixelLanes,
     output: &mut [u8],
@@ -320,6 +338,7 @@ fn copy_lane_pixel(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn load_pixel(source: &[u8], start: usize, channels: usize) -> [u8; 16] {
     let mut block = [0u8; 16];
     block[..channels].copy_from_slice(&source[start..start + channels]);

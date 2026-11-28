@@ -8,7 +8,7 @@ use crate::compute::registry::support::PaletteInput;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage, RgbImage};
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn expand_to_rgb(indices: &GrayImage, palette: PaletteInput<'_>) -> RgbImage {
     match palette.rgb {
         Some(colors) => crate::image::expand_palette(indices, colors, palette.alpha).to_rgb8(),
@@ -16,7 +16,20 @@ pub(crate) fn expand_to_rgb(indices: &GrayImage, palette: PaletteInput<'_>) -> R
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-pub(crate) fn execute_rgb(input: &RgbImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
-    super::super::super::rgb8::default::equalize_impl::execute(input, lut)
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+pub(crate) fn execute_rgb_in_place(
+    mut input: RgbImage,
+    lut: &[u8],
+) -> Result<DynamicImage, PilError> {
+    if lut.len() != 3 * 256 {
+        return Err(PilError::InternalError(
+            "P Equalize RGB lookup table shape mismatch".into(),
+        ));
+    }
+    for pixel in input.as_mut().chunks_exact_mut(3) {
+        pixel[0] = lut[usize::from(pixel[0])];
+        pixel[1] = lut[256 + usize::from(pixel[1])];
+        pixel[2] = lut[512 + usize::from(pixel[2])];
+    }
+    Ok(DynamicImage::ImageRgb8(input))
 }

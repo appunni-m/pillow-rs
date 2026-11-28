@@ -5,7 +5,7 @@ use crate::pipeline::PipelineOp;
 
 const PIL_MAX_IMAGE_PIXELS: u64 = 1024 * 1024 * 1024 / 4 / 3;
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn validate_crop_order<T: PartialOrd>(
     (left, top, right, bottom): (T, T, T, T),
 ) -> Result<(), PilError> {
@@ -22,14 +22,14 @@ fn validate_crop_order<T: PartialOrd>(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 // Rust callers use this fixed safety limit. Python Image.crop applies its
 // mutable Pillow warning/error policy before calling `crop_with_max_pixels`.
 pub(crate) fn check_crop_extent(width: i64, height: i64) -> Result<(), PilError> {
     check_crop_extent_with_limit(width, height, Some(PIL_MAX_IMAGE_PIXELS))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn check_crop_extent_with_limit(
     width: i64,
     height: i64,
@@ -55,7 +55,7 @@ impl Image {
     ///
     /// Coordinate conversion and overflow reporting stay in the core so WASM
     /// and other FFI layers only marshal their native integer types.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub fn crop_unsigned(&self, box_coords: (u32, u32, u32, u32)) -> Result<Image, PilError> {
         let coordinates = (
             i64::from(box_coords.0),
@@ -78,7 +78,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when dimensions, mode, or deferred source data
     /// cannot be resolved.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     // TODO(pillow-rs#3ptb): verify lazy-decode fault ordering for zero-area
     // crops and oversized dimensions against the frozen Pillow 13.0 matrix.
     pub fn crop(&self, box_coords: Option<(i32, i32, i32, i32)>) -> Result<Image, PilError> {
@@ -97,7 +97,7 @@ impl Image {
     /// # Errors
     ///
     /// Returns crop ordering, extent, allocation, mode, or deferred source errors.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     // TODO(pillow-rs#3ptb): verify configurable host limits and fatal-threshold
     // parity after the host preflight, including warning-filter escalation.
     pub fn crop_with_max_pixels(
@@ -109,7 +109,7 @@ impl Image {
     }
 
     /// Crops with the host bomb policy and an injected parent execution route.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn crop_with_max_pixels_and_context(
         &self,
@@ -124,7 +124,7 @@ impl Image {
         routed.crop_with_max_pixels_inner(box_coords, max_image_pixels)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn crop_with_max_pixels_inner(
         &self,
         box_coords: Option<(i32, i32, i32, i32)>,
@@ -190,7 +190,7 @@ impl Image {
         )))
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn crop_signed(
         &self,
         (left, top, right, bottom): (i64, i64, i64, i64),
@@ -275,7 +275,7 @@ impl Image {
     /// Crops a non-negative Pillow box after its coordinates have been
     /// normalized by [`Image::crop`].
     ///
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn crop_box(&self, left: u32, top: u32, right: u32, bottom: u32) -> Result<Image, PilError> {
         let branch = self.materialized_branch()?;
         // Materializing a pipeline branch removes its backend pin. Crop stays
@@ -308,13 +308,18 @@ impl Image {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
     fn crop_canvas(&self, width: u32, height: u32) -> Result<Image, PilError> {
         let mode = self.mode_identity()?;
         if mode == crate::raster::Mode::ImagePalette8 {
             return Ok(Image::new_palette_index_from_source(self, width, height, 0));
         }
-        let mut canvas = Image::new(width, height, mode, (0, 0, 0, 0))?;
+        let fill = if mode == crate::raster::Mode::ImageLab8 {
+            (0, 128, 128, 0)
+        } else {
+            (0, 0, 0, 0)
+        };
+        let mut canvas = Image::new(width, height, mode, fill)?;
         let Image::Loaded(data) = &mut canvas else {
             return Err(PilError::InternalError(
                 "non-palette crop canvas did not create loaded storage".into(),

@@ -6,6 +6,7 @@ use crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<P: Pixel<Subpixel = u8>>(
     input: DataInput<'_, P>,
 ) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {

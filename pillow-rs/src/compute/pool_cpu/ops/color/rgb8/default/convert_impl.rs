@@ -4,6 +4,7 @@ use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, GrayAlphaImage, Mode, RgbImage, Rgba, RgbaImage};
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
     if target == Mode::ImageLab8 {
         return crate::compute::pool_cpu::ops::color::helpers::convert::lab_target::execute(
@@ -25,7 +26,6 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
         Mode::ImageLumaA8 => convert_luma_alpha_from_rgb(source),
         // Pillow's RGB-to-La route emits opaque premultiplied luma-alpha.
         Mode::ImageLaPremultiplied8 => convert_luma_alpha_direct_to_la(source),
-        Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(source.clone())),
         // I;16 conversion materializes rounded L bytes before widening them.
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
@@ -87,6 +87,7 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_palette_target(
     source: &RgbImage,
     target: Mode,
@@ -122,6 +123,7 @@ pub(crate) fn execute_palette_target(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn convert_luma_alpha_from_rgb(source: &RgbImage) -> Result<DynamicImage, PilError> {
     let dimensions =
         crate::checked_dims::CheckedDims::new_allow_empty(source.width(), source.height(), 1)?;
@@ -151,6 +153,7 @@ fn convert_luma_alpha_from_rgb(source: &RgbImage) -> Result<DynamicImage, PilErr
     Ok(DynamicImage::ImageLumaA8(output))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn convert_luma_alpha_direct_to_la(source: &RgbImage) -> Result<DynamicImage, PilError> {
     let source_dims =
         crate::checked_dims::CheckedDims::new_allow_empty(source.width(), source.height(), 3)?;

@@ -5308,6 +5308,7 @@ input_index:
   - inputs/parity/pil-imagetext-mode-size-matrix.json
   - inputs/parity/pil-imagetext-text.json
   - inputs/parity/pil-imagetext-text-mode-size-matrix.json
+  - inputs/parity/avx512f-strategy-cases.json
   coverage:
   - inputs/coverage/pil.json
   - inputs/coverage/pil-gpubatchexecutor.json
@@ -7984,6 +7985,118 @@ surfaces:
   source_path: PIL.Image.Image
   storage_slug: pil-image-image
   operations:
+  - id: _migration_direct_posterize
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: null
+      path: PIL.Image.Image._migration_direct_posterize
+      signature: _migration_direct_posterize(self, /, bits)
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      - id: bits
+        style: positional_or_keyword
+        value_types:
+        - any_json
+        omission:
+          kind: required
+      result:
+        shape: image
+        observations:
+        - path: value
+          value_types:
+          - image
+          comparison:
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs._core.Image._migration_direct_posterize
+      signature: _migration_direct_posterize(self, /, bits)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.Image.Image._migration_direct_posterize.behavior.default
+      dimension: success_path
+      description: Run the direct Rust Posterize operation and preserve the exact mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_posterize.mode.l
+      dimension: mode
+      description: Direct Rust Posterize applies its byte mask to native L samples.
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image._migration_direct_posterize.mode.p
+      dimension: mode
+      description: Direct Rust Posterize applies its byte mask to native P samples.
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image._migration_direct_posterize.mode.rgb
+      dimension: mode
+      description: Direct Rust Posterize applies its byte mask to native RGB samples.
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image._migration_direct_posterize.block-tail.avx512f
+      dimension: boundary
+      description: Direct Rust Posterize AVX-512F block with scalar byte tail.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_posterize.material.avx512f
+      dimension: performance
+      description: Direct Rust Posterize full-call workload on a 1024x768 native byte image.
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    parity:
+      applicability: not_applicable
+      reason: Pillow ImageOps transforms P palette entries instead of exposing this direct Rust operation.
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-core
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      - python-simd
+      metrics:
+      - latency
+      - throughput
+    fault_contract:
+      applicability: not_applicable
+      reason: The direct Posterize hook has no injected fault contract.
   - id: _migration_direct_rotate
     kind: method
     classification: endpoint
@@ -16310,12 +16423,6 @@ surfaces:
       lanes:
       - parity
       - coverage
-    - id: PIL.Image.Image.transform.mode.cmyk
-      dimension: mode
-      description: Public behavior for image mode 'CMYK'.
-      lanes:
-      - parity
-      - coverage
     - id: PIL.Image.Image.transform.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -16328,9 +16435,21 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.Image.Image.transform.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.Image.Image.transform.mode.p
       dimension: mode
       description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -16343,6 +16462,78 @@ surfaces:
     - id: PIL.Image.Image.transform.mode.rgba
       dimension: mode
       description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.rgba-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.transform.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
       lanes:
       - parity
       - coverage
@@ -34149,12 +34340,6 @@ surfaces:
       lanes:
       - parity
       - coverage
-    - id: PIL.ImageOps.invert.mode.p
-      dimension: mode
-      description: Public behavior for image mode 'P'.
-      lanes:
-      - parity
-      - coverage
     - id: PIL.ImageOps.invert.mode.rgb
       dimension: mode
       description: Public behavior for image mode 'RGB'.
@@ -34164,6 +34349,12 @@ surfaces:
     - id: PIL.ImageOps.invert.mode.rgba
       dimension: mode
       description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageOps.invert.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
       lanes:
       - parity
       - coverage

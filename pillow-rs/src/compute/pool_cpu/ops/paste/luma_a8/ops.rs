@@ -56,7 +56,7 @@ pub(crate) fn prepare<'a>(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<I>(strategy: BytePlan<'_, I>) -> Result<DynamicImage, PilError>
 where
     I: std::ops::Deref<Target = DynamicImage>,

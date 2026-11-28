@@ -1,3 +1,4 @@
+use crate::compute::CpuExecutionRoute;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
@@ -13,8 +14,9 @@ impl Image {
     ///
     /// - `mode`: exact destination raster mode.
     /// - `matrix`: optional Pillow conversion matrix for immediate conversion.
-    ///   Four values convert RGB input to luma; twelve values convert RGB input
-    ///   through a 3x4 color matrix.
+    ///   L consumes the first four coefficients from either accepted length;
+    ///   RGB consumes all twelve coefficients from a 3x4 matrix. The 4-value
+    ///   RGB and 12-value LAB routes are documented Rust-only extensions.
     /// - `dither`: optional dither name for binary and palette-like conversion.
     ///
     /// # Returns
@@ -27,7 +29,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when the mode, matrix, dither option, or source
     /// image data is invalid.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn convert(
         &self,
         mode: Mode,
@@ -36,11 +38,11 @@ impl Image {
         _palette: Option<&str>,
         _colors: Option<u32>,
     ) -> Result<Image, PilError> {
-        self.convert_inner(mode, matrix, dither, None)
+        self.convert_inner(mode, matrix, dither, None, None)
     }
 
     /// Converts using a CPU context injected by a composed caller.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn convert_with_execution_context(
         &self,
         mode: Mode,
@@ -48,35 +50,49 @@ impl Image {
         dither: Option<&str>,
         context: crate::compute::ExecutionContext,
     ) -> Result<Image, PilError> {
-        self.convert_inner(mode, matrix, dither, Some(context))
+        self.convert_inner(mode, matrix, dither, Some(context), None)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    /// Converts using the requested backend and architecture selected by a composed caller.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    pub(crate) fn convert_with_execution_route(
+        &self,
+        mode: Mode,
+        matrix: Option<Vec<f64>>,
+        dither: Option<&str>,
+        route: CpuExecutionRoute,
+    ) -> Result<Image, PilError> {
+        self.convert_inner(mode, matrix, dither, None, Some(route))
+    }
+
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn convert_inner(
         &self,
         mode: Mode,
         matrix: Option<Vec<f64>>,
         dither: Option<&str>,
         context: Option<crate::compute::ExecutionContext>,
+        route: Option<CpuExecutionRoute>,
     ) -> Result<Image, PilError> {
         let src_mode = self.mode_identity()?;
         validate_convert_request(src_mode, mode, matrix.is_some())?;
+        let context = route.map(CpuExecutionRoute::context).or(context);
         if matches!(src_mode, Mode::ImageI32 | Mode::ImageF32)
             && mode == Mode::ImageRgbx8
             && let Some(converted) =
-                super::dispatch::try_convert_scalar_to_rgbx(self, src_mode, context)?
+                super::dispatch::try_convert_scalar_to_rgbx(self, src_mode, context, route)?
         {
             return Ok(converted);
         }
         if let Some(converted) =
-            try_convert_prestandard(self, src_mode, mode, &matrix, dither, context)?
+            try_convert_prestandard(self, src_mode, mode, &matrix, dither, context, route)?
         {
-            return Ok(converted);
+            return Ok(with_convert_route(converted, context, route));
         }
 
         if mode == Mode::One {
             let dither_enum = parse_dither(dither)?;
-            return super::binary::convert_to_binary(self, dither_enum, context);
+            return super::binary::convert_to_binary(self, dither_enum, context, route);
         }
 
         if !(src_mode == Mode::ImageRgb8 && mode == Mode::ImageLuma8)
@@ -87,9 +103,10 @@ impl Image {
             if prepared_convert_validates_dither(src_mode, mode) {
                 let _ = parse_dither(dither)?;
             }
-            return Ok(with_execution_context(
+            return Ok(with_convert_route(
                 push_pipeline_convert(self, mode),
                 context,
+                route,
             ));
         }
 
@@ -100,19 +117,21 @@ impl Image {
             // luma contract. Reuse its native-layout executor so SIMD can
             // use the packed RGB kernel and GPU can upload RGB/read back L
             // without passing the conversion through an RGBA carrier.
-            return Ok(with_execution_context(
+            return Ok(with_convert_route(
                 Image::push_op(self, PipelineOp::Grayscale),
                 context,
+                route,
             ));
         }
-        Ok(with_execution_context(
+        Ok(with_convert_route(
             push_pipeline_convert(self, mode),
             context,
+            route,
         ))
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn with_execution_context(
     image: Image,
     context: Option<crate::compute::ExecutionContext>,
@@ -123,7 +142,21 @@ fn with_execution_context(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+fn with_convert_route(
+    image: Image,
+    context: Option<crate::compute::ExecutionContext>,
+    route: Option<CpuExecutionRoute>,
+) -> Image {
+    match route {
+        Some(route) => {
+            image.with_backend_and_execution_context(Some(route.child_backend()), route.context())
+        }
+        None => with_execution_context(image, context),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn push_pipeline_convert(image: &Image, mode: Mode) -> Image {
     Image::push_op(
         image,
@@ -135,7 +168,7 @@ fn push_pipeline_convert(image: &Image, mode: Mode) -> Image {
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(super) fn prepared_convert_validates_dither(source: Mode, target: Mode) -> bool {
     // The prior One→L route widened to L, whose same-mode conversion returned
     // before parsing dither. Preserve that validation behavior on the direct
@@ -173,7 +206,7 @@ pub(super) fn prepared_convert_validates_dither(source: Mode, target: Mode) -> b
     true
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn validate_convert_request(
     source_mode: Mode,
     target_mode: Mode,
@@ -206,7 +239,52 @@ fn validate_convert_request(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+/// Validates ImagingCore's existing-destination Convert route without reading
+/// or transforming pixel data.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+pub(crate) fn validate_imaging_core_convert_into(
+    source_mode: Mode,
+    target_mode: Mode,
+) -> Result<(), PilError> {
+    validate_convert_request(source_mode, target_mode, false)?;
+    if source_mode == target_mode {
+        return Ok(());
+    }
+
+    let support = &crate::compute::pool_cpu::ops::color::ops::CONVERT_SUPPORT;
+    if let Some(composition) = support.target_composition_for(source_mode, target_mode) {
+        if let crate::compute::registry::support::OperationRouteOutcome::Rejects {
+            reason,
+            kind,
+            ..
+        } = composition.outcome
+        {
+            return Err(kind.into_error(reason));
+        }
+        return Ok(());
+    }
+    if support.scope_for_target(source_mode, target_mode).is_some() {
+        return Ok(());
+    }
+
+    let input = crate::compute::registry::support::StrategyInputs {
+        width: 0,
+        height: 0,
+        byte_len: None,
+        palette: crate::compute::registry::support::PaletteKnowledge::Unknown,
+        request: crate::compute::registry::support::RequestFacts::Unspecified,
+    }
+    .with_convert_target(target_mode);
+    let _ = support.for_mode(source_mode).assess_inputs(input)?;
+
+    let source_name = source_mode.pillow_name().unwrap_or("unknown");
+    let target_name = target_mode.pillow_name().unwrap_or("unknown");
+    Err(PilError::ValueError(format!(
+        "conversion from {source_name} to {target_name} not supported"
+    )))
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn try_convert_prestandard(
     image: &Image,
     source_mode: Mode,
@@ -214,14 +292,20 @@ fn try_convert_prestandard(
     matrix: &Option<Vec<f64>>,
     dither: Option<&str>,
     context: Option<crate::compute::ExecutionContext>,
+    route: Option<CpuExecutionRoute>,
 ) -> Result<Option<Image>, PilError> {
     // Pillow applies the matrix before its same-mode fast path.
     if let Some(matrix) = matrix {
-        return execute_matrix_conversion(image, target_mode, matrix, context).map(Some);
+        return execute_matrix_conversion(image, target_mode, matrix, context, route).map(Some);
     }
-    if let Some(converted) =
-        super::dispatch::try_convert_early_modes(image, source_mode, target_mode, dither, context)?
-    {
+    if let Some(converted) = super::dispatch::try_convert_early_modes(
+        image,
+        source_mode,
+        target_mode,
+        dither,
+        context,
+        route,
+    )? {
         return Ok(Some(converted));
     }
     if target_mode == Mode::ImageLab8 {
@@ -237,15 +321,20 @@ fn try_convert_prestandard(
         ) {
             image.clone()
         } else {
-            image.convert_with_execution_context(
-                Mode::ImageRgba8,
-                None,
-                None,
-                context.unwrap_or_else(|| image.cpu_arch_execution_route_advisory().1),
-            )?
+            match route {
+                Some(route) => {
+                    image.convert_with_execution_route(Mode::ImageRgba8, None, None, route)?
+                }
+                None => image.convert_with_execution_context(
+                    Mode::ImageRgba8,
+                    None,
+                    None,
+                    context.unwrap_or_else(|| image.cpu_arch_execution_route_advisory().1),
+                )?,
+            }
         };
         let profile = crate::lab::identity_profile().into();
-        return Ok(Some(with_execution_context(
+        return Ok(Some(with_convert_route(
             Image::push_op(
                 &normalized,
                 PipelineOp::ConvertLab {
@@ -253,20 +342,22 @@ fn try_convert_prestandard(
                 },
             ),
             context,
+            route,
         )));
     }
     // Preserve the existing eager wrapper for native I;16 destinations.
     // LAB and other declared targets continue to the single prepared Convert
     // operation, where the exact source-mode strategy writes the final mode.
-    super::luma16::try_convert_to_luma16(image, source_mode, target_mode, context)
+    super::luma16::try_convert_to_luma16(image, source_mode, target_mode, context, route)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_matrix_conversion(
     image: &Image,
     target_mode: Mode,
     matrix: &[f64],
     context: Option<crate::compute::ExecutionContext>,
+    route: Option<CpuExecutionRoute>,
 ) -> Result<Image, PilError> {
     let (materialized, mut operation_receipts) =
         image.materialized_shared_for_ops_with_receipts()?;
@@ -277,10 +368,11 @@ fn execute_matrix_conversion(
         matrix,
         &mut operation_receipts,
         context,
+        route,
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_matrix_conversion_from_source(
     image: &Image,
     materialized: &DynamicImage,
@@ -288,6 +380,7 @@ fn execute_matrix_conversion_from_source(
     matrix: &[f64],
     operation_receipts: &mut crate::compute::PipelineOperationTelemetryCapture,
     context_override: Option<crate::compute::ExecutionContext>,
+    route_override: Option<CpuExecutionRoute>,
 ) -> Result<Image, PilError> {
     // The LAB matrix extension requires twelve coefficients to produce one
     // RGB sample before the direct LAB kernel runs.
@@ -314,7 +407,10 @@ fn execute_matrix_conversion_from_source(
     // original request while recording the CPU fallback architecture.
     // TODO(pillow-rs#brg0): route an active GPU request through a GPU-owned
     // matrix strategy when that backend declares this operation.
-    let (requested_backend, routed_context) = image.cpu_arch_execution_route()?;
+    let (requested_backend, routed_context) = match route_override {
+        Some(route) => (route.requested_backend(), route.context()),
+        None => image.cpu_arch_execution_route()?,
+    };
     let context = context_override.unwrap_or(routed_context);
     let fallback_reason = (requested_backend == Some(crate::compute::Backend::Gpu)).then(|| {
         format!(

@@ -19,6 +19,7 @@ impl<'a, const CHANNELS: usize> Kernel<'a, CHANNELS> {
         target_feature = "neon",
         target_endian = "little"
     ))]
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn source(&self) -> &[u8] {
         self.source
     }
@@ -28,6 +29,7 @@ impl<'a, const CHANNELS: usize> Kernel<'a, CHANNELS> {
         target_feature = "neon",
         target_endian = "little"
     ))]
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) const fn width(&self) -> u32 {
         self.width
     }
@@ -37,6 +39,7 @@ impl<'a, const CHANNELS: usize> Kernel<'a, CHANNELS> {
         target_feature = "neon",
         target_endian = "little"
     ))]
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) const fn height(&self) -> u32 {
         self.height
     }
@@ -46,10 +49,12 @@ impl<'a, const CHANNELS: usize> Kernel<'a, CHANNELS> {
         target_feature = "neon",
         target_endian = "little"
     ))]
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn lut(&self) -> &[u8] {
         self.lut
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) const fn is_identity(&self) -> bool {
         self.identity
     }
@@ -67,6 +72,7 @@ pub(crate) struct Mapped {
     pub(crate) scalar_tail: Option<u64>,
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a, const CHANNELS: usize>(
     source: &'a [u8],
     width: u32,
@@ -91,6 +97,7 @@ pub(crate) fn prepare<'a, const CHANNELS: usize>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_sse2<const CHANNELS: usize>(
     kernel: Kernel<'_, CHANNELS>,
 ) -> Result<Output, PilError> {
@@ -100,6 +107,7 @@ pub(crate) fn execute_sse2<const CHANNELS: usize>(
     finish(map_wide(kernel)?)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_wasm_simd128<const CHANNELS: usize>(
     kernel: Kernel<'_, CHANNELS>,
 ) -> Result<Output, PilError> {
@@ -109,6 +117,7 @@ pub(crate) fn execute_wasm_simd128<const CHANNELS: usize>(
     finish(map_wide(kernel)?)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_neon<const CHANNELS: usize>(
     kernel: Kernel<'_, CHANNELS>,
 ) -> Result<Output, PilError> {
@@ -118,6 +127,7 @@ pub(crate) fn execute_neon<const CHANNELS: usize>(
     finish(map_wide(kernel)?)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn copy_identity<const CHANNELS: usize>(kernel: Kernel<'_, CHANNELS>) -> Result<Output, PilError> {
     let row_stride = (kernel.width as usize)
         .checked_mul(CHANNELS)
@@ -138,6 +148,7 @@ fn copy_identity<const CHANNELS: usize>(kernel: Kernel<'_, CHANNELS>) -> Result<
     })
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn finish(mapped: Mapped) -> Result<Output, PilError> {
     crate::compute::record_pipeline_operation_vector_blocks(mapped.vector_blocks);
     if let Some(scalar_tail) = mapped.scalar_tail {
@@ -147,6 +158,7 @@ pub(crate) fn finish(mapped: Mapped) -> Result<Output, PilError> {
     Ok(mapped.output)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn map_wide<const CHANNELS: usize>(kernel: Kernel<'_, CHANNELS>) -> Result<Mapped, PilError> {
     let width = kernel.width as usize;
     let height = kernel.height as usize;
@@ -185,6 +197,7 @@ fn map_wide<const CHANNELS: usize>(kernel: Kernel<'_, CHANNELS>) -> Result<Mappe
     })
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn native_lut_is_identity<const CHANNELS: usize>(lut: &[u8]) -> bool {
     (0..CHANNELS).all(|channel| {
         let start = channel * 256;
@@ -195,6 +208,7 @@ fn native_lut_is_identity<const CHANNELS: usize>(lut: &[u8]) -> bool {
     })
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn native_lut_tables<const CHANNELS: usize>(lut: &[u8]) -> Result<LutTables, PilError> {
     let mut tables = [[u8x16::splat(0); 16]; 4];
     for channel in 0..CHANNELS {
@@ -210,6 +224,7 @@ fn native_lut_tables<const CHANNELS: usize>(lut: &[u8]) -> Result<LutTables, Pil
     Ok(tables)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[inline]
 fn native_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     let low = input & u8x16::splat(0x0f);
@@ -228,6 +243,7 @@ fn native_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     bit3.select(level3[0], level3[1])
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn map_native_lut_row<const CHANNELS: usize>(
     source: &[u8],
     destination: &mut [u8],

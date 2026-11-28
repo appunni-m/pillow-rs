@@ -8,7 +8,7 @@ use crate::raster::Mode;
 
 type GetDataExecutionRoute = (Option<Backend>, crate::compute::ExecutionContext);
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn with_getdata_receipt<T>(
     requested_backend: Option<Backend>,
     selection: StrategySelection,
@@ -421,7 +421,7 @@ impl Image {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn try_getdata_band_simd_sink(
         &self,
         band: u8,
@@ -461,7 +461,7 @@ impl Image {
         Ok(handled.is_some())
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn try_getdata_band_backend(
         &self,
         mode: Mode,
@@ -505,7 +505,7 @@ impl Image {
         Ok(true)
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn write_getdata_band_cpu(
         &self,
         band: usize,

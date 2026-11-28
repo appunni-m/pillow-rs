@@ -11,6 +11,7 @@ use wide::u8x16;
 
 const LANES: usize = 16;
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn native_byte_filter_architectures(
     operation: OperationId,
     mode: Mode,

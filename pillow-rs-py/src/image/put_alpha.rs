@@ -6,7 +6,7 @@ use pyo3::prelude::{Bound, Py, PyRef, PyResult, Python};
 use pyo3::pymethods;
 use pyo3::types::{PyAny, PyAnyMethods, PyBool, PyInt};
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn update_core_image<T: Send>(
     slf: &Py<PyImage>,
     py: Python<'_>,
@@ -26,7 +26,7 @@ fn update_core_image<T: Send>(
 
 // TODO(pillow-rs#3ptb): verify scalar and image PutAlpha outputs, promotion and
 // callback fault order, and pinned/selected route receipts across mode pairs.
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn putalpha_input_impl(
     slf: Py<PyImage>,
     alpha: &Bound<'_, PyAny>,
@@ -128,7 +128,7 @@ impl PyImage {
         })
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[pyo3(signature = (alpha, execution_context=None))]
     fn putalpha_input(
         slf: Py<Self>,
@@ -140,7 +140,7 @@ impl PyImage {
         putalpha_input_impl(slf, alpha, py, true, false, route).map(|_| ())
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[pyo3(signature = (alpha, execution_context=None))]
     fn putalpha_input_prepared(
         slf: Py<Self>,
@@ -194,7 +194,7 @@ impl PyImage {
         result.map_err(map_error)
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[pyo3(signature = (mask, execution_context=None))]
     fn putalpha_image_input(
         slf: Py<Self>,

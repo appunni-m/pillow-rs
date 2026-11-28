@@ -50,6 +50,17 @@ pub struct ModeChannelCapacity {
     pub channels: u8,
 }
 
+/// One exact target and coefficient count accepted by ConvertMatrix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConvertMatrixTarget {
+    /// Exact output mode identity.
+    pub mode: Mode,
+    /// Number of coefficients consumed by the declared route.
+    pub coefficients: usize,
+    /// Present when this target/arity pair is a Rust-only extension.
+    pub core_only_reason: Option<&'static str>,
+}
+
 /// How one Merge target accepts the identity of its source bands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MergeBandModeRule {
@@ -304,6 +315,17 @@ pub enum InputContract {
         /// Existing conversion error when the requested pair is not declared.
         rejection_reason: &'static str,
     },
+    /// Exact ConvertMatrix output identities and accepted coefficient counts.
+    ConvertMatrixTarget {
+        /// Supported target/arity pairs, including their Pillow scope.
+        targets: &'static [ConvertMatrixTarget],
+        /// Existing rejection for a matrix length other than 4 or 12.
+        length_rejection_reason: &'static str,
+        /// Existing rejection for an unsupported output identity.
+        target_rejection_reason: &'static str,
+        /// Rejection for a globally valid length unsupported by the target.
+        coefficient_rejection_reason: &'static str,
+    },
     /// Exact secondary raster identities accepted by a Chops byte strategy.
     ChopsBinaryModes {
         /// Secondary identities whose native byte layout is compatible.
@@ -346,6 +368,13 @@ pub enum InputContract {
     /// seed and neighbor reads swallow ValueError/IndexError, while later
     /// comparison and write failures propagate after completed mutations.
     FloodFillInputs,
+    /// RemapPalette accepts at most the declared number of destination entries.
+    RemapPaletteDestinationMap {
+        /// Maximum number of destination indices accepted by the operation.
+        max_entries: usize,
+        /// Existing rejection when the destination map is too long.
+        rejection_reason: &'static str,
+    },
     /// Paste's exact source/mask relation, including its compact bitmap form.
     PasteInputs {
         /// Mode-specific source, mask, and size rules bound to execution.
@@ -443,10 +472,17 @@ pub enum StrategyGuard {
     /// Filtered Resize has work for the scalar x86 FMA implementation; exact
     /// boxed identity and crop paths remain on Default.
     ResizeFilteredFma,
+    /// Unboxed filtered ImageF32 Resize has eight-output AVX-512F work.
+    ResizeFilteredAvx512F,
     /// ImageF32 Resize has nonempty, checked native storage and valid geometry.
     ResizeF32Vector,
+    /// Nearest Resize has checked four-byte storage and enough output for an
+    /// AVX-512F gather block.
+    ResizeAvx512Nearest,
     /// ImageI32 Thumbnail can stream one even 2x2 reducing-gap pass.
     ThumbnailI32Stream2x2,
+    /// I32 Thumbnail can process a full 16-sample AVX-512F reduction block.
+    ThumbnailI32Avx512F,
     /// Unboxed I;16 Resize has exact two-byte samples and safe vector dimensions.
     ResizeLuma16Vector,
     /// Native-byte nearest Resize has exact storage and safe vector dimensions.
@@ -495,6 +531,16 @@ pub enum StrategyGuard {
         /// Physical byte channels in this exact mode's stored pixel.
         channels: u8,
     },
+    /// Native byte ColorSaturation expanded to sixteen AVX-512F float lanes.
+    ColorSaturationAvx512F {
+        /// Physical byte channels in this exact mode's stored pixel.
+        channels: u8,
+    },
+    /// Native-byte Posterize has a complete AVX-512F block in its checked storage.
+    NativeByteAvx512Pointwise {
+        /// Physical byte channels in this exact mode's stored pixel.
+        channels: u8,
+    },
     /// Native-byte Filter3x3 parameters and shape accepted by a vector kernel.
     Filter3x3NativeBytesVectorizable {
         /// Physical byte channels in this exact mode's storage.
@@ -514,8 +560,10 @@ pub enum StrategyGuard {
         /// Physical byte channels in this exact mode's storage.
         channels: u8,
     },
-    /// RGBA GaussianBlur radius-seven NEON path with a sufficiently large image.
+    /// RGBA GaussianBlur radius-seven architecture path with checked nonempty storage.
     FilterRgbaGaussianBlurRadiusSeven,
+    /// RGBA GaussianBlur AVX-512F middle-block path with 16-pixel rows on both axes.
+    FilterRgbaGaussianBlurRadiusSevenAvx512F,
     /// L-mode rank filter window accepted by the byte selector.
     FilterLumaRankWindow,
     /// Native-byte MaxFilter or MinFilter window accepted by vector extrema kernels.
@@ -533,6 +581,24 @@ pub enum StrategyGuard {
         /// Largest window implemented by this operation's vector sorter.
         max_size: u32,
     },
+    /// F-mode AVX-512F rank window with complete 16-lane blocks and safe gather indices.
+    FilterF32Avx512RankWindow {
+        /// Largest window implemented by this operation's vector sorter.
+        max_size: u32,
+        /// Minimum row width that amortizes the AVX-512F path.
+        minimum_width: u32,
+        /// Maximum pixel count representable by its signed 32-bit gather indices.
+        max_pixels: u64,
+    },
+    /// I-mode AVX-512F rank window with complete 16-lane blocks and safe gather indices.
+    FilterI32Avx512RankWindow {
+        /// Largest window implemented by this operation's vector sorter.
+        max_size: u32,
+        /// Minimum row width that amortizes the AVX-512F path.
+        minimum_width: u32,
+        /// Maximum pixel count representable by its signed 32-bit gather indices.
+        max_pixels: u64,
+    },
     /// Native RGB 150% UnsharpMask blend with one complete vector block.
     FilterUnsharpRgb150,
     /// I32 AVX2/FMA Filter3x3's finite kernel and complete vector block.
@@ -540,6 +606,10 @@ pub enum StrategyGuard {
         /// Native byte channels in this exact mode's storage.
         channels: u8,
     },
+    /// I-mode Filter3x3 with one complete sixteen-pixel AVX-512F interior block.
+    Filter3x3I32Avx512F,
+    /// I-mode Filter5x5 with one complete sixteen-pixel AVX-512F interior block.
+    Filter5x5I32Avx512F,
     /// One exact target identity different from the source selects this implementation.
     ConvertTargetMode(Mode),
     /// One exact non-identity target selects a vector route only for nonempty images.
@@ -577,8 +647,22 @@ pub enum StrategyGuard {
         /// Physical number of byte channels in the exact mode's stored pixel.
         channels: u8,
     },
+    /// Exact AVX-512F AlphaComposite blocks with scalar tails.
+    AlphaCompositeAvx512F {
+        /// Physical number of byte channels in the exact mode's stored pixel.
+        channels: u8,
+        /// Minimum admitted pixels to amortize AVX-512F block setup.
+        minimum_pixels: u32,
+    },
     /// Native-byte Blend pairs admitted by the fused architecture kernel.
     BlendNativeVector {
+        /// Number of bytes stored per source pixel.
+        channels: u8,
+        /// Exact secondary identities with byte arithmetic matching this kernel.
+        compatible_modes: &'static [Mode],
+    },
+    /// Blend bytes in complete 64-byte AVX-512F blocks.
+    BlendNativeAvx512F {
         /// Number of bytes stored per source pixel.
         channels: u8,
         /// Exact secondary identities with byte arithmetic matching this kernel.
@@ -608,6 +692,15 @@ pub enum StrategyGuard {
         target_mode: Mode,
         /// Native output channels and number of input bands.
         channels: u8,
+    },
+    /// AVX-512F widening interleave for exact two- or four-byte target modes.
+    MergeAvx512FInterleave {
+        /// Exact output mode owned by this strategy.
+        target_mode: Mode,
+        /// Native output channels and number of input bands.
+        channels: u8,
+        /// Minimum pixels required to enter the sixteen-pixel AVX-512F block.
+        minimum_pixels: u32,
     },
     /// Native-byte Rotate strategy for eligible identity, right-angle, nearest,
     /// or bilinear requests over an exact byte layout.
@@ -662,6 +755,18 @@ pub enum StrategyGuard {
         /// Physical number of byte channels in this particular implementation.
         channels: u8,
     },
+    /// Native byte Invert rows contain at least one full AVX-512F block.
+    NativeByteAvx512Invert {
+        /// Physical number of byte channels in this particular implementation.
+        channels: u8,
+    },
+    /// Exact typed sample storage contains complete AVX-512F blocks.
+    NativeTypedAvx512Invert {
+        /// Physical bytes stored per pixel in this exact mode.
+        bytes_per_pixel: u8,
+        /// Bytes stored by one native sample (`2` for u16, `4` for f32).
+        sample_bytes: u8,
+    },
     /// Nonempty rows with enough native bytes for the horizontal mirror kernel.
     NativeMirrorRows {
         /// Physical number of byte channels in this particular implementation.
@@ -682,6 +787,8 @@ pub enum StrategyGuard {
         /// Physical number of bytes in each sample pixel.
         channels: u8,
     },
+    /// ImageI32 GetExtrema has one complete AVX-512F block of native samples.
+    GetExtremaI32Avx512F,
     /// The native byte allocation also satisfies the nonempty checked-dimension policy.
     CheckedNativeBytes {
         /// Physical number of byte channels in this particular implementation.
@@ -736,6 +843,13 @@ pub enum StrategyGuard {
         /// Required dimension multiple for complete packed blocks.
         block_size: u32,
     },
+    /// Native 32-bit pixel-axis permutation with AVX-512F gathers.
+    TransposeAvx512FNative32 {
+        /// Minimum width and height needed for a full vector block.
+        minimum_dimension: u32,
+        /// Maximum pixel count representable by signed 32-bit gather indices.
+        max_pixels: u64,
+    },
     /// Native byte transpose over the logical source prefix.
     TransposeNativeBytes {
         /// Physical bytes moved together for one source pixel.
@@ -753,8 +867,21 @@ pub enum StrategyGuard {
         /// Physical number of bytes in this exact mode's stored pixel.
         channels: u8,
     },
-    /// Exact F-mode float samples and a non-identity Reduce request.
-    ReduceF32Vector,
+    /// Exact four-byte storage and complete 2x2 blocks for AVX-512F Reduce.
+    ReduceAvx512Byte2x2 {
+        /// Physical number of bytes in this exact mode's stored pixel.
+        channels: u8,
+    },
+    /// Exact F-mode float samples, a non-identity Reduce request, and lane width.
+    ReduceF32Vector {
+        /// Output pixels processed by one architecture vector block.
+        lanes: u8,
+    },
+    /// Exact I-mode signed samples, a non-identity 2x2 Reduce, and lane width.
+    ReduceI32Vector {
+        /// Output pixels processed by one architecture vector block.
+        lanes: u8,
+    },
     /// Exact native source bytes and a payload with the same byte width.
     PutDataNative {
         /// Fixed byte width of this mode's native copy implementation.
@@ -791,6 +918,7 @@ impl InputContract {
         Ok(())
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn assess(self, input: StrategyInputs) -> Result<Option<UnresolvedGuard>, PilError> {
         contracts::assess(self, input)
     }

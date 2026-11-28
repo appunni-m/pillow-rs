@@ -3,11 +3,11 @@ use super::{
     imageops_unsupported_mode_error,
 };
 use crate::map_error;
-use pyo3::exceptions::{PyAttributeError, PyNameError, PyUnboundLocalError};
+use pyo3::exceptions::{PyAttributeError, PyUnboundLocalError};
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
 use pyo3::types::{
     PyAnyMethods, PyBool, PyFloat, PyInt, PyIterator, PyList, PyListMethods, PyModuleMethods,
-    PyRange, PySlice, PyTuple, PyTupleMethods,
+    PySlice, PyTuple, PyTupleMethods,
 };
 use pyo3::{pyfunction, wrap_pyfunction};
 
@@ -139,18 +139,6 @@ fn autocontrast_callback_error(error: AutocontrastCallbackError) -> PyErr {
 }
 
 // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-fn imageops_global_or_builtin_if_present<'py>(
-    py: Python<'py>,
-    name: &str,
-) -> PyResult<Option<Bound<'py, PyAny>>> {
-    match imageops_global_or_builtin(py, name) {
-        Ok(value) => Ok(Some(value)),
-        Err(error) if error.is_instance_of::<PyNameError>(py) => Ok(None),
-        Err(error) => Err(error),
-    }
-}
-
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn autocontrast_cutoff_has_builtin_values(cutoff: Option<&Bound<'_, PyAny>>) -> bool {
     let Some(cutoff) = cutoff else {
         return true;
@@ -172,6 +160,31 @@ fn is_builtin_autocontrast_number(value: &Bound<'_, PyAny>) -> bool {
     value.is_exact_instance_of::<PyInt>()
         || value.is_exact_instance_of::<PyFloat>()
         || value.is_exact_instance_of::<PyBool>()
+}
+
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
+fn autocontrast_module_globals_match_fast_callables(py: Python<'_>) -> PyResult<bool> {
+    let imageops = py.import("pillow_rs.imageops")?;
+    let expected_value = match imageops.getattr("_AUTOCONTRAST_FAST_BUILTINS") {
+        Ok(expected) => expected,
+        Err(error) if error.is_instance_of::<PyAttributeError>(py) => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    let expected = match expected_value.cast::<PyTuple>() {
+        Ok(expected) if expected.len() == 4 => expected,
+        _ => return Ok(false),
+    };
+    let namespace = imageops.dict();
+    for (index, name) in ["int", "list", "range", "sum"].into_iter().enumerate() {
+        if !namespace.contains(name)? {
+            continue;
+        }
+        let actual = namespace.get_item(name)?;
+        if !actual.is(&expected.get_item(index)?) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
@@ -208,41 +221,9 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         {
             return Ok(false);
         }
-        let Some(int) = imageops_global_or_builtin_if_present(self.py, "int")? else {
-            return Ok(false);
-        };
-        let Some(list) = imageops_global_or_builtin_if_present(self.py, "list")? else {
-            return Ok(false);
-        };
-        let Some(range) = imageops_global_or_builtin_if_present(self.py, "range")? else {
-            return Ok(false);
-        };
-        if !int.is(&self.py.get_type::<PyInt>())
-            || !list.is(&self.py.get_type::<PyList>())
-            || !range.is(&self.py.get_type::<PyRange>())
-        {
-            return Ok(false);
-        }
-        if cutoff.is_none() {
-            return Ok(true);
-        }
-        let Some(sum) = imageops_global_or_builtin_if_present(self.py, "sum")? else {
-            return Ok(false);
-        };
-        let imageops = self.py.import("pillow_rs.imageops")?;
-        let expected = match imageops.getattr("_AUTOCONTRAST_FAST_BUILTINS") {
-            Ok(expected) => expected,
-            Err(error) if error.is_instance_of::<PyAttributeError>(self.py) => {
-                return Ok(false);
-            }
-            Err(error) => return Err(error.into()),
-        };
-        let expected = match expected.cast::<PyTuple>() {
-            Ok(expected) if expected.len() == 1 => expected,
-            _ => return Ok(false),
-        };
-        let expected = expected.get_item(0)?;
-        Ok(sum.is(&expected))
+        // Explicit module-level callables keep their host callback route.
+        // Standard builtins are assumed; their runtime identities are not probed.
+        autocontrast_module_globals_match_fast_callables(self.py).map_err(Into::into)
     }
 
     // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending

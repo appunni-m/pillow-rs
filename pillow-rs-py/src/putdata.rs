@@ -16,7 +16,7 @@ use pyo3::types::{
     PyTupleMethods, PyType, PyTypeMethods,
 };
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn python_is_sequence(value: &Bound<'_, PyAny>) -> PyResult<bool> {
     // Exact numbers are common pixel values and cannot provide the sequence
     // protocol. Keep this fast path ahead of the type inspection below.
@@ -50,7 +50,7 @@ fn python_is_sequence(value: &Bound<'_, PyAny>) -> PyResult<bool> {
     Ok(false)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn putdata_value_from_python(
     value: &Bound<'_, PyAny>,
     kind: PutDataValueKind,
@@ -141,7 +141,7 @@ fn putdata_value_from_python(
     Ok(PutDataValue::Components(components))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn putdata_bulk(
     slf: &Bound<'_, PyImage>,
     data: &Bound<'_, PyAny>,
@@ -223,7 +223,7 @@ fn putdata_bulk(
 // Pillow uses raw byte storage for its image8 modes (`1`, `L`, `P`, and `I;16*`).
 // Exact bytes may retain their allocation; subclass bytes are consumed without
 // retaining Python-owned storage.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn putdata_raw_bytes(
     slf: &Bound<'_, PyImage>,
     data: &Bound<'_, PyAny>,
@@ -269,12 +269,12 @@ fn putdata_raw_bytes(
         .map_err(map_error)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn retained_python_bytes(data: &Bound<'_, PyAny>) -> Option<Bytes> {
     data.extract::<Bytes>().ok()
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn is_exact_builtin_numeric_sequence(data: &Bound<'_, PyAny>, kind: PutDataValueKind) -> bool {
     let is_number = |item: Bound<'_, PyAny>| {
         item.cast_exact::<PyInt>().is_ok() || item.cast_exact::<pyo3::types::PyFloat>().is_ok()
@@ -303,7 +303,7 @@ fn is_exact_builtin_numeric_sequence(data: &Bound<'_, PyAny>, kind: PutDataValue
     false
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn putdata_native_component_tuples(
     data: &Bound<'_, PyAny>,
     kind: PutDataValueKind,
@@ -346,7 +346,7 @@ fn putdata_native_component_tuples(
     Some(values)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn write_item(
     slf: &Bound<'_, PyImage>,
     pixel_index: usize,
@@ -365,7 +365,7 @@ fn write_item(
         .map_err(map_error)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn putdata_exact_sequence(
     slf: &Bound<'_, PyImage>,
     data: &Bound<'_, PyAny>,
@@ -409,7 +409,7 @@ fn putdata_exact_sequence(
     Ok(false)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn putdata_generic_sequence(
     slf: &Bound<'_, PyImage>,
     data: &Bound<'_, PyAny>,
@@ -447,7 +447,7 @@ fn putdata_generic_sequence(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn putdata_formatted(
     slf: &Bound<'_, PyImage>,
     data: &Bound<'_, PyAny>,

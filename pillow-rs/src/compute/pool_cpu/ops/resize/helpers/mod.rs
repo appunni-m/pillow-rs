@@ -1,6 +1,8 @@
 //! Shared typed kernels for Resize modes with identical sample arithmetic.
 
 pub(crate) mod alpha_samples;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(crate) mod avx512f_nearest;
 pub(crate) mod boxed_crop;
 pub(crate) mod byte_samples;
 pub(crate) mod coefficients;

@@ -74,6 +74,8 @@ pub trait ImageOpsPosterizeCallbacks: ImageOpsLutBuildCallbacks {
     /// The caller's bits value, retaining Python's numeric protocols.
     type Bits;
 
+    /// Validate the source expression `1 <= bits <= 8` before LUT work.
+    fn validate_bits(&mut self, bits: &Self::Bits) -> Result<(), Self::Error>;
     /// Evaluate the left-side expression `8 - bits`.
     fn eight_minus_bits(&mut self, bits: &Self::Bits) -> Result<Self::Value, Self::Error>;
     /// Evaluate `2 ** exponent` with the host's power protocol.
@@ -111,7 +113,7 @@ pub trait ImageOpsSolarizeCallbacks: ImageOpsLutBuildCallbacks {
 // The Python ImageOps facade scopes this callback route and forwards the
 // captured context through the public Image.point wrapper, preserving subclass
 // dispatch without adding backend state to this host-neutral callback trait.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn imageops_lut_with_callbacks<C: ImageOpsLutCallbacks>(
     callbacks: &mut C,
     image: &C::Image,
@@ -124,7 +126,7 @@ pub fn imageops_lut_with_callbacks<C: ImageOpsLutCallbacks>(
     imageops_lut_non_palette(callbacks, image, lut, operation)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(super) fn imageops_lut_non_palette<C: ImageOpsLutCallbacks>(
     callbacks: &mut C,
     image: &C::Image,
@@ -151,7 +153,7 @@ pub(super) fn imageops_lut_non_palette<C: ImageOpsLutCallbacks>(
 
 /// Runs ImageOps Invert through its public mode, point, and palette paths.
 #[doc(hidden)]
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn invert_with_callbacks<C: ImageOpsInvertCallbacks>(
     callbacks: &mut C,
     image: C::Image,
@@ -167,16 +169,18 @@ pub fn invert_with_callbacks<C: ImageOpsInvertCallbacks>(
     imageops_lut_with_palette_callbacks(callbacks, &image, lut, OperationId::ImageOpsInvert)
 }
 
-/// Runs ImageOps Posterize's LUT construction and shared wrapper mode route.
-/// TODO(pillow-rs#3ptb): freeze parity for a replaced `range` that mutates or
-/// raises, proving it runs before result-list allocation and P-mode admission.
+/// Runs ImageOps Posterize's validation, LUT construction, and wrapper mode route.
+/// TODO(pillow-rs#3ptb): freeze parity for custom bits comparisons and a
+/// replaced `range` that mutates or raises before result-list allocation or
+/// P-mode admission.
 #[doc(hidden)]
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn posterize_with_callbacks<C: ImageOpsPosterizeCallbacks>(
     callbacks: &mut C,
     image: C::Image,
     bits: C::Bits,
 ) -> Result<C::Output, C::Error> {
+    callbacks.validate_bits(&bits)?;
     let exponent = callbacks.eight_minus_bits(&bits)?;
     let power = callbacks.two_to_power(&exponent)?;
     let lower_mask = callbacks.subtract_one(&power)?;
@@ -195,7 +199,7 @@ pub fn posterize_with_callbacks<C: ImageOpsPosterizeCallbacks>(
 
 /// Runs ImageOps Solarize's LUT construction and shared wrapper mode route.
 #[doc(hidden)]
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn solarize_with_callbacks<C: ImageOpsSolarizeCallbacks>(
     callbacks: &mut C,
     image: C::Image,
@@ -215,6 +219,7 @@ pub fn solarize_with_callbacks<C: ImageOpsSolarizeCallbacks>(
     imageops_lut_with_palette_callbacks(callbacks, &image, lut, OperationId::ImageOpsSolarize)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn invert_for_mode(image: &Image, mode: Mode) -> Result<Image, PilError> {
     // The public ImageOps guard differs from the exact-mode prepared Invert
     // child. Keep both contracts visible while preserving lazy child errors.
@@ -228,7 +233,7 @@ fn invert_for_mode(image: &Image, mode: Mode) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn invert_ops(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode_identity()?;
     invert_for_mode(image, mode)
@@ -240,6 +245,7 @@ pub fn invert_ops(image: &Image) -> Result<Image, PilError> {
 ///
 /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
 /// materialization failures.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn flip(image: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Flip))
 }
@@ -250,6 +256,7 @@ pub fn flip(image: &Image) -> Result<Image, PilError> {
 ///
 /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
 /// materialization failures.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn mirror(image: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Mirror))
 }
@@ -262,7 +269,7 @@ pub fn mirror(image: &Image) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::OsError`] for modes outside L/RGB/P, or another
 /// [`PilError`] when mode detection fails. P is a core-only native-index path.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
     let mode = image.mode_identity()?;
     OperationId::Posterize
@@ -283,7 +290,7 @@ pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::OsError`] for modes outside L/RGB/P, or another
 /// [`PilError`] when mode detection fails. P is a core-only native-index path.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
     solarize_with_input(image, SolarizeInput::Threshold(f64::from(threshold)))
 }
@@ -300,7 +307,7 @@ pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
 /// mode detection fails. P is a core-only native-index path. Bindings must
 /// evaluate custom comparisons before calling this function so their
 /// exceptions and mutations precede image validation, as they do in Pillow.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub fn solarize_with_input(image: &Image, input: SolarizeInput) -> Result<Image, PilError> {
     let mode = image.mode_identity()?;
     OperationId::Solarize
@@ -345,6 +352,7 @@ pub fn solarize_with_input(image: &Image, input: SolarizeInput) -> Result<Image,
 /// The host callback remains in its owning runtime so custom comparison
 /// behavior and its error type are preserved. Core controls the sample order.
 #[doc(hidden)]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn solarize_comparison_table<E, F>(mut compare: F) -> Result<Box<[bool; 256]>, E>
 where
     F: FnMut(usize) -> Result<bool, E>,
@@ -362,6 +370,7 @@ where
 ///
 /// Returns [`PilError::ValueError`] for Pillow's unsupported `La` to `L`
 /// conversion. Other materialization failures may be reported lazily.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn grayscale(image: &Image) -> Result<Image, PilError> {
     if image.mode_identity()? == Mode::ImageLaPremultiplied8 {
         return Err(PilError::ValueError(

@@ -19,7 +19,7 @@ pub(crate) struct Rotate<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<Rotate<'a>>;
 
-static ARCHITECTURES: [ImplementationSupport; 4] = [
+static ARCHITECTURES: [ImplementationSupport; 6] = [
     ImplementationSupport::cpu(
         OperationId::Rotate,
         Mode::ImageRgba8,
@@ -32,7 +32,11 @@ static ARCHITECTURES: [ImplementationSupport; 4] = [
         StrategyGuard::RotateVectorBytes {
             channels: 4,
             force_nearest: false,
-            bilinear: true,
+            bilinear: !cfg!(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "avx",
+                target_feature = "fma"
+            )),
         },
     ),
     ImplementationSupport::cpu(
@@ -45,6 +49,42 @@ static ARCHITECTURES: [ImplementationSupport; 4] = [
             not(target_feature = "avx2")
         )),
         &[Architecture::Sse2],
+        StrategyGuard::RotateVectorBytes {
+            channels: 4,
+            force_nearest: false,
+            bilinear: !cfg!(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "avx",
+                target_feature = "fma"
+            )),
+        },
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Rotate,
+        Mode::ImageRgba8,
+        Architecture::AvxFma,
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx",
+            target_feature = "fma"
+        )),
+        &[Architecture::AvxFma],
+        StrategyGuard::RotateVectorBytes {
+            channels: 4,
+            force_nearest: false,
+            bilinear: true,
+        },
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Rotate,
+        Mode::ImageRgba8,
+        Architecture::Avx2Fma,
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx2",
+            target_feature = "fma"
+        )),
+        &[Architecture::Avx2Fma],
         StrategyGuard::RotateVectorBytes {
             channels: 4,
             force_nearest: false,
@@ -85,6 +125,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: &'a Input,
     request: RotateRequest,
@@ -95,12 +136,16 @@ pub(crate) fn prepare<'a>(
     Ok(Prepared::new(Rotate { input, request }, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
     let architecture = plan.selection().implementation.architecture;
     let rotate = plan.implementation;
     let output = match architecture {
         Architecture::Default => super::default::rotate_impl::execute(rotate.input, rotate.request),
-        Architecture::Avx2 => super::avx2::rotate_impl::execute(rotate.input, rotate.request),
+        Architecture::Avx2 | Architecture::Avx2Fma => {
+            super::avx2::rotate_impl::execute(rotate.input, rotate.request)
+        }
+        Architecture::AvxFma => super::avx::rotate_impl::execute(rotate.input, rotate.request),
         Architecture::Sse2 => super::sse2::rotate_impl::execute(rotate.input, rotate.request),
         Architecture::Neon => super::neon::rotate_impl::execute(rotate.input, rotate.request),
         Architecture::WasmSimd128 => {

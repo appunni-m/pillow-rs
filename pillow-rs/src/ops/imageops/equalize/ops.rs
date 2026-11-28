@@ -151,13 +151,14 @@ pub trait ImageOpsEqualizeCallbacks {
 
 /// Runs Pillow's ImageOps Equalize wrapper flow through host callbacks.
 ///
-/// The operation support output rule selects the palette-to-RGB conversion
-/// before the public histogram callback. After building the LUT, separate
-/// wrapper-mode callbacks reproduce Pillow's `_lut` checks before public `point`.
+/// The support declaration supplies the requested palette-to-RGB conversion
+/// before public histogram dispatch. The wrapper returned by `convert` is
+/// retained; after histogram/LUT callbacks, its live mode is read again in
+/// Pillow's `_lut` order before the declared L/RGB route reaches public `point`.
 // TODO(pillow-rs#3ptb): freeze wrapper output, mask fault order, mode-property
 // changes across `_lut` checks, formatting faults, and route receipts proving
 // one captured context reaches public Convert, Histogram, and Point callbacks.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn equalize_with_callbacks<C: ImageOpsEqualizeCallbacks>(
     callbacks: &mut C,
@@ -198,7 +199,7 @@ pub fn equalize_with_callbacks<C: ImageOpsEqualizeCallbacks>(
     callbacks.point(&image, lut)
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn equalize_lut_with_callbacks<C: ImageOpsEqualizeCallbacks>(
     callbacks: &mut C,
     histogram: &C::Histogram,
@@ -256,11 +257,12 @@ fn equalize_lut_with_callbacks<C: ImageOpsEqualizeCallbacks>(
 ///
 /// # Errors
 ///
-/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
-/// or another [`PilError`] when mode detection fails.
+/// Returns [`PilError::OsError`] for modes outside L, RGB, and P, or another
+/// [`PilError`] when mode detection fails. P uses the operation-defined
+/// palette-to-RGB route.
 // TODO(pillow-rs#3ptb): Verify this lazy Rust API's mode/architecture route,
 // output, and fallback receipts in the frozen CPU matrix.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode_identity()?;
     OperationId::Equalize
@@ -288,7 +290,7 @@ pub fn equalize_lut_from_histogram(image: &Image, histogram: &[u32]) -> Result<V
 }
 
 /// Equalizes an image after validating an optional Pillow mask.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, PilError> {
     match mask {
         ImageOpsMask::None => equalize(image),

@@ -679,6 +679,10 @@ fn integer32_raw_layout(rawmode: &str) -> Option<RawDecoderLayout> {
     ))
 }
 
+// TODO(pillow-rs#3ptb): freeze F;64F/BF/NF raw input cases, checking
+// little/big/native byte order and f64-to-f32 conversion against the pinned
+// Pillow build, then add target-only expectations when FLOAT64 is unavailable.
+// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
 fn float32_raw_layout(rawmode: &str) -> Option<RawDecoderLayout> {
     let (sample_bytes, byte_order, sample_type) = match rawmode {
         "F;8" => (
@@ -754,6 +758,8 @@ fn float32_raw_layout(rawmode: &str) -> Option<RawDecoderLayout> {
         "F;32F" => (4, RawByteOrder::Little, RawScalarType::Float32),
         "F;32BF" => (4, RawByteOrder::Big, RawScalarType::Float32),
         "F;32NF" => (4, RawByteOrder::Native, RawScalarType::Float32),
+        // NO_PILLOW_SUPPORT: Pillow registers these raw layouts only when its
+        // build enables FLOAT64; Rust accepts them independently of that flag.
         "F;64F" => (8, RawByteOrder::Little, RawScalarType::Float64),
         "F;64BF" => (8, RawByteOrder::Big, RawScalarType::Float64),
         "F;64NF" => (8, RawByteOrder::Native, RawScalarType::Float64),

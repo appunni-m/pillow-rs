@@ -41,7 +41,7 @@ class ImageDraw:
 
     font = None
 
-    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     def __init__(self, im: Image.Image, mode: str | None = None) -> None:
         # Pillow's ImageDraw constructor calls Image._ensure_mutable(), which
         # loads the image before validating the optional draw mode.
@@ -72,6 +72,7 @@ class ImageDraw:
         self._image._rust_image = self._draw.image
         self.im = self._image._rust_image
 
+    # VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
     def _resolve_draw_ink(self, ink):
         if isinstance(ink, str):
             # Pillow resolves color strings in the drawing context mode before
@@ -90,7 +91,10 @@ class ImageDraw:
         ):
             # Rust updates the entries usable by indexed pixels. Keep Python's
             # possibly malformed raw palette bytes until Image.load realizes it.
-            entry_size = {"RGB": 3, "RGBA": 4, "LA": 2}.get(palette.mode)
+            # Bound the PyO3 transfer to the entries Draw can resolve.
+            entry_size = {"RGB": 3, "RGBA": 4, "LA": 2, "CMYK": 4}.get(
+                palette.mode
+            )
             palette_data = palette.palette
             if entry_size is not None:
                 usable_size = min(len(palette_data) // entry_size, 256) * entry_size
@@ -200,18 +204,18 @@ class ImageDraw:
             font = self._getfont(font_size)
         return self._prepare_text_font(font, None, embedded_color)
 
-    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-27; parity=pass@cpu-default-closure-2026-11-27; benchmark=pending
     @_with_draw_execution_context
     def line(
         self,
         xy: Coords,
         fill: _Ink | None = None,
-        width: int = 0,
+        width: int = 1,
         joint: str | None = None,
     ) -> None:
         """Draw a line, or a connected sequence of line segments."""
         ink, _ = self._getink(fill)
-        if ink is not None:
+        if ink is not None and width != 0:
             self._mutate(self._draw._line_base, xy, ink, width)
             if joint == "curve" and width > 4:
                 # Pillow inspects and groups the original coordinates only
@@ -412,7 +416,7 @@ class ImageDraw:
         if ink is not None:
             self._mutate(self._draw.bitmap, xy, bitmap._rust_image, ink)
 
-    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-71a655b2f26d4015a6581b31fd05b80b; benchmark=pending
     @_with_draw_execution_context
     def multiline_text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
                        align="left", direction=None, features=None, language=None,
@@ -524,7 +528,7 @@ class ImageDraw:
         )
         return self.polygon(points, fill, outline, width)
 
-    # VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-71a655b2f26d4015a6581b31fd05b80b; benchmark=pending
     # TODO(pillow-rs#3ptb): freeze existing Text state and option-conflict cases.
     @_with_draw_execution_context
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
@@ -547,6 +551,9 @@ class ImageDraw:
             if stroke_width:
                 image_text.stroke(stroke_width, stroke_fill)
         mask_kwargs = dict(kwargs)
+        # ``font_size`` selects the wrapper's default font above; it is not a
+        # keyword for the font mask callback or a reason to reject native text.
+        mask_kwargs.pop("font_size", None)
         try:
             self._draw_text_lines(
                 xy,

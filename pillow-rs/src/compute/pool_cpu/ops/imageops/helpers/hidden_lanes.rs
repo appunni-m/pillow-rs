@@ -10,7 +10,7 @@ use crate::raster::{DynamicImage, Mode, Pixel};
 /// Pillow 12.2 allocates an initialized output in `ImagingPoint`, then its
 /// two- and three-band handlers write only their mode-defined lanes. Keep the
 /// omitted lanes at zero for later raw-byte operations such as Paste.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn initialize_point_output_lanes(output: &mut DynamicImage) -> Result<(), PilError> {
     let Some(lane_count) = output.mode().hidden_pixel_lane_count() else {
         return Ok(());

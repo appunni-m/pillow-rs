@@ -15,7 +15,7 @@ use crate::raster::DynamicImage;
 
 /// Prepare and execute each operation in order, preserving the mode returned
 /// by each operation as the next operation's typed input identity.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(super) fn execute_batch(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -48,7 +48,7 @@ pub(super) fn execute_batch(
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn execute_batch_step(
     ops: &[PipelineOp],
     index: usize,
@@ -82,7 +82,7 @@ fn execute_batch_step(
     Ok(index + 1)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn execute_owned_special(
     op: &PipelineOp,
     context: &ExecutionContext,
@@ -116,7 +116,7 @@ fn execute_owned_special(
     Ok(false)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn execute_prepared_operation(
     op: &PipelineOp,
     image: &DynamicImage,
@@ -163,7 +163,7 @@ fn execute_prepared_operation(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn finish_batch_output(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -196,7 +196,7 @@ enum OwnedInvertKind {
     Chops,
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_owned_chops_affine(
     image: &mut DynamicImage,
     op: &PipelineOp,
@@ -250,7 +250,7 @@ fn execute_owned_chops_affine(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn prepare_owned_invert(
     image: &DynamicImage,
     op: &PipelineOp,
@@ -307,7 +307,7 @@ fn prepare_owned_invert(
 
 // TODO(pillow-rs#3ptb): verify raw-byte Paste follow-on parity for both
 // in-place inversion lane policies before closing this source path.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_owned_invert(image: &mut DynamicImage, plan: &OwnedInvertPlan) -> Result<(), PilError> {
     if image.mode() != plan.mode {
         return Err(PilError::InternalError(
@@ -363,7 +363,7 @@ struct FusedStep {
     operations: usize,
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn execute_fused_run(
     ops: &[PipelineOp],
     start: usize,
@@ -464,7 +464,7 @@ fn execute_fused_run(
     Ok(None)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn draw_run_end(ops: &[PipelineOp], start: usize) -> usize {
     let mut end = start + 1;
     while end < ops.len() && crate::compute::pool_cpu::ops::draw::is_draw_op(&ops[end]) {
@@ -473,7 +473,7 @@ fn draw_run_end(ops: &[PipelineOp], start: usize) -> usize {
     end
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_alpha_composite_mirror_run(
     ops: &[PipelineOp],
     start: usize,
@@ -551,7 +551,7 @@ fn execute_alpha_composite_mirror_run(
     }))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn record_fused_operation_telemetry(
     op: &PipelineOp,
     selection: &StrategySelection,
@@ -567,7 +567,7 @@ fn record_fused_operation_telemetry(
     finish_pipeline_operation_telemetry();
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_chops_multiply_screen_run(
     ops: &[PipelineOp],
     start: usize,
@@ -617,7 +617,7 @@ fn execute_chops_multiply_screen_run(
     }))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_rgb_putpixel_thumbnail_run(
     ops: &[PipelineOp],
     start: usize,
@@ -658,7 +658,7 @@ fn execute_rgb_putpixel_thumbnail_run(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_transpose_run(
     ops: &[PipelineOp],
     start: usize,
@@ -725,7 +725,7 @@ fn execute_transpose_run(
     }))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn finish_failed_unprepared_run(ops: &[PipelineOp]) {
     for op in ops {
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
@@ -734,7 +734,7 @@ fn finish_failed_unprepared_run(ops: &[PipelineOp]) {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn finish_failed_prepared_run(ops: &[PipelineOp], selection: &StrategySelection) {
     let architecture = selection.implementation.architecture;
     for _ in ops {
@@ -746,7 +746,7 @@ fn finish_failed_prepared_run(ops: &[PipelineOp], selection: &StrategySelection)
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn finish_prepared_transpose_run(
     ops: &[PipelineOp],
     uses_default: bool,
@@ -760,7 +760,7 @@ fn finish_prepared_transpose_run(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_point_run(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -769,6 +769,10 @@ fn execute_point_run(
     lut: Vec<u8>,
 ) -> Result<DynamicImage, PilError> {
     if super::ops::imageops::helpers::point_lut::is_identity(&lut, bands) {
+        let mut output = image.clone();
+        // Pillow allocates a fresh zeroed ImagingPoint result. Preserve that
+        // observable lane state even when composition reduces the LUT to identity.
+        super::ops::imageops::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
         for op in ops {
             begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
             // No mode/architecture kernel runs for an identity LUT. The one
@@ -776,7 +780,7 @@ fn execute_point_run(
             record_pipeline_operation_path("native-identity");
             finish_pipeline_operation_telemetry();
         }
-        return Ok(image.clone());
+        return Ok(output);
     }
 
     let fused = PipelineOp::Eval { lut: lut.into() };
@@ -816,7 +820,7 @@ fn execute_point_run(
     Ok(output)
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn put_pixel_run_end(ops: &[PipelineOp], start: usize) -> usize {
     let mut end = start + 1;
     while end < ops.len() && matches!(&ops[end], PipelineOp::PutPixel { .. }) {
@@ -825,7 +829,7 @@ fn put_pixel_run_end(ops: &[PipelineOp], start: usize) -> usize {
     end
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_put_pixel_run(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -861,7 +865,7 @@ fn execute_put_pixel_run(
     output
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn finish_cpu_operation_telemetry(ops: &[PipelineOp], selection: Option<&StrategySelection>) {
     let architecture = selection.map(|selection| selection.implementation.architecture);
     let path = match architecture {
@@ -879,7 +883,7 @@ fn finish_cpu_operation_telemetry(ops: &[PipelineOp], selection: Option<&Strateg
 }
 
 /// Start per-operation receipts in pipeline order before their LIFO completion.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn begin_cpu_operations_telemetry(ops: &[PipelineOp]) {
     for op in ops {
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));

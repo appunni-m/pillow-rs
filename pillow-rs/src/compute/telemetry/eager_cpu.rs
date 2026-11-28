@@ -20,6 +20,7 @@ pub(crate) struct EagerCpuOperationTelemetry {
 /// implemented on the host. GPU and SIMD requests begin with a provisional
 /// fallback receipt; a prepared strategy refines SIMD into its actual selected
 /// architecture, while GPU-to-CPU routing remains a backend fallback.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn begin_eager_cpu_operation_telemetry(
     operation: &'static str,
     requested_backend: Option<Backend>,
@@ -27,6 +28,7 @@ pub(crate) fn begin_eager_cpu_operation_telemetry(
     begin_eager_cpu_operation_telemetry_with_reason(operation, requested_backend, None)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn begin_eager_cpu_operation_telemetry_with_reason(
     operation: &'static str,
     requested_backend: Option<Backend>,
@@ -113,6 +115,7 @@ pub(crate) fn record_eager_cpu_operation_receipt_with_selection_and_receipts(
 /// output buffer. The timing report still covers the complete Python call and
 /// result materialization; this receipt identifies the executor and accounts
 /// for the caller-owned output buffer without claiming a core allocation.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn finish_eager_cpu_operation_telemetry(
     telemetry: EagerCpuOperationTelemetry,
     output_bytes: usize,
@@ -146,6 +149,7 @@ pub(crate) fn finish_eager_cpu_operation_telemetry(
 }
 
 /// Finish a host operation receipt with its prepared architecture selection.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn finish_eager_cpu_operation_telemetry_with_selection(
     mut telemetry: EagerCpuOperationTelemetry,
     output_bytes: usize,

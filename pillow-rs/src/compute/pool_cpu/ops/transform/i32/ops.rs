@@ -21,6 +21,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &ARCHITECTURES,
 );
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     request: TransformRequest<'a>,
@@ -29,6 +30,7 @@ pub(crate) fn prepare<'a>(
     strategy::prepare(SUPPORT, image, request, context)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match plan.selection().implementation.architecture {
         Architecture::Default => super::default::transform_impl::execute(
@@ -61,11 +63,27 @@ pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_into(plan: Strategy<'_>, output: &mut DynamicImage) -> Result<(), PilError> {
     strategy::execute_into(
         plan,
         output,
         super::default::transform_impl::execute_into,
         Some(super::helpers::transform_impl::execute_into),
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+pub(crate) fn execute_into_with_validity(
+    plan: Strategy<'_>,
+    output: &mut DynamicImage,
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    strategy::execute_into_with_validity(
+        plan,
+        output,
+        validity,
+        super::default::transform_impl::execute_into_with_validity,
+        Some(super::helpers::transform_impl::execute_into_with_validity),
     )
 }

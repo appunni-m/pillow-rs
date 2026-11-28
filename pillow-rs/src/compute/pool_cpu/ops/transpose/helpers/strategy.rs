@@ -126,6 +126,7 @@ macro_rules! declare_transpose_mode {
             >,
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) fn prepare_flip<'a>(
             image: &'a $input,
             ctx: &crate::compute::ExecutionContext,
@@ -139,6 +140,7 @@ macro_rules! declare_transpose_mode {
             })
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) fn prepare_mirror<'a>(
             image: &'a $input,
             ctx: &crate::compute::ExecutionContext,
@@ -169,6 +171,7 @@ macro_rules! declare_transpose_mode {
             })
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) fn prepare_transpose<'a>(
             image: &'a $input,
             method: &crate::pipeline::TransposeMethod,
@@ -199,12 +202,14 @@ macro_rules! declare_transpose_mode {
         }
 
         impl FlipStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn selection(
                 &self,
             ) -> &crate::compute::registry::support::StrategySelection {
                 self.prepared.selection()
             }
 
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> crate::raster::DynamicImage {
                 match self.prepared.implementation {
                     FlipArchitecture::Default(image) => $flip_impl(image),
@@ -213,12 +218,14 @@ macro_rules! declare_transpose_mode {
         }
 
         impl MirrorStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn selection(
                 &self,
             ) -> &crate::compute::registry::support::StrategySelection {
                 self.prepared.selection()
             }
 
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> crate::raster::DynamicImage {
                 match self.prepared.implementation {
                     MirrorArchitecture::Default(image) => $mirror_impl(image),
@@ -231,12 +238,14 @@ macro_rules! declare_transpose_mode {
         }
 
         impl TransposeStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn selection(
                 &self,
             ) -> &crate::compute::registry::support::StrategySelection {
                 self.prepared.selection()
             }
 
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn execute(
                 self,
             ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
@@ -253,6 +262,7 @@ macro_rules! declare_transpose_mode {
         }
 
         #[cfg(any($($mcfg),*))]
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         fn execute_native_mirror(image: &$input) -> crate::raster::DynamicImage {
             let channels = match crate::raster::Mode::$mode {
                 crate::raster::Mode::ImageI32 | crate::raster::Mode::ImageF32 => 4,
@@ -278,6 +288,74 @@ macro_rules! declare_transpose_mode {
 }
 
 macro_rules! declare_native_byte_transpose_mode {
+    (
+        $mode:ident, $input:ty, $flip_impl:path, $mirror_impl:path, $transpose_impl:path,
+        4, avx512f
+    ) => {
+        $crate::compute::pool_cpu::ops::transpose::helpers::strategy::declare_transpose_mode! {
+            $mode, $input, $flip_impl, $mirror_impl, $transpose_impl;
+            mirror {
+                Sse2,
+                all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"),
+                &[$crate::compute::Architecture::Sse2],
+                $crate::compute::registry::support::StrategyGuard::NativeMirrorRows {
+                    channels: 4,
+                };
+                Neon,
+                all(target_arch = "aarch64", target_feature = "neon"),
+                &[$crate::compute::Architecture::Neon],
+                $crate::compute::registry::support::StrategyGuard::NativeMirrorRows {
+                    channels: 4,
+                };
+                WasmSimd128,
+                all(target_arch = "wasm32", target_feature = "simd128"),
+                &[$crate::compute::Architecture::WasmSimd128],
+                $crate::compute::registry::support::StrategyGuard::NativeMirrorRows {
+                    channels: 4,
+                }
+            }
+            transpose {
+                inputs: &[
+                    $crate::compute::registry::support::InputContract::CheckedByteDimensions {
+                        bytes_per_pixel: 4,
+                        allow_empty: true,
+                    }
+                ];
+                Avx512F,
+                any(target_arch = "x86", target_arch = "x86_64"),
+                &[$crate::compute::Architecture::Avx512F],
+                $crate::compute::registry::support::StrategyGuard::TransposeAvx512FNative32 {
+                    minimum_dimension: 16,
+                    max_pixels: i32::MAX as u64,
+                },
+                super::avx512f::execute;
+                Sse2,
+                all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"),
+                &[$crate::compute::Architecture::Sse2],
+                $crate::compute::registry::support::StrategyGuard::TransposeNativeBytes {
+                    channels: 4,
+                    allow_empty: true,
+                },
+                super::sse2::execute;
+                Neon,
+                all(target_arch = "aarch64", target_feature = "neon"),
+                &[$crate::compute::Architecture::Neon],
+                $crate::compute::registry::support::StrategyGuard::TransposeNativeBytes {
+                    channels: 4,
+                    allow_empty: true,
+                },
+                super::neon::execute;
+                WasmSimd128,
+                all(target_arch = "wasm32", target_feature = "simd128"),
+                &[$crate::compute::Architecture::WasmSimd128],
+                $crate::compute::registry::support::StrategyGuard::TransposeNativeBytes {
+                    channels: 4,
+                    allow_empty: true,
+                },
+                super::wasm_simd128::execute
+            }
+        }
+    };
     (
         $mode:ident, $input:ty, $flip_impl:path, $mirror_impl:path, $transpose_impl:path,
         $channels:literal
@@ -522,6 +600,7 @@ macro_rules! declare_native_luma16_transpose_mode {
             >,
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         fn native_luma16_facts(
             image: &$input,
         ) -> crate::compute::registry::support::StrategyInputs {
@@ -539,6 +618,7 @@ macro_rules! declare_native_luma16_transpose_mode {
             }
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) fn prepare_flip<'a>(
             image: &'a $input,
             ctx: &crate::compute::ExecutionContext,
@@ -569,6 +649,7 @@ macro_rules! declare_native_luma16_transpose_mode {
             })
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) fn prepare_mirror<'a>(
             image: &'a $input,
             ctx: &crate::compute::ExecutionContext,
@@ -599,6 +680,7 @@ macro_rules! declare_native_luma16_transpose_mode {
             })
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         pub(crate) fn prepare_transpose<'a>(
             image: &'a $input,
             method: &crate::pipeline::TransposeMethod,
@@ -636,12 +718,14 @@ macro_rules! declare_native_luma16_transpose_mode {
         }
 
         impl FlipStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn selection(
                 &self,
             ) -> &crate::compute::registry::support::StrategySelection {
                 self.prepared.selection()
             }
 
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> crate::raster::DynamicImage {
                 match self.prepared.implementation {
                     FlipArchitecture::Default(image) => $flip_impl(image),
@@ -659,12 +743,14 @@ macro_rules! declare_native_luma16_transpose_mode {
         }
 
         impl MirrorStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn selection(
                 &self,
             ) -> &crate::compute::registry::support::StrategySelection {
                 self.prepared.selection()
             }
 
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> crate::raster::DynamicImage {
                 match self.prepared.implementation {
                     MirrorArchitecture::Default(image) => $mirror_impl(image),
@@ -682,12 +768,14 @@ macro_rules! declare_native_luma16_transpose_mode {
         }
 
         impl TransposeStrategy<'_> {
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn selection(
                 &self,
             ) -> &crate::compute::registry::support::StrategySelection {
                 self.prepared.selection()
             }
 
+            // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
             pub(crate) fn execute(
                 self,
             ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
@@ -714,6 +802,7 @@ macro_rules! declare_native_luma16_transpose_mode {
             }
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         #[cfg(any(
             all(
                 any(target_arch = "x86", target_arch = "x86_64"),
@@ -736,6 +825,7 @@ macro_rules! declare_native_luma16_transpose_mode {
             crate::raster::DynamicImage::$mode(output)
         }
 
+        // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
         #[cfg(any(
             all(
                 any(target_arch = "x86", target_arch = "x86_64"),

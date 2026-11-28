@@ -9,6 +9,7 @@ pub(crate) struct Kernel<'a, P: Pixel> {
     sigma: f64,
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a, P: Pixel>(
     input: &'a ImageBuffer<P, Vec<P::Subpixel>>,
     sigma: f64,
@@ -16,6 +17,7 @@ pub(crate) fn prepare<'a, P: Pixel>(
     Kernel { input, sigma }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<P: Pixel>(kernel: Kernel<'_, P>) -> Result<GrayImage, PilError> {
     let (width, height) = kernel.input.dimensions();
     let values = effect_noise_values(width, height, kernel.sigma)?;

@@ -5,6 +5,7 @@ use std::sync::Arc;
 pub(crate) use super::helpers::composite::CompositeLayout;
 use super::helpers::composite_module_support::COMPOSITE_MODULE_INPUTS;
 pub(crate) use super::helpers::merge::MergeLayout;
+pub(crate) use super::helpers::preparation::merge::{PreparedMerge, prepare_merge_pipeline};
 use super::helpers::strategy::{secondary_facts, select_support};
 pub(crate) use super::helpers::{
     composite_wrapper_mask_alpha, validate_composite_wrapper_dimensions,
@@ -29,7 +30,7 @@ pub(crate) enum PreparedAlphaComposite<'a> {
     ImageRgba8(super::rgba8::ops::Strategy<'a>),
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageLumaA8 => super::luma_a8::ops::SUPPORT,
@@ -65,11 +66,13 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 }
 
 /// Complete support contract for Pillow's LA and RGBA AlphaComposite modes.
+// TODO(pillow-rs#3ptb): verify LA/RGBA pixels, im1-then-im2 load faults before
+// mode/size admission, eager static output, and instance-route receipts.
 pub(crate) static ALPHA_COMPOSITE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::AlphaComposite, &[], classify_mode);
 
 impl PreparedAlphaComposite<'_> {
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::ImageLumaA8(strategy) => strategy.selection(),
@@ -77,7 +80,7 @@ impl PreparedAlphaComposite<'_> {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self {
             Self::ImageLumaA8(strategy) => strategy.execute(),
@@ -86,7 +89,7 @@ impl PreparedAlphaComposite<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn assess(
     inputs: OperationInputs<'_>,
     source: crate::compute::registry::support::SecondaryInputFacts,
@@ -100,7 +103,7 @@ pub(crate) fn assess(
     classify_mode(inputs.mode()).assess(ctx, facts)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     source: Arc<DynamicImage>,
@@ -137,7 +140,7 @@ pub(crate) fn prepare<'a>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -154,7 +157,7 @@ pub(crate) fn prepare_pipeline<'a>(
 }
 
 /// Prepares the full-frame RGBA fusion using each operation's declared strategy.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_mirror_fusion<'a>(
     image: &'a DynamicImage,
     alpha_composite: &PipelineOp,
@@ -231,14 +234,14 @@ macro_rules! composite_module_modes {
 
 macro_rules! define_composite_module_routes {
     ($($mode:ident => $module:ident),+ $(,)?) => {
-        // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn composite_support(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::COMPOSITE_MODULE_MODE_SUPPORT,)+
             }
         }
 
-        // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         fn execute_composite_mode(
             mode: Mode,
             source: &DynamicImage,
@@ -279,12 +282,12 @@ pub(crate) struct PreparedCompositeModule<'a> {
 }
 
 impl PreparedCompositeModule<'_> {
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         execute_composite_mode(
             self.mode,
@@ -297,7 +300,7 @@ impl PreparedCompositeModule<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn prepare_composite_module<'a>(
     input: OperationInputs<'a>,
     destination: Arc<DynamicImage>,
@@ -322,7 +325,7 @@ fn prepare_composite_module<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_composite_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -359,7 +362,7 @@ const BLEND_RGBA: &[Mode] = &[
 ];
 const BLEND_WRONG_MODES: &[Mode] = &[Mode::One, Mode::ImagePalette8, Mode::ImagePaletteAlpha8];
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 const fn blend_input_contract(modes: &'static [Mode]) -> InputContract {
     InputContract::BlendInputs {
         compatible_modes: modes,
@@ -383,16 +386,28 @@ const BLEND_RGBA_VECTOR_MODES: &[Mode] = &[
     Mode::ImageRgbPremultiplied8,
     Mode::ImageRgbx8,
 ];
+const BLEND_AVX512F: &[Architecture] = &[Architecture::Avx512F];
 const BLEND_AVX_FMA: &[Architecture] = &[Architecture::AvxFma];
 const BLEND_NEON: &[Architecture] = &[Architecture::Neon];
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 const fn blend_vector_architectures(
     mode: Mode,
     channels: u8,
     compatible_modes: &'static [Mode],
-) -> [ImplementationSupport; 2] {
+) -> [ImplementationSupport; 3] {
     [
+        ImplementationSupport::cpu(
+            OperationId::BlendModule,
+            mode,
+            Architecture::Avx512F,
+            cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+            BLEND_AVX512F,
+            StrategyGuard::BlendNativeAvx512F {
+                channels,
+                compatible_modes,
+            },
+        ),
         ImplementationSupport::cpu(
             OperationId::BlendModule,
             mode,
@@ -418,28 +433,28 @@ const fn blend_vector_architectures(
     ]
 }
 
-static BLEND_L_ARCHITECTURES: [ImplementationSupport; 2] =
+static BLEND_L_ARCHITECTURES: [ImplementationSupport; 3] =
     blend_vector_architectures(Mode::ImageLuma8, 1, BLEND_L_VECTOR_MODES);
-static BLEND_LA_ARCHITECTURES: [ImplementationSupport; 2] =
+static BLEND_LA_ARCHITECTURES: [ImplementationSupport; 3] =
     blend_vector_architectures(Mode::ImageLumaA8, 2, BLEND_LA_VECTOR_MODES);
-static BLEND_LA_PREMULTIPLIED_ARCHITECTURES: [ImplementationSupport; 2] =
+static BLEND_LA_PREMULTIPLIED_ARCHITECTURES: [ImplementationSupport; 3] =
     blend_vector_architectures(Mode::ImageLaPremultiplied8, 2, BLEND_LA_VECTOR_MODES);
-static BLEND_RGB_ARCHITECTURES: [ImplementationSupport; 2] =
+static BLEND_RGB_ARCHITECTURES: [ImplementationSupport; 3] =
     blend_vector_architectures(Mode::ImageRgb8, 3, BLEND_RGB_VECTOR_MODES);
-static BLEND_HSV_ARCHITECTURES: [ImplementationSupport; 2] =
+static BLEND_HSV_ARCHITECTURES: [ImplementationSupport; 3] =
     blend_vector_architectures(Mode::ImageHsv8, 3, BLEND_RGB_VECTOR_MODES);
-static BLEND_YCBCR_ARCHITECTURES: [ImplementationSupport; 2] =
+static BLEND_YCBCR_ARCHITECTURES: [ImplementationSupport; 3] =
     blend_vector_architectures(Mode::ImageYCbCr8, 3, BLEND_RGB_VECTOR_MODES);
-static BLEND_RGBA_ARCHITECTURES: [ImplementationSupport; 2] =
+static BLEND_RGBA_ARCHITECTURES: [ImplementationSupport; 3] =
     blend_vector_architectures(Mode::ImageRgba8, 4, BLEND_RGBA_VECTOR_MODES);
-static BLEND_CMYK_ARCHITECTURES: [ImplementationSupport; 2] =
+static BLEND_CMYK_ARCHITECTURES: [ImplementationSupport; 3] =
     blend_vector_architectures(Mode::ImageCmyk8, 4, BLEND_RGBA_VECTOR_MODES);
-static BLEND_RGB_PREMULTIPLIED_ARCHITECTURES: [ImplementationSupport; 2] =
+static BLEND_RGB_PREMULTIPLIED_ARCHITECTURES: [ImplementationSupport; 3] =
     blend_vector_architectures(Mode::ImageRgbPremultiplied8, 4, BLEND_RGBA_VECTOR_MODES);
-static BLEND_RGBX_ARCHITECTURES: [ImplementationSupport; 2] =
+static BLEND_RGBX_ARCHITECTURES: [ImplementationSupport; 3] =
     blend_vector_architectures(Mode::ImageRgbx8, 4, BLEND_RGBA_VECTOR_MODES);
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn blend_support(mode: Mode) -> ModeSupport {
     let (inputs, architectures) = match mode {
         Mode::ImageLuma8 => (BLEND_LUMA_INPUT, &BLEND_L_ARCHITECTURES[..]),
@@ -501,12 +516,12 @@ pub(crate) struct PreparedBlendModule<'a> {
 }
 
 impl PreparedBlendModule<'_> {
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         execute_blend_mode(
             self.mode,
@@ -518,7 +533,7 @@ impl PreparedBlendModule<'_> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_blend_module<'a>(
     input: OperationInputs<'a>,
     other: Arc<DynamicImage>,
@@ -538,7 +553,7 @@ pub(crate) fn prepare_blend_module<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_blend_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -551,7 +566,7 @@ pub(crate) fn prepare_blend_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_blend_module)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_blend_mode(
     mode: Mode,
     source: &DynamicImage,
@@ -635,13 +650,20 @@ const MERGE_FOUR: &[InputContract] = &[InputContract::MergeBandLayout {
 // TODO(pillow-rs#3ptb): freeze invalid first-band and high-depth fault outcomes
 // in parity, including the safe replacement for Pillow's invalid raw reads.
 
+// RGB selects its exact-architecture sixteen-pixel interleaver first, then a
+// same-architecture MergeNativeInterleave strategy. If the specialized guard
+// is ineligible, selection records IneligibleRequest and the architecture leaf
+// runs the portable-wide helper, which records the wide-shuffle data path.
+// TODO(pillow-rs#3ptb): confirm this combined selection/path receipt in the
+// frozen CPU parity matrix for short RGB Merge inputs.
 const MERGE_RGB_SSSE3: &[Architecture] = &[Architecture::Ssse3];
 const MERGE_RGB_NEON: &[Architecture] = &[Architecture::Neon];
 const MERGE_SSE2: &[Architecture] = &[Architecture::Sse2];
 const MERGE_NEON: &[Architecture] = &[Architecture::Neon];
 const MERGE_WASM_SIMD128: &[Architecture] = &[Architecture::WasmSimd128];
+const MERGE_AVX512F: &[Architecture] = &[Architecture::Avx512F];
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 const fn merge_native_architecture(
     mode: Mode,
     channels: u8,
@@ -662,12 +684,24 @@ const fn merge_native_architecture(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-const fn merge_portable_architectures(mode: Mode, channels: u8) -> [ImplementationSupport; 3] {
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+const fn merge_four_architectures(mode: Mode) -> [ImplementationSupport; 4] {
     [
+        ImplementationSupport::cpu(
+            OperationId::Merge,
+            mode,
+            Architecture::Avx512F,
+            cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+            MERGE_AVX512F,
+            StrategyGuard::MergeAvx512FInterleave {
+                target_mode: mode,
+                channels: 4,
+                minimum_pixels: 16,
+            },
+        ),
         merge_native_architecture(
             mode,
-            channels,
+            4,
             Architecture::Sse2,
             cfg!(all(
                 any(target_arch = "x86", target_arch = "x86_64"),
@@ -677,14 +711,14 @@ const fn merge_portable_architectures(mode: Mode, channels: u8) -> [Implementati
         ),
         merge_native_architecture(
             mode,
-            channels,
+            4,
             Architecture::Neon,
             cfg!(all(target_arch = "aarch64", target_feature = "neon")),
             MERGE_NEON,
         ),
         merge_native_architecture(
             mode,
-            channels,
+            4,
             Architecture::WasmSimd128,
             cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
             MERGE_WASM_SIMD128,
@@ -692,12 +726,48 @@ const fn merge_portable_architectures(mode: Mode, channels: u8) -> [Implementati
     ]
 }
 
-static MERGE_LA_ARCHITECTURES: [ImplementationSupport; 3] =
-    merge_portable_architectures(Mode::ImageLumaA8, 2);
-static MERGE_RGBA_ARCHITECTURES: [ImplementationSupport; 3] =
-    merge_portable_architectures(Mode::ImageRgba8, 4);
-static MERGE_CMYK_ARCHITECTURES: [ImplementationSupport; 3] =
-    merge_portable_architectures(Mode::ImageCmyk8, 4);
+static MERGE_LA_ARCHITECTURES: [ImplementationSupport; 4] = [
+    ImplementationSupport::cpu(
+        OperationId::Merge,
+        Mode::ImageLumaA8,
+        Architecture::Avx512F,
+        cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+        MERGE_AVX512F,
+        StrategyGuard::MergeAvx512FInterleave {
+            target_mode: Mode::ImageLumaA8,
+            channels: 2,
+            minimum_pixels: 16,
+        },
+    ),
+    merge_native_architecture(
+        Mode::ImageLumaA8,
+        2,
+        Architecture::Sse2,
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2"
+        )),
+        MERGE_SSE2,
+    ),
+    merge_native_architecture(
+        Mode::ImageLumaA8,
+        2,
+        Architecture::Neon,
+        cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+        MERGE_NEON,
+    ),
+    merge_native_architecture(
+        Mode::ImageLumaA8,
+        2,
+        Architecture::WasmSimd128,
+        cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+        MERGE_WASM_SIMD128,
+    ),
+];
+static MERGE_RGBA_ARCHITECTURES: [ImplementationSupport; 4] =
+    merge_four_architectures(Mode::ImageRgba8);
+static MERGE_CMYK_ARCHITECTURES: [ImplementationSupport; 4] =
+    merge_four_architectures(Mode::ImageCmyk8);
 
 const MERGE_RGB_ARCHITECTURES: &[ImplementationSupport] = &[
     ImplementationSupport::cpu(
@@ -749,27 +819,8 @@ const MERGE_RGB_ARCHITECTURES: &[ImplementationSupport] = &[
     ),
 ];
 
-pub(crate) struct PreparedMerge<'a> {
-    source: &'a DynamicImage,
-    remaining: Vec<Arc<DynamicImage>>,
-    mode: Mode,
-    selection: StrategySelection,
-}
-
-impl PreparedMerge<'_> {
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-    pub(crate) fn selection(&self) -> &StrategySelection {
-        &self.selection
-    }
-
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        execute_merge_mode(self.mode, self.source, &self.remaining, &self.selection)
-    }
-}
-
 /// Merge's support mode is the requested output identity, not its first band.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn merge_support(target_mode: Mode) -> ModeSupport {
     let (input, output) = match target_mode {
         Mode::One
@@ -823,8 +874,8 @@ pub(crate) static MERGE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Merge, &[], merge_support)
         .with_rejected_output(OutputModeRule::ByTargetMode);
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn merge_facts(
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+pub(super) fn merge_facts(
     input: OperationInputs<'_>,
     target: Mode,
     bands: &[Image],
@@ -868,8 +919,8 @@ fn merge_facts(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn select_merge(
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+pub(super) fn select_merge(
     target: Mode,
     facts: StrategyInputs,
     ctx: &ExecutionContext,
@@ -883,42 +934,8 @@ fn select_merge(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-pub(crate) fn prepare_merge<'a>(
-    input: OperationInputs<'a>,
-    target: Mode,
-    bands: &'a [Image],
-    ctx: &ExecutionContext,
-) -> Result<PreparedMerge<'a>, PilError> {
-    let selection = select_merge(target, merge_facts(input, target, bands)?, ctx)?;
-    let remaining = bands
-        .iter()
-        .skip(1)
-        .map(Image::materialized_shared)
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(PreparedMerge {
-        source: input.image,
-        remaining,
-        mode: target,
-        selection,
-    })
-}
-
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-pub(crate) fn prepare_merge_pipeline<'a>(
-    input: OperationInputs<'a>,
-    op: &'a PipelineOp,
-    ctx: &ExecutionContext,
-) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::Merge { mode, bands } = op else {
-        return Err(PilError::ValueError("expected Merge op".into()));
-    };
-    prepare_merge(input, *mode, bands, ctx)
-        .map(crate::compute::registry::PreparedOperation::from_merge)
-}
-
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn execute_merge_mode(
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+pub(super) fn execute_merge_mode(
     mode: Mode,
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],

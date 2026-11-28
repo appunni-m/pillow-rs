@@ -1,6 +1,6 @@
 use super::layout::{DrawLayout, layout_for_mode};
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn is_eligible(
     image: &crate::raster::DynamicImage,
     ops: &[crate::pipeline::PipelineOp],
@@ -18,7 +18,7 @@ pub(crate) fn is_eligible(
             .all(|op| super::admission::supports_for_image(image, op, layout))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<const CHANNELS: usize, const FLOAT_MODE: bool>(
     image: &crate::raster::DynamicImage,
     ops: &[crate::pipeline::PipelineOp],

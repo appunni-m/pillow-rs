@@ -2,7 +2,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::{plan::BytePlan, vector};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbaImage};
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<I>(strategy: BytePlan<'_, I>) -> Result<DynamicImage, PilError>
 where
     I: std::ops::Deref<Target = crate::raster::DynamicImage>,

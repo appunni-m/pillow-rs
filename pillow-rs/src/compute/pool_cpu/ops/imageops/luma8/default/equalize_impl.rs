@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage};
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(input: &GrayImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
     if super::super::super::helpers::histogram::lut_is_identity(lut, 1) {
         return Ok(DynamicImage::ImageLuma8(input.clone()));

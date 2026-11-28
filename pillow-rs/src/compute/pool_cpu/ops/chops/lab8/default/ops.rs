@@ -1,7 +1,7 @@
 //! Default lab8 ImageChops strategy.
 
 use crate::error::PilError;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 use super::super::super::ops::ChopsRequest;
 
@@ -19,7 +19,7 @@ pub(crate) fn execute(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-9151618946984508b6673146ca4f53d0; benchmark=pending
 fn execute_binary(
     image: &DynamicImage,
     other: Option<&DynamicImage>,
@@ -30,7 +30,7 @@ fn execute_binary(
             "Chops mode strategy received a different raster variant".into(),
         ));
     };
-    super::super::super::helpers::three_band::execute(buffer, other, operation)
+    super::super::super::helpers::three_band::execute(buffer, Mode::ImageLab8, other, operation)
         .map(DynamicImage::ImageLab8)
 }
 

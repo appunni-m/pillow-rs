@@ -10,7 +10,7 @@ impl Image {
     ///
     /// Callback operations retain palette and wrapper metadata while dropping
     /// the encoded source format, matching Pillow's `Image._new` path.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn from_derived_dynamic(&self, image: DynamicImage) -> Result<Image, PilError> {
         let mode = self.mode_identity()?;
         if image.mode() != mode {
@@ -24,15 +24,17 @@ impl Image {
     /// Builds a materialized result with a new mode and Pillow `_new` metadata.
     /// Preserve `info`, EXIF, and a palette only for indexed P/PA outputs;
     /// operation-created images do not retain the encoded source format.
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn from_mode_changed_dynamic(&self, image: DynamicImage) -> Result<Image, PilError> {
         let mode = image.mode();
         let info = self.image_info();
         let exif = self.exif_metadata();
         let palette = matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
-            .then(|| self.palette().unwrap_or_default());
-        let palette_alpha =
-            (mode == Mode::ImagePaletteAlpha8).then(|| self.palette_alpha().unwrap_or_default());
+            .then(|| self.palette())
+            .flatten();
+        let palette_attached = palette.is_some();
+        let palette_alpha = (mode == Mode::ImagePaletteAlpha8 && palette_attached)
+            .then(|| self.palette_alpha().unwrap_or_default());
         if mode == Mode::ImagePalette8 {
             let DynamicImage::ImagePalette8(_) = &image else {
                 return Err(PilError::InternalError(
@@ -41,7 +43,13 @@ impl Image {
             };
             return Ok(Image::Paletted(PalettedData {
                 indices: image,
+                palette_attached,
                 palette: palette.unwrap_or_default(),
+                palette_data: self.palette_data().cloned().unwrap_or_else(|| {
+                    crate::image::PaletteData::from_alpha(
+                        palette_alpha.as_deref().unwrap_or_default(),
+                    )
+                }),
                 palette_alpha: palette_alpha.unwrap_or_default(),
                 source_format: None,
                 info,
@@ -60,6 +68,7 @@ impl Image {
             image: Arc::new(image),
             known_zero_fill: false,
             palette,
+            palette_data: self.palette_data().cloned(),
             palette_alpha,
             source_format: None,
             info,

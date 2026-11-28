@@ -7,6 +7,7 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{ImageBuffer, Pixel};
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn finish<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     width: u32,
     height: u32,
@@ -16,6 +17,7 @@ fn finish<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     crate::image_utils::typed_bytes_to_buffer(dimensions, output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn single<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     input: PixelInput<'_, P>,
 ) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {
@@ -56,6 +58,7 @@ pub(crate) fn single<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     finish::<P, CHANNELS>(input.image.width(), input.image.height(), output)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn single_with_hidden_lanes<P, const CHANNELS: usize>(
     input: PixelInput<'_, P>,
     lane_count: usize,
@@ -80,6 +83,7 @@ where
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn apply_rgba_batch(
     output: &mut [u8],
     row_bytes: usize,
@@ -109,6 +113,7 @@ fn apply_rgba_batch(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn batch(
     input: BatchInput<'_, crate::raster::Rgba<u8>>,
     selection: crate::compute::registry::support::StrategySelection,

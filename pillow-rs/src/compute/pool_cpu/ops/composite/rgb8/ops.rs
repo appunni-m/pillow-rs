@@ -10,6 +10,7 @@ pub(crate) const MODE: Mode = Mode::ImageRgb8;
 
 super::super::helpers::declare_composite_module_support!(ImageRgb8, luma_mask(3, 16));
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
@@ -40,6 +41,7 @@ pub(crate) fn merge(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn blend(
     source: &DynamicImage,
     other: &DynamicImage,
@@ -49,6 +51,7 @@ pub(crate) fn blend(
     super::super::helpers::blend::execute_selected(source, other, MODE, 3, alpha, selection)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn composite(
     source: &DynamicImage,
     destination: &DynamicImage,

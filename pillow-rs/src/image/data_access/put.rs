@@ -9,22 +9,24 @@ use crate::image::PutDataExecutionContext;
 use crate::raster::Mode;
 
 impl Image {
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     /// Queues replacement pixel data from a flat byte sequence.
     ///
-    /// `data` must match the active image mode and dimensions expected by the
-    /// pipeline operation. Validation happens when the pipeline is materialized.
+    /// The byte slice is consumed as a prefix of the active image's native
+    /// payload: excess bytes are ignored, and unsupplied samples remain
+    /// unchanged. Payload-mode support is checked when the pipeline is
+    /// materialized.
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; materialization reports invalid byte length
-    /// or mode mismatches.
+    /// Currently returns `Ok(())`; materialization reports unsupported payload
+    /// modes.
     pub fn putdata(&mut self, data: &[u8]) -> Result<(), PilError> {
         self.putdata_with_execution_context(data, None)
     }
 
     /// Queues replacement bytes under a route captured by a host wrapper.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_with_execution_context(
         &mut self,
@@ -60,7 +62,7 @@ impl Image {
     /// image, while retaining the immutable owner until deferred execution.
     /// Other layouts must continue through [`Image::putdata_bytes_fast_path`]
     /// so Pillow's per-entry coercion and packed-color rules remain intact.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn putdata_shared_bytes_fast_path(
         &mut self,
         data: Bytes,
@@ -72,7 +74,7 @@ impl Image {
     }
 
     /// Queues shared immutable bytes with the wrapper's captured execution route.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_shared_bytes_fast_path_with_context(
         &mut self,
@@ -125,7 +127,7 @@ impl Image {
     ///
     /// Returns [`PilError::TypeError`] for incompatible value shapes or too
     /// many pixels, and propagates image mode or dimension errors.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn putdata_values(
         &mut self,
         values: &[PutDataValue],
@@ -136,7 +138,7 @@ impl Image {
     }
 
     /// Normalizes values under a route captured by the host wrapper.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_values_with_execution_context(
         &mut self,
@@ -184,7 +186,7 @@ impl Image {
         Ok(())
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn putdata_core_only_native_values(
         &mut self,
         mode: Mode,
@@ -251,7 +253,7 @@ impl Image {
     /// This is the core-owned mode policy for `putdata`. A binding may still
     /// need to inspect host-language protocol behavior, but it does not need
     /// to duplicate the mode's scalar or component shape.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn putdata_value_kind(&self) -> Result<PutDataValueKind, PilError> {
         let image_mode = self.mode_identity()?;
         if matches!(
@@ -293,7 +295,7 @@ impl Image {
 
     /// Applies a callback-free bulk input through the canonical `putdata`
     /// normalization path.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn putdata_input(
         &mut self,
         input: PutDataInput<'_>,
@@ -304,7 +306,7 @@ impl Image {
     }
 
     /// Applies extracted values under the route captured by the host wrapper.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_input_with_execution_context(
         &mut self,
@@ -332,7 +334,7 @@ impl Image {
     /// sequences. Keeping the conversion in core reaches the same bulk path
     /// for every binding while custom Python values can still use
     /// [`Image::putdata_value_at`] to preserve re-entrant coercion order.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn putdata_numeric_values(
         &mut self,
         values: &[f64],
@@ -343,7 +345,7 @@ impl Image {
     }
 
     /// Writes numeric samples under the route captured by the host wrapper.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_numeric_values_with_execution_context(
         &mut self,
@@ -371,7 +373,7 @@ impl Image {
     /// modes. Bindings only need to extract the host integer sequence; this
     /// mode distinction belongs here so every backend receives the same
     /// canonical operation.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn putdata_integer_values(
         &mut self,
         values: &[i64],
@@ -382,7 +384,7 @@ impl Image {
     }
 
     /// Writes integer samples under the route captured by the host wrapper.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_integer_values_with_execution_context(
         &mut self,
@@ -431,7 +433,7 @@ impl Image {
     /// element, so bindings must delegate this check before they iterate a
     /// Python sequence. Keeping it here also gives every binding the same
     /// dimension and error behavior.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn validate_putdata_length(&self, entry_count: usize) -> Result<(), PilError> {
         let (width, height) = self.size()?;
         let pixel_count = (width as usize)
@@ -448,7 +450,7 @@ impl Image {
     /// Returns `Ok(true)` when the current mode consumed the bytes. Other
     /// modes return `Ok(false)` so the binding can preserve Python's generic
     /// sequence and callback behavior.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn putdata_bytes_fast_path(
         &mut self,
         data: &[u8],
@@ -460,7 +462,7 @@ impl Image {
     }
 
     /// Applies byte-oriented fast paths under the wrapper-captured route.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_bytes_fast_path_with_execution_context(
         &mut self,
@@ -514,7 +516,7 @@ impl Image {
     /// worth of input bytes at a time. It updates only those raw bytes and
     /// preserves all other existing sample bytes. With a scale or offset it
     /// clips each input byte before placing it in that row layout.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn putdata_l16_bytes(
         &mut self,
         data: &[u8],
@@ -524,7 +526,7 @@ impl Image {
         self.putdata_l16_bytes_with_count(data, data.len(), scale, offset, None)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn putdata_l16_bytes_with_count(
         &mut self,
         data: &[u8],
@@ -580,7 +582,7 @@ impl Image {
     /// matching strategy or report the Default fallback. A pinned GPU request
     /// uses CPU Default; an unpinned GPU preference can use an active SIMD
     /// architecture for this synchronous host-write path.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_execution_context(&self) -> PutDataExecutionContext {
         let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
@@ -588,7 +590,7 @@ impl Image {
     }
 
     /// Creates callback-write state from a route selected by the host wrapper.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_execution_context_for_route(
         &self,
@@ -603,7 +605,7 @@ impl Image {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn putdata_context(
         &self,
         route: Option<(
@@ -619,7 +621,7 @@ impl Image {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn putdata_value_at_selection(
         &self,
         mode: Mode,
@@ -654,7 +656,7 @@ impl Image {
     ///
     /// Returns [`PilError::TypeError`] when `value` is incompatible with the
     /// image mode or `pixel_index` is outside the image.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn putdata_value_at(
         &mut self,
         pixel_index: usize,
@@ -671,7 +673,7 @@ impl Image {
     /// The binding creates one context per host sequence and passes it through
     /// each synchronous write after coercing that value without holding the
     /// image borrow. A changed exact mode refreshes the cached mode strategy.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putdata_value_at_with_context(
         &mut self,

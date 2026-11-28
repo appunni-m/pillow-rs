@@ -1,5 +1,6 @@
 //! Canonical raster identity list shared by `Mode` and `DynamicImage`.
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 macro_rules! for_each_raster_identity {
     ($callback:ident) => {
         for_each_raster_identity! {@dispatch $callback, default}

@@ -9,7 +9,7 @@ use crate::compute::registry::support::{
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn select_support(
     support: ModeSupport,
     facts: StrategyInputs,
@@ -25,7 +25,7 @@ pub(crate) fn select_support(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn secondary_facts(image: &DynamicImage) -> SecondaryInputFacts {
     SecondaryInputFacts {
         mode: image.mode(),

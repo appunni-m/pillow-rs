@@ -11,6 +11,7 @@ pub(crate) struct Kernel {
     sigma: f64,
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare(width: u32, height: u32, sigma: f64) -> Kernel {
     Kernel {
         width,
@@ -19,18 +20,22 @@ pub(crate) fn prepare(width: u32, height: u32, sigma: f64) -> Kernel {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_sse2(kernel: Kernel) -> Result<GrayImage, PilError> {
     execute_vector(kernel)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_neon(kernel: Kernel) -> Result<GrayImage, PilError> {
     execute_vector(kernel)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_wasm_simd128(kernel: Kernel) -> Result<GrayImage, PilError> {
     execute_vector(kernel)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_vector(kernel: Kernel) -> Result<GrayImage, PilError> {
     let pixels = usize::try_from(kernel.width)
         .ok()
@@ -79,6 +84,7 @@ fn execute_vector(kernel: Kernel) -> Result<GrayImage, PilError> {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn clamp_sample(value: f64) -> u8 {
     if value <= 0.0 {
         0

@@ -18,6 +18,7 @@ impl Image {
         self.encode_with_options(format, &[])
     }
 
+    // VERIFY: source=reviewed@2026-11-26; parity=pass@migration-parity-0af1e98051014400ba3cb149a9141582; benchmark=n/a
     /// Encodes the image with strict, format-specific encoder options.
     ///
     /// `options` uses the selected codec's legacy string-pair names, which
@@ -36,12 +37,13 @@ impl Image {
         let save_format = parse_format_str(format)?;
         let upper_format = format.to_ascii_uppercase();
         let mode = self.mode_identity()?;
-        // TODO(image-slash-star#nype): implement I (I32) → PNG encoding in
-        // the codec. `PIL.Image.Image.save.nuanced.i-png` currently succeeds
-        // in Pillow but the pinned encoder rejects ImageMode::I32.
+        // Pillow 13 rejects I (I32) → PNG with this exact public error. The
+        // pinned codec reports a generic unsupported-mode message, so keep
+        // this fault translation at the Pillow-owned encoding boundary.
         // Pillow's encoders reject unsupported mode/format combinations with
         // an OSError naming both; replicate the public messages exactly.
         let rejection = match upper_format.as_str() {
+            "PNG" if mode == crate::raster::Mode::ImageI32 => Some("cannot write mode I as PNG"),
             "PNG" if mode == crate::raster::Mode::ImageF32 => Some("cannot write mode F as PNG"),
             "PNG" if mode == crate::raster::Mode::ImageCmyk8 => {
                 Some("cannot write mode CMYK as PNG")

@@ -6,6 +6,9 @@ use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(crate) mod avx512f;
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum MergeLayout {
     Two,
@@ -24,8 +27,28 @@ impl MergeLayout {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
 pub(crate) fn interleave(
+    first: &DynamicImage,
+    remaining: &[Arc<DynamicImage>],
+    mode: Mode,
+    layout: MergeLayout,
+) -> Result<DynamicImage, PilError> {
+    interleave_with_lab_chroma::<false>(first, remaining, mode, layout)
+}
+
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+pub(crate) fn interleave_lab(
+    first: &DynamicImage,
+    remaining: &[Arc<DynamicImage>],
+    mode: Mode,
+    layout: MergeLayout,
+) -> Result<DynamicImage, PilError> {
+    interleave_with_lab_chroma::<true>(first, remaining, mode, layout)
+}
+
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+fn interleave_with_lab_chroma<const LAB_CHROMA: bool>(
     first: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
     mode: Mode,
@@ -39,7 +62,7 @@ pub(crate) fn interleave(
 
     match layout {
         MergeLayout::Two => interleave_two(&bands, &mut output),
-        MergeLayout::Three => interleave_three(&bands, &mut output),
+        MergeLayout::Three => interleave_three::<LAB_CHROMA>(&bands, &mut output),
         MergeLayout::Four => interleave_four(&bands, &mut output),
     }
 
@@ -80,12 +103,20 @@ fn interleave_two(bands: &[&[u8]], output: &mut [u8]) {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
-fn interleave_three(bands: &[&[u8]], output: &mut [u8]) {
+// VERIFY: source=reviewed@2026-11-26; parity=pending; benchmark=pending
+fn interleave_three<const LAB_CHROMA: bool>(bands: &[&[u8]], output: &mut [u8]) {
     for (index, pixel) in output.chunks_exact_mut(3).enumerate() {
         pixel[0] = bands[0][index];
-        pixel[1] = bands[1][index];
-        pixel[2] = bands[2][index];
+        pixel[1] = if LAB_CHROMA {
+            bands[1][index].wrapping_add(128)
+        } else {
+            bands[1][index]
+        };
+        pixel[2] = if LAB_CHROMA {
+            bands[2][index].wrapping_add(128)
+        } else {
+            bands[2][index]
+        };
     }
 }
 
@@ -140,6 +171,7 @@ fn interleave_four(bands: &[&[u8]], output: &mut [u8]) {
 
 /// Interleaves canonical native L bands with the archived portable 16-byte
 /// shuffle, retaining a scalar tail for every channel count.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn interleave_wide(
     first: &DynamicImage,
     remaining: &[Arc<DynamicImage>],

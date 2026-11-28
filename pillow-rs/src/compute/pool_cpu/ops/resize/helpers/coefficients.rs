@@ -3,7 +3,7 @@
 use super::typed_nearest::BoxBounds;
 use crate::ops::pil_resize::{
     FilterCoeffs, FilterCoeffsF64, filter_from_resample, precompute_coeffs_f64,
-    precompute_coeffs_f64_boxed,
+    precompute_coeffs_f64_boxed_with_kernel,
 };
 use crate::pipeline::ResampleFilter;
 use std::sync::Arc;
@@ -16,21 +16,34 @@ pub(crate) fn for_resize(
     bounds: BoxBounds,
 ) -> (Arc<FilterCoeffsF64>, Arc<FilterCoeffsF64>) {
     let (kernel, support) = filter_from_resample(filter);
+    for_resize_with_kernel(source, destination, kernel, support, bounds)
+}
+
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+pub(crate) fn for_resize_with_kernel(
+    source: (u32, u32),
+    destination: (u32, u32),
+    kernel: fn(f64) -> f64,
+    support: f64,
+    bounds: BoxBounds,
+) -> (Arc<FilterCoeffsF64>, Arc<FilterCoeffsF64>) {
     match bounds {
         Some((left, top, right, bottom)) => (
-            Arc::new(precompute_coeffs_f64_boxed(
+            Arc::new(precompute_coeffs_f64_boxed_with_kernel(
                 destination.0,
                 source.0,
                 left,
                 right,
-                filter,
+                kernel,
+                support,
             )),
-            Arc::new(precompute_coeffs_f64_boxed(
+            Arc::new(precompute_coeffs_f64_boxed_with_kernel(
                 destination.1,
                 source.1,
                 top,
                 bottom,
-                filter,
+                kernel,
+                support,
             )),
         ),
         None => (

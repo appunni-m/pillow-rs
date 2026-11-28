@@ -51,7 +51,7 @@ const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     rejection_reason: "image has wrong mode",
 }];
 
-static ARCHITECTURES: [ImplementationSupport; 38] = [
+static ARCHITECTURES: [ImplementationSupport; 35] = [
     ImplementationSupport::cpu(
         OperationId::Convert,
         Mode::ImageRgb8,
@@ -282,30 +282,6 @@ static ARCHITECTURES: [ImplementationSupport; 38] = [
         Architecture::Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2],
-        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
-    ),
-    ImplementationSupport::cpu(
-        OperationId::Convert,
-        Mode::ImageRgb8,
-        Architecture::Neon,
-        cfg!(target_arch = "aarch64"),
-        &[Architecture::Neon],
-        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
-    ),
-    ImplementationSupport::cpu(
-        OperationId::Convert,
-        Mode::ImageRgb8,
-        Architecture::WasmSimd128,
-        WASM_SIMD128_AVAILABLE,
-        &[Architecture::WasmSimd128],
-        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
-    ),
-    ImplementationSupport::cpu(
-        OperationId::Convert,
-        Mode::ImageRgb8,
-        Architecture::Sse2,
-        SSE2_AVAILABLE,
-        &[Architecture::Sse2],
         StrategyGuard::ConvertTargetMode(Mode::ImageRgba8),
     ),
     ImplementationSupport::cpu(
@@ -388,6 +364,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
 ///
 /// `selection` must come from [`SUPPORT`] for this RGB8 source and target,
 /// with architecture capabilities checked by the same execution context.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[allow(
     unsafe_code,
     reason = "architecture dispatch relies on the validated Convert strategy selection"
@@ -435,6 +412,7 @@ pub(crate) unsafe fn execute(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_palette_target(
     source: &RgbImage,
     target: Mode,

@@ -5,7 +5,7 @@ use crate::compute::registry::support::{
 };
 use crate::raster::Mode;
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn support(
     operation: OperationId,
     mode: Mode,
@@ -109,7 +109,7 @@ macro_rules! declare_strategies {
         pub(crate) type AlphaStrategy<'a> = PreparedAlpha<AlphaArchitectureStrategy<'a>>;
 
 
-        // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         #[inline]
         pub(crate) fn prepare_alpha<'a>(
             image: &'a alpha_scalar::Input, alpha: u8, ctx: &AlphaContext,
@@ -132,7 +132,7 @@ macro_rules! declare_strategies {
         }
 
         impl AlphaStrategy<'_> {
-            // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+            // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
             #[inline]
             pub(crate) fn execute(self) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
                 match self.implementation {

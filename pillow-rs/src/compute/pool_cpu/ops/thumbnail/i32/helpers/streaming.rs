@@ -9,7 +9,7 @@ use crate::ops::pil_resize::{F64MulAdd, FilterCoeffsF64, i32_samples_from_le_byt
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn reduce_source_row_pair(
     source: &[i32],
     source_width: usize,
@@ -21,17 +21,22 @@ fn reduce_source_row_pair(
     let top = &source[top_start..top_start + source_width];
     let bottom = &source[bottom_start..bottom_start + source_width];
     for (output_x, reduced) in reduced_row.iter_mut().enumerate() {
-        let source_x = output_x * 2;
-        let quartet = top[source_x]
-            .wrapping_add(top[source_x + 1])
-            .wrapping_add(bottom[source_x])
-            .wrapping_add(bottom[source_x + 1]);
-        *reduced = round_up(f64::from(quartet) / 4.0) as i32;
+        *reduced = reduce_i32_sample(top, bottom, output_x * 2);
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-fn horizontal_ring_row<F: F64MulAdd>(
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+#[inline]
+pub(crate) fn reduce_i32_sample(top: &[i32], bottom: &[i32], source_x: usize) -> i32 {
+    let quartet = top[source_x]
+        .wrapping_add(top[source_x + 1])
+        .wrapping_add(bottom[source_x])
+        .wrapping_add(bottom[source_x + 1]);
+    round_up(f64::from(quartet) / 4.0) as i32
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+fn horizontal_ring_row<F: F64MulAdd, R>(
     source: &[i32],
     source_width: usize,
     reduced_y: usize,
@@ -42,14 +47,17 @@ fn horizontal_ring_row<F: F64MulAdd>(
     horizontal: &FilterCoeffsF64,
     fixed_weights: Option<&(usize, Vec<[f64; 8]>)>,
     fma: &F,
-) {
-    reduce_source_row_pair(source, source_width, reduced_row, reduced_y);
+    reduce_row_pair: &mut R,
+) where
+    R: FnMut(&[i32], usize, &mut [i32], usize),
+{
+    reduce_row_pair(source, source_width, reduced_row, reduced_y);
     let ring_start = (reduced_y & ring_mask) * destination_width;
     let ring_row = &mut ring[ring_start..ring_start + destination_width];
     resize_streaming::horizontal_row(reduced_row, ring_row, horizontal, fixed_weights, fma);
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn vertical_output_row<F: F64MulAdd>(
     output: &mut [u8],
     output_y: usize,
@@ -86,15 +94,19 @@ fn vertical_output_row<F: F64MulAdd>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-fn execute_stream<F: F64MulAdd>(
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+fn execute_stream<F: F64MulAdd, R>(
     source: &[i32],
     source_dimensions: (u32, u32),
     destination: (u32, u32),
     horizontal: &FilterCoeffsF64,
     vertical: &FilterCoeffsF64,
     fma: &F,
-) -> Result<RgbaImage, PilError> {
+    mut reduce_row_pair: R,
+) -> Result<RgbaImage, PilError>
+where
+    R: FnMut(&[i32], usize, &mut [i32], usize),
+{
     let destination_width = destination.0 as usize;
     let maximum_vertical_taps = vertical.weights.iter().map(Vec::len).max().unwrap_or(0);
     let ring_rows = maximum_vertical_taps
@@ -131,6 +143,7 @@ fn execute_stream<F: F64MulAdd>(
                 horizontal,
                 fixed_weights.as_ref(),
                 fma,
+                &mut reduce_row_pair,
             );
             next_source_row += 1;
         }
@@ -149,13 +162,27 @@ fn execute_stream<F: F64MulAdd>(
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute<F: F64MulAdd>(
     input: &RgbaImage,
     destination: (u32, u32),
     filter: ResampleFilter,
     fma: &F,
 ) -> Result<RgbaImage, PilError> {
+    execute_with_reducer(input, destination, filter, fma, reduce_source_row_pair)
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn execute_with_reducer<F: F64MulAdd, R>(
+    input: &RgbaImage,
+    destination: (u32, u32),
+    filter: ResampleFilter,
+    fma: &F,
+    reduce_row_pair: R,
+) -> Result<RgbaImage, PilError>
+where
+    R: FnMut(&[i32], usize, &mut [i32], usize),
+{
     let source_dimensions = input.dimensions();
     if source_dimensions.0 % 2 != 0 || source_dimensions.1 % 2 != 0 {
         return Err(PilError::InternalError(
@@ -176,5 +203,6 @@ pub(crate) fn execute<F: F64MulAdd>(
         &horizontal,
         &vertical,
         fma,
+        reduce_row_pair,
     )
 }

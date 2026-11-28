@@ -192,6 +192,7 @@ pub(crate) fn execute_palette_target(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &RgbaImage,
     target: Mode,

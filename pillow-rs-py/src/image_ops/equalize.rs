@@ -88,12 +88,12 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         ))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn convert_to_rgb(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error> {
         image.call_method1("convert", ("RGB",)).map_err(Into::into)
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn histogram(
         &mut self,
         image: &Self::Image,
@@ -106,7 +106,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
     // callback/fault order, and selected/fallback receipts in CPU parity.
     // Builtin mutation is outside the supported compatibility contract; do not
     // inspect or emulate patched module globals on this native path.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn native_histogram(
         &mut self,
         histogram: &Self::Histogram,
@@ -350,7 +350,7 @@ fn map_equalize_callback_error(error: EqualizeCallbackError) -> PyErr {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[pyfunction]
 fn ops_imageops_equalize_with_callbacks(
     py: Python<'_>,

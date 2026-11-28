@@ -37,10 +37,12 @@ pub(crate) fn apply_text<const RGBA_MASK: bool>(
 pub(crate) const MODE: Mode = Mode::ImageI16B;
 pub(crate) const SUPPORT: ModeSupport = super::super::helpers::support::serial_support(MODE);
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn support() -> ModeSupport {
     SUPPORT
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     ops: &[PipelineOp],

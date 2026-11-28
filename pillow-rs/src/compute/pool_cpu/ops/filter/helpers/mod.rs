@@ -10,14 +10,8 @@ mod convolution;
 mod extrema;
 #[path = "filter3x3.rs"]
 mod filter3x3;
-#[path = "kernels/filter3x3_vector.rs"]
-mod filter3x3_vector;
 #[path = "filter5x5.rs"]
 mod filter5x5;
-#[path = "kernels/filter5x5_rgb_vector.rs"]
-mod filter5x5_rgb_vector;
-#[path = "kernels/filter5x5_vector.rs"]
-mod filter5x5_vector;
 #[path = "hidden_lanes.rs"]
 pub(super) mod hidden_lanes;
 #[path = "i16_kernel.rs"]
@@ -28,18 +22,19 @@ mod mode_leaf;
 pub(super) mod rank;
 #[path = "rank_vector.rs"]
 mod rank_vector;
-#[path = "kernels/rank_vector.rs"]
-mod rank_vector_kernel;
 #[path = "uniform_image.rs"]
 mod uniform_image;
 mod unsharp;
+mod vector;
 
 pub(crate) use blur::gaussian_blur_box_parameters;
 pub(in crate::compute::pool_cpu::ops::filter) use blur::{
     copy_native_byte_blur_input, execute_native_byte_blur, validate_native_byte_blur_selection,
 };
 pub(in crate::compute::pool_cpu::ops::filter) use byte_filter::execute as execute_native_bytes_filter;
-pub(crate) use convolution::{pillow_kernel_row_3, pillow_kernel_row_5};
+pub(crate) use convolution::pillow_kernel_row_3;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(crate) use convolution::pillow_kernel_row_5;
 pub(in crate::compute::pool_cpu::ops::filter) use extrema::{
     execute_native_byte_extrema, native_byte_blur_architectures, native_byte_filter_architectures,
 };
@@ -47,7 +42,6 @@ pub(crate) use filter3x3::{
     execute_filter3x3_la_binomial_bytes, execute_filter3x3_la_binomial_vector_bytes,
     execute_filter3x3_native_bytes, execute_filter3x3_small_uniform_bytes,
 };
-pub(crate) use filter3x3_vector::apply as apply_filter3x3_vector;
 pub(crate) use filter5x5::rgb_blur_ring as filter5x5_rgb_blur_ring;
 pub(crate) use filter5x5::{
     apply_native_rows as apply_filter5x5_native_rows, binomial5x5_parameters_match,
@@ -62,7 +56,6 @@ pub(crate) use filter5x5::{
 pub(in crate::compute::pool_cpu::ops::filter) use filter5x5::{
     filter_5x5_binomial_la_rows, filter_5x5_binomial_luma_rows,
 };
-pub(crate) use filter5x5_vector::apply as apply_filter5x5_vector;
 pub(in crate::compute::pool_cpu::ops::filter) use i16_kernel::{
     execute_u16_filter3x3, execute_u16_filter5x5,
 };
@@ -77,3 +70,4 @@ pub(in crate::compute::pool_cpu::ops::filter) use uniform_image::{
     SMALL_UNIFORM_BYTE_MAX_PIXELS, native_small_uniform_bytes, native_zero_bytes,
 };
 pub(crate) use unsharp::blend_native_bytes as blend_unsharp_native_bytes;
+pub(crate) use vector::{apply_filter3x3_vector, apply_filter5x5_vector};

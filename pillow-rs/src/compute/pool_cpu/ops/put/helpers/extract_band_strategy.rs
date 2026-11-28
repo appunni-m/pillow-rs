@@ -75,6 +75,7 @@ macro_rules! declare_strategies {
         pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
 
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         #[inline]
         pub(crate) fn prepare<'a>(input: &'a scalar::Input, index: u8, ctx: &ExecutionContext)
             -> Result<Strategy<'a>, PilError> {
@@ -90,6 +91,7 @@ macro_rules! declare_strategies {
             Ok(Prepared::new(implementation, selection))
         }
 
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         #[inline]
         pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
                 match strategy.implementation {
@@ -106,6 +108,7 @@ pub(crate) use declare_strategies;
 
 macro_rules! declare_into {
     ($channels:literal) => {
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         #[allow(unsafe_code)]
         pub(crate) fn execute_into(
             strategy: Strategy<'_>,
@@ -123,7 +126,9 @@ macro_rules! declare_into {
                     #[cfg(target_arch = "x86_64")]
                     {
                         // SAFETY: preparation selected this strategy only after
-                        // checking SSE2/SSSE3 and the exact source layout.
+                        // checking SSE2/SSSE3 and exact source, output, and index
+                        // guards. The shared image borrow and exclusive output
+                        // slice cannot alias through safe Rust.
                         unsafe {
                             super::super::helpers::extract_band_vector::ssse3_into::<_, $channels>(
                                 input, output,

@@ -82,6 +82,24 @@ def _sha256_string(value: Any, label: str) -> str:
     return value
 
 
+def _validate_test_api_features(
+    profile: str, declared_features: set[str], label: str
+) -> None:
+    """Allow private test hooks on CPU architecture runs and require them for GPU faults."""
+
+    declared = declared_features & _TEST_API_FEATURES
+    required = profile == "python-gpu-fault-contract"
+    allowed = profile in {
+        "python-cpu",
+        "python-parallel-cpu",
+        "python-gpu-fault-contract",
+    }
+    if (required and declared != _TEST_API_FEATURES) or (
+        declared and (not allowed or declared != _TEST_API_FEATURES)
+    ):
+        raise RuntimeIdentityError(f"{label}: test-api features do not match the target profile")
+
+
 def _nonnegative_int(value: Any, label: str) -> int:
     if type(value) is not int or value < 0:
         raise RuntimeIdentityError(f"{label} must be a non-negative integer")
@@ -600,14 +618,7 @@ def _target_backend_identity(
             raise RuntimeIdentityError("declared target features do not include both parallel features")
     elif declared_parallel:
         raise RuntimeIdentityError("serial runtime declares parallel target features")
-    test_api_profile = profile == "python-gpu-fault-contract"
-    declared_test_api = feature_set & _TEST_API_FEATURES
-    if (test_api_profile and declared_test_api != _TEST_API_FEATURES) or (
-        not test_api_profile and declared_test_api
-    ):
-        raise RuntimeIdentityError(
-            "declared test-api features do not match the GPU fault-contract profile"
-        )
+    _validate_test_api_features(profile, feature_set, "declared target")
 
     core_path = _module_file_path(core, core_name)
     if core_path is None:
@@ -946,14 +957,7 @@ def validate_runtime_identity(snapshot: dict[str, Any]) -> None:
             not parallel_enabled and declared_parallel
         ):
             raise RuntimeIdentityError("stable target features disagree with parallel state")
-        test_api_profile = profile == "python-gpu-fault-contract"
-        declared_test_api = set(features) & _TEST_API_FEATURES
-        if (test_api_profile and declared_test_api != _TEST_API_FEATURES) or (
-            not test_api_profile and declared_test_api
-        ):
-            raise RuntimeIdentityError(
-                "stable target test-api features disagree with profile"
-            )
+        _validate_test_api_features(profile, set(features), "stable target")
         core = _exact_keys(
             target["selected_core"],
             {"module_name", "spec_name", "file", "mapping"},

@@ -10,11 +10,13 @@ use crate::raster::{DynamicImage, Mode};
 const MODE: Mode = Mode::ImageF32;
 pub(in crate::compute::pool_cpu::ops::filter) const MAX_RANK_WINDOW: u32 =
     super::helpers::MAX_RANK_WINDOW;
+pub(in crate::compute::pool_cpu::ops::filter) const AVX512F_MINIMUM_WIDTH: u32 = 16;
+pub(in crate::compute::pool_cpu::ops::filter) const AVX512F_MAX_PIXELS: u64 = i32::MAX as u64;
 
 // TODO(pillow-rs#3ptb): rerun F32 rank selection on native x86 hardware. The
 // current x86 Architecture selector runs only prove ARM64 unavailable-hardware fallback.
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn rank_compatibility(
     raw: &[u8],
 ) -> F32RankCompatibility {
@@ -25,9 +27,22 @@ pub(in crate::compute::pool_cpu::ops::filter) fn rank_compatibility(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 macro_rules! rank_vector_architectures {
     ($name:ident, $operation:expr) => {
         const $name: &[ImplementationSupport] = &[
+            ImplementationSupport::cpu(
+                $operation,
+                MODE,
+                Architecture::Avx512F,
+                cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+                &[Architecture::Avx512F],
+                StrategyGuard::FilterF32Avx512RankWindow {
+                    max_size: MAX_RANK_WINDOW,
+                    minimum_width: AVX512F_MINIMUM_WIDTH,
+                    max_pixels: AVX512F_MAX_PIXELS,
+                },
+            ),
             ImplementationSupport::cpu(
                 $operation,
                 MODE,
@@ -106,7 +121,7 @@ fn rejected(mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         OperationId::Filter3x3 => rejected(Mode::ImageF32),
@@ -150,7 +165,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -169,6 +184,15 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     };
     match selection.implementation.architecture {
         Architecture::Default => super::default::execute(image, request),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => {
+            let DynamicImage::ImageF32(input) = image else {
+                return Err(PilError::InternalError(
+                    "F AVX-512F rank strategy received a mismatched raster variant".into(),
+                ));
+            };
+            super::avx512f::rank_impl::execute(input, size, rank, selection)
+        }
         Architecture::Avx2
         | Architecture::Avx
         | Architecture::Sse2

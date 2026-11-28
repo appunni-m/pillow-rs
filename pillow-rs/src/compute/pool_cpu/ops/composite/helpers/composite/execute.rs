@@ -8,6 +8,7 @@ use crate::raster::{DynamicImage, Mode};
 use super::CompositeLayout;
 
 /// Executes the selected byte-mode architecture through that exact Paste mode strategy.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_byte_selected<'a, F>(
     source: &'a DynamicImage,
     destination: &'a DynamicImage,
@@ -58,6 +59,7 @@ where
     })
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn unbound(mode: Mode, selection: &StrategySelection) -> PilError {
     PilError::InternalError(format!(
         "unbound {:?} Composite strategy for mode {mode:?}",
@@ -65,6 +67,7 @@ fn unbound(mode: Mode, selection: &StrategySelection) -> PilError {
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &DynamicImage,
     destination: &DynamicImage,

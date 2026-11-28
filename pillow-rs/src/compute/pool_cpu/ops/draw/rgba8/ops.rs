@@ -43,10 +43,12 @@ pub(crate) const SUPPORT: ModeSupport =
 pub(crate) const CHANNELS: usize = 4;
 pub(crate) const FLOAT_MODE: bool = false;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn support() -> ModeSupport {
     SUPPORT
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     image: &DynamicImage,
     ops: &[PipelineOp],

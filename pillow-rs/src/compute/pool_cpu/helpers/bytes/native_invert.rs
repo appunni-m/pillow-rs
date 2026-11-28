@@ -4,6 +4,9 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use wide::u8x16;
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(crate) mod avx512f;
+
 const ALL: [u8; 16] = [u8::MAX; 16];
 const LA: [u8; 16] = [
     u8::MAX,
@@ -48,6 +51,7 @@ pub(crate) enum NativeInvertOutput {
     Prefix(Vec<u8>),
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn invert(
     source: &[u8],
     width: u32,
@@ -122,6 +126,7 @@ pub(crate) fn invert_in_place(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn active_mask(channels: usize, invert_alpha: bool) -> Result<[u8; 16], PilError> {
     match channels {
         1 | 3 => Ok(ALL),
@@ -135,6 +140,7 @@ fn active_mask(channels: usize, invert_alpha: bool) -> Result<[u8; 16], PilError
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn exact_copy(source: &[u8], mask: [u8; 16], channels: usize) -> Result<Vec<u8>, PilError> {
     if channels == 1 {
         return invert_single_channel(source);
@@ -159,6 +165,7 @@ fn exact_copy(source: &[u8], mask: [u8; 16], channels: usize) -> Result<Vec<u8>,
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn invert_single_channel(source: &[u8]) -> Result<Vec<u8>, PilError> {
     let full_len = source.len() / 16 * 16;
     let mut output = vec![0; source.len()];
@@ -177,6 +184,7 @@ fn invert_single_channel(source: &[u8]) -> Result<Vec<u8>, PilError> {
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transform_rows(source: &[u8], row_bytes: usize, height: usize, mask: [u8; 16]) -> Vec<u8> {
     if row_bytes == 0 || height == 0 {
         return source.to_vec();
@@ -190,6 +198,7 @@ fn transform_rows(source: &[u8], row_bytes: usize, height: usize, mask: [u8; 16]
     output
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transform_row(row: &mut [u8], mask: [u8; 16]) {
     let active = u8x16::new(mask);
     let mut chunks = row.chunks_exact_mut(16);

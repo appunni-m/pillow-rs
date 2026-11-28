@@ -1,8 +1,8 @@
 //! Channel extraction and alpha mutation methods for [`Image`].
-// TODO(pillow-rs#3ptb): verify PutAlpha/PutAlphaData wrapper mode-change,
-// mutation, metadata, and error order in CPU parity, including integer
-// coercion, exact-image-mask aliasing, callbacks observing promotion, and
-// callback-driven destination changes between band selection and the write.
+// TODO(pillow-rs#3ptb): verify PutAlpha/PutAlphaData mode, P/PA palette,
+// mutation, metadata, and error parity, including integer coercion, exact-mask
+// aliasing, callback-observed promotion, and destination changes between band
+// selection and write.
 // GetChannel parity must also cover
 // custom __index__ exceptions and str-subclass comparisons in getbands().index.
 // Their operation declarations now
@@ -74,12 +74,12 @@ type PutAlphaExecutionRoute = (
 
 // NO_PILLOW_SUPPORT: the operation declaration includes native high-depth
 // alpha routes that extend Pillow's operation contract.
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn validate_putalpha_mode(operation: OperationId, mode: Mode) -> Result<(), PilError> {
     operation.support().for_mode(mode).validate_mode()
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn promote_putalpha_destination(image: &mut Image, mode: Mode) -> Result<(), PilError> {
     if !matches!(
         mode,
@@ -90,7 +90,7 @@ fn promote_putalpha_destination(image: &mut Image, mode: Mode) -> Result<(), Pil
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn validated_putalpha_mask(image: &Image, mask: &Image) -> Result<DynamicImage, PilError> {
     let mask_mode = mask.mode_identity()?;
     if !crate::compute::registry::support::PUT_ALPHA_DATA_MASK_MODES.contains(&mask_mode) {
@@ -329,7 +329,7 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when `channel` is out of range, or
     /// another [`PilError`] when materialization fails.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn getchannel(&self, channel: i32) -> Result<Image, PilError> {
         self.getchannel_with_context_inner(channel, None)
     }
@@ -351,7 +351,7 @@ impl Image {
         source.getchannel_with_context_inner(channel, Some(context))
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn getchannel_with_context_inner(
         &self,
         channel: i32,
@@ -449,7 +449,7 @@ impl Image {
         self.queue_getchannel_child(route, backend_channel, context)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn queue_getchannel_child(
         &self,
         route: OperationModeRoute,
@@ -536,7 +536,7 @@ impl Image {
     ///
     /// Returns an error when the source mode has no declared PutAlpha
     /// strategy. Deferred pixel-execution errors are reported on materialize.
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
         let image_mode = self.mode_identity()?;
         validate_putalpha_mode(OperationId::PutAlpha, image_mode)?;
@@ -561,7 +561,7 @@ impl Image {
     ///
     /// Returns the operation's declared mode rejection for unsupported images.
     #[doc(hidden)]
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub fn validate_putalpha_data_destination(&self) -> Result<(), PilError> {
         let mode = self.mode_identity()?;
         validate_putalpha_mode(OperationId::PutAlphaData, mode)
@@ -576,13 +576,13 @@ impl Image {
     ///
     /// Returns the operation's declared mode rejection or promotion error.
     #[doc(hidden)]
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub fn prepare_putalpha_data_input(&mut self) -> Result<(), PilError> {
         self.prepare_putalpha_data_input_with_route(None)
     }
 
     /// Prepares PutAlphaData after mode validation under the caller's route.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_putalpha_data_input_with_execution_route(
         &mut self,
@@ -592,7 +592,7 @@ impl Image {
         self.prepare_putalpha_data_input_with_route(Some((pinned_backend, context)))
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn prepare_putalpha_data_input_with_route(
         &mut self,
         route: Option<PutAlphaExecutionRoute>,
@@ -605,7 +605,7 @@ impl Image {
     }
 
     /// Prepares PutAlphaData while retaining a host-captured CPU route.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_putalpha_data_input_with_context(
         &mut self,
@@ -624,13 +624,13 @@ impl Image {
     /// Returns an error when the current mode has no declared PutAlpha
     /// strategy or its promotion cannot be planned.
     #[doc(hidden)]
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub fn prepare_putalpha_input(&mut self) -> Result<(), PilError> {
         self.prepare_putalpha_input_with_route(None)
     }
 
     /// Prepares PutAlpha after mode validation under the caller's route.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_putalpha_input_with_execution_route(
         &mut self,
@@ -640,7 +640,7 @@ impl Image {
         self.prepare_putalpha_input_with_route(Some((pinned_backend, context)))
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn prepare_putalpha_input_with_route(
         &mut self,
         route: Option<PutAlphaExecutionRoute>,
@@ -653,7 +653,7 @@ impl Image {
     }
 
     /// Prepares PutAlpha while retaining a host-captured CPU route.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn prepare_putalpha_input_with_context(
         &mut self,
@@ -663,13 +663,13 @@ impl Image {
     }
 
     /// Applies the Python-facing scalar-or-mask `putalpha` contract.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub fn putalpha_with_input(&mut self, input: PutAlphaInput) -> Result<(), PilError> {
         self.putalpha_with_input_and_route(input, None)
     }
 
     /// Applies PutAlpha under a host-captured backend and architecture route.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putalpha_with_input_and_execution_route(
         &mut self,
@@ -680,7 +680,7 @@ impl Image {
         self.putalpha_with_input_and_route(input, Some((pinned_backend, context)))
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn putalpha_with_input_and_route(
         &mut self,
         input: PutAlphaInput,
@@ -708,7 +708,7 @@ impl Image {
     }
 
     /// Applies PutAlpha under a route captured by a host wrapper.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn putalpha_with_input_and_context(
         &mut self,
@@ -721,12 +721,12 @@ impl Image {
     /// Replaces the alpha channel from a `1` or `L` mask image, matching Pillow's
     /// image-backed ``Image.putalpha``. Native-width Rust modes use their
     /// declared CoreOnly strategies without a Pillow parity claim.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub fn putalpha_data(&mut self, mask: &Image) -> Result<(), PilError> {
         self.putalpha_data_with_route(mask, None)
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn putalpha_data_with_route(
         &mut self,
         mask: &Image,
@@ -769,7 +769,7 @@ impl Image {
         Ok(())
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn apply_putalpha_execution_route(&mut self, route: Option<PutAlphaExecutionRoute>) {
         if let Some((pinned_backend, context)) = route {
             *self = self

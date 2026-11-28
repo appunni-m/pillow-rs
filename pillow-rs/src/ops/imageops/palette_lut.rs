@@ -73,7 +73,7 @@ pub trait ImageOpsPaletteLutCallbacks: ImageOpsLutCallbacks {
 
 /// Applies Pillow's `_lut(..., palette=True)` route and its public palette APIs.
 #[doc(hidden)]
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn imageops_lut_with_palette_callbacks<C: ImageOpsPaletteLutCallbacks>(
     callbacks: &mut C,
     image: &C::Image,
@@ -90,7 +90,7 @@ pub fn imageops_lut_with_palette_callbacks<C: ImageOpsPaletteLutCallbacks>(
     super::point::imageops_lut_non_palette(callbacks, image, lut, operation)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn imageops_palette_lut<C: ImageOpsPaletteLutCallbacks>(
     callbacks: &mut C,
     image: &C::Image,

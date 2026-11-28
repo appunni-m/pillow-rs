@@ -47,7 +47,7 @@ EXPECTED_MODULES = (
 )
 EXPECTED_LEGACY_ROWS = 199
 EXPECTED_LEGACY_UNIQUE_ENDPOINTS = 197
-EXPECTED_ENDPOINT_COUNT = 217
+EXPECTED_ENDPOINT_COUNT = 218
 
 @dataclass(frozen=True, order=True)
 class LegacyRef:
@@ -318,6 +318,19 @@ CORRECTIONS: tuple[Endpoint, ...] = (
         correction_reason=(
             "A test-api-only binding exercises the direct Rust Rotate entry; "
             "the Python facade returns before the binding on shortcut cases."
+        ),
+    ),
+    Endpoint(
+        surface="PIL.Image.Image",
+        operation="_migration_direct_posterize",
+        kind="method",
+        source_path="PIL.Image.Image._migration_direct_posterize",
+        classification="endpoint",
+        authority="target-only-contract",
+        legacy_refs=(),
+        correction_reason=(
+            "A test-api-only binding exercises the direct Rust Posterize route; "
+            "the public Python ImageOps path transforms palette entries."
         ),
     ),
 )

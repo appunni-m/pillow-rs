@@ -62,6 +62,12 @@ DIRECT_ROTATE_MODES = tuple(
     )
 )
 
+DIRECT_POSTERIZE_MODES = (
+    ("L", "l", 1, 65),
+    ("P", "p", 1, 65),
+    ("RGB", "rgb", 3, 22),
+)
+
 # PyImage's test-only byte observer returns native DynamicImage carrier bytes,
 # including expanded One and the internal typed CoreOnly layouts.
 _DIRECT_ROTATE_BYTES_PER_PIXEL = {
@@ -1557,6 +1563,104 @@ def chops_invert_core_only_matrix_cases(
             )
             expanded.append(case)
     return expanded
+
+
+def _chops_invert_expected_output_case(
+    base_case: dict[str, Any],
+    mode: str,
+    source: bytes,
+    width: int,
+    height: int,
+    assets_root: Path,
+    case_id: str,
+) -> dict[str, Any]:
+    case = copy.deepcopy(base_case)
+    case["case_id"] = case_id
+    case["assets"] = [
+        _write_target_only_matrix_asset(source, assets_root, "invert-source")
+    ]
+    image_step = next(
+        step
+        for step in case["steps"]
+        if step["surface"] == "PIL.Image" and step["operation"] == "frombytes"
+    )
+    image_step["arguments"]["size"]["value"] = [width, height]
+    inverted = bytes(value ^ 0xFF for value in source)
+    case["target_expectation"]["observations"][0]["value"] = (
+        _native_image_result_record(mode, inverted, width, height)
+    )
+    return case
+
+
+def chops_invert_avx512f_core_only_boundary_cases(
+    assets_root: Path,
+) -> list[dict[str, Any]]:
+    """Freeze below-block, first-block, and scalar-tail outputs for typed modes."""
+
+    base_cases = {
+        case["covers"][0].rsplit(".", 1)[-1]: case
+        for case in chops_invert_target_output_cases()
+    }
+    cases: list[dict[str, Any]] = []
+    for mode, mode_id, sample_kind, _samples in CHOPS_INVERT_CORE_ONLY_MODES:
+        bytes_per_pixel = _DIRECT_ROTATE_BYTES_PER_PIXEL[mode]
+        first_vector_width = (64 + bytes_per_pixel - 1) // bytes_per_pixel
+        widths = (
+            ("below-block", max(1, 63 // bytes_per_pixel)),
+            ("first-block", first_vector_width),
+            ("scalar-tail", first_vector_width + 1),
+        )
+        for boundary, width in widths:
+            source = _core_only_matrix_input(mode, sample_kind, width, 1, "boundary")
+            case_id = (
+                "PIL.ImageChops.invert.expected-output."
+                f"{mode_id}.avx512f-{boundary}-{width}x1"
+            )
+            cases.append(
+                _chops_invert_expected_output_case(
+                    base_cases[mode_id],
+                    mode,
+                    source,
+                    width,
+                    1,
+                    assets_root,
+                    case_id,
+                )
+            )
+    return cases
+
+
+def chops_invert_avx512f_core_only_material_cases(
+    assets_root: Path,
+) -> list[dict[str, Any]]:
+    """Build named target-only 1024x768 workloads for typed AVX-512F Invert."""
+
+    base_cases = {
+        case["covers"][0].rsplit(".", 1)[-1]: case
+        for case in chops_invert_target_output_cases()
+    }
+    cases: list[dict[str, Any]] = []
+    for mode, mode_id, sample_kind, _samples in CHOPS_INVERT_CORE_ONLY_MODES:
+        width, height = 1024, 768
+        source = _core_only_matrix_input(
+            mode, sample_kind, width, height, "seeded-noise"
+        )
+        case_id = (
+            "PIL.ImageChops.invert.expected-output."
+            f"{mode_id}.avx512f-performance-material-1024x768"
+        )
+        cases.append(
+            _chops_invert_expected_output_case(
+                base_cases[mode_id],
+                mode,
+                source,
+                width,
+                height,
+                assets_root,
+                case_id,
+            )
+        )
+    return cases
 
 
 def chops_constant_core_only_matrix_cases(
@@ -3162,6 +3266,144 @@ def rotate_direct_target_output_cases() -> list[dict[str, Any]]:
         )
     cases.extend(_direct_rotate_branch_cases())
     return cases
+
+
+# VERIFY: source=reviewed@2026-11-25; parity=pass@migration-parity-be5b7f3169b142d3abf46796c30837c4; benchmark=n/a
+def direct_posterize_target_output_cases(assets_root: Path) -> list[dict[str, Any]]:
+    """Record direct Rust Posterize block, tail, and material outputs."""
+
+    bits = 3
+    mask = (0xFF << (8 - bits)) & 0xFF
+    cases = []
+    for mode, mode_id, channels, width in DIRECT_POSTERIZE_MODES:
+        source = bytes((index * 37 + 11) & 0xFF for index in range(width * channels))
+        cases.append(
+            _direct_posterize_expected_case(
+                mode,
+                mode_id,
+                width,
+                1,
+                source,
+                bits,
+                f"block-tail.{mode_id}",
+                {
+                    "id": f"posterize-source-{mode_id}",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(source).decode("ascii"),
+                    "sha256": hashlib.sha256(source).hexdigest(),
+                    "media_type": "application/octet-stream",
+                },
+            )
+        )
+        material_width, material_height = (1024, 768)
+        material_source = bytes(
+            (index * 37 + index // 251 + 11) & 0xFF
+            for index in range(material_width * material_height * channels)
+        )
+        material_asset = _write_target_only_matrix_asset(
+            material_source, assets_root, f"posterize-material-{mode_id}"
+        )
+        cases.append(
+            _direct_posterize_expected_case(
+                mode,
+                mode_id,
+                material_width,
+                material_height,
+                material_source,
+                bits,
+                f"material-{mode_id}-{material_width}x{material_height}",
+                material_asset,
+            )
+        )
+    return cases
+
+
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=n/a
+# VERIFY: source=reviewed@2026-11-25; parity=pass@migration-parity-be5b7f3169b142d3abf46796c30837c4; benchmark=n/a
+def _direct_posterize_expected_case(
+    mode: str,
+    mode_id: str,
+    width: int,
+    height: int,
+    source: bytes,
+    bits: int,
+    case_suffix: str,
+    source_asset: dict[str, str],
+) -> dict[str, Any]:
+    mask = (0xFF << (8 - bits)) & 0xFF
+    output = bytes(value & mask for value in source)
+    return {
+        "case_id": (
+            "PIL.Image.Image._migration_direct_posterize.expected-output."
+            f"{case_suffix}"
+        ),
+        "surface": "PIL.Image.Image",
+        "operation": "_migration_direct_posterize",
+        "verification": "expected-output",
+        "covers": [
+            "PIL.Image.Image._migration_direct_posterize.behavior.default",
+            f"PIL.Image.Image._migration_direct_posterize.mode.{mode_id}",
+            (
+                "PIL.Image.Image._migration_direct_posterize.block-tail.avx512f"
+                if case_suffix.startswith("block-tail.")
+                else "PIL.Image.Image._migration_direct_posterize.material.avx512f"
+            ),
+        ],
+        "assets": [source_asset],
+        "steps": _direct_posterize_steps(
+            mode, [width, height], source_asset["id"], bits
+        ),
+        "observations": ["posterized"],
+        "target_expectation": {
+            "observations": [
+                {
+                    "step_id": "posterized",
+                    "value": _native_image_result_record(
+                        mode, output, width, height, info=None
+                    ),
+                }
+            ]
+        },
+    }
+
+
+# VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=n/a
+def _direct_posterize_steps(
+    mode: str,
+    size: list[int],
+    asset_id: str,
+    bits: int,
+) -> list[dict[str, Any]]:
+    """Build the public-facade workflow for the test-only Rust operation."""
+
+    return [
+        {
+            "step_id": "image",
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "receiver": None,
+            "arguments": {
+                "mode": {"kind": "literal", "value": mode},
+                "size": {"kind": "literal", "value": size},
+                "data": {"kind": "asset", "asset_id": asset_id},
+            },
+        },
+        {
+            "step_id": "handle",
+            "surface": "PIL.Image.Image",
+            "operation": "getim",
+            "receiver": {"kind": "binding", "step_id": "image"},
+            "arguments": {},
+        },
+        {
+            "step_id": "posterized",
+            "surface": "PIL.Image.Image",
+            "operation": "_migration_direct_posterize",
+            "receiver": {"kind": "binding", "step_id": "handle"},
+            "arguments": {"bits": {"kind": "literal", "value": bits}},
+        },
+    ]
 
 
 # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a

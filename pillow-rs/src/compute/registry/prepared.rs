@@ -139,6 +139,7 @@ declare_prepared_operations! {
 
 impl PreparedOperation<'_> {
     /// Executes Convert while retaining palette metadata for the Image wrapper.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn execute_convert_output(
         self,
     ) -> Result<crate::compute::pool_cpu::ops::color::ops::PreparedConvertOutput, PilError> {
@@ -151,6 +152,7 @@ impl PreparedOperation<'_> {
     }
 
     /// Returns the filter owner's prepared identity proof when it can share the input Arc.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn shared_identity_proof(&self) -> Option<bool> {
         match &self.implementation {
             Implementation::Filter(plan) => plan.shared_identity_proof(),

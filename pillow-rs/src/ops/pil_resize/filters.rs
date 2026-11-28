@@ -118,12 +118,12 @@ pub(crate) fn pillow_sin_f64(value: f64) -> f64 {
 // ── Filter kernels ──
 
 /// Box / Nearest-neighbor kernel.
-fn kernel_box(x: f64) -> f64 {
+pub(crate) fn kernel_box(x: f64) -> f64 {
     if x > -0.5 && x <= 0.5 { 1.0 } else { 0.0 }
 }
 
 /// Triangle (bilinear) kernel.
-fn kernel_triangle(x: f64) -> f64 {
+pub(crate) fn kernel_triangle(x: f64) -> f64 {
     let a = x.abs();
     if a < 1.0 { 1.0 - a } else { 0.0 }
 }
@@ -221,7 +221,7 @@ fn kernel_mks2021(x: f64) -> f64 {
     }
 }
 
-fn kernel_lanczos3(x: f64) -> f64 {
+pub(crate) fn kernel_lanczos3(x: f64) -> f64 {
     kernel_lanczos(x, 3.0)
 }
 

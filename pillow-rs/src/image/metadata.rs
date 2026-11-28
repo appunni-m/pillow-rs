@@ -1,13 +1,13 @@
 //! Image mode, size, transparency, and compatibility metadata methods.
 
-use image_slash_star::{ImageFormat, ImageInfo, ImageMode};
+use image_slash_star::{ImageFormat, ImageInfo};
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView, Mode};
 
 use super::{
-    Image, ImageInfoValue, PaletteTransparency, PalettedData, PipelineModeState,
+    Image, ImageInfoValue, PaletteModel, PaletteTransparency, PalettedData, PipelineModeState,
     cached_pipeline_mode, known_pipeline_op_dimensions, known_pipeline_op_mode_with_expansion,
     materialization_cache,
 };
@@ -65,22 +65,6 @@ fn clear_palette_info_alpha(info: &mut Option<ImageInfo>) {
         return;
     };
     palette.alpha.clear();
-}
-
-pub(super) const fn image_mode_name(mode: ImageMode) -> &'static str {
-    match mode {
-        ImageMode::L1 => "1",
-        ImageMode::P8 => "P",
-        ImageMode::L8 => "L",
-        ImageMode::La8 | ImageMode::La16 => "LA",
-        ImageMode::Rgb8 | ImageMode::Rgb16 | ImageMode::Rgb32F => "RGB",
-        ImageMode::Rgba8 | ImageMode::Rgba16 | ImageMode::Rgba32F => "RGBA",
-        ImageMode::Cmyk8 => "CMYK",
-        ImageMode::L16 => "I;16",
-        ImageMode::F32 => "F",
-        ImageMode::I32 => "I",
-        _ => "unknown",
-    }
 }
 
 impl Image {
@@ -348,18 +332,30 @@ impl Image {
         }
     }
 
+    /// Returns the typed color model for an attached indexed palette.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    pub(crate) fn palette_model(&self) -> Option<PaletteModel> {
+        if !(self.has_palette_mode()
+            || self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8))
+            || !self.has_attached_palette()
+        {
+            return None;
+        }
+        Some(if let Some(palette_data) = self.palette_data() {
+            palette_data.model()
+        } else if self.pending_palette_transparency().is_none()
+            && !self.palette_input().alpha.is_empty()
+        {
+            PaletteModel::Rgba
+        } else {
+            PaletteModel::Rgb
+        })
+    }
+
     /// Returns the observable Pillow palette mode.
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     pub fn palette_mode(&self) -> Option<&'static str> {
-        (self.has_palette_mode() || self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8))
-            .then(|| {
-                if self.pending_palette_transparency().is_none()
-                    && self.palette_alpha().is_some_and(|alpha| !alpha.is_empty())
-                {
-                    "RGBA"
-                } else {
-                    "RGB"
-                }
-            })
+        self.palette_model().map(PaletteModel::pillow_name)
     }
 
     /// Returns whether mode, pending metadata, or a committed palette carries
@@ -422,6 +418,16 @@ impl Image {
         let Some(palette) = self.palette() else {
             return Ok(());
         };
+        if matches!(
+            self.palette_data(),
+            Some(crate::image::PaletteData::Cmyk(_))
+        ) {
+            // Pillow's palette packer has a CMYK-to-RGB packer but no
+            // CMYK-to-RGBA packer. Image.apply_transparency therefore gets
+            // None from getpalette("RGBA") and raises its empty assertion.
+            return Err(PilError::AssertionError(String::new()));
+        }
+        let palette_data = crate::image::PaletteData::Rgba;
         // The attached palette may have no alpha table even though the source
         // image still carries an indexed transparency marker.
         let palette_entries = palette.len() / 3;
@@ -460,6 +466,7 @@ impl Image {
 
         if let Image::Paletted(data) = self {
             data.palette_alpha = palette_alpha;
+            data.palette_data = palette_data;
             clear_palette_info_alpha(&mut data.info);
         } else {
             let materialized = match route {
@@ -476,7 +483,9 @@ impl Image {
             let exif = self.exif_metadata();
             *self = Image::Paletted(PalettedData {
                 indices: DynamicImage::ImagePalette8(indices),
+                palette_attached: true,
                 palette,
+                palette_data,
                 palette_alpha,
                 source_format,
                 info,
@@ -748,7 +757,7 @@ impl Image {
 
     /// Returns a known exact raster identity without materializing pixels.
     ///
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub(crate) fn known_mode_identity(&self) -> Option<Mode> {
         match self {
             Image::Loaded(data) => Some(data.image.mode()),
@@ -780,7 +789,7 @@ impl Image {
     /// pipeline can provide the identity. Host-facing Pillow spellings remain
     /// available through [`Image::mode`].
     ///
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub fn mode_identity(&self) -> Result<Mode, PilError> {
         if let Some(mode) = self.known_mode_identity() {
             return Ok(mode);
@@ -833,6 +842,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when lazy data must be materialized to determine
     /// the mode and that materialization fails.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn mode(&self) -> Result<String, PilError> {
         let mode = self.mode_identity()?;
         Ok(super::mode_boundary::pillow_mode_name(mode)
@@ -847,6 +857,7 @@ impl Image {
     /// operation cannot fail; keeping this path infallible also makes it clear
     /// that mode selection does not trigger a second decode. The materialized
     /// [`DynamicImage`] variant is the mode authority, including for pipelines.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=n/a
     pub(crate) fn mode_from_materialized(image: &DynamicImage) -> Mode {
         image.mode()
     }

@@ -3,8 +3,9 @@
 //! Legacy `Backend::Simd` requests now reach this owner through the CPU pool
 //! with the detected architecture in their context. Invert has exact-mode
 //! SSE2, NEON, and Wasm SIMD128 strategies for the archived `1/L/P`, `LA/PA`,
-//! `RGB`, and `RGBA/CMYK` layouts; its shared byte kernel lives in
-//! `pool_cpu/helpers/bytes` and preserves every stored byte.
+//! `RGB`, and `RGBA/CMYK` layouts, plus a guarded AVX-512F strategy on x86.
+//! Its shared byte kernels live in `pool_cpu/helpers/bytes` and preserve every
+//! stored byte.
 //! Binary and fused Chops paths now apply their native byte arithmetic to
 //! retained omitted lanes, including owned in-place batch execution. Missing
 //! state starts from the same canonical per-mode fallback as Paste; Invert
@@ -126,7 +127,7 @@ operation_support!(OFFSET_SUPPORT, ChopsOffset, NO_INPUTS);
 operation_support!(DUPLICATE_SUPPORT, ChopsDuplicate, NO_INPUTS);
 operation_support!(INVERT_SUPPORT, ChopsInvert, NO_INPUTS);
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn support_for_mode(operation: OperationId, mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::support(operation),
@@ -157,12 +158,8 @@ fn support_for_mode(operation: OperationId, mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-pub(super) fn mode_support(mode: Mode, operation: OperationId) -> ModeSupport {
-    mode_support_with_architectures(mode, operation, &[])
-}
-
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: mode-specific Chops contracts declare exact and fixed output identities.
 pub(super) fn mode_support_with_architectures(
     mode: Mode,
     operation: OperationId,
@@ -255,7 +252,7 @@ pub(super) fn mode_support_with_architectures(
                 mode,
                 OutputModeRule::Preserve,
                 NO_INPUTS,
-                &[],
+                architectures,
                 "native stored-byte inversion extends Pillow ImageChops modes",
             )
         }
@@ -266,7 +263,7 @@ pub(super) fn mode_support_with_architectures(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn binary_inputs_for(operation: OperationId, mode: Mode) -> Option<&'static [InputContract]> {
     if !is_byte_binary(operation) {
         return None;
@@ -286,7 +283,7 @@ fn binary_inputs_for(operation: OperationId, mode: Mode) -> Option<&'static [Inp
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn is_byte_binary(operation: OperationId) -> bool {
     matches!(
         operation,
@@ -305,7 +302,7 @@ fn is_byte_binary(operation: OperationId) -> bool {
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn internal_mode(mode: Mode) -> bool {
     matches!(
         mode,
@@ -440,7 +437,8 @@ impl ChopsExecutionPlan {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    // Scope: ChopsAdd vector eligibility and hidden-lane propagation setup.
     pub(crate) fn can_execute_in_place(&self, image: &DynamicImage) -> bool {
         if self.selection.implementation.architecture == Architecture::Default
             || image.mode() != self.mode
@@ -463,7 +461,8 @@ impl ChopsExecutionPlan {
         bytes.len() % height == 0 && bytes.len() / height >= 8
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    // Scope: Chops binary out-of-place dispatch and hidden-lane propagation.
     pub(crate) fn execute(self, image: &DynamicImage) -> Result<DynamicImage, PilError> {
         let selection = &self.selection;
         let other = self.other.as_deref();
@@ -480,7 +479,8 @@ impl ChopsExecutionPlan {
         Ok(output)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    // Scope: ChopsAdd in-place sidecar capture, mutation, and restoration.
     pub(crate) fn execute_in_place(self, image: &mut DynamicImage) -> Result<(), PilError> {
         let selection = &self.selection;
         if !self.can_execute_in_place(image) {
@@ -606,7 +606,7 @@ pub(crate) fn prepare_plan(
 
 /// Prepares the archived fused Multiply-then-Screen formula when both steps
 /// share an operand and admit the same exact mode and architecture strategy.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare_fused_multiply_screen<'a>(
     image: &'a DynamicImage,
     multiply: &PipelineOp,
@@ -698,7 +698,7 @@ pub(crate) fn prepare_fused_multiply_screen<'a>(
     }))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn secondary(op: &PipelineOp) -> Option<&Arc<Image>> {
     match op {
         PipelineOp::Add { other, .. }
@@ -720,14 +720,17 @@ fn secondary(op: &PipelineOp) -> Option<&Arc<Image>> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Chops byte binary pipeline requests and normalized arithmetic inputs.
 fn request(op: &PipelineOp) -> Result<ChopsRequest, PilError> {
     let request = match op {
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         PipelineOp::Add { scale, offset, .. } => ChopsRequest::Binary(BinaryOperation::Add {
             scale: *scale as f32,
             offset: *offset as f32,
             exact_default_parameters: *scale == 1.0 && *offset == 0.0,
         }),
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         PipelineOp::Subtract { scale, offset, .. } => {
             ChopsRequest::Binary(BinaryOperation::Subtract {
                 scale: *scale as f32,
@@ -735,7 +738,9 @@ fn request(op: &PipelineOp) -> Result<ChopsRequest, PilError> {
                 exact_default_parameters: *scale == 1.0 && *offset == 0.0,
             })
         }
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         PipelineOp::Multiply { .. } => ChopsRequest::Binary(BinaryOperation::Multiply),
+        // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
         PipelineOp::Screen { .. } => ChopsRequest::Binary(BinaryOperation::Screen),
         PipelineOp::Darker { .. } => ChopsRequest::Binary(BinaryOperation::Darker),
         PipelineOp::Lighter { .. } => ChopsRequest::Binary(BinaryOperation::Lighter),
@@ -757,7 +762,8 @@ fn request(op: &PipelineOp) -> Result<ChopsRequest, PilError> {
     Ok(request)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Default-only Constant and Duplicate execute through shared typed behavior.
 pub(super) fn execute_shared(
     image: &DynamicImage,
     request: ChopsRequest,

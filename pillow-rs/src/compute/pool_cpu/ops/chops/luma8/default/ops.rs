@@ -19,7 +19,7 @@ pub(crate) fn execute(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_binary(
     image: &DynamicImage,
     other: Option<&DynamicImage>,

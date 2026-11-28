@@ -88,11 +88,12 @@ pub trait ImageOpsColorizeCallbacks: crate::ops::imageops::ImageOpsLutCallbacks 
 /// Runs ImageOps Colorize with wrapper mode admission and ordered callbacks.
 /// The Python facade scopes this sequence so public Convert and Point
 /// callbacks retain the same CPU route while preserving subclass dispatch.
-// TODO(pillow-rs#3ptb): freeze wrapper mode-comparison, `isinstance`/`str`
-// lookup and truthiness, ImageColor resolver, color-index, arithmetic,
-// Convert/Point faults, subclass Convert mode overrides, and final
-// mode/output/selection receipts in the CPU parity matrix.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+/// The exact-L support contract declares expected RGB output, then the shared
+/// LUT route checks the actual wrapper returned by virtual `convert`.
+// TODO(pillow-rs#3ptb): freeze wrapper `__ne__`/truthiness and failure-only
+// `str(mode)`, `isinstance`/resolver, color-index/arithmetic, Convert/Point
+// faults, subclass Convert mode overrides, and final output/selection receipts.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn colorize_with_callbacks<C: ImageOpsColorizeCallbacks>(
     callbacks: &mut C,
@@ -112,23 +113,24 @@ pub fn colorize_with_callbacks<C: ImageOpsColorizeCallbacks>(
         .support()
         .for_mode(Mode::ImageLuma8)
         .validate_mode()?;
-    let points_valid = if mid.is_none() {
-        callbacks.point_is_nonnegative(&blackpoint)?
-            && callbacks.point_is_at_most(&blackpoint, &whitepoint)?
-            && callbacks.point_is_at_most_255(&whitepoint)?
-    } else {
-        callbacks.point_is_nonnegative(&blackpoint)?
-            && callbacks.point_is_at_most(&blackpoint, &midpoint)?
-            && callbacks.point_is_at_most(&midpoint, &whitepoint)?
-            && callbacks.point_is_at_most_255(&whitepoint)?
-    };
-    if !points_valid {
-        let message = if mid.is_some() {
-            "midpoint must be between or equal to blackpoint and whitepoint"
-        } else {
-            "blackpoint and whitepoint must each be between or equal to 0 and 255, with blackpoint less than or equal to whitepoint"
-        };
-        return Err(PilError::ValueError(message.into()).into());
+    // Pillow validates the endpoint chain before it compares an optional midpoint.
+    let endpoints_valid = callbacks.point_is_nonnegative(&blackpoint)?
+        && callbacks.point_is_at_most(&blackpoint, &whitepoint)?
+        && callbacks.point_is_at_most_255(&whitepoint)?;
+    if !endpoints_valid {
+        return Err(PilError::ValueError(
+            "blackpoint and whitepoint must each be between or equal to 0 and 255, with blackpoint less than or equal to whitepoint".into(),
+        )
+        .into());
+    }
+    if mid.is_some()
+        && !(callbacks.point_is_at_most(&blackpoint, &midpoint)?
+            && callbacks.point_is_at_most(&midpoint, &whitepoint)?)
+    {
+        return Err(PilError::ValueError(
+            "midpoint must be between or equal to blackpoint and whitepoint".into(),
+        )
+        .into());
     }
 
     let lut = colorize_lut_with_callbacks(
@@ -149,6 +151,7 @@ pub fn colorize_with_callbacks<C: ImageOpsColorizeCallbacks>(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn colorize_lut_with_callbacks<C: ImageOpsColorizeCallbacks>(
     callbacks: &mut C,
     black: &C::Value,
@@ -210,6 +213,7 @@ fn colorize_lut_with_callbacks<C: ImageOpsColorizeCallbacks>(
     callbacks.combine_channels(red, green, blue)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn append_endpoint<C: ImageOpsColorizeCallbacks>(
     callbacks: &mut C,
     color: &C::Value,
@@ -228,6 +232,7 @@ fn append_endpoint<C: ImageOpsColorizeCallbacks>(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn append_segment<C: ImageOpsColorizeCallbacks>(
     callbacks: &mut C,
     start: &C::Value,
@@ -247,6 +252,7 @@ fn append_segment<C: ImageOpsColorizeCallbacks>(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn interpolated_component<C: ImageOpsColorizeCallbacks>(
     callbacks: &mut C,
     start: &C::Value,
@@ -266,10 +272,12 @@ fn interpolated_component<C: ImageOpsColorizeCallbacks>(
 }
 
 /// Validates that an image can be colorized.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn validate_colorize_mode(image: &Image) -> Result<(), PilError> {
     validate_colorize_mode_for_mode(image.mode_identity()?)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn validate_colorize_mode_for_mode(mode: Mode) -> Result<(), PilError> {
     let support = OperationId::Colorize.support().for_mode(mode);
     if support.scope().is_some() {
@@ -287,7 +295,7 @@ fn validate_colorize_mode_for_mode(mode: Mode) -> Result<(), PilError> {
 /// Colorizes an `L` image by mapping black and white endpoints.
 // TODO(pillow-rs#3ptb): Verify native output and mode/architecture receipts
 // separately from the Python wrapper callback route.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn colorize(
     image: &Image,
     black: (u8, u8, u8),

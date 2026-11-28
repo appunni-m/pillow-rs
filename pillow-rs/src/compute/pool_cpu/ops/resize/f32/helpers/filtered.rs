@@ -6,7 +6,6 @@ use crate::ops::pil_resize::{
     F64MulAdd, FilterCoeffsF64, f_resize_coefficients_allow_finite_fma,
     f_resize_samples_allow_finite_fma,
 };
-use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
 type Bounds = super::super::super::helpers::typed_nearest::BoxBounds;
@@ -14,12 +13,13 @@ type Bounds = super::super::super::helpers::typed_nearest::BoxBounds;
 // The exact architecture owner supplies the target's separate-product group
 // width as a const generic, keeping this loop free of target and mode branches.
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<const PRODUCT_BLOCK_WIDTH: usize, F: F64MulAdd>(
     source: &[f32],
     source_size: (u32, u32),
     destination_size: (u32, u32),
-    filter: ResampleFilter,
+    kernel: fn(f64) -> f64,
+    support: f64,
     bounds: Bounds,
     vertical_first: bool,
     fma: &F,
@@ -29,17 +29,19 @@ pub(crate) fn execute<const PRODUCT_BLOCK_WIDTH: usize, F: F64MulAdd>(
             source,
             source_size,
             destination_size,
-            filter,
+            kernel,
+            support,
             bounds,
             fma,
         );
     }
     let (source_width, source_height) = source_size;
     let (width, height) = destination_size;
-    let (horizontal, vertical) = super::super::super::helpers::coefficients::for_resize(
+    let (horizontal, vertical) = super::super::super::helpers::coefficients::for_resize_with_kernel(
         source_size,
         destination_size,
-        filter,
+        kernel,
+        support,
         bounds,
     );
     let (need_horizontal, need_vertical) =
@@ -91,21 +93,23 @@ pub(crate) fn execute<const PRODUCT_BLOCK_WIDTH: usize, F: F64MulAdd>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn execute_vertical_first<const PRODUCT_BLOCK_WIDTH: usize, F: F64MulAdd>(
     source: &[f32],
     source_size: (u32, u32),
     destination_size: (u32, u32),
-    filter: ResampleFilter,
+    kernel: fn(f64) -> f64,
+    support: f64,
     bounds: Bounds,
     fma: &F,
 ) -> Result<RgbaImage, PilError> {
     let (source_width, _) = source_size;
     let (width, height) = destination_size;
-    let (_, vertical) = super::super::super::helpers::coefficients::for_resize(
+    let (_, vertical) = super::super::super::helpers::coefficients::for_resize_with_kernel(
         source_size,
         (source_width, height),
-        filter,
+        kernel,
+        support,
         bounds,
     );
     let vertical_dims = CheckedDims::new_allow_empty(source_width, height, 1)?;
@@ -119,10 +123,11 @@ fn execute_vertical_first<const PRODUCT_BLOCK_WIDTH: usize, F: F64MulAdd>(
         fma,
     );
 
-    let (horizontal, _) = super::super::super::helpers::coefficients::for_resize(
+    let (horizontal, _) = super::super::super::helpers::coefficients::for_resize_with_kernel(
         (source_width, height),
         destination_size,
-        filter,
+        kernel,
+        support,
         bounds,
     );
     let output_dims = CheckedDims::new_allow_empty(width, height, 1)?;
@@ -139,7 +144,7 @@ fn execute_vertical_first<const PRODUCT_BLOCK_WIDTH: usize, F: F64MulAdd>(
     encode(width, height, &output)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn horizontal_pass<const PRODUCT_BLOCK_WIDTH: usize, const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     output: &mut [f32],
@@ -203,7 +208,7 @@ fn horizontal_pass<const PRODUCT_BLOCK_WIDTH: usize, const FINITE_OPERANDS: bool
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn horizontal_sample<
     const PRODUCT_BLOCK_WIDTH: usize,
     const FINITE_OPERANDS: bool,
@@ -235,7 +240,10 @@ fn horizontal_sample<
     accumulator as f32
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+/// Uses the fixed eight-tap accumulation shared with the established serial
+/// kernel. This route intentionally applies the F64MulAdd sequence to all eight
+/// taps; `PRODUCT_BLOCK_WIDTH` governs the general fallback's product prefix.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline]
 fn horizontal_eight_tap<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source_row: &[f32],
@@ -278,7 +286,7 @@ fn horizontal_eight_tap<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     Some(accumulator as f32)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn contiguous_eight_tap_coefficients(
     coefficients: &FilterCoeffsF64,
 ) -> Option<(usize, Vec<(usize, [f64; 8])>)> {
@@ -299,8 +307,8 @@ fn contiguous_eight_tap_coefficients(
     Some((first, fixed))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn vertical_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn vertical_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     output: &mut [f32],
     destination_width: usize,
@@ -328,7 +336,7 @@ fn vertical_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn vertical_output_packed<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     width: u32,
@@ -357,7 +365,7 @@ fn vertical_output_packed<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn accumulate_row<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     source_row_stride: usize,
@@ -377,7 +385,7 @@ fn accumulate_row<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline(always)]
 fn mul_add<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     fma: &F,
@@ -392,7 +400,7 @@ fn mul_add<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn encode(width: u32, height: u32, samples: &[f32]) -> Result<RgbaImage, PilError> {
     let dims = CheckedDims::new_allow_empty(width, height, 4)?;
     if samples.len() != dims.total_pixels() {

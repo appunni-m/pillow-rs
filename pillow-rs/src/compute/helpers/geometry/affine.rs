@@ -3,6 +3,7 @@
 /// Computes Pillow's 16.16 nearest-affine coefficients when the map is not a
 /// pure scale and all output corners fit the fixed-point coordinate range.
 #[must_use]
+#[cfg(feature = "gpu")]
 pub(crate) fn affine_nearest_fixed(data: [f64; 6], width: u32, height: u32) -> Option<[i64; 6]> {
     let [a, b, c, d, e, f] = data;
     if b == 0.0 && d == 0.0 {

@@ -9,6 +9,7 @@ pub(crate) const MODE: Mode = Mode::ImageF32;
 
 super::super::helpers::declare_composite_module_support!(ImageF32, vector(4));
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
@@ -18,6 +19,7 @@ pub(crate) fn merge(
     super::default::operations::merge(source, remaining)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn composite(
     source: &DynamicImage,
     destination: &DynamicImage,

@@ -72,7 +72,7 @@ fn backend_enabled(name: &str) -> PyResult<bool> {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 #[cfg(feature = "test-api")]
 #[pyfunction]
 fn _set_migration_target_architecture(name: &str) -> PyResult<()> {
@@ -88,6 +88,7 @@ fn _set_migration_target_architecture(name: &str) -> PyResult<()> {
         "avx2" => pillow_rs::Architecture::Avx2,
         "avx_fma" => pillow_rs::Architecture::AvxFma,
         "avx2_fma" => pillow_rs::Architecture::Avx2Fma,
+        "avx512f" => pillow_rs::Architecture::Avx512F,
         "wasm_simd128" => pillow_rs::Architecture::WasmSimd128,
         _ => {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(

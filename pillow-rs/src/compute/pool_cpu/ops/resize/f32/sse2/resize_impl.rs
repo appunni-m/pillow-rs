@@ -7,7 +7,7 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 pub(crate) fn execute(
     context: &ExecutionContext,
     input: &RgbaImage,
@@ -23,5 +23,12 @@ pub(crate) fn execute(
             "ImageF32 SSE2 strategy received another architecture".into(),
         ));
     }
-    super::super::helpers::vector::execute(input, width, height, filter, bounds)
+    super::super::helpers::vector::execute_with_filter::<16>(
+        input,
+        width,
+        height,
+        filter,
+        bounds,
+        super::super::x86_64::filters::filter_from_resample,
+    )
 }

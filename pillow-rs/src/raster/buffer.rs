@@ -70,7 +70,8 @@ enum HiddenLaneValues {
 }
 
 impl HiddenPixelLanes {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    // Scope: Chops byte binaries map retained lanes by matching clipped rows.
     pub(crate) fn constant(lane_count: usize, pixel_count: usize, values: [u8; 2]) -> Option<Self> {
         (1..=2).contains(&lane_count).then_some(Self {
             lane_count,
@@ -284,7 +285,7 @@ where
     P: Pixel,
     Container: Deref<Target = [P::Subpixel]>,
 {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     /// Constructs a buffer from a generic container.
     ///
     /// Returns `None` if the container is not big enough.
@@ -463,7 +464,7 @@ where
             .map(|pixel_indices| <P as Pixel>::from_slice(pixel_indices))
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn check_image_fits(width: u32, height: u32, len: usize) -> bool {
         let checked_len = Self::image_buffer_len(width, height);
         checked_len.is_some_and(|min_len| min_len <= len)
@@ -659,6 +660,66 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
             _phantom: PhantomData,
             hidden_pixel_lanes: Self::zero_hidden_pixel_lanes(width, height),
         }
+    }
+
+    /// Copies selected pixels from a same-mode source into a clipped region.
+    ///
+    /// The mask is indexed in source row-major order. This copies native
+    /// samples directly and leaves omitted physical lanes to the DynamicImage
+    /// owner, which has the exact mode identity needed to merge them.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    pub(crate) fn copy_masked_region_from(
+        &mut self,
+        source: &Self,
+        x: u32,
+        y: u32,
+        mask: &[u8],
+    ) -> bool {
+        let Some(source_pixels) = (source.width as usize).checked_mul(source.height as usize)
+        else {
+            return false;
+        };
+        if mask.len() != source_pixels
+            || x > self.width
+            || y > self.height
+            || source.width > self.width - x
+            || source.height > self.height - y
+        {
+            return false;
+        }
+        let channels = usize::from(P::CHANNEL_COUNT);
+        let Some(source_row_len) = (source.width as usize).checked_mul(channels) else {
+            return false;
+        };
+        let Some(destination_row_len) = (self.width as usize).checked_mul(channels) else {
+            return false;
+        };
+        for source_y in 0..source.height as usize {
+            let mut source_x = 0;
+            while source_x < source.width as usize {
+                while source_x < source.width as usize
+                    && mask[source_y * source.width as usize + source_x] == 0
+                {
+                    source_x += 1;
+                }
+                let run_start = source_x;
+                while source_x < source.width as usize
+                    && mask[source_y * source.width as usize + source_x] != 0
+                {
+                    source_x += 1;
+                }
+                if run_start == source_x {
+                    continue;
+                }
+                let byte_count = (source_x - run_start) * channels;
+                let source_start = source_y * source_row_len + run_start * channels;
+                let destination_start = (y as usize + source_y) * destination_row_len
+                    + (x as usize + run_start) * channels;
+                self.data[destination_start..destination_start + byte_count]
+                    .copy_from_slice(&source.data[source_start..source_start + byte_count]);
+            }
+        }
+        true
     }
 
     // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending

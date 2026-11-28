@@ -88,6 +88,14 @@
 // PIL API compatibility — many functions have 8+ parameters matching PIL signatures
 #![allow(clippy::too_many_arguments)]
 
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx512f"
+))]
+compile_error!(
+    "build pillow-rs for a baseline x86 target; AVX-512F is dispatched through runtime-checked leaf strategies"
+);
+
 #[cfg(feature = "parallel")]
 use rayon as _;
 
@@ -177,6 +185,8 @@ pub use crate::compute::BatchKey;
 pub use crate::compute::BatchOutput;
 #[cfg(feature = "gpu")]
 pub use crate::compute::BatchResult;
+#[doc(hidden)]
+pub use crate::compute::CpuExecutionRoute;
 pub use crate::compute::DrawRequestKind;
 pub use crate::compute::DrawTextMaskKind;
 pub use crate::compute::ExecutionContext;
@@ -361,6 +371,10 @@ pub use crate::font::pilfont::PilFontMode;
 pub use crate::font::pilfont::PilFontTextInput;
 pub use crate::font::transposed_bbox;
 pub use crate::font::validate_transposed_length;
+#[doc(hidden)]
+pub use crate::image::ArrowExportBuffer;
+#[doc(hidden)]
+pub use crate::image::ArrowImportLayout;
 pub use crate::image::ChannelSelector;
 pub use crate::image::ExifCompatFields;
 pub use crate::image::FormattedExtrema;
@@ -375,6 +389,7 @@ pub use crate::image::NewColorInput;
 pub use crate::image::OpenFormatsInput;
 pub use crate::image::OpenModeInput;
 pub use crate::image::PaletteColorComponent;
+pub use crate::image::PaletteModel;
 pub use crate::image::PaletteTransparency;
 pub use crate::image::PutAlphaInput;
 pub use crate::image::PutDataExecutionContext;
@@ -383,6 +398,8 @@ pub use crate::image::PutDataValue;
 pub use crate::image::PutDataValueKind;
 pub use crate::image::PutPixelValue;
 pub use crate::image::RawDecoderPlan;
+#[doc(hidden)]
+pub use crate::image::validate_arrow_import_size;
 pub use crate::path::ImagePath;
 // Preserve the original public Rust paths after adopting host-neutral names.
 // Remove these aliases only as part of an explicit breaking-release decision.
@@ -397,6 +414,7 @@ pub use crate::image::StatValue;
 pub use crate::image::imaging_core_to_bytes;
 pub use crate::image::prepare_exif_compat;
 pub use crate::image::stat_from_histogram;
+pub use crate::image::stat_from_integer_histogram;
 pub use crate::image::stat_from_list;
 pub use crate::image::validate_open_inputs;
 #[doc(hidden)]
@@ -432,15 +450,29 @@ pub use crate::ops::chops::soft_light as chops_soft_light;
 pub use crate::ops::chops::subtract as chops_subtract;
 pub use crate::ops::chops::subtract_modulo as chops_subtract_modulo;
 #[doc(hidden)]
+pub use crate::ops::convert::ConvertInputOutput;
+#[doc(hidden)]
 pub use crate::ops::convert::ConvertInputPlan;
 #[doc(hidden)]
 pub use crate::ops::convert::ConvertMatrixTruthiness;
 pub use crate::ops::convert::ConvertModeInput;
 #[doc(hidden)]
 pub use crate::ops::convert::ConvertModeInput as PythonConvertModeInput;
+#[doc(hidden)]
+pub use crate::ops::convert::ConvertPaletteColor;
 pub use crate::ops::convert::ConvertPaletteInput;
 #[doc(hidden)]
 pub use crate::ops::convert::ConvertPaletteInput as PythonConvertPaletteInput;
+#[doc(hidden)]
+pub use crate::ops::convert::ConvertTransparencyInfoDelta;
+#[doc(hidden)]
+pub use crate::ops::convert::ConvertTransparencyInputKind;
+#[doc(hidden)]
+pub use crate::ops::convert::ConvertTransparencyPreflight;
+#[doc(hidden)]
+pub use crate::ops::convert::ConvertTransparencyValue;
+#[doc(hidden)]
+pub use crate::ops::convert::ConvertWarning;
 pub use crate::ops::convert::DitherInput;
 #[doc(hidden)]
 pub use crate::ops::convert::DitherInput as PythonDitherInput;
@@ -669,6 +701,7 @@ pub use crate::ops::module_fns::alpha_composite as image_alpha_composite;
 pub use crate::ops::module_fns::alpha_composite_with_execution_context as image_alpha_composite_with_execution_context;
 pub use crate::ops::module_fns::blend as image_blend;
 pub use crate::ops::module_fns::composite as image_composite;
+pub use crate::ops::module_fns::composite_with_execution_context as image_composite_with_execution_context;
 pub use crate::ops::module_fns::effect_mandelbrot as image_effect_mandelbrot;
 pub use crate::ops::module_fns::effect_mandelbrot_with_extent as image_effect_mandelbrot_with_extent;
 pub use crate::ops::module_fns::effect_noise as image_effect_noise;
@@ -820,177 +853,98 @@ pub use crate::raster::RgbaImage;
 pub use crate::raster::Rows;
 pub use crate::raster::RowsMut;
 
-pub use crate::font::public_api::imagefont_from_bytes;
-
-pub use crate::font::public_api::imagefont_from_bytes_with_options;
-
-pub use crate::font::public_api::imagefont_from_source;
-
-pub use crate::font::public_api::imagefont_load_default;
-
-pub use crate::font::public_api::imagefont_size;
-
-pub use crate::font::public_api::imagefont_text_bbox;
-
-pub use crate::font::public_api::imagefont_text_bbox_bytes;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_split_positions;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_split_positions_input;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_layout_bbox_input;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_layout_bbox;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_layout_bbox_with_callbacks;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_split_with_callbacks;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_length;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_wrap;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_wrap_scaled;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_wrap_with_callbacks;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_font_mode;
-
-#[doc(hidden)]
-pub use crate::font::public_api::imagefont_text_scaling;
-
-pub use crate::font::public_api::imagefont_getname;
-
-pub use crate::font::public_api::imagefont_getname_optional;
-
-pub use crate::font::public_api::imagefont_getmetrics;
-
-pub use crate::font::public_api::imagefont_getlength;
-
-pub use crate::font::public_api::imagefont_native_getlength_26dot6;
-
-pub use crate::font::public_api::imagefont_native_getlength_26dot6_input;
-
-pub use crate::font::public_api::imagefont_native_getsize;
-
-pub use crate::font::public_api::imagefont_native_getsize_input;
-
-pub use crate::font::public_api::imagefont_native_render;
-
-pub use crate::font::public_api::imagefont_native_render_input;
-
-pub use crate::font::public_api::imagefont_native_face_attrs;
-
-pub use crate::font::public_api::imagefont_native_face_info;
-
 pub use crate::font::public_api::imagefont_font_format;
-
-pub use crate::font::public_api::imagefont_is_scalable;
-
-pub use crate::font::public_api::imagefont_getlength_bytes;
-
-pub use crate::font::public_api::imagefont_getlength_with_options;
-
-pub use crate::font::public_api::imagefont_getlength_bytes_with_options;
-
-pub use crate::font::public_api::imagefont_has_variations;
-
-pub use crate::font::public_api::imagefont_variant;
-
-pub use crate::font::public_api::imagefont_variant_with_options;
-
+pub use crate::font::public_api::imagefont_from_bytes;
+pub use crate::font::public_api::imagefont_from_bytes_with_options;
+pub use crate::font::public_api::imagefont_from_source;
+pub use crate::font::public_api::imagefont_get_transposed_mask;
+pub use crate::font::public_api::imagefont_get_transposed_mask_input;
 pub use crate::font::public_api::imagefont_get_variation_axes;
-
 pub use crate::font::public_api::imagefont_get_variation_names;
-
-pub use crate::font::public_api::imagefont_set_variation_by_name;
-
-pub use crate::font::public_api::imagefont_set_variation_by_name_input;
-
-pub use crate::font::public_api::imagefont_set_variation_by_axes;
-
-pub use crate::font::public_api::imagefont_set_variation_by_axes_input;
-
-pub use crate::font::public_api::imagefont_native_getvaraxes;
-
-pub use crate::font::public_api::imagefont_native_getvarnames;
-
-pub use crate::font::public_api::imagefont_native_setvarname;
-
-pub use crate::font::public_api::imagefont_native_setvaraxes;
-
 pub use crate::font::public_api::imagefont_getbbox;
-
-pub use crate::font::public_api::imagefont_getbbox_bytes;
-
 #[cfg(feature = "test-api")]
 pub use crate::font::public_api::imagefont_getbbox_binary;
-
 #[cfg(feature = "test-api")]
 pub use crate::font::public_api::imagefont_getbbox_binary_bytes;
-
-pub use crate::font::public_api::imagefont_getbbox_with_options;
-
-pub use crate::font::public_api::imagefont_getbbox_with_optional_font;
-
-pub use crate::font::public_api::imagefont_textbbox_at_with_optional_font;
-
-pub use crate::font::public_api::imagefont_textbbox_at_with_optional_font_input;
-
-pub use crate::font::public_api::imagefont_getlength_with_optional_font;
-
-pub use crate::font::public_api::imagefont_getlength_with_optional_font_input;
-
-pub use crate::font::public_api::imagefont_multiline_textbbox;
-
-pub use crate::font::public_api::imagefont_multiline_textbbox_with_optional_font;
-
-pub use crate::font::public_api::imagefont_multiline_textbbox_with_optional_font_input;
-
+pub use crate::font::public_api::imagefont_getbbox_bytes;
 pub use crate::font::public_api::imagefont_getbbox_bytes_with_options;
-
 pub use crate::font::public_api::imagefont_getbbox_input_with_options;
-
-pub use crate::font::public_api::imagefont_getmask;
-
-pub use crate::font::public_api::imagefont_getmask_bytes;
-
-pub use crate::font::public_api::imagefont_getmask2;
-
-pub use crate::font::public_api::imagefont_getmask2_bytes;
-
-pub use crate::font::public_api::imagefont_getmask_with_options;
-
-pub use crate::font::public_api::imagefont_getmask_bytes_with_options;
-
-pub use crate::font::public_api::imagefont_getmask_input_with_options;
-
-pub use crate::font::public_api::imagefont_getmask2_with_start;
-
-pub use crate::font::public_api::imagefont_getmask2_bytes_with_start;
-
-pub use crate::font::public_api::imagefont_getmask2_with_options;
-
-pub use crate::font::public_api::imagefont_getmask2_bytes_with_options;
-
-pub use crate::font::public_api::imagefont_getmask2_input_with_options;
-
+pub use crate::font::public_api::imagefont_getbbox_with_optional_font;
+pub use crate::font::public_api::imagefont_getbbox_with_options;
+pub use crate::font::public_api::imagefont_getlength;
+pub use crate::font::public_api::imagefont_getlength_bytes;
+pub use crate::font::public_api::imagefont_getlength_bytes_with_options;
 pub use crate::font::public_api::imagefont_getlength_input_with_options;
-
-pub use crate::font::public_api::imagefont_get_transposed_mask;
-
-pub use crate::font::public_api::imagefont_get_transposed_mask_input;
-
+pub use crate::font::public_api::imagefont_getlength_with_optional_font;
+pub use crate::font::public_api::imagefont_getlength_with_optional_font_input;
+pub use crate::font::public_api::imagefont_getlength_with_options;
+pub use crate::font::public_api::imagefont_getmask;
+pub use crate::font::public_api::imagefont_getmask_bytes;
+pub use crate::font::public_api::imagefont_getmask_bytes_with_options;
+pub use crate::font::public_api::imagefont_getmask_input_with_options;
+pub use crate::font::public_api::imagefont_getmask_with_options;
+pub use crate::font::public_api::imagefont_getmask2;
+pub use crate::font::public_api::imagefont_getmask2_bytes;
+pub use crate::font::public_api::imagefont_getmask2_bytes_with_options;
+pub use crate::font::public_api::imagefont_getmask2_bytes_with_start;
+pub use crate::font::public_api::imagefont_getmask2_input_with_options;
+pub use crate::font::public_api::imagefont_getmask2_with_options;
+pub use crate::font::public_api::imagefont_getmask2_with_start;
+pub use crate::font::public_api::imagefont_getmetrics;
+pub use crate::font::public_api::imagefont_getname;
+pub use crate::font::public_api::imagefont_getname_optional;
+pub use crate::font::public_api::imagefont_has_variations;
+pub use crate::font::public_api::imagefont_is_scalable;
+pub use crate::font::public_api::imagefont_load_default;
+pub use crate::font::public_api::imagefont_multiline_textbbox;
+pub use crate::font::public_api::imagefont_multiline_textbbox_with_optional_font;
+pub use crate::font::public_api::imagefont_multiline_textbbox_with_optional_font_input;
+pub use crate::font::public_api::imagefont_native_face_attrs;
+pub use crate::font::public_api::imagefont_native_face_info;
+pub use crate::font::public_api::imagefont_native_getlength_26dot6;
+pub use crate::font::public_api::imagefont_native_getlength_26dot6_input;
+pub use crate::font::public_api::imagefont_native_getsize;
+pub use crate::font::public_api::imagefont_native_getsize_input;
+pub use crate::font::public_api::imagefont_native_getvaraxes;
+pub use crate::font::public_api::imagefont_native_getvarnames;
+pub use crate::font::public_api::imagefont_native_render;
+pub use crate::font::public_api::imagefont_native_render_input;
+pub use crate::font::public_api::imagefont_native_setvaraxes;
+pub use crate::font::public_api::imagefont_native_setvarname;
 #[cfg(feature = "test-api")]
 pub use crate::font::public_api::imagefont_render_text_binary;
+pub use crate::font::public_api::imagefont_set_variation_by_axes;
+pub use crate::font::public_api::imagefont_set_variation_by_axes_input;
+pub use crate::font::public_api::imagefont_set_variation_by_name;
+pub use crate::font::public_api::imagefont_set_variation_by_name_input;
+pub use crate::font::public_api::imagefont_size;
+pub use crate::font::public_api::imagefont_text_bbox;
+pub use crate::font::public_api::imagefont_text_bbox_bytes;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_font_mode;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_layout_bbox;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_layout_bbox_input;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_layout_bbox_with_callbacks;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_length;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_scaling;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_split_positions;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_split_positions_input;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_split_with_callbacks;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_wrap;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_wrap_scaled;
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_wrap_with_callbacks;
+pub use crate::font::public_api::imagefont_textbbox_at_with_optional_font;
+pub use crate::font::public_api::imagefont_textbbox_at_with_optional_font_input;
+pub use crate::font::public_api::imagefont_variant;
+pub use crate::font::public_api::imagefont_variant_with_options;

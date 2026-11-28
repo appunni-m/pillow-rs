@@ -14,6 +14,7 @@ declare_invert_native_mode!(
 
 // NO_PILLOW_SUPPORT: Pillow quantizes only L, P, RGB, and RGBA; this adds a
 // native PA strategy that resolves palette colors and alpha during sampling.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_quantize_with_palette(
     samples: &[u8],
     palette: crate::compute::registry::support::PaletteInput<'_>,

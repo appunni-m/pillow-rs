@@ -37,8 +37,43 @@ fn affine_f32_bicubic_vertical(samples: [f64; 4], distance: f64) -> f64 {
     distance.mul_add(middle, p1)
 }
 
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
 #[inline(always)]
-fn transform_affine_f32_pixels(
+fn transform_affine_f32_bicubic_pixel(
+    source: &[f32],
+    source_dimensions: (u32, u32),
+    floor_x: i64,
+    floor_y: i64,
+    dx_fraction: f64,
+    dy_fraction: f64,
+) -> f32 {
+    let (src_w, src_h) = source_dimensions;
+    let src_w_i = i64::from(src_w);
+    let src_h_i = i64::from(src_h);
+    let x = floor_x - 1;
+    let y = floor_y - 1;
+    let mut rows = [0.0f64; 4];
+    for row in 0..4i64 {
+        let yy = y + row;
+        if row > 0 && (yy < 0 || yy >= src_h_i) {
+            rows[row as usize] = rows[row as usize - 1];
+            continue;
+        }
+        let cy = yy.clamp(0, src_h_i - 1) as usize;
+        let samples = [
+            source[cy * src_w as usize + x.clamp(0, src_w_i - 1) as usize],
+            source[cy * src_w as usize + (x + 1).clamp(0, src_w_i - 1) as usize],
+            source[cy * src_w as usize + (x + 2).clamp(0, src_w_i - 1) as usize],
+            source[cy * src_w as usize + (x + 3).clamp(0, src_w_i - 1) as usize],
+        ];
+        rows[row as usize] = affine_f32_bicubic_horizontal(samples, dx_fraction);
+    }
+    affine_f32_bicubic_vertical(rows, dy_fraction) as f32
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+#[inline(always)]
+fn transform_affine_f32_pixels<const TRACK_VALIDITY: bool>(
     source: &[f32],
     source_dimensions: (u32, u32),
     destination_dimensions: (u32, u32),
@@ -46,6 +81,7 @@ fn transform_affine_f32_pixels(
     filter: &ResampleFilter,
     fill_word: f32,
     output: &mut [u8],
+    validity: &mut [u8],
 ) {
     let (src_w, src_h) = source_dimensions;
     let (dst_w, dst_h) = destination_dimensions;
@@ -68,6 +104,24 @@ fn transform_affine_f32_pixels(
             let sx = a.mul_add(xin, b * yin) + c;
             let sy = d.mul_add(xin, e * yin) + f;
 
+            if matches!(filter, ResampleFilter::Nearest) {
+                // Pillow's nearest affine coordinate conversion maps NaN to
+                // sample coordinate zero on the supported CPU targets.
+                let ix = sx as i64;
+                let iy = sy as i64;
+                let in_bounds = ix >= 0 && ix < src_w_i && iy >= 0 && iy < src_h_i;
+                if TRACK_VALIDITY {
+                    validity[output_index] = u8::from(in_bounds);
+                }
+                if in_bounds {
+                    let start = output_index * 4;
+                    output[start..start + 4].copy_from_slice(
+                        &source[(iy as usize) * src_w as usize + ix as usize].to_le_bytes(),
+                    );
+                }
+                continue;
+            }
+
             if !sx.is_finite()
                 || !sy.is_finite()
                 || sx < 0.0
@@ -75,19 +129,13 @@ fn transform_affine_f32_pixels(
                 || sy < 0.0
                 || sy >= f64::from(src_h)
             {
-                continue;
-            }
-
-            if matches!(filter, ResampleFilter::Nearest) {
-                let ix = sx as i64;
-                let iy = sy as i64;
-                if ix >= 0 && ix < src_w_i && iy >= 0 && iy < src_h_i {
-                    let start = output_index * 4;
-                    output[start..start + 4].copy_from_slice(
-                        &source[(iy as usize) * src_w as usize + ix as usize].to_le_bytes(),
-                    );
+                if TRACK_VALIDITY {
+                    validity[output_index] = 0;
                 }
                 continue;
+            }
+            if TRACK_VALIDITY {
+                validity[output_index] = 1;
             }
 
             let sample_x = sx - 0.5;
@@ -119,28 +167,16 @@ fn transform_affine_f32_pixels(
                     );
                 }
                 ResampleFilter::Bicubic => {
-                    let x = floor_x - 1;
-                    let y = floor_y - 1;
-                    let mut rows = [0.0f64; 4];
-                    for row in 0..4i64 {
-                        let yy = y + row;
-                        if row > 0 && (yy < 0 || yy >= src_h_i) {
-                            rows[row as usize] = rows[row as usize - 1];
-                            continue;
-                        }
-                        let cy = yy.clamp(0, src_h_i - 1) as usize;
-                        let samples = [
-                            source[cy * src_w as usize + (x).clamp(0, src_w_i - 1) as usize],
-                            source[cy * src_w as usize + (x + 1).clamp(0, src_w_i - 1) as usize],
-                            source[cy * src_w as usize + (x + 2).clamp(0, src_w_i - 1) as usize],
-                            source[cy * src_w as usize + (x + 3).clamp(0, src_w_i - 1) as usize],
-                        ];
-                        rows[row as usize] = affine_f32_bicubic_horizontal(samples, dx_fraction);
-                    }
-                    let start = output_index * 4;
-                    output[start..start + 4].copy_from_slice(
-                        &(affine_f32_bicubic_vertical(rows, dy_fraction) as f32).to_le_bytes(),
+                    let value = transform_affine_f32_bicubic_pixel(
+                        source,
+                        source_dimensions,
+                        floor_x,
+                        floor_y,
+                        dx_fraction,
+                        dy_fraction,
                     );
+                    let start = output_index * 4;
+                    output[start..start + 4].copy_from_slice(&value.to_le_bytes());
                 }
                 // Image.transform accepts only nearest, bilinear, and bicubic
                 // filters. Keep an internal fallback deterministic if a direct
@@ -203,6 +239,7 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32_into(
     raw: &[u8],
     source_dimensions: (u32, u32),
@@ -212,6 +249,56 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32_into(
     filter: &ResampleFilter,
     fill: Option<(u8, u8, u8, u8)>,
     output: &mut [u8],
+) -> Result<(), PilError> {
+    transform_affine_f32_into_impl::<false>(
+        raw,
+        source_dimensions,
+        dst_w,
+        dst_h,
+        data,
+        filter,
+        fill,
+        output,
+        &mut [],
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32_into_with_validity(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    fill: Option<(u8, u8, u8, u8)>,
+    output: &mut [u8],
+    validity: &mut [u8],
+) -> Result<(), PilError> {
+    transform_affine_f32_into_impl::<true>(
+        raw,
+        source_dimensions,
+        dst_w,
+        dst_h,
+        data,
+        filter,
+        fill,
+        output,
+        validity,
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pass@migration-parity-403d8607d0ba40038b9ec2047fcf0561; benchmark=pending
+fn transform_affine_f32_into_impl<const TRACK_VALIDITY: bool>(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    fill: Option<(u8, u8, u8, u8)>,
+    output: &mut [u8],
+    validity: &mut [u8],
 ) -> Result<(), PilError> {
     let (src_w, src_h) = source_dimensions;
     let source_len = usize::try_from(src_w)
@@ -238,6 +325,11 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32_into(
             "F affine destination buffer shape mismatch".into(),
         ));
     }
+    if TRACK_VALIDITY && validity.len() != output_pixels {
+        return Err(PilError::InternalError(
+            "F affine Transform validity buffer shape mismatch".into(),
+        ));
+    }
     let source = raw
         .chunks_exact(4)
         .take(source_len)
@@ -252,7 +344,7 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32_into(
     let fill_word = fill
         .map(|color| f32::from_le_bytes([color.0, color.1, color.2, color.3]))
         .unwrap_or(0.0);
-    transform_affine_f32_pixels(
+    transform_affine_f32_pixels::<TRACK_VALIDITY>(
         &source,
         (src_w, src_h),
         (dst_w, dst_h),
@@ -260,6 +352,7 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32_into(
         filter,
         fill_word,
         output,
+        validity,
     );
 
     Ok(())
@@ -654,7 +747,14 @@ pub(super) fn f64_add_c(left: f64, right: f64) -> f64 {
 #[inline]
 // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(super) fn f64_fma_c(left: f64, right: f64, addend: f64) -> f64 {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        left * right + addend
+    }
+    #[cfg(all(
+        not(target_arch = "wasm32"),
+        not(any(target_arch = "x86", target_arch = "x86_64"))
+    ))]
     {
         left.mul_add(right, addend)
     }
@@ -688,6 +788,7 @@ mod projective;
 pub(in crate::compute::pool_cpu::ops::transform) use projective::{
     transform_mesh_scalar32, transform_mesh_scalar32_record_with_coefficients,
     transform_projective_scalar32, transform_projective_scalar32_into,
+    transform_projective_scalar32_into_with_validity,
 };
 
 /// Pillow uses 16.16 nearest affine coordinates when the map is not a

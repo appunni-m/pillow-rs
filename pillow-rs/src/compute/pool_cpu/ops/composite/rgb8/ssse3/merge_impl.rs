@@ -39,7 +39,7 @@ const RGB_SSSE3_MASKS: [[[u8; 16]; 3]; 3] = [
     ],
 ];
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[allow(
     unsafe_code,
     reason = "the SSSE3 architecture strategy and merge guard validate this kernel's preconditions"
@@ -83,6 +83,7 @@ pub(crate) fn merge(
 #[allow(unsafe_code)]
 #[inline]
 #[target_feature(enable = "ssse3")]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 unsafe fn interleave_rgb_ssse3(
     red: &[u8],
     green: &[u8],

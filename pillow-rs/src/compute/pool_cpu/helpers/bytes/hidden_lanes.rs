@@ -3,7 +3,8 @@ use crate::raster::Mode;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{ImageBuffer, Pixel};
 
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: Chops byte binaries use the canonical RGB omitted-byte fallback.
 /// Returns the canonical omitted bytes for a logical pixel when no producer
 /// state was retained for its compact carrier.
 pub(crate) fn default_hidden_pixel_lanes(mode: Mode, first_sample: u8) -> Option<[u8; 2]> {

@@ -40,12 +40,46 @@ pub(crate) fn validate_rounded_rect(x0: i32, y0: i32, x1: i32, y1: i32) -> Resul
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn validate_draw_mode_pair(requested: Mode, actual: Mode) -> Result<(), PilError> {
     if requested != actual && !(requested == Mode::ImageRgba8 && actual == Mode::ImageRgb8) {
         return Err(PilError::ValueError("mode mismatch".to_owned()));
     }
     Ok(())
+}
+
+/// Packs Pillow's logical LAB ink into the raster's biased a/b byte lanes.
+// VERIFY: source=reviewed@2026-11-26; parity=pass@draw-rerun-3; benchmark=pending
+pub(crate) fn lab_storage_ink((l, a, b, alpha): DrawColor) -> DrawColor {
+    (l, a.wrapping_add(128), b.wrapping_add(128), alpha)
+}
+
+// VERIFY: source=reviewed@2026-11-26; parity=pass@draw-rerun-3; benchmark=pending
+fn encode_lab_draw_inks(operation: &mut crate::pipeline::PipelineOp) {
+    use crate::pipeline::PipelineOp;
+
+    let encode_optional = |ink: &mut Option<DrawColor>| {
+        if let Some(ink) = ink {
+            *ink = lab_storage_ink(*ink);
+        }
+    };
+    match operation {
+        PipelineOp::DrawLine { fill, .. } | PipelineOp::DrawPoint { fill, .. } => {
+            *fill = lab_storage_ink(*fill);
+        }
+        PipelineOp::DrawRectangle { fill, outline, .. }
+        | PipelineOp::DrawRoundedRect { fill, outline, .. }
+        | PipelineOp::DrawEllipse { fill, outline, .. }
+        | PipelineOp::DrawCircle { fill, outline, .. }
+        | PipelineOp::DrawPolygon { fill, outline, .. }
+        | PipelineOp::DrawChord { fill, outline, .. }
+        | PipelineOp::DrawPieslice { fill, outline, .. } => {
+            encode_optional(fill);
+            encode_optional(outline);
+        }
+        PipelineOp::DrawArc { fill, .. } => encode_optional(fill),
+        _ => {}
+    }
 }
 
 /// Native Python value passed from Draw's resolved ink to a font mask.
@@ -82,7 +116,7 @@ pub struct Draw {
     palette_color_cache: Vec<(Vec<PaletteColorComponent>, u8)>,
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn image_with_draw_output(source: &Image, output: DynamicImage) -> Image {
     let mut image = Image::from_dynamic(output);
     if let Image::Loaded(data) = &mut image {
@@ -483,9 +517,12 @@ impl Draw {
     /// `explicit_mode` may select Pillow's RGBA drawing context over an RGB image.
     /// An invalid explicit mode is reported by `validate_mode` and by the first
     /// mode-sensitive drawing operation.
-    // TODO(pillow-rs#3ptb): verify direct Rust mismatch timing and the accepted
-    // RGBA-context-over-RGB case against Python and JavaScript parity.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // Direct Rust construction is intentionally infallible; callers can invoke
+    // validate_mode explicitly, while mode-sensitive operations validate the
+    // stored context when they prepare or queue work.
+    // TODO(pillow-rs#3ptb): verify direct Rust validation timing, no-op paths,
+    // and RGBA-context-over-RGB output against the frozen API cases.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn new(image: Image, explicit_mode: Option<Mode>) -> Self {
         Self::new_with_execution_route(image, explicit_mode, None, None)
     }
@@ -493,7 +530,7 @@ impl Draw {
     /// Creates a drawing context with the caller's previously captured route
     /// and any explicit backend pin from the source image.
     #[doc(hidden)]
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn new_with_execution_route(
         image: Image,
         explicit_mode: Option<Mode>,
@@ -558,8 +595,12 @@ impl Draw {
     /// Appends a primitive while keeping this drawing context's route attached.
     // TODO(pillow-rs#3ptb): verify queued Draw selection/fallback receipts and
     // explicit pin retention across the frozen CPU mode/architecture matrix.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-26; parity=pass@draw-rerun-3; benchmark=pending
     pub(super) fn queue_draw_op(&mut self, operation: crate::pipeline::PipelineOp) {
+        let mut operation = operation;
+        if self.draw_mode == Some(Mode::ImageLab8) {
+            encode_lab_draw_inks(&mut operation);
+        }
         let mut image = Image::push_op(&self.image, operation);
         if let Some(backend) = self.pinned_backend {
             image = image.use_backend(backend);
@@ -571,7 +612,7 @@ impl Draw {
     }
 
     /// Resolves eager drawing through CPU while preserving SIMD's architecture request.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn cpu_execution_context(
         &self,
     ) -> Result<(Option<Backend>, ExecutionContext), PilError> {
@@ -581,7 +622,7 @@ impl Draw {
 
     /// Captures the backend and architecture selected for this Draw operation.
     #[doc(hidden)]
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn execution_route(&self) -> Result<(Option<Backend>, ExecutionContext), PilError> {
         self.cpu_execution_context()
     }
@@ -601,7 +642,7 @@ impl Draw {
     }
 
     /// Replaces eagerly drawn pixels while retaining their Image metadata.
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(super) fn replace_draw_output(&mut self, image: DynamicImage) {
         self.image = image_with_draw_output(&self.image, image);
     }
@@ -610,7 +651,7 @@ impl Draw {
     ///
     /// RGB images may be drawn through an RGBA context for alpha blending. All
     /// other explicit modes must match the destination image mode exactly.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn validate_mode(&self) -> Result<(), PilError> {
         let Some(requested) = self.draw_mode else {
             return Ok(());
@@ -619,7 +660,7 @@ impl Draw {
     }
 
     /// Return the effective PIL mode after validating an explicit override.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn effective_mode(&self) -> Result<Mode, PilError> {
         let actual = self.actual_mode()?;
         if let Some(requested) = self.draw_mode {
@@ -631,7 +672,7 @@ impl Draw {
     }
 
     /// Return the Draw-owned mode snapshot, resolving lazy mode only if needed.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn actual_mode(&self) -> Result<Mode, PilError> {
         match self.orig_mode {
             Some(mode) => Ok(mode),
@@ -641,15 +682,15 @@ impl Draw {
 
     /// Return the resolved drawing-context mode for host callback strategies.
     #[doc(hidden)]
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn draw_mode_identity(&self) -> Result<Mode, PilError> {
         self.effective_mode()
     }
 
     /// Validate the drawing mode and report the RGB alpha-blend exception.
-    // TODO(pillow-rs#3ptb): verify direct Rust mismatch timing and RGBA-over-
-    // RGB output for each queued geometry entry point.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // TODO(pillow-rs#3ptb): verify direct Rust validation order and
+    // RGBA-context-over-RGB outputs across queued geometry entry points.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn alpha_blend_rgb(&self) -> Result<bool, PilError> {
         let Some(requested) = self.draw_mode else {
             return Ok(false);
@@ -660,17 +701,16 @@ impl Draw {
     }
 
     /// Validate text options that are independent of rendered glyph data.
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-26; parity=pass@draw-rerun-3; benchmark=pending
     pub fn validate_text_options(
         &self,
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
-        // NO_PILLOW_SUPPORT: Pillow limits embedded-color Text to RGB/RGBA;
-        // this core implementation composes those glyphs through each
-        // Pillow-mode destination's Convert and Paste strategies.
-        if options.embedded_color && !self.effective_mode()?.is_pillow_mode() {
+        if options.embedded_color
+            && !matches!(self.effective_mode()?, Mode::ImageRgb8 | Mode::ImageRgba8)
+        {
             return Err(PilError::ValueError(
-                "Embedded color is not supported for this image mode".into(),
+                "Embedded color supported only in RGB and RGBA modes".into(),
             ));
         }
         Ok(())
@@ -729,9 +769,9 @@ impl Draw {
         self.orig_mode
     }
 
-    // TODO(pillow-rs#3ptb): verify omitted-ink defaults, CoreOnly rejection,
-    // and palette-mode outcomes across direct Rust Draw shape callers.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // TODO(pillow-rs#3ptb): verify omitted-ink defaults and CoreOnly rejection
+    // across direct Rust Draw shape callers, including typed-input error order.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn shape_inks(
         &self,
         fill: Option<(u8, u8, u8, u8)>,
@@ -752,9 +792,9 @@ impl Draw {
 
     /// Return the ink Pillow's experimental `Outline` API uses when both
     /// `fill` and `outline` are omitted.
-    // TODO(pillow-rs#3ptb): verify the no-ink result for every exact Pillow
-    // mode and the explicit CoreOnly rejection in direct Rust calls.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // TODO(pillow-rs#3ptb): verify the no-ink result for each Pillow mode and
+    // explicit CoreOnly rejection through direct Rust shape calls.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn default_shape_ink(&self) -> Result<Option<(u8, u8, u8, u8)>, PilError> {
         let ink = match self.effective_mode()? {
             // ImageDraw._getink() starts an RGB-family outline with
@@ -800,6 +840,7 @@ impl Draw {
     ///
     /// The only public path that changes the stored mode during drawing is an
     /// explicit RGBA context over an RGB image; this method restores RGB.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn image_clone(&self) -> Result<Image, PilError> {
         let img = self.image.clone();
         if self.orig_mode != Some(Mode::ImageRgb8) || img.mode_identity()? == Mode::ImageRgb8 {
@@ -815,7 +856,11 @@ impl Draw {
         ))
     }
 
-    /// Consume the drawing context and return the modified image.
+    /// Consume the drawing context and return its current image graph.
+    ///
+    /// Unlike [`Draw::image_clone`], this does not materialize or apply the
+    /// explicit RGBA-context-over-RGB restoration path.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn into_image(self) -> Image {
         self.image
     }

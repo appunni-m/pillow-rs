@@ -3,12 +3,14 @@ use super::execution::{
     PyExecutionContext, PythonExecutionRoute, route_from_context, route_pending_image,
 };
 use crate::*;
+use pyo3::PyTypeInfo;
 use pyo3::basic::CompareOp;
-use pyo3::exceptions::PyBufferError;
+use pyo3::exceptions::{PyAttributeError, PyBufferError};
 use pyo3::pymethods;
 use pyo3::types::{
     PyAnyMethods, PyByteArray, PyInt, PyList, PyMemoryView, PyString, PyTuple, PyTupleMethods,
 };
+use std::io::Write;
 
 // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn finish_frombytes_payload(
@@ -68,6 +70,222 @@ fn raw_decoder_plan_from_python(
         1
     };
     pillow_rs::RawDecoderPlan::new(mode, rawmode.as_deref(), stride, orientation).map_err(map_error)
+}
+
+struct SaveTarget<'py> {
+    path: Option<HostPath>,
+    filename_path: Option<HostPath>,
+    writer: Bound<'py, PyAny>,
+}
+
+struct SaveOutputFile {
+    file: std::fs::File,
+    remove_on_failure: Option<HostPath>,
+}
+
+impl SaveOutputFile {
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+    fn write_all(self, py: Python<'_>, bytes: Vec<u8>) -> (std::io::Result<()>, Self) {
+        let Self {
+            mut file,
+            remove_on_failure,
+        } = self;
+        let (result, file) = py.detach(move || {
+            let result = file.write_all(&bytes);
+            (result, file)
+        });
+        (
+            result,
+            Self {
+                file,
+                remove_on_failure,
+            },
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+    fn cleanup_after_failure(self, py: Python<'_>) -> PyResult<()> {
+        let Self {
+            file,
+            remove_on_failure,
+        } = self;
+        drop(file);
+        let Some(path) = remove_on_failure else {
+            return Ok(());
+        };
+        match std::fs::remove_file(&path.path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => Ok(()),
+            Err(error) => Err(map_host_path_error(py, &path, error)),
+        }
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+fn save_target_from_python<'py>(
+    fp: &Bound<'py, PyAny>,
+    py: Python<'py>,
+) -> PyResult<SaveTarget<'py>> {
+    let mut path = host_path_from_python(fp)?;
+    let mut writer = fp.clone();
+    if path.is_none() {
+        let stdout = py.import("sys")?.getattr("stdout")?;
+        let text_io_wrapper = py.import("io")?.getattr("TextIOWrapper")?;
+        if fp.eq(&stdout)? && stdout.is_instance(&text_io_wrapper)? {
+            // Pillow redirects this public file-like target to its binary stream.
+            writer = stdout.getattr("buffer")?;
+        }
+    }
+
+    let mut filename_path = path.as_ref().map(|path| path.clone_ref(py));
+    if !filename_path
+        .as_ref()
+        .is_some_and(|path| !path.path.as_os_str().is_empty())
+    {
+        match writer.getattr("name") {
+            Ok(_) => {
+                let name_for_check = writer.getattr("name")?;
+                if host_path_is_pathlike(&name_for_check)? {
+                    let name_for_path = writer.getattr("name")?;
+                    filename_path = Some(host_path_from_fspath(&name_for_path)?);
+                    if path
+                        .as_ref()
+                        .is_some_and(|path| path.path.as_os_str().is_empty())
+                    {
+                        if let Some(filename) = filename_path.as_ref() {
+                            path = Some(filename.clone_ref(py));
+                        }
+                    }
+                }
+            }
+            Err(error) if error.is_instance_of::<PyAttributeError>(py) => {}
+            Err(error) => return Err(error),
+        }
+    }
+
+    Ok(SaveTarget {
+        path,
+        filename_path,
+        writer,
+    })
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+fn save_extension_from_target(target: &SaveTarget<'_>, py: Python<'_>) -> PyResult<Option<String>> {
+    let Some(filename_path) = target.filename_path.as_ref() else {
+        return Ok(None);
+    };
+    let os_path = py.import("os")?.getattr("path")?;
+    let extension = os_path
+        .call_method1("splitext", (filename_path.value.bind(py),))?
+        .get_item(1)?;
+    match filename_path.kind {
+        HostPathKind::Text => {
+            let extension = extension.call_method0("lower")?;
+            match extension.extract::<String>() {
+                Ok(extension) => Ok(Some(extension)),
+                Err(error)
+                    if error.is_instance_of::<pyo3::exceptions::PyUnicodeEncodeError>(py) =>
+                {
+                    let message = PyString::new(py, "unknown file extension: ")
+                        .call_method1("__add__", (&extension,))?;
+                    Err(PyErr::from_value(
+                        pyo3::exceptions::PyValueError::type_object(py)
+                            .call1((message,))?
+                            .into_any(),
+                    ))
+                }
+                Err(error) => Err(error),
+            }
+        }
+        HostPathKind::Bytes => extension
+            .call_method0("lower")?
+            .call_method0("decode")?
+            .extract()
+            .map(Some),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+fn save_format_from_python(
+    format: Option<&Bound<'_, PyAny>>,
+    target: &SaveTarget<'_>,
+    before_encode: Option<&Bound<'_, PyAny>>,
+    py: Python<'_>,
+) -> PyResult<String> {
+    let explicit_format = match format {
+        Some(value) if value.is_truthy()? => Some(value),
+        _ => None,
+    };
+    let extension = if explicit_format.is_none() {
+        save_extension_from_target(target, py)?
+    } else {
+        None
+    };
+    let extension_format = if explicit_format.is_none() {
+        Some(pillow_rs::Image::resolve_save_format(None, extension.as_deref()).map_err(map_error)?)
+    } else {
+        None
+    };
+    if let Some(before_encode) = before_encode {
+        // Realize wrapper-owned lazy metadata after format discovery, before encoding.
+        before_encode.call0()?;
+    }
+    match explicit_format {
+        Some(format) => {
+            let format = format.call_method0("upper")?.extract::<String>()?;
+            pillow_rs::Image::resolve_save_format(Some(&format), None).map_err(map_error)
+        }
+        None => extension_format.ok_or_else(|| {
+            pyo3::exceptions::PyRuntimeError::new_err("save format extension was not resolved")
+        }),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+fn create_save_file(path: Option<&HostPath>, py: Python<'_>) -> PyResult<Option<SaveOutputFile>> {
+    if let Some(path) = path {
+        if host_path_contains_null(path) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "embedded null byte",
+            ));
+        }
+    }
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let remove_on_failure = (!path.path.exists()).then(|| path.clone_ref(py));
+    std::fs::File::create(&path.path)
+        .map(|file| {
+            Some(SaveOutputFile {
+                file,
+                remove_on_failure,
+            })
+        })
+        .map_err(|error| map_host_path_error(py, path, error))
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+fn save_execution_route(
+    inner: &pillow_rs::Image,
+    provider: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Option<PythonExecutionRoute>> {
+    if inner.is_materialized() {
+        return Ok(None);
+    }
+    let Some(provider) = provider else {
+        return Ok(None);
+    };
+    let context = provider.call0()?;
+    if context.is_none() {
+        return Ok(None);
+    }
+    let context = context.extract::<pyo3::PyRef<'_, PyExecutionContext>>()?;
+    Ok(Some(PythonExecutionRoute {
+        requested_backend: context.requested_backend,
+        pinned_backend: context.pinned_backend,
+        context: context.inner,
+    }))
 }
 
 #[pymethods]
@@ -133,7 +351,7 @@ impl PyImage {
         Ok(PyImage { inner: image })
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[classmethod]
     #[pyo3(signature = (fp, mode=None, formats=None))]
     fn open(
@@ -151,8 +369,8 @@ impl PyImage {
             .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
         if let Some(path) = host_path_from_python(fp)? {
             let bytes = py
-                .detach(|| std::fs::read(&path))
-                .map_err(|error| map_open_path_error(py, fp, &path, error))?;
+                .detach(|| std::fs::read(&path.path))
+                .map_err(|error| map_host_path_error(py, &path, error))?;
             let img = py
                 .detach(|| RsImage::open_bytes_with_formats(bytes, format_refs.as_deref()))
                 .map_err(map_error)?;
@@ -189,9 +407,9 @@ impl PyImage {
         .map_err(map_error)
     }
 
-    // TODO(pillow-rs#3ptb): freeze file-object name/extension, writer-option,
-    // path/write faults, and route receipts in the CPU parity matrix.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // TODO(pillow-rs#3ptb): verify file-like callback and partial-write
+    // behavior, encoder faults, and route receipts in CPU parity.
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[pyo3(signature = (
         fp,
         format=None,
@@ -208,87 +426,38 @@ impl PyImage {
         execution_context_provider: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<()> {
-        // Preserve format extraction before PathLike conversion. Compression
-        // conversion follows the wrapper load and filesystem preflight below.
-        let format = format
-            .map(|value| value.extract::<String>())
-            .transpose()?
-            .filter(|format| !format.is_empty());
-        let path = host_path_from_python(fp)?;
-        let extension = path
-            .as_deref()
-            .and_then(|path| path.extension())
-            .and_then(|extension| extension.to_str());
-        let extension_format = if format.is_none() {
-            Some(pillow_rs::Image::resolve_save_format(None, extension).map_err(map_error)?)
-        } else {
-            None
-        };
-        if let Some(before_encode) = before_encode {
-            // The Python Image wrapper injects its virtual load method here so
-            // dirty palettes are realized after format discovery and before
-            // the Rust encoder reads the image. No PyImage borrow is active.
-            before_encode.call0()?;
-        }
-        let format = match format {
-            Some(format) => pillow_rs::Image::resolve_save_format(Some(&format), extension)
-                .map_err(map_error)?,
-            None => extension_format.ok_or_else(|| {
-                pyo3::exceptions::PyRuntimeError::new_err("save format extension was not resolved")
-            })?,
-        };
-        if let Some(path) = path.as_deref() {
-            if path.is_dir() {
-                return Err(pyo3::exceptions::PyIsADirectoryError::new_err((
-                    21,
-                    "Is a directory",
-                    path.to_string_lossy().to_string(),
-                )));
+        let target = save_target_from_python(fp, py)?;
+        let format = save_format_from_python(format, &target, before_encode, py)?;
+        let mut output_file = create_save_file(target.path.as_ref(), py)?;
+        let save_result = (|| {
+            let compress_level = compress_level
+                .map(|value| value.extract::<i64>())
+                .transpose()?;
+            let encoder_options = save_options::encoder_options(&format, compress_level)?;
+            let inner = slf.bind(py).borrow().inner.clone();
+            let execution_route = save_execution_route(&inner, execution_context_provider)?;
+            let inner = route_pending_image(inner, execution_route);
+            let encoded = py
+                .detach(move || inner.encode_with_options(&format, &encoder_options))
+                .map_err(map_error)?;
+            if let Some(file_output) = output_file.take() {
+                let (write_result, file) = file_output.write_all(py, encoded);
+                output_file = Some(file);
+                write_result.map_err(|error| map_error(error.into()))?;
+            } else {
+                target
+                    .writer
+                    .call_method1("write", (PyBytes::new(target.writer.py(), &encoded),))?;
             }
-            if path.parent().is_some_and(|parent| !parent.exists()) {
-                return Err(pyo3::exceptions::PyFileNotFoundError::new_err((
-                    2,
-                    "No such file or directory",
-                    path.to_string_lossy().to_string(),
-                )));
-            }
-        }
-        let compress_level = compress_level
-            .map(|value| value.extract::<i64>())
-            .transpose()?;
-        let encoder_options = save_options::encoder_options(&format, compress_level)?;
-        let inner = slf.bind(py).borrow().inner.clone();
-        let execution_route = if inner.is_materialized() {
-            None
-        } else {
-            match execution_context_provider {
-                Some(provider) => {
-                    let context = provider.call0()?;
-                    if context.is_none() {
-                        None
-                    } else {
-                        let context = context.extract::<pyo3::PyRef<'_, PyExecutionContext>>()?;
-                        Some(PythonExecutionRoute {
-                            requested_backend: context.requested_backend,
-                            pinned_backend: context.pinned_backend,
-                            context: context.inner,
-                        })
-                    }
-                }
-                None => None,
-            }
-        };
-        let inner = route_pending_image(inner, execution_route);
-        let encoded = py
-            .detach(move || inner.encode_with_options(&format, &encoder_options))
-            .map_err(map_error)?;
-        if let Some(path) = path {
-            py.detach(|| std::fs::write(path, &encoded))
-                .map_err(|error| map_error(error.into()))
-        } else {
-            fp.call_method1("write", (PyBytes::new(fp.py(), &encoded),))?;
             Ok(())
+        })();
+        if let Err(error) = save_result {
+            if let Some(output_file) = output_file.take() {
+                output_file.cleanup_after_failure(py)?;
+            }
+            return Err(error);
         }
+        Ok(())
     }
 
     // TODO(pillow-rs#3ptb): verify unpacked font-mask bytes and selected/fallback

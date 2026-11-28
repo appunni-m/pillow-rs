@@ -5,6 +5,7 @@ use crate::error::PilError;
 use crate::raster::GrayAlphaImage;
 use wide::u8x16;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(source: &GrayAlphaImage) -> Result<(Vec<u8>, u64), PilError> {
     let dimensions = CheckedDims::new_allow_empty(source.width(), source.height(), 2)?;
     if source.as_raw().len() != dimensions.total_bytes() {

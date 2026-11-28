@@ -14,6 +14,11 @@ from typing import Any, Iterable
 
 import yaml
 
+try:
+    from migration_parity.fixture_io import stored_path as stored_fixture_path
+except ModuleNotFoundError:
+    from scripts.migration_parity.fixture_io import stored_path as stored_fixture_path
+
 from .python_bindings import (
     Binding,
     PythonBindingIndex,
@@ -129,6 +134,7 @@ def target_only_pyo3_binding(
     return None
 
 
+# VERIFY: source=reviewed@2026-11-26; parity=n/a; benchmark=n/a
 def crosswalk_source_identity(
     root: Path, additional_inputs: Iterable[str] = ()
 ) -> dict[str, Any]:
@@ -170,9 +176,9 @@ def crosswalk_source_identity(
         if directory.is_dir():
             files.update(path for path in directory.rglob(f"*{suffix}") if path.is_file())
     for relative in additional_inputs:
-        path = root / relative
+        path = stored_fixture_path(root / relative)
         if not path.is_file():
-            raise FileNotFoundError(f"crosswalk input disappeared during identity capture: {relative}")
+            raise FileNotFoundError(f"crosswalk input is missing: {relative}")
         files.add(path.resolve())
 
     digest = hashlib.sha256()

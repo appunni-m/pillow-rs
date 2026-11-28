@@ -31,7 +31,7 @@ impl Draw {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     fn replace_paletted_text_output(&mut self, image: DynamicImage) -> Result<(), PilError> {
         let DynamicImage::ImagePalette8(indices) = image else {
             return Err(PilError::InternalError(
@@ -46,12 +46,19 @@ impl Draw {
                 PilError::InternalError("prepared Draw Text palette disappeared".into())
             })?;
         let palette_alpha = self.image.palette_alpha().unwrap_or_default();
+        let palette_data = self
+            .image
+            .palette_data()
+            .cloned()
+            .unwrap_or_else(|| crate::image::PaletteData::from_alpha(&palette_alpha));
         let source_format = self.image.source_format();
         let info = self.image.image_info();
         let exif = self.image.exif_metadata();
         self.image = Image::Paletted(crate::image::PalettedData {
             indices: DynamicImage::ImagePalette8(indices),
+            palette_attached: true,
             palette,
+            palette_data,
             palette_alpha,
             source_format,
             info,

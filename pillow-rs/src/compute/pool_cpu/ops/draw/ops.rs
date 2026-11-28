@@ -106,7 +106,7 @@ pub(in crate::compute::pool_cpu::ops::draw) const DRAW_INPUTS: &[InputContract] 
         embedded_color_modes: TEXT_EMBEDDED_COLOR_MODES,
         mode_rejection: "mode mismatch",
         mask_rejection: "bad transparency mask",
-        embedded_color_rejection: "Embedded color is not supported for this image mode",
+        embedded_color_rejection: "Embedded color supported only in RGB and RGBA modes",
     },
 ];
 const DRAW_COMPOSED_OPERATIONS: &[OperationId] = &[OperationId::Paste];
@@ -194,7 +194,7 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::routed(
 
 const FLOODFILL_INPUTS: &[InputContract] = &[InputContract::FloodFillInputs];
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn classify_floodfill_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One
@@ -234,7 +234,7 @@ fn classify_floodfill_mode(mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn pillow_floodfill_strategy(mode: Mode) -> ModeSupport {
     ModeSupport::cpu(
         OperationId::FloodFill,
@@ -251,7 +251,7 @@ pub(crate) static FLOODFILL_SUPPORT: OperationSupport = OperationSupport::new(
     classify_floodfill_mode,
 );
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_floodfill(
     mode: Mode,
     context: &ExecutionContext,
@@ -261,7 +261,7 @@ pub(crate) fn prepare_floodfill(
     Ok(PreparedFloodFill::new(mode, selection, requested_backend))
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_floodfill<A: FloodFillAccess>(
     prepared: &PreparedFloodFill,
     access: &mut A,
@@ -319,12 +319,12 @@ pub(crate) struct PreparedDraw<'a> {
 }
 
 impl PreparedDraw<'_> {
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
-    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         execute_batch(
             self.image,
@@ -340,7 +340,7 @@ impl PreparedDraw<'_> {
 /// Direct Bitmap loops do not use the native span kernels selected by Draw's
 /// geometry batch, so a non-Default architecture request resolves to this
 /// mode's Default strategy.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn select_bitmap_strategy(
     support: ModeSupport,
     context: &ExecutionContext,
@@ -367,7 +367,7 @@ pub(crate) fn select_bitmap_strategy(
 }
 
 /// Selects the exact raster-mode strategy for direct Text composition.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn select_text_strategy(
     support: ModeSupport,
     context: &ExecutionContext,
@@ -396,7 +396,7 @@ pub(crate) fn select_text_strategy(
 }
 
 /// Executes Text through the exact mode selected by the shared Draw contract.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn apply_text(
     selection: StrategySelection,
     input: TextComposeInput<'_>,
@@ -409,7 +409,7 @@ pub(crate) fn apply_text(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn apply_text_for_mode<const RGBA_MASK: bool>(
     mode: Mode,
     input: TextComposeInput<'_>,
@@ -451,7 +451,7 @@ fn apply_text_for_mode<const RGBA_MASK: bool>(
 }
 
 /// Applies the prepared bitmap through the selected exact-mode Default owner.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn apply_bitmap(
     selection: StrategySelection,
     image: DynamicImage,
@@ -511,7 +511,7 @@ pub(crate) fn apply_bitmap(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn select_direct_strategy(
     support: ModeSupport,
     context: &ExecutionContext,
@@ -535,7 +535,7 @@ fn select_direct_strategy(
 }
 
 /// Confirms a direct Draw executor received its exact mode and Default strategy.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn validate_direct_selection(
     selection: StrategySelection,
     mode: Mode,
@@ -552,7 +552,7 @@ pub(crate) fn validate_direct_selection(
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::support(),
@@ -583,7 +583,7 @@ fn classify_mode(mode: Mode) -> ModeSupport {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn prepare_mode(
     image: &DynamicImage,
     ops: &[PipelineOp],
@@ -616,7 +616,7 @@ fn prepare_mode(
     SUPPORT.for_mode(mode).select(context, input)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -636,7 +636,7 @@ pub(crate) fn prepare<'a>(
     })
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,
@@ -645,7 +645,7 @@ pub(crate) fn prepare_pipeline<'a>(
     prepare(input, op, context).map(crate::compute::registry::PreparedOperation::from_draw)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_batch(
     image: &DynamicImage,
     ops: &[PipelineOp],
@@ -691,7 +691,7 @@ pub(crate) fn prepare_batch(
     prepare_mode(image, ops, context)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_mode(
     image: &DynamicImage,
     ops: &[PipelineOp],
@@ -731,7 +731,7 @@ fn execute_mode(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn is_draw_op(op: &PipelineOp) -> bool {
     super::helpers::is_draw_op(op)
 }

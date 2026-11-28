@@ -4,7 +4,7 @@ use crate::compute::Architecture;
 use crate::compute::ExecutionContext;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OutputModeRule, StrategyInputs,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule, StrategyInputs,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
@@ -28,12 +28,18 @@ const COLOR_SATURATION_INPUTS: &[InputContract] = &[InputContract::ExactNativeBy
     overflow_reason: "ColorSaturation native dimensions overflowed",
     mismatch_reason: "ColorSaturation source bytes did not match its dimensions",
 }];
+const COLOR_SATURATION_ARCHITECTURES: [ImplementationSupport; 3] =
+    crate::compute::pool_cpu::ops::enhance::helpers::strategy::color_saturation_architectures(
+        OperationId::ColorSaturation,
+        Mode::ImageRgbx8,
+        4,
+    );
 pub(crate) const COLOR_SATURATION_SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::ColorSaturation,
     Mode::ImageRgbx8,
     OutputModeRule::Preserve,
     COLOR_SATURATION_INPUTS,
-    &[],
+    &COLOR_SATURATION_ARCHITECTURES,
 );
 
 pub(crate) type Strategy<'a> = Prepared<(&'a RgbaImage, f64)>;
@@ -77,11 +83,15 @@ pub(crate) fn prepare_color_saturation<'a>(
     Ok(Prepared::new((source, factor), selection))
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn execute_color_saturation(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     let architecture = strategy.selection().implementation.architecture;
     let (source, factor) = strategy.implementation;
     match architecture {
         Architecture::Default => super::default::color_saturation_impl::execute(source, factor)
+            .map(DynamicImage::ImageRgbx8),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => super::avx512f::color_saturation_impl::execute(source, factor)
             .map(DynamicImage::ImageRgbx8),
         architecture => Err(PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for ColorSaturation mode {}",

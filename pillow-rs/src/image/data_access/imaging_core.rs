@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::compute::{Backend, ExecutionContext, PipelineOperationTelemetryCapture};
 use crate::error::PilError;
-use crate::image::{Image, materialization_cache};
+use crate::image::{Image, PaletteData, materialization_cache};
 use crate::raster::Mode;
 
 /// Transparency key accepted by Pillow's ImagingCore convert_transparent method.
@@ -40,6 +40,286 @@ impl Image {
         transparency: ImagingCoreTransparencyKey,
     ) -> Result<Image, PilError> {
         self.imaging_core_convert_transparent_with_route(target, transparency, None)
+    }
+
+    /// Converts this ImagingCore into an existing destination's native mode.
+    ///
+    /// The destination retains its palette and wrapper metadata; only its
+    /// operation-ready raster is replaced. Both images must have equal size.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when dimensions differ or conversion
+    /// to the destination mode is unsupported.
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    pub fn imaging_core_convert_into(&self, destination: &mut Image) -> Result<(), PilError> {
+        self.imaging_core_convert_into_with_route(destination, None)
+    }
+
+    /// Converts into an existing destination under the host-selected route.
+    #[doc(hidden)]
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    pub fn imaging_core_convert_into_with_execution_context(
+        &self,
+        destination: &mut Image,
+        requested_backend: Option<Backend>,
+        pinned_backend: Option<Backend>,
+        context: ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.imaging_core_convert_into_with_route(
+            destination,
+            Some((requested_backend, pinned_backend, context)),
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    fn imaging_core_convert_into_with_route(
+        &self,
+        destination: &mut Image,
+        route: Option<ImagingCoreRoute>,
+    ) -> Result<(), PilError> {
+        let target = destination.mode_identity()?;
+        let source_mode = self.mode_identity()?;
+        crate::ops::convert::validate_imaging_core_convert_into(source_mode, target)?;
+        let source_dimensions = self.size()?;
+        let destination_dimensions = destination.size()?;
+        if source_dimensions != destination_dimensions {
+            return Err(PilError::ValueError("images do not match".into()));
+        }
+
+        let (requested_backend, pinned_backend, context) = match route {
+            Some((requested_backend, pinned_backend, context)) => {
+                (requested_backend, pinned_backend, context)
+            }
+            None => {
+                let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+                (requested_backend, None, context)
+            }
+        };
+        let converted = self.convert_with_execution_route(
+            target,
+            None,
+            Some("NONE"),
+            crate::compute::CpuExecutionRoute::new(requested_backend, context)
+                .with_pinned_backend(pinned_backend),
+        )?;
+        let pixels = converted.materialized_shared_for_ops()?;
+        if pixels.mode() != target {
+            return Err(PilError::InternalError(
+                "ImagingCore conversion returned a different destination mode".into(),
+            ));
+        }
+        let mut updated_destination = if let Some((_, pinned_backend, context)) = route {
+            destination
+                .clone()
+                .with_backend_and_execution_context(pinned_backend, context)
+        } else {
+            destination.clone()
+        };
+        updated_destination.load()?;
+        if (pixels.width(), pixels.height()) != updated_destination.size()? {
+            return Err(PilError::InternalError(
+                "ImagingCore destination dimensions changed after preflight".into(),
+            ));
+        }
+        updated_destination.mutate_materialized_pixels(|raster| {
+            if raster.mode() != target {
+                return Err(PilError::InternalError(
+                    "ImagingCore destination mode changed during conversion".into(),
+                ));
+            }
+            *raster = pixels.as_ref().clone();
+            Ok(())
+        })?;
+        if matches!(target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
+            updated_destination.replace_palette_state_from(&converted);
+        }
+        *destination = updated_destination;
+        Ok(())
+    }
+
+    /// Applies a mode-preserving Transform into an existing ImagingCore region.
+    // VERIFY: source=reviewed@2026-11-24; parity=n/a; benchmark=n/a
+    pub fn imaging_core_transform(
+        &mut self,
+        source: &Image,
+        box_coordinates: (i64, i64, i64, i64),
+        method: crate::pipeline::TransformMethod,
+        data: Vec<f64>,
+        resample: i32,
+        fill: bool,
+    ) -> Result<(), PilError> {
+        self.imaging_core_transform_with_route(
+            source,
+            box_coordinates,
+            method,
+            data,
+            resample,
+            fill,
+            None,
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-24; parity=n/a; benchmark=n/a
+    /// Applies ImagingCore Transform under the context captured by the host.
+    #[doc(hidden)]
+    pub fn imaging_core_transform_with_execution_context(
+        &mut self,
+        source: &Image,
+        box_coordinates: (i64, i64, i64, i64),
+        method: crate::pipeline::TransformMethod,
+        data: Vec<f64>,
+        resample: i32,
+        fill: bool,
+        requested_backend: Option<Backend>,
+        pinned_backend: Option<Backend>,
+        context: ExecutionContext,
+    ) -> Result<(), PilError> {
+        self.imaging_core_transform_with_route(
+            source,
+            box_coordinates,
+            method,
+            data,
+            resample,
+            fill,
+            Some((requested_backend, pinned_backend, context)),
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-24; parity=n/a; benchmark=n/a
+    fn imaging_core_transform_with_route(
+        &mut self,
+        source: &Image,
+        box_coordinates: (i64, i64, i64, i64),
+        method: crate::pipeline::TransformMethod,
+        data: Vec<f64>,
+        resample: i32,
+        fill: bool,
+        route: Option<ImagingCoreRoute>,
+    ) -> Result<(), PilError> {
+        let destination_mode = self.mode_identity()?;
+        let source_mode = source.mode_identity()?;
+        if destination_mode != source_mode {
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
+        let filter = crate::ops::transform::parse_transform_resample(resample)?;
+        validate_imaging_core_transform_data(&method, &data)?;
+
+        let destination_dimensions = self.size()?;
+        let clipped = clip_imaging_core_transform_box(box_coordinates, destination_dimensions);
+        let (left, top, right, bottom) = clipped;
+        if left >= right || top >= bottom {
+            return Ok(());
+        }
+        self.imaging_core_transform_region(
+            source,
+            destination_mode,
+            clipped,
+            method,
+            data,
+            filter,
+            fill,
+            route,
+        )
+    }
+
+    // VERIFY: source=reviewed@2026-11-24; parity=n/a; benchmark=n/a
+    fn imaging_core_transform_region(
+        &mut self,
+        source: &Image,
+        mode: Mode,
+        coordinates: (i64, i64, i64, i64),
+        method: crate::pipeline::TransformMethod,
+        data: Vec<f64>,
+        filter: crate::pipeline::ResampleFilter,
+        fill: bool,
+        route: Option<ImagingCoreRoute>,
+    ) -> Result<(), PilError> {
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
+        let (requested_backend, pinned_backend, context) = route.unwrap_or_else(|| {
+            let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+            (requested_backend, None, context)
+        });
+        *self = self
+            .clone()
+            .with_backend_and_execution_context(pinned_backend, context);
+        let routed_source = source
+            .clone()
+            .with_backend_and_execution_context(pinned_backend, context);
+        self.load()?;
+        let source_pixels = routed_source.materialized_shared_for_ops()?;
+        if source_pixels.mode() != mode {
+            return Err(PilError::InternalError(
+                "ImagingCore Transform source mode changed during materialization".into(),
+            ));
+        }
+        let destination_pixels = self.materialized_shared_for_ops()?;
+        let dimensions = (destination_pixels.width(), destination_pixels.height());
+        // ImagingCore transforms evaluate their matrix at absolute output
+        // coordinates even when the requested destination box is partial.
+        // TODO(pillow-rs#3ptb): add origin-aware kernels to avoid full-image
+        // work for partial boxes without changing those coordinates.
+        let mut output = destination_pixels.as_ref().clone();
+        operation_receipts.capture();
+        let request = crate::compute::pool_cpu::ops::transform::ops::TransformRequest {
+            width: dimensions.0,
+            height: dimensions.1,
+            method: &method,
+            data: &data,
+            filter,
+            // ImagingCore's boolean fill contract zeroes every physical byte
+            // for invalid samples, including the alpha byte in four-band modes.
+            fill: Some((0, 0, 0, 0)),
+            fill_is_none: true,
+        };
+        let prepared = crate::compute::pool_cpu::ops::transform::ops::prepare(
+            source_pixels.as_ref(),
+            request,
+            &context,
+        )?;
+        let selection = *prepared.selection();
+        let pixel_count = (dimensions.0 as usize)
+            .checked_mul(dimensions.1 as usize)
+            .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+        let mut validity = Vec::new();
+        validity
+            .try_reserve_exact(pixel_count)
+            .map_err(|error| PilError::MemoryError(error.to_string()))?;
+        validity.resize(pixel_count, 0);
+        crate::compute::begin_pipeline_operation_telemetry("ImagingCoreTransform");
+        crate::compute::record_pipeline_operation_selection(&selection);
+        crate::compute::record_pipeline_operation_path(
+            if selection.implementation.architecture == crate::compute::Architecture::Default {
+                "cpu"
+            } else {
+                "vector"
+            },
+        );
+        let result = prepared.execute_into_with_validity(&mut output, &mut validity);
+        if result.is_ok() {
+            mask_imaging_core_transform_region(&mut validity, dimensions, coordinates, fill);
+        }
+        let result = result.and_then(|()| {
+            self.mutate_materialized_pixels(|destination| {
+                if destination.copy_masked_region_from(&output, 0, 0, &validity) {
+                    Ok(())
+                } else {
+                    Err(PilError::InternalError(
+                        "ImagingCore Transform destination region shape mismatch".into(),
+                    ))
+                }
+            })
+        });
+        crate::compute::finish_pipeline_operation_telemetry();
+        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
+            "ImagingCoreTransform",
+            requested_backend,
+            0,
+            "ImagingCore Transform uses the selected serial CPU architecture strategy",
+            selection,
+            operation_receipts,
+        );
+        result
     }
 
     /// Converts ImagingCore pixels under the active host-selected CPU route.
@@ -125,13 +405,13 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when the target transition is not
     /// supported by the current mode, and propagates materialization errors.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn imaging_core_setmode(&mut self, target: Mode) -> Result<(), PilError> {
         self.imaging_core_setmode_with_route(target, None)
     }
 
     /// Changes ImagingCore mode under a context selected by the host wrapper.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn imaging_core_setmode_with_execution_context(
         &mut self,
@@ -146,7 +426,7 @@ impl Image {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn imaging_core_setmode_with_route(
         &mut self,
         target: Mode,
@@ -198,13 +478,13 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when the source, band, dimensions, or
     /// stored sample layout does not match the destination.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn imaging_core_putband(&mut self, source: &Image, band: i32) -> Result<(), PilError> {
         self.imaging_core_putband_with_route(source, band, None)
     }
 
     /// Replaces one ImagingCore band under a context selected by the host wrapper.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn imaging_core_putband_with_execution_context(
         &mut self,
@@ -221,7 +501,7 @@ impl Image {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn imaging_core_putband_with_route(
         &mut self,
         source: &Image,
@@ -258,6 +538,14 @@ impl Image {
             None => source.clone(),
         };
         let source_pixels = routed_source.materialized_shared()?;
+        let source_palette =
+            if destination_mode == Mode::ImagePalette8 && routed_source.has_attached_palette() {
+                let mut loaded_source = routed_source.clone();
+                loaded_source.load()?;
+                Some(loaded_source)
+            } else {
+                None
+            };
         if let Some((_, pinned_backend, context)) = route {
             *self = self
                 .clone()
@@ -273,6 +561,9 @@ impl Image {
                 selection,
             )
         })?;
+        if let Some(source_palette) = source_palette.as_ref() {
+            self.copy_attached_palette_from(source_palette);
+        }
         crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
             "PutBand",
             requested_backend,
@@ -290,13 +581,13 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when the destination mode or band is
     /// unsupported, and propagates materialization errors.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub fn imaging_core_fillband(&mut self, band: i32, value: i32) -> Result<(), PilError> {
         self.imaging_core_fillband_with_route(band, value, None)
     }
 
     /// Fills one ImagingCore band under a context selected by the host wrapper.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn imaging_core_fillband_with_execution_context(
         &mut self,
@@ -313,7 +604,7 @@ impl Image {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn imaging_core_fillband_with_route(
         &mut self,
         band: i32,
@@ -356,7 +647,33 @@ impl Image {
         Ok(())
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    fn copy_attached_palette_from(&mut self, source: &Image) {
+        let Some(palette) = source.palette() else {
+            return;
+        };
+        let alpha = source.palette_alpha();
+        let palette_data = source.palette_data().cloned();
+        match self {
+            Image::Loaded(destination) => {
+                destination.palette = Some(palette);
+                destination.palette_data = palette_data;
+                destination.palette_alpha = alpha;
+            }
+            Image::Paletted(destination) => {
+                destination.palette_attached = true;
+                destination.palette = palette;
+                destination.palette_alpha = alpha.unwrap_or_default();
+                destination.palette_data = palette_data
+                    .unwrap_or_else(|| PaletteData::from_alpha(&destination.palette_alpha));
+            }
+            Image::Bytes { .. } | Image::Pipeline { .. } => {
+                unreachable!("PutBand palette copy follows destination materialization");
+            }
+        }
+    }
+
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn mutate_materialized_pixels(
         &mut self,
         operation: impl FnOnce(&mut crate::raster::DynamicImage) -> Result<(), PilError>,
@@ -377,5 +694,66 @@ impl Image {
             }
         }
         Ok(())
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=n/a; benchmark=n/a
+fn validate_imaging_core_transform_data(
+    method: &crate::pipeline::TransformMethod,
+    data: &[f64],
+) -> Result<(), PilError> {
+    let expected = match method {
+        crate::pipeline::TransformMethod::Affine => 6,
+        crate::pipeline::TransformMethod::Perspective | crate::pipeline::TransformMethod::Quad => 8,
+        crate::pipeline::TransformMethod::Mesh => {
+            return Err(PilError::ValueError("unknown transformation method".into()));
+        }
+    };
+    if data.len() != expected {
+        return Err(PilError::ValueError(
+            "wrong number of matrix entries".into(),
+        ));
+    }
+    Ok(())
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=n/a; benchmark=n/a
+fn clip_imaging_core_transform_box(
+    coordinates: (i64, i64, i64, i64),
+    dimensions: (u32, u32),
+) -> (i64, i64, i64, i64) {
+    let clip_x = |value: i64| value.clamp(0, i64::from(dimensions.0));
+    let clip_y = |value: i64| value.clamp(0, i64::from(dimensions.1));
+    (
+        clip_x(coordinates.0),
+        clip_y(coordinates.1),
+        clip_x(coordinates.2),
+        clip_y(coordinates.3),
+    )
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=n/a; benchmark=n/a
+fn mask_imaging_core_transform_region(
+    validity: &mut [u8],
+    dimensions: (u32, u32),
+    coordinates: (i64, i64, i64, i64),
+    fill: bool,
+) {
+    let width = dimensions.0 as usize;
+    let (left, top, right, bottom) = coordinates;
+    let left = left as usize;
+    let top = top as usize;
+    let right = right as usize;
+    let bottom = bottom as usize;
+    for (y, row) in validity.chunks_exact_mut(width).enumerate() {
+        if y < top || y >= bottom {
+            row.fill(0);
+            continue;
+        }
+        row[..left].fill(0);
+        if fill {
+            row[left..right].fill(1);
+        }
+        row[right..].fill(0);
     }
 }

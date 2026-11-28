@@ -25,6 +25,7 @@ pub(super) struct PyPasteBoxPlan {
 pub(super) struct PyPasteSourcePlan {
     prepared: Option<pillow_rs::PasteSourcePlan>,
     deferred_source: Option<pyo3::Py<PyAny>>,
+    deferred_core: bool,
 }
 
 #[pyclass(name = "_ThumbnailPlan", frozen)]
@@ -89,50 +90,9 @@ pub(super) fn register_adapter_functions(m: &Bound<'_, pyo3::types::PyModule>) -
     Ok(())
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=n/a
-fn convert_input_plan_from_python(
-    image: &pillow_rs::Image,
-    mode: pillow_rs::ConvertModeInput,
-    matrix: Option<&Bound<'_, PyAny>>,
-    palette: Option<&Bound<'_, PyAny>>,
-    py: Python<'_>,
-) -> PyResult<pillow_rs::ConvertInputPlan> {
-    let mut matrix_truthiness = if matrix.is_some() {
-        pillow_rs::ConvertMatrixTruthiness::NotEvaluated
-    } else {
-        pillow_rs::ConvertMatrixTruthiness::First(false)
-    };
-    let mut palette_adaptive = None;
-    loop {
-        let plan = image
-            .prepare_convert_input_plan(mode.clone(), matrix_truthiness, palette_adaptive)
-            .map_err(map_error)?;
-        match plan {
-            pillow_rs::ConvertInputPlan::NeedsMatrixTruthiness => {
-                let truthy = matrix
-                    .map(|value| value.is_truthy())
-                    .transpose()?
-                    .unwrap_or(false);
-                matrix_truthiness = pillow_rs::ConvertMatrixTruthiness::First(truthy);
-            }
-            pillow_rs::ConvertInputPlan::NeedsMatrixTruthinessAgain { first } => {
-                let second = matrix
-                    .map(|value| value.is_truthy())
-                    .transpose()?
-                    .unwrap_or(false);
-                matrix_truthiness = pillow_rs::ConvertMatrixTruthiness::Repeated { first, second };
-            }
-            pillow_rs::ConvertInputPlan::NeedsPaletteComparison => {
-                palette_adaptive = Some(convert_palette_is_adaptive_from_python(py, palette)?);
-            }
-            ready => return Ok(ready),
-        }
-    }
-}
-
 #[pymethods]
 impl PyImage {
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-27; parity=pass@cpu-default-closure-2026-11-27; benchmark=pending
     fn _resize_filter_code(slf: Py<Self>, resample: Option<&Bound<'_, PyAny>>) -> PyResult<i32> {
         let _keep_self_alive = slf;
         let input = resample_input_from_python(resample)?;
@@ -165,7 +125,7 @@ impl PyImage {
         Ok(pyimage_from_active_route(rs, py))
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[pyo3(signature = (size, resample=None, box_coords=None, reducing_gap=None))]
     fn _resize_dispatch(
         slf: Py<Self>,
@@ -199,6 +159,7 @@ impl PyImage {
         Py::new(py, pyimage_from_active_route(resized, py)).map(|image| image.into_any())
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[pyo3(signature = (angle, output_size, resample=None, expand=false, fillcolor=None))]
     #[allow(clippy::too_many_arguments)] // Mirrors the internal Pillow Rotate boundary.
     fn _prepare_rotate(
@@ -256,7 +217,7 @@ impl PyImage {
         })
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn _rotate_prepared(
         slf: Py<Self>,
         plan: pyo3::PyRef<'_, PyRotatePlan>,
@@ -277,7 +238,7 @@ impl PyImage {
         Ok(pyimage_from_active_route(inner, py))
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn transpose(slf: Py<Self>, method: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
         let input = transpose_input_from_python(method)?;
         let inner = slf.bind(py).borrow().inner.clone();
@@ -317,93 +278,14 @@ impl PyImage {
         Ok(PyImage { inner })
     }
 
-    // TODO(pillow-rs#3ptb): parity-check arbitrary mode truth/equality overrides,
-    // custom matrix sequence callbacks, palette comparison through transparent
-    // routes, and custom dither __index__ failures. Built-in inputs now follow
-    // the staged route before only consumed arguments are converted.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    #[pyo3(signature = (mode=None, matrix=None, dither=None, palette=None, colors=None, execution_context=None))]
-    fn convert(
-        slf: Py<Self>,
-        mode: Option<&Bound<'_, PyAny>>,
-        matrix: Option<&Bound<'_, PyAny>>,
-        dither: Option<&Bound<'_, PyAny>>,
-        palette: Option<&Bound<'_, PyAny>>,
-        colors: Option<&Bound<'_, PyAny>>,
-        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
-        py: Python<'_>,
-    ) -> PyResult<PyImage> {
-        let mode = convert_mode_input_from_python(mode)?;
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+    #[cfg(feature = "test-api")]
+    fn _migration_direct_posterize(slf: Py<Self>, bits: u8, py: Python<'_>) -> PyResult<PyImage> {
         let inner = slf.bind(py).borrow().inner.clone();
-        let plan = convert_input_plan_from_python(&inner, mode, matrix, palette, py)?;
-        let matrix = if matches!(plan, pillow_rs::ConvertInputPlan::Matrix { .. }) {
-            Some(convert_matrix_from_python(matrix.ok_or_else(|| {
-                PyValueError::new_err("Convert matrix plan has no matrix input")
-            })?)?)
-        } else {
-            None
-        };
-        let dither = if matches!(plan, pillow_rs::ConvertInputPlan::Convert { .. }) {
-            convert_dither_input_from_python(dither)?
-        } else {
-            pillow_rs::DitherInput::None
-        };
-        let colors = if matches!(plan, pillow_rs::ConvertInputPlan::Quantize { .. }) {
-            colors
-                .map(|value| value.extract::<i32>())
-                .transpose()?
-                .map(i64::from)
-        } else {
-            None
-        };
-        let route = route_from_context(execution_context, py);
-        let execution_context = route.map(|route| route.context);
-        let rs = py
-            .detach(move || {
-                inner.execute_convert_input_plan(plan, matrix, dither, colors, execution_context)
-            })
+        let inner = py
+            .detach(move || pillow_rs::imageops_posterize(&inner, bits))
             .map_err(map_error)?;
-        Ok(PyImage {
-            inner: route_pending_image(rs, route),
-        })
-    }
-
-    /// Applies Pillow's low-level matrix conversion through the typed core plan.
-    // TODO(pillow-rs#3ptb): verify target-mode arity faults, matrix pixel output,
-    // and active architecture/fallback receipts in the CPU parity matrix.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    #[pyo3(signature = (mode, matrix))]
-    fn convert_matrix(
-        slf: Py<Self>,
-        mode: &Bound<'_, PyAny>,
-        matrix: &Bound<'_, PyAny>,
-        py: Python<'_>,
-    ) -> PyResult<PyImage> {
-        let mode_name = mode.extract::<String>()?;
-        let target_mode = pillow_rs::Mode::from_pillow_name(&mode_name).ok_or_else(|| {
-            map_error(pillow_rs::PilError::ValueError(
-                "unrecognized image mode".into(),
-            ))
-        })?;
-        // NO_PILLOW_SUPPORT: the Rust Convert matrix contract also admits LAB.
-        let matrix = convert_matrix_from_python(matrix)?;
-        let route = route_from_context(None, py);
-        let context = route.map(|route| route.context);
-        let image = slf.bind(py).borrow().inner.clone();
-        let result = py
-            .detach(move || {
-                image.execute_convert_input_plan(
-                    pillow_rs::ConvertInputPlan::Matrix { target_mode },
-                    Some(matrix),
-                    pillow_rs::DitherInput::None,
-                    None,
-                    context,
-                )
-            })
-            .map_err(map_error)?;
-        Ok(PyImage {
-            inner: route_pending_image(result, route),
-        })
+        Ok(PyImage { inner })
     }
 
     #[pyo3(signature = (box_coords, has_mask, position_size_available, known_length=None))]
@@ -427,6 +309,7 @@ impl PyImage {
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn _paste_prepare_source(
         slf: Py<Self>,
         source: &Bound<'_, PyAny>,
@@ -445,6 +328,7 @@ impl PyImage {
             return Ok(PyPasteSourcePlan {
                 prepared: None,
                 deferred_source: Some(source.clone().unbind()),
+                deferred_core: false,
             });
         };
         let image = slf.bind(py).borrow();
@@ -455,9 +339,20 @@ impl PyImage {
         Ok(PyPasteSourcePlan {
             prepared: Some(prepared),
             deferred_source: None,
+            deferred_core: false,
         })
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+    fn _paste_defer_resolved_source(&self, source: &Bound<'_, PyAny>) -> PyPasteSourcePlan {
+        PyPasteSourcePlan {
+            prepared: None,
+            deferred_source: Some(source.clone().unbind()),
+            deferred_core: true,
+        }
+    }
+
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn _paste_prepare_resolved_image_source(
         &self,
         source: &Bound<'_, PyImage>,
@@ -470,9 +365,13 @@ impl PyImage {
         Ok(PyPasteSourcePlan {
             prepared: Some(prepared),
             deferred_source: None,
+            deferred_core: false,
         })
     }
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // TODO(pillow-rs#3ptb): parity-check transactional eager pixels/faults,
+    // route receipts, and callback order across source conversion, mask.im,
+    // and native Paste argument validation.
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     #[pyo3(signature = (box_plan, source_plan, mask=None, execution_context=None))]
     fn _paste_apply_prepared(
         slf: pyo3::Py<Self>,
@@ -494,6 +393,7 @@ impl PyImage {
             }
             None => box_plan.prepared.clone(),
         };
+        let mask = paste_mask_from_python(mask)?;
         let source_plan = match &source_plan.prepared {
             Some(prepared) => prepared.clone(),
             None => {
@@ -508,32 +408,46 @@ impl PyImage {
                     .inner
                     .mode_identity()
                     .map_err(map_error)?;
-                let input = paste_source_from_python(source, mode)?;
-                pillow_rs::Image::prepare_paste_source_for_mode(mode, input).map_err(map_error)?
+                let input = if source_plan.deferred_core {
+                    paste_source_from_imaging_core(source, mode)?
+                } else {
+                    paste_source_from_python(source, mode)?
+                };
+                match input {
+                    pillow_rs::PasteSourceInput::Image(image) if source_plan.deferred_core => slf
+                        .bind(py)
+                        .borrow()
+                        .inner
+                        .prepare_resolved_paste_image_source(*image)
+                        .map_err(map_error)?,
+                    input => pillow_rs::Image::prepare_paste_source_for_mode(mode, input)
+                        .map_err(map_error)?,
+                }
             }
         };
-        let mask = paste_mask_from_python(mask)?;
         let route = route_from_context(execution_context, py);
         let mut destination = slf.bind(py).borrow_mut();
-        let destination = &mut destination.inner;
-        py.detach(|| match route {
-            Some(route) => {
-                let result = destination.paste_prepared_with_execution_context(
-                    box_plan,
-                    source_plan,
-                    mask,
-                    route.context,
-                );
-                if result.is_ok() {
-                    if let Some(backend) = route.pinned_backend {
-                        *destination = (*destination).clone().use_backend(backend);
-                    }
-                }
-                result
-            }
-            None => destination.paste_prepared(box_plan, source_plan, mask),
-        })
-        .map_err(map_error)
+        let working = destination.inner.clone();
+        let updated = py
+            .detach(move || {
+                let mut working = working;
+                match route {
+                    Some(route) => working.paste_prepared_with_execution_route(
+                        box_plan,
+                        source_plan,
+                        mask,
+                        pillow_rs::CpuExecutionRoute::new(route.requested_backend, route.context)
+                            .with_pinned_backend(route.pinned_backend),
+                    ),
+                    None => working.paste_prepared(box_plan, source_plan, mask),
+                }?;
+                let mut working = route_pending_image(working, route);
+                working.load()?;
+                Ok::<_, pillow_rs::PilError>(working)
+            })
+            .map_err(map_error)?;
+        destination.inner = updated;
+        Ok(())
     }
 
     // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
@@ -696,17 +610,34 @@ impl PyImage {
         })
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // TODO(pillow-rs#3ptb): verify eager callback execution uses the injected
+    // Architecture and records its selected/fallback receipt in CPU parity.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn expand(slf: Py<Self>, margin: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
         let margin = c_int_from_python(margin)?;
+        let route = route_from_context(None, py);
         let inner = slf.bind(py).borrow().inner.clone();
+        let execution_route = route.map(|route| (route.requested_backend, route.context));
         let rs = py
-            .detach(move || inner.imaging_core_expand(margin, margin))
+            .detach(move || match execution_route {
+                Some((requested_backend, context)) => inner
+                    .imaging_core_expand_with_execution_route(
+                        margin,
+                        margin,
+                        requested_backend,
+                        context,
+                    ),
+                None => inner.imaging_core_expand(margin, margin),
+            })
             .map_err(map_error)?;
-        Ok(pyimage_from_active_route(rs, py))
+        Ok(PyImage {
+            inner: route_pending_image(rs, route),
+        })
     }
 
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // TODO(pillow-rs#3ptb): verify the eager P callback path uses the injected
+    // Architecture; scalar queued routes receive it before materialization.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn rankfilter(
         slf: Py<Self>,
         size: &Bound<'_, PyAny>,
@@ -715,11 +646,24 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let size = c_int_from_python(size)?;
         let rank = c_int_from_python(rank)?;
+        let route = route_from_context(None, py);
         let inner = slf.bind(py).borrow().inner.clone();
+        let execution_route = route.map(|route| (route.requested_backend, route.context));
         let rs = py
-            .detach(move || inner.imaging_core_rankfilter(size, rank))
+            .detach(move || match execution_route {
+                Some((requested_backend, context)) => inner
+                    .imaging_core_rankfilter_with_execution_route(
+                        size,
+                        rank,
+                        requested_backend,
+                        context,
+                    ),
+                None => inner.imaging_core_rankfilter(size, rank),
+            })
             .map_err(map_error)?;
-        Ok(pyimage_from_active_route(rs, py))
+        Ok(PyImage {
+            inner: route_pending_image(rs, route),
+        })
     }
 
     // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
@@ -813,33 +757,6 @@ impl PyImage {
         py.detach(move || pillow_rs::image_effect_spread(&inner, distance))
             .map(|i| pyimage_from_active_route(i, py))
             .map_err(map_error)
-    }
-
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    #[pyo3(signature = (dest_map, source_palette=None))]
-    fn remap_palette(
-        slf: Py<Self>,
-        dest_map: &Bound<'_, PyAny>,
-        source_palette: Option<&Bound<'_, PyAny>>,
-        py: Python<'_>,
-    ) -> PyResult<PyImage> {
-        // These sequence extractions can call user-defined iteration methods.
-        let dest_map = dest_map.extract::<Vec<u8>>()?;
-        let source_palette = source_palette
-            .map(|palette| palette.extract::<Vec<u8>>())
-            .transpose()?;
-        let image = slf.bind(py).borrow();
-        let image = &image.inner;
-        let remapped = py
-            .detach(|| match source_palette.as_deref() {
-                None => image.remap_palette(&dest_map),
-                Some(source_palette) => {
-                    image.remap_palette_with_source(&dest_map, Some(source_palette))
-                }
-            })
-            .map(|i| pyimage_from_active_route(i, py))
-            .map_err(map_error)?;
-        Ok(remapped)
     }
 
     // TODO(pillow-rs#3ptb): verify XBM mode faults, route receipts, and output

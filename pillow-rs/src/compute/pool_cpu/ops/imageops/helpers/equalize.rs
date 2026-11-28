@@ -15,6 +15,7 @@ pub(crate) enum PreparedEqualize<'a> {
 }
 
 impl PreparedEqualize<'_> {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::Luma(prepared) => prepared.selection(),
@@ -23,6 +24,7 @@ impl PreparedEqualize<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let mut output = match self {
             Self::Luma(prepared) => prepared.execute()?,
@@ -34,6 +36,7 @@ impl PreparedEqualize<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn equalize_lut(
     image: &DynamicImage,
     channels: usize,
@@ -43,6 +46,7 @@ fn equalize_lut(
         .ok_or_else(|| PilError::ValueError("images do not match".into()))
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     mask: Option<&Arc<Image>>,

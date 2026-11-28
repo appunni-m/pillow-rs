@@ -6,6 +6,7 @@ use super::super::{
 use crate::pipeline::ResampleFilter;
 use crate::raster::Mode;
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn thumbnail_i32_stream_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height, filter, reducing_gap_bits) = match input.request {
         RequestFacts::Thumbnail {
@@ -46,8 +47,33 @@ pub(crate) fn thumbnail_i32_stream_guard(input: StrategyInputs) -> GuardAssessme
     }
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
-pub(crate) fn reduce_f32_vector_guard(input: StrategyInputs) -> GuardAssessment {
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn thumbnail_i32_avx512f_guard(input: StrategyInputs) -> GuardAssessment {
+    match thumbnail_i32_stream_guard(input) {
+        GuardAssessment::Satisfied
+            if input.width >= 32
+                && input.width.is_multiple_of(2)
+                && input.height.is_multiple_of(2) =>
+        {
+            GuardAssessment::Satisfied
+        }
+        GuardAssessment::Satisfied => GuardAssessment::Ineligible,
+        other => other,
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn reduce_f32_vector_guard(input: StrategyInputs, lanes: u8) -> GuardAssessment {
+    reduce_32bit_vector_guard(input, lanes)
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn reduce_i32_vector_guard(input: StrategyInputs, lanes: u8) -> GuardAssessment {
+    reduce_32bit_vector_guard(input, lanes)
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+fn reduce_32bit_vector_guard(input: StrategyInputs, lanes: u8) -> GuardAssessment {
     let (x_factor, y_factor) = match input.request {
         RequestFacts::Reduce { x_factor, y_factor } => (x_factor, y_factor),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
@@ -57,7 +83,7 @@ pub(crate) fn reduce_f32_vector_guard(input: StrategyInputs) -> GuardAssessment 
         || y_factor != 2
         || !input.width.is_multiple_of(2)
         || !input.height.is_multiple_of(2)
-        || !(input.width / 2).is_multiple_of(8)
+        || !(input.width / 2).is_multiple_of(u32::from(lanes))
     {
         return GuardAssessment::Ineligible;
     }
@@ -73,6 +99,7 @@ pub(crate) fn reduce_f32_vector_guard(input: StrategyInputs) -> GuardAssessment 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn brightness_vector_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let factor_bits = match input.request {
         RequestFacts::Brightness { factor_bits } => factor_bits,
@@ -96,6 +123,7 @@ pub(crate) fn brightness_vector_guard(input: StrategyInputs, channels: u8) -> Gu
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn contrast_vector_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let factor_bits = match input.request {
         RequestFacts::Contrast { factor_bits } => factor_bits,
@@ -120,6 +148,7 @@ pub(crate) fn contrast_vector_guard(input: StrategyInputs, channels: u8) -> Guar
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn sharpness_vector_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let factor_bits = match input.request {
         RequestFacts::Sharpness { factor_bits } => factor_bits,
@@ -143,6 +172,7 @@ pub(crate) fn sharpness_vector_guard(input: StrategyInputs, channels: u8) -> Gua
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn color_saturation_vector_guard(
     input: StrategyInputs,
     channels: u8,
@@ -170,7 +200,22 @@ pub(crate) fn color_saturation_vector_guard(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn color_saturation_avx512f_guard(
+    input: StrategyInputs,
+    channels: u8,
+) -> GuardAssessment {
+    match color_saturation_vector_guard(input, channels) {
+        GuardAssessment::Satisfied if input.byte_len.is_some_and(|length| length >= 16) => {
+            GuardAssessment::Satisfied
+        }
+        GuardAssessment::Satisfied => GuardAssessment::Ineligible,
+        other => other,
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: equal-dimension byte-vector Chops require matching native byte layouts.
 pub(crate) fn chops_equal_dimensions_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     match input.request {
         RequestFacts::ChopsBinary { other, .. }
@@ -185,7 +230,8 @@ pub(crate) fn chops_equal_dimensions_guard(input: StrategyInputs, channels: u8) 
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// Scope: ChopsAdd/Sub vector eligibility checks shape, finite parameters, and row threshold.
 pub(crate) fn chops_add_subtract_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let (other, scale_bits, offset_bits) = match input.request {
         RequestFacts::ChopsBinary {
@@ -217,6 +263,7 @@ pub(crate) fn chops_add_subtract_guard(input: StrategyInputs, channels: u8) -> G
     chops_native_bytes_guard(input, other, channels)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn chops_offset_native_bytes_guard(
     input: StrategyInputs,
     channels: u8,
@@ -241,6 +288,7 @@ pub(crate) fn chops_offset_native_bytes_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn chops_offset_native_i16_guard(input: StrategyInputs) -> GuardAssessment {
     // Match the archived I;16 capability predicate's checked-u32 byte count.
     // The row-wise typed SIMD kernel needs a complete 8-sample row block,
@@ -265,11 +313,19 @@ pub(crate) fn chops_offset_native_i16_guard(input: StrategyInputs) -> GuardAsses
     }
 }
 
+// VERIFY: source=reviewed@2026-11-27; parity=pass@cpu-full-neon-20261127/batch-08-lab-secondary-rerun; benchmark=pending
+// Scope: LAB secondary Chops inputs use the centered Default path.
 fn chops_native_bytes_guard(
     input: StrategyInputs,
     other: SecondaryInputFacts,
     channels: u8,
 ) -> GuardAssessment {
+    // The three-band Default Chops route applies Pillow's centered LAB
+    // carrier adjustment per operand. The byte-vector kernel currently works
+    // on serialized channels, so a LAB secondary must use that Default path.
+    if other.mode == crate::raster::Mode::ImageLab8 {
+        return GuardAssessment::Ineligible;
+    }
     let primary = native_bytes_guard(input, channels);
     if !matches!(primary, GuardAssessment::Satisfied) {
         return primary;
@@ -285,6 +341,7 @@ fn chops_native_bytes_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter3x3_native_bytes_vectorizable_guard(
     input: StrategyInputs,
     channels: u8,
@@ -320,6 +377,7 @@ pub(crate) fn filter3x3_native_bytes_vectorizable_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter5x5_native_bytes_vectorizable_guard(
     input: StrategyInputs,
     channels: u8,
@@ -353,6 +411,7 @@ pub(crate) fn filter5x5_native_bytes_vectorizable_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter5x5_i32_binomial_fma_guard(input: StrategyInputs) -> GuardAssessment {
     let (kernel_bits, scale_bits, offset_bits) = match input.request {
         RequestFacts::Filter5x5 {
@@ -392,6 +451,7 @@ pub(crate) fn filter5x5_i32_binomial_fma_guard(input: StrategyInputs) -> GuardAs
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter5x5_i32_vectorizable_guard(input: StrategyInputs) -> GuardAssessment {
     let (kernel_bits, scale_bits) = match input.request {
         RequestFacts::Filter5x5 {
@@ -419,6 +479,7 @@ pub(crate) fn filter5x5_i32_vectorizable_guard(input: StrategyInputs) -> GuardAs
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter_native_byte_blur_guard(
     input: StrategyInputs,
     channels: u8,
@@ -470,6 +531,7 @@ pub(crate) fn filter_native_byte_blur_guard(
     checked_native_bytes_guard(input, channels)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter_rgba_gaussian_blur_radius_seven_guard(
     input: StrategyInputs,
 ) -> GuardAssessment {
@@ -496,6 +558,21 @@ pub(crate) fn filter_rgba_gaussian_blur_radius_seven_guard(
     checked_native_bytes_guard(input, 4)
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn filter_rgba_gaussian_blur_radius_seven_avx512f_guard(
+    input: StrategyInputs,
+) -> GuardAssessment {
+    let eligibility = filter_rgba_gaussian_blur_radius_seven_guard(input);
+    if !matches!(eligibility, GuardAssessment::Satisfied) {
+        return eligibility;
+    }
+    if input.width < 32 || input.height < 32 {
+        return GuardAssessment::Ineligible;
+    }
+    GuardAssessment::Satisfied
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter_luma_rank_window_guard(input: StrategyInputs) -> GuardAssessment {
     let (size, rank) = match input.request {
         RequestFacts::FilterWindow { size, rank, .. } => (size, rank),
@@ -515,6 +592,7 @@ pub(crate) fn filter_luma_rank_window_guard(input: StrategyInputs) -> GuardAsses
     checked_native_bytes_guard(input, 1)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter_native_byte_extrema_guard(
     input: StrategyInputs,
     channels: u8,
@@ -533,6 +611,7 @@ pub(crate) fn filter_native_byte_extrema_guard(
     checked_native_bytes_guard(input, channels)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter_native_byte_rank_window_guard(
     input: StrategyInputs,
     channels: u8,
@@ -558,7 +637,7 @@ pub(crate) fn filter_native_byte_rank_window_guard(
     checked_native_bytes_guard(input, channels)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pass@migration-parity-de042d8a4480460c8d2be1f284c38af6; benchmark=pending
 pub(crate) fn filter_f32_rank_window_guard(
     input: StrategyInputs,
     max_size: u32,
@@ -593,6 +672,64 @@ pub(crate) fn filter_f32_rank_window_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn filter_f32_avx512_rank_window_guard(
+    input: StrategyInputs,
+    max_size: u32,
+    minimum_width: u32,
+    max_pixels: u64,
+) -> GuardAssessment {
+    let rank_window = filter_f32_rank_window_guard(input, max_size);
+    if !matches!(rank_window, GuardAssessment::Satisfied) {
+        return rank_window;
+    }
+    let size = match input.request {
+        RequestFacts::FilterWindow { size, .. } => size,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let pixels = u64::from(input.width) * u64::from(input.height);
+    if size == 1 || input.width < minimum_width || pixels > max_pixels {
+        GuardAssessment::Ineligible
+    } else {
+        GuardAssessment::Satisfied
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn filter_i32_avx512_rank_window_guard(
+    input: StrategyInputs,
+    max_size: u32,
+    minimum_width: u32,
+    max_pixels: u64,
+) -> GuardAssessment {
+    let (size, rank) = match input.request {
+        RequestFacts::FilterWindow { size, rank, .. } => (size, rank),
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    if size == 0
+        || size == 1
+        || size % 2 == 0
+        || size > max_size
+        || input.width < minimum_width
+        || input.height == 0
+        || rank.is_some_and(|rank| u64::from(rank) >= u64::from(size) * u64::from(size))
+    {
+        return GuardAssessment::Ineligible;
+    }
+    match checked_native_bytes_guard(input, 4) {
+        GuardAssessment::Satisfied => {
+            if u64::from(input.width) * u64::from(input.height) <= max_pixels {
+                GuardAssessment::Satisfied
+            } else {
+                GuardAssessment::Ineligible
+            }
+        }
+        other => other,
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter_unsharp_rgb150_guard(input: StrategyInputs) -> GuardAssessment {
     match input.request {
         RequestFacts::UnsharpMask { percent: 150, .. } => (),
@@ -612,6 +749,7 @@ pub(crate) fn filter_unsharp_rgb150_guard(input: StrategyInputs) -> GuardAssessm
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn filter3x3_i32_vectorizable_guard(
     input: StrategyInputs,
     channels: u8,
@@ -642,13 +780,73 @@ pub(crate) fn filter3x3_i32_vectorizable_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn filter3x3_i32_avx512f_guard(input: StrategyInputs) -> GuardAssessment {
+    let (kernel_bits, scale_bits) = match input.request {
+        RequestFacts::Filter3x3 {
+            kernel_bits,
+            scale_bits,
+            ..
+        } => (kernel_bits, scale_bits),
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let layout = checked_native_bytes_guard(input, 4);
+    if !matches!(layout, GuardAssessment::Satisfied) {
+        return layout;
+    }
+    let scale = f32::from_bits(scale_bits);
+    let valid_parameters = scale.is_finite()
+        && scale != 0.0
+        && kernel_bits
+            .iter()
+            .all(|bits| f32::from_bits(*bits).is_finite());
+    if valid_parameters && input.width >= 18 && input.height >= 3 {
+        GuardAssessment::Satisfied
+    } else {
+        GuardAssessment::Ineligible
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn filter5x5_i32_avx512f_guard(input: StrategyInputs) -> GuardAssessment {
+    let (kernel_bits, scale_bits) = match input.request {
+        RequestFacts::Filter5x5 {
+            kernel_bits,
+            scale_bits,
+            ..
+        } => (kernel_bits, scale_bits),
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let layout = checked_native_bytes_guard(input, 4);
+    if !matches!(layout, GuardAssessment::Satisfied) {
+        return layout;
+    }
+    let scale = f32::from_bits(scale_bits);
+    let valid_parameters = scale.is_finite()
+        && scale != 0.0
+        && kernel_bits
+            .iter()
+            .all(|bits| f32::from_bits(*bits).is_finite());
+    if valid_parameters && input.width >= 20 && input.height >= 5 {
+        GuardAssessment::Satisfied
+    } else {
+        GuardAssessment::Ineligible
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn convert_target_guard(
     input: StrategyInputs,
     target: Mode,
     nonempty: bool,
 ) -> GuardAssessment {
     match input.request {
-        RequestFacts::ConvertTarget { target_mode } if target_mode == target => {
+        RequestFacts::ConvertTarget { target_mode }
+        | RequestFacts::ConvertMatrix { target_mode, .. }
+            if target_mode == target =>
+        {
             if !nonempty
                 || (input.width as usize)
                     .checked_mul(input.height as usize)
@@ -664,90 +862,7 @@ pub(crate) fn convert_target_guard(
     }
 }
 
-pub(crate) fn rotate_vector_bytes_guard(
-    input: StrategyInputs,
-    channels: u8,
-    force_nearest: bool,
-    bilinear: bool,
-) -> GuardAssessment {
-    if !(1..=4).contains(&channels) {
-        return GuardAssessment::Ineligible;
-    }
-    let empty_input = input.width == 0 || input.height == 0;
-    let RequestFacts::Rotate {
-        angle_bits,
-        expand,
-        center_bits,
-        translate_bits,
-        affine_bits,
-        output_size: _,
-        filter,
-        nearest,
-        ..
-    } = input.request
-    else {
-        return if input.request == RequestFacts::Unspecified {
-            GuardAssessment::Deferred
-        } else {
-            GuardAssessment::Ineligible
-        };
-    };
-    let angle = f64::from_bits(angle_bits);
-    let finite_pair = |bits: Option<(u64, u64)>| {
-        bits.is_none_or(|(x, y)| f64::from_bits(x).is_finite() && f64::from_bits(y).is_finite())
-    };
-    let finite_affine = affine_bits.is_none_or(|values| {
-        values
-            .into_iter()
-            .all(|value| f64::from_bits(value).is_finite())
-    });
-    if !angle.is_finite()
-        || !finite_pair(center_bits)
-        || !finite_pair(translate_bits)
-        || !finite_affine
-    {
-        return GuardAssessment::Ineligible;
-    }
-    // Empty-source behavior depends on the exact Default fast path: archived
-    // discrete paths preserve some empty outputs, while affine paths may
-    // reject or fill an expanded image. Keep that case on Default instead of
-    // a generic vector shortcut.
-    // TODO(pillow-rs#3ptb): verify empty outputs and architecture receipts in
-    // the frozen CPU parity matrix.
-    if empty_input {
-        return GuardAssessment::Ineligible;
-    }
-    let layout = StrategyGuard::CheckedNativeBytes { channels }.assess(input);
-    if !matches!(layout, GuardAssessment::Satisfied) {
-        return layout;
-    }
-    if affine_bits.is_none()
-        && angle.rem_euclid(360.0).abs() <= f64::EPSILON
-        && center_bits.is_none()
-        && translate_bits.is_none()
-    {
-        return layout;
-    }
-    if affine_bits.is_none() && center_bits.is_none() && translate_bits.is_none() {
-        let normalized = angle.rem_euclid(360.0);
-        let discrete = [90.0, 180.0, 270.0]
-            .into_iter()
-            .find(|value| normalized == *value);
-        if discrete.is_some_and(|degree| degree == 180.0 || expand || input.width == input.height) {
-            return layout;
-        }
-    }
-    let nearest = force_nearest || nearest;
-    if !nearest && (!bilinear || filter != 1) {
-        return GuardAssessment::Ineligible;
-    }
-    if !rotate_output_geometry_supported(input, channels) {
-        return GuardAssessment::Ineligible;
-    }
-    layout
-}
-
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn transform_byte_kernels_guard(
     input: StrategyInputs,
     channels: u8,
@@ -795,6 +910,7 @@ pub(crate) fn transform_byte_kernels_guard(
     checked_native_bytes_guard(input, channels)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn transform_i16_affine_guard(
     input: StrategyInputs,
     nearest: bool,
@@ -837,107 +953,7 @@ pub(crate) fn transform_i16_affine_guard(
     checked_native_bytes_guard(input, 2)
 }
 
-fn rotate_output_geometry_supported(input: StrategyInputs, channels: u8) -> bool {
-    let width = input.width;
-    let height = input.height;
-    if width == 0 || height == 0 {
-        return false;
-    }
-    let RequestFacts::Rotate {
-        angle_bits,
-        expand,
-        center_bits,
-        translate_bits,
-        affine_bits,
-        output_size,
-        ..
-    } = input.request
-    else {
-        return false;
-    };
-    if let Some(affine_bits) = affine_bits {
-        let Some((output_width, output_height)) = output_size else {
-            return false;
-        };
-        return affine_bits
-            .into_iter()
-            .all(|value| f64::from_bits(value).is_finite())
-            && output_width != 0
-            && output_height != 0
-            && output_width
-                .checked_mul(output_height)
-                .and_then(|pixels| pixels.checked_mul(u32::from(channels)))
-                .is_some_and(|output_bytes| output_bytes != 0)
-            && crate::checked_dims::CheckedDims::new(output_width, output_height, channels)
-                .is_ok();
-    }
-    let angle = f64::from_bits(angle_bits);
-    let (sw, sh) = (f64::from(width), f64::from(height));
-    let radians = -angle.to_radians();
-    let a = crate::ops::rotate::round_rotate_coefficient(radians.cos());
-    let b = crate::ops::rotate::round_rotate_coefficient(radians.sin());
-    let d = crate::ops::rotate::round_rotate_coefficient(-radians.sin());
-    let e = a;
-    let center = center_bits.map(|(x, y)| (f64::from_bits(x), f64::from_bits(y)));
-    let translate = translate_bits.map(|(x, y)| (f64::from_bits(x), f64::from_bits(y)));
-    let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
-    let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
-    let c = a * (-center_x - translate_x) + b * (-center_y - translate_y) + center_x;
-    let f = d * (-center_x - translate_x) + e * (-center_y - translate_y) + center_y;
-    let Some((output_width, output_height)) =
-        rotate_destination_dimensions(a, b, c, d, e, f, width, height, expand)
-    else {
-        return false;
-    };
-    let Some(output_bytes) = output_width
-        .checked_mul(output_height)
-        .and_then(|pixels| pixels.checked_mul(u32::from(channels)))
-    else {
-        return false;
-    };
-    output_bytes != 0
-        && crate::checked_dims::CheckedDims::new(output_width, output_height, channels).is_ok()
-}
-
-fn rotate_destination_dimensions(
-    a: f64,
-    b: f64,
-    c: f64,
-    d: f64,
-    e: f64,
-    f: f64,
-    width: u32,
-    height: u32,
-    expand: bool,
-) -> Option<(u32, u32)> {
-    let (sw, sh) = (f64::from(width), f64::from(height));
-    let transform = |x: f64, y: f64| (a * x + b * y + c, d * x + e * y + f);
-    let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
-    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-    for (x, y) in corners {
-        let (rotated_x, rotated_y) = transform(x, y);
-        min_x = min_x.min(rotated_x);
-        max_x = max_x.max(rotated_x);
-        min_y = min_y.min(rotated_y);
-        max_y = max_y.max(rotated_y);
-    }
-    let (output_width, output_height) = if expand {
-        (max_x.ceil() - min_x.floor(), max_y.ceil() - min_y.floor())
-    } else {
-        (sw, sh)
-    };
-    if !output_width.is_finite()
-        || !output_height.is_finite()
-        || output_width < 0.0
-        || output_height < 0.0
-        || output_width > f64::from(u32::MAX)
-        || output_height > f64::from(u32::MAX)
-    {
-        return None;
-    }
-    Some((output_width as u32, output_height as u32))
-}
-
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn native_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let expected = (input.width as usize)
         .checked_mul(input.height as usize)
@@ -945,7 +961,7 @@ pub(crate) fn native_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAs
     exact_byte_layout(input.byte_len, expected)
 }
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn checked_native_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let expected = crate::checked_dims::CheckedDims::new(input.width, input.height, channels)
         .ok()
@@ -953,6 +969,18 @@ pub(crate) fn checked_native_bytes_guard(input: StrategyInputs, channels: u8) ->
     exact_byte_layout(input.byte_len, expected)
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn get_extrema_i32_avx512f_guard(input: StrategyInputs) -> GuardAssessment {
+    match checked_native_bytes_guard(input, 4) {
+        GuardAssessment::Satisfied if input.byte_len.is_some_and(|length| length >= 64) => {
+            GuardAssessment::Satisfied
+        }
+        GuardAssessment::Satisfied => GuardAssessment::Ineligible,
+        other => other,
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn exact_byte_layout(byte_len: Option<usize>, expected: Option<usize>) -> GuardAssessment {
     match (expected, byte_len) {
         (None, _) => GuardAssessment::Ineligible,

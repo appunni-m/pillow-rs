@@ -9,7 +9,7 @@ use crate::pipeline::TransposeMethod;
 
 const CHANNELS: u8 = 4;
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn try_execute(
     image: &super::super::Input,
     method: &TransposeMethod,
@@ -31,7 +31,7 @@ pub(crate) fn try_execute(
     Ok(Some(output))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[inline(always)]
 fn load_rgba_words(row: &[u8]) -> [u32; 4] {
     [
@@ -42,7 +42,7 @@ fn load_rgba_words(row: &[u8]) -> [u32; 4] {
     ]
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[inline(always)]
 fn store_rgba_words(row: &mut [u8], words: [u32; 4]) {
     row[0..4].copy_from_slice(&words[0].to_ne_bytes());
@@ -55,7 +55,7 @@ fn store_rgba_words(row: &mut [u8], words: [u32; 4]) {
 ///
 /// Each source row contributes four contiguous native pixels. Their packed
 /// words are written as four contiguous destination rows.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn rotate270_tiled(source: &[u8], output: &mut [u8], width: u32, height: u32) {
     let width = width as usize;
     let height = height as usize;
@@ -79,7 +79,7 @@ fn rotate270_tiled(source: &[u8], output: &mut [u8], width: u32, height: u32) {
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transpose_rgba_block(
     source: &[u8],
     output: &mut [u8],

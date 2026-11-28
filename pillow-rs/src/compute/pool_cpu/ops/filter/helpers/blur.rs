@@ -10,7 +10,7 @@ use crate::error::PilError;
 
 pub(crate) const BOX_BLUR_BIAS: u32 = 1 << 23;
 
-#[path = "kernels/blur_line_steps.rs"]
+#[path = "blur/line_steps.rs"]
 mod blur_line_steps;
 #[path = "blur/box_rows.rs"]
 mod box_rows;
@@ -583,6 +583,8 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_native_byte_blur<const 
     vector::execute::<CHANNELS>(image, mode, request, selection, context)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn validate_native_byte_blur_selection(
     selection: &crate::compute::registry::support::StrategySelection,
     mode: crate::raster::Mode,
@@ -612,6 +614,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn validate_native_byte_blur_selec
         || !matches!(
             architecture,
             crate::compute::Architecture::Avx2
+                | crate::compute::Architecture::Avx512F
                 | crate::compute::Architecture::Avx
                 | crate::compute::Architecture::Sse2
                 | crate::compute::Architecture::Neon

@@ -153,7 +153,12 @@ pub fn finish_expand_fill_palette_from_host(
 }
 
 /// Runs Pillow ImageOps.expand sequencing through host callbacks and typed Rust strategies.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// Preserve CheckedDims-first before fill conversion and canvas allocation. This
+// intentional fault-order difference keeps the configured Rust pixel-limit
+// policy ahead of ordinary fill errors.
+// TODO(pillow-rs#3ptb): verify Expand dimension/fill fault outcomes, including
+// zero-sized results, against the frozen CPU parity cases.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn expand_with_callbacks<C: ImageOpsExpandCallbacks>(
     callbacks: &mut C,
@@ -191,7 +196,7 @@ where
         None
     };
 
-    // ImageOps resolves Image.new before evaluating its image.mode argument.
+    // Capture the Image.new wrapper class before evaluating call arguments.
     let constructor = callbacks.capture_wrapper_constructor()?;
     let target_mode = callbacks.image_mode()?;
     let size = callbacks.size_pair(&width, &height)?;
@@ -212,7 +217,9 @@ where
         let prepared = prepare_expand_fill_for_mode(mode, input)?;
         finish_expand_fill_palette_from_host(mode, prepared)
     })?;
-    let canvas = callbacks.run_core(move || expand_canvas_with_prepared_fill(size, &prepared))?;
+    let route = callbacks.canvas_execution_route();
+    let canvas = callbacks
+        .run_core(move || expand_canvas_with_prepared_fill_for_route(size, &prepared, route))?;
     let mut output = callbacks.wrap_canvas(&constructor, canvas)?;
     if let Some((palette, palette_mode)) = palette {
         if callbacks.palette_is_truthy(&palette)? {
@@ -274,6 +281,7 @@ fn palette_alpha_fill_error(input: &ImageOpsColor) -> PilError {
 }
 
 /// Checks the allocation dimensions against the mode captured for `Image.new`.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn validate_prepared_expand_output_size(
     prepared: &PreparedExpandFill,
@@ -282,21 +290,41 @@ pub fn validate_prepared_expand_output_size(
     validate_expand_output_size_for_mode(prepared.mode, size)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn validate_expand_output_size_for_mode(mode: Mode, size: (u32, u32)) -> Result<(), PilError> {
     CheckedDims::new_allow_empty(size.0, size.1, expand_bytes_per_pixel(mode)?)?;
     Ok(())
 }
 
-/// Creates and materializes the filled canvas before the source is loaded.
+/// Creates and materializes the filled canvas without an injected caller route.
 ///
-/// ImageOps.expand follows Pillow's Image.new-then-paste order. The host
-/// wrapper uses this entry point to preserve allocation faults before source
-/// decoding while it delegates the source conversion and copy to Image.paste.
+/// The direct helper materializes the fill canvas with the default route.
+/// ImageOps.expand uses the route-aware helper to preserve its source context
+/// before it delegates source conversion and copy to public Image.paste.
+// TODO(pillow-rs#3ptb): verify mode/architecture selection receipts for this
+// eager canvas fill against the frozen CPU parity matrix.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn expand_canvas_with_prepared_fill(
     size: (u32, u32),
     prepared: &PreparedExpandFill,
+) -> Result<Image, PilError> {
+    expand_canvas_with_prepared_fill_for_route(size, prepared, None)
+}
+
+/// Materializes an ImageOps.expand canvas under its captured operation route.
+// TODO(pillow-rs#3ptb): verify mode/architecture selection receipts for this
+// eager canvas fill against the frozen CPU parity matrix.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+#[doc(hidden)]
+pub fn expand_canvas_with_prepared_fill_for_route(
+    size: (u32, u32),
+    prepared: &PreparedExpandFill,
+    route: Option<(
+        Option<crate::compute::Backend>,
+        crate::compute::ExecutionContext,
+    )>,
 ) -> Result<Image, PilError> {
     validate_prepared_expand_output_size(prepared, size)?;
     if !prepared.palette_resolved {
@@ -315,6 +343,10 @@ pub fn expand_canvas_with_prepared_fill(
         },
         prepared,
     )?;
+    let filled = match route {
+        Some((backend, context)) => filled.with_backend_and_execution_context(backend, context),
+        None => filled,
+    };
     filled.materialized_branch()
 }
 
@@ -359,12 +391,13 @@ fn empty_expand_canvas(mode: Mode, fill: (u8, u8, u8, u8)) -> Result<Image, PilE
 ///
 /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
 /// materialization failures.
-// VERIFY: source=reviewed@2026-11-15; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn expand(image: &Image, border: u32, fill: (u8, u8, u8, u8)) -> Result<Image, PilError> {
     expand_with_margins(image, ExpandMargins::uniform(border), fill)
 }
 
 /// Adds independent margins around an image.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn expand_with_margins(
     image: &Image,
     border: ExpandMargins,
@@ -378,6 +411,7 @@ pub fn expand_with_margins(
 /// Keeping the host value intact until the mode is known preserves native
 /// component counts and meanings: CMYK's fourth component is K, RGBX's is X,
 /// and a three-component color receives Pillow's opaque fourth byte for both.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn expand_with_input(
     image: &Image,
     border: u32,
@@ -387,6 +421,7 @@ pub fn expand_with_input(
 }
 
 /// Resolves a fill and adds independent margins around an image.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn expand_with_margins_and_input(
     image: &Image,
     border: ExpandMargins,
@@ -397,6 +432,7 @@ pub fn expand_with_margins_and_input(
     expand_with_prepared_fill(image, border, &prepared)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn expand_with_prepared_fill(
     image: &Image,
     border: ExpandMargins,
@@ -425,7 +461,7 @@ fn expand_with_prepared_fill(
         None => expand_with_margins(image, border, prepared.fill)?,
     };
     if let Some((palette, palette_alpha)) = prepared.output_palette.clone() {
-        output.set_pipeline_output_palette(palette, palette_alpha);
+        output.set_pipeline_output_palette(palette, palette_alpha, image.palette_data().cloned());
     }
     Ok(output)
 }

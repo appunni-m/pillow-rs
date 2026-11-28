@@ -20,7 +20,7 @@ static ARCHITECTURES: [ImplementationSupport; 3] = luma16_copy_architectures(
     StrategyGuard::NativeCropBytes { channels: 2 },
 );
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Crop,
     Mode::ImageI16N,
@@ -47,6 +47,7 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     image: &'a super::default::crop_impl::Input,
     region: CropRegion,
@@ -84,6 +85,7 @@ pub(crate) fn prepare<'a>(
     Ok(Prepared::new(implementation, selection))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
         ArchitectureStrategy::Default(implementation) => {

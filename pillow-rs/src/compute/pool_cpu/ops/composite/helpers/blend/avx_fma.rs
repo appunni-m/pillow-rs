@@ -9,6 +9,7 @@ use core::arch::x86 as arch;
 use core::arch::x86_64 as arch;
 
 /// Runs the archived block and tail policy after the injected context selected AVX/FMA.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 pub(crate) fn execute(
     source: &DynamicImage,
@@ -34,6 +35,7 @@ pub(crate) fn execute(
 #[allow(unsafe_code)]
 #[inline]
 #[target_feature(enable = "avx,fma")]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 unsafe fn blend_block(left: [u8; 16], right: [u8; 16], alpha: f32) -> [u8; 16] {
     // SAFETY: the target-feature boundary establishes AVX/FMA. The local
     // arrays contain exactly sixteen initialized bytes and are loaded/stored

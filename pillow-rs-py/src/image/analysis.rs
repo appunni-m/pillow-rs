@@ -172,24 +172,6 @@ impl PyImage {
     }
 
     // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-    #[pyo3(signature = (mask=None, execution_context=None))]
-    fn stat_formatted(
-        &self,
-        mask: Option<&Bound<'_, PyAny>>,
-        execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
-        py: Python<'_>,
-    ) -> PyResult<Py<PyAny>> {
-        let mask = imageops_mask_from_python(mask)?;
-        let route = route_from_context(execution_context, py);
-        let execution_context = route.map(|route| route.context);
-        let inner = route_pending_image(self.inner.clone(), route);
-        let result = py
-            .detach(move || inner.stat_formatted_with_mask_and_context(mask, execution_context))
-            .map_err(map_error)?;
-        stat_result_to_python(&result)
-    }
-
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
     #[pyo3(signature = (mask=None, extrema=None, execution_context=None))]
     fn histogram_with_input(
         slf: Py<Self>,
@@ -354,7 +336,29 @@ impl PyImage {
 }
 
 #[pyfunction]
-fn stat_from_histogram(data: Vec<f64>) -> PyResult<Py<PyAny>> {
+fn stat_from_histogram(data: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+    if let Ok(values) = data.cast::<PyList>() {
+        let mut integer_counts = Vec::with_capacity(values.len());
+        let mut all_nonnegative_integers = true;
+        for value in values.iter() {
+            if !value.is_instance_of::<PyInt>() {
+                all_nonnegative_integers = false;
+                break;
+            }
+            match value.extract::<u64>() {
+                Ok(count) => integer_counts.push(count),
+                Err(_) => {
+                    all_nonnegative_integers = false;
+                    break;
+                }
+            }
+        }
+        if all_nonnegative_integers {
+            let result = pillow_rs::stat_from_integer_histogram(&integer_counts);
+            return stat_result_to_python(&result);
+        }
+    }
+    let data = data.extract::<Vec<f64>>()?;
     let result = pillow_rs::stat_from_histogram(&data);
     stat_result_to_python(&result)
 }

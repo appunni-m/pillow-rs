@@ -23,6 +23,17 @@ const ARCHITECTURES: &[ImplementationSupport] = &[
     ImplementationSupport::cpu(
         OperationId::AlphaComposite,
         Mode::ImageRgba8,
+        Architecture::Avx512F,
+        cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+        &[Architecture::Avx512F],
+        StrategyGuard::AlphaCompositeAvx512F {
+            channels: 4,
+            minimum_pixels: 16,
+        },
+    ),
+    ImplementationSupport::cpu(
+        OperationId::AlphaComposite,
+        Mode::ImageRgba8,
         Architecture::Sse2,
         cfg!(all(
             any(target_arch = "x86", target_arch = "x86_64"),
@@ -60,6 +71,8 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
 #[derive(Clone, Copy)]
 enum ArchitectureStrategy {
     Default,
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    Avx512F,
     #[cfg(all(
         any(target_arch = "x86", target_arch = "x86_64"),
         target_feature = "sse2"
@@ -97,10 +110,12 @@ pub(crate) struct MirrorFusionExecution {
 }
 
 impl Strategy<'_> {
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let DynamicImage::ImageRgba8(source) = self.source.as_ref() else {
             return Err(PilError::InternalError(
@@ -110,6 +125,10 @@ impl Strategy<'_> {
         let output = match self.architecture {
             ArchitectureStrategy::Default => {
                 super::default::alpha_composite_impl::execute(source, self.destination)?
+            }
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            ArchitectureStrategy::Avx512F => {
+                super::avx512f::alpha_composite_impl::execute(source, self.destination)?
             }
             #[cfg(all(
                 any(target_arch = "x86", target_arch = "x86_64"),
@@ -131,6 +150,7 @@ impl Strategy<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     destination: &'a RgbaImage,
     source: Arc<DynamicImage>,
@@ -145,6 +165,7 @@ pub(crate) fn prepare<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn bind_architecture(selection: &StrategySelection) -> Result<ArchitectureStrategy, PilError> {
     super::super::helpers::strategy::require_operation_mode(
         selection,
@@ -159,6 +180,8 @@ fn bind_architecture(selection: &StrategySelection) -> Result<ArchitectureStrate
     }
     let strategy = match implementation.architecture {
         Architecture::Default => ArchitectureStrategy::Default,
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => ArchitectureStrategy::Avx512F,
         #[cfg(all(
             any(target_arch = "x86", target_arch = "x86_64"),
             target_feature = "sse2"
@@ -179,6 +202,7 @@ fn bind_architecture(selection: &StrategySelection) -> Result<ArchitectureStrate
 
 /// Selects one architecture for the fused implementation only when both
 /// operations choose the same exact RGBA strategy.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn prepare_mirror_fusion<'a>(
     destination: &'a RgbaImage,
     source: Arc<DynamicImage>,
@@ -198,6 +222,7 @@ pub(crate) fn prepare_mirror_fusion<'a>(
     let mirror_selection = select_mirror_strategy(destination, ctx)?;
     let architecture = alpha_selection.implementation.architecture;
     if architecture != mirror_selection.implementation.architecture
+        || architecture == Architecture::Avx512F
         || (architecture != Architecture::Default && width < 8)
     {
         return Ok(None);
@@ -238,6 +263,7 @@ impl MirrorFusionStrategy<'_> {
         &self.mirror_selection
     }
 
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<MirrorFusionExecution, PilError> {
         let DynamicImage::ImageRgba8(source) = self.source.as_ref() else {
             return Err(PilError::InternalError(
@@ -264,6 +290,12 @@ impl MirrorFusionStrategy<'_> {
                 0,
                 0,
             ),
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            ArchitectureStrategy::Avx512F => {
+                return Err(PilError::InternalError(
+                    "RGBA AlphaComposite+Mirror has no AVX-512F fused strategy".into(),
+                ));
+            }
             #[cfg(all(
                 any(target_arch = "x86", target_arch = "x86_64"),
                 target_feature = "sse2"
@@ -300,6 +332,7 @@ fn fused_vector_output(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
@@ -313,6 +346,8 @@ pub(crate) fn merge(
             target_feature = "sse2"
         ))]
         Architecture::Sse2 => super::sse2::merge_impl::merge(source, remaining),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => super::avx512f::merge_impl::merge(source, remaining, selection),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => super::neon::merge_impl::merge(source, remaining),
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
@@ -323,6 +358,7 @@ pub(crate) fn merge(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn blend(
     source: &DynamicImage,
     other: &DynamicImage,

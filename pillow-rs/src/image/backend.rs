@@ -7,14 +7,15 @@ use image_slash_star::{ImageFormat, ImageInfo};
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, Mode};
-
-use super::{
-    Image, PipelineOps, cached_pipeline_mode, declared_pipeline_mode, image_mode_name,
-    materialization_cache,
-};
+use crate::raster::DynamicImage;
 #[cfg(feature = "gpu")]
-use super::{MaterializationCache, PipelineModeCache};
+use crate::raster::Mode;
+
+use super::{Image, PipelineOps, materialization_cache};
+#[cfg(feature = "gpu")]
+use super::{
+    MaterializationCache, PipelineModeCache, cached_pipeline_mode, declared_pipeline_mode,
+};
 
 #[cfg(feature = "gpu")]
 fn gpu_dynamic_mode_name(image: &DynamicImage) -> Result<String, PilError> {
@@ -33,15 +34,18 @@ impl Image {
     ///
     /// Composed operations use this to keep their conversion, extraction, and
     /// blend children on the context selected at the public operation boundary.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     #[doc(hidden)]
     pub fn with_execution_context(mut self, context: crate::compute::ExecutionContext) -> Image {
+        if self.injected_execution_context() == Some(context) {
+            return self;
+        }
         self.inject_execution_context_recursive(context);
         self
     }
 
     /// Returns the context attached to this pipeline node, if one was injected.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn injected_execution_context(&self) -> Option<crate::compute::ExecutionContext> {
         match self {
             Image::Pipeline { ops, .. } => ops.execution_context(),
@@ -49,7 +53,7 @@ impl Image {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn inject_execution_context_recursive(&mut self, context: crate::compute::ExecutionContext) {
         let Image::Pipeline {
             source,
@@ -84,7 +88,7 @@ impl Image {
         *materialized = materialization_cache();
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn inject_op_execution_context_recursive(
         operation: &mut PipelineOp,
         context: crate::compute::ExecutionContext,
@@ -146,7 +150,7 @@ impl Image {
     }
 
     /// Applies a caller-selected pipeline backend and architecture together.
-    // VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn with_backend_and_execution_context(
         self,
         backend: Option<crate::compute::Backend>,
@@ -162,6 +166,7 @@ impl Image {
         image.with_execution_context(context)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn lock_backend_recursive(&mut self, b: crate::compute::Backend) {
         let Image::Pipeline {
             source,
@@ -202,6 +207,7 @@ impl Image {
         *materialized = materialization_cache();
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     fn lock_op_backend_recursive(op: &mut PipelineOp, b: crate::compute::Backend) {
         match op {
             PipelineOp::Add { other, .. }
@@ -267,7 +273,7 @@ impl Image {
     // strategy, and fallback receipts for direct eager routes across the
     // frozen CPU mode/architecture matrix; this source audit is not runtime
     // evidence.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn cpu_arch_execution_route(
         &self,
     ) -> Result<
@@ -311,7 +317,7 @@ impl Image {
 
     /// Resolves one CPU-owned operation's route and whether its backend is an
     /// explicit request rather than an automatic preference.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn cpu_arch_execution_route_with_policy(
         &self,
     ) -> Result<
@@ -354,7 +360,7 @@ impl Image {
             .map(|(requested_backend, _, _)| requested_backend)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     fn backend_request_policy(
         &self,
     ) -> Result<
@@ -398,6 +404,13 @@ impl Image {
         (requested_backend, context)
     }
 
+    /// Captures the route without moving its existing advisory error boundary.
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+    pub(crate) fn cpu_execution_route_advisory(&self) -> crate::compute::CpuExecutionRoute {
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        crate::compute::CpuExecutionRoute::new(requested_backend, context)
+    }
+
     /// Advisory CPU route that also retains whether the route is explicitly
     /// pinned or is the only active backend.
     // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
@@ -424,7 +437,7 @@ impl Image {
 impl Image {
     /// Try applying ImageOps.grayscale immediately for the bounded native-RGB
     /// CPU/SIMD path. Other inputs keep the ordinary lazy pipeline semantics.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn try_grayscale_eager_rgb(&self) -> Result<Option<Image>, PilError> {
         let Image::Loaded(data) = self else {
             return Ok(None);
@@ -455,6 +468,7 @@ impl Image {
             palette: crate::compute::registry::support::PaletteInput {
                 rgb: data.palette.as_deref(),
                 alpha: data.palette_alpha.as_deref().unwrap_or_default(),
+                data: data.palette_data.as_ref(),
             },
         };
         let grayscale = match backend {
@@ -553,6 +567,7 @@ impl Image {
         self.gpu_pending_graph_depth(0)
     }
 
+    // VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
     #[cfg(feature = "gpu")]
     fn gpu_pending_graph_depth(&self, depth: usize) -> Result<GpuPendingGraph<'_>, PilError> {
         if depth > 64 {
@@ -600,7 +615,9 @@ impl Image {
                 height: info.height,
                 mode: (*header_mode)
                     .pillow_name()
-                    .unwrap_or_else(|| image_mode_name(info.mode))
+                    .unwrap_or_else(|| {
+                        super::codec_adapter::pillow_spelling_from_codec_image_mode(info.mode)
+                    })
                     .to_owned(),
                 encoded_bytes: source.bytes().len() as u64,
                 ops: Vec::new(),
@@ -773,6 +790,7 @@ impl Image {
 /// For L/LA modes, extracts the R channel directly (GPU stores luma in R, and
 /// G/B may be stale after mode-aware processing). Uses `to_luma8()`/`to_luma_alpha8()`
 /// only as a fallback.
+#[cfg(feature = "gpu")]
 pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicImage {
     let orig_color = original.color();
     let res_color = result.color();

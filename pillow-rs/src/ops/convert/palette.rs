@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::compute::Backend;
+use crate::compute::CpuExecutionRoute;
 use crate::compute::registry::support::{OperationInputs, PaletteInput};
 use crate::error::PilError;
 use crate::image::{Image, LoadedData, PipelineOps};
@@ -9,7 +10,7 @@ use crate::raster::{DynamicImage, Mode};
 /// Per-entry alpha table Pillow applies when converting a palette image to an
 /// alpha band: a single transparent index becomes 0 with everything else 255,
 /// a PNG `tRNS` table is used verbatim.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(super) fn palette_alpha_for_convert(img: &Image) -> Option<Vec<u8>> {
     if let Some(transparency) = img.pending_palette_transparency() {
         return match transparency {
@@ -27,13 +28,14 @@ pub(super) fn palette_alpha_for_convert(img: &Image) -> Option<Vec<u8>> {
     img.palette_alpha().filter(|alpha| !alpha.is_empty())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(super) fn convert_prepared_palette(
     image: &Image,
     source_mode: Mode,
     target: Mode,
     dither: Option<&str>,
     context_override: Option<crate::compute::ExecutionContext>,
+    route_override: Option<CpuExecutionRoute>,
 ) -> Result<Image, PilError> {
     let is_scalar_source = matches!(source_mode, Mode::ImageI32 | Mode::ImageF32);
     let should_parse_dither =
@@ -72,6 +74,7 @@ pub(super) fn convert_prepared_palette(
         palette: PaletteInput {
             rgb: source_palette.as_deref(),
             alpha: &palette_alpha,
+            data: image.palette_data(),
         },
     };
     let operation = crate::pipeline::PipelineOp::Convert {
@@ -79,7 +82,10 @@ pub(super) fn convert_prepared_palette(
         matrix: None,
         dither: prepared_dither,
     };
-    let (selected_backend, routed_context) = image.cpu_arch_execution_route()?;
+    let (selected_backend, routed_context) = match route_override {
+        Some(route) => (route.requested_backend(), route.context()),
+        None => image.cpu_arch_execution_route()?,
+    };
     let context = context_override.unwrap_or(routed_context);
     let fallback_reason = (selected_backend == Some(Backend::Gpu)).then(|| {
         format!(
@@ -150,6 +156,7 @@ fn wrap_prepared_palette(
             (None, None, None)
         }
     };
+    let source_preserves_palette_data = image.known_mode_identity() == Some(Mode::ImagePalette8);
     match target {
         Mode::ImagePalette8 => {
             if matches!(
@@ -160,6 +167,7 @@ fn wrap_prepared_palette(
                     image: Arc::new(raster),
                     known_zero_fill: false,
                     palette: image.palette(),
+                    palette_data: image.palette_data().cloned(),
                     palette_alpha: image.palette_alpha(),
                     source_format,
                     info,
@@ -169,10 +177,14 @@ fn wrap_prepared_palette(
             let palette = palette.ok_or_else(|| {
                 PilError::InternalError("prepared P conversion omitted RGB entries".into())
             })?;
+            let palette_data = Some(crate::image::PaletteData::from_alpha(
+                palette_alpha.as_deref().unwrap_or_default(),
+            ));
             let source = LoadedData {
                 image: Arc::new(raster),
                 known_zero_fill: false,
                 palette: None,
+                palette_data: None,
                 palette_alpha: None,
                 source_format,
                 info,
@@ -185,21 +197,38 @@ fn wrap_prepared_palette(
                 backend: None,
                 palette: Some(palette),
                 palette_alpha,
+                palette_data,
                 compatibility_icc_profile: image.compatibility_icc_profile().map(Arc::from),
                 materialized: crate::image::materialization_cache(),
                 shape: crate::image::pipeline_shape_cache(),
                 mode: crate::image::pipeline_mode_cache_for(Some(Mode::ImagePalette8)),
             })
         }
-        Mode::ImagePaletteAlpha8 => Ok(Image::Loaded(LoadedData {
-            image: Arc::new(raster),
-            known_zero_fill: false,
-            palette,
-            palette_alpha,
-            source_format,
-            info,
-            exif,
-        })),
+        Mode::ImagePaletteAlpha8 => {
+            let palette_data = palette.as_ref().map(|_| {
+                if source_preserves_palette_data {
+                    image.palette_data().cloned().unwrap_or_else(|| {
+                        crate::image::PaletteData::from_alpha(
+                            palette_alpha.as_deref().unwrap_or_default(),
+                        )
+                    })
+                } else {
+                    crate::image::PaletteData::from_alpha(
+                        palette_alpha.as_deref().unwrap_or_default(),
+                    )
+                }
+            });
+            Ok(Image::Loaded(LoadedData {
+                image: Arc::new(raster),
+                known_zero_fill: false,
+                palette,
+                palette_data,
+                palette_alpha,
+                source_format,
+                info,
+                exif,
+            }))
+        }
         _ => Err(PilError::InternalError(
             "prepared palette wrapper received a non-palette target".into(),
         )),

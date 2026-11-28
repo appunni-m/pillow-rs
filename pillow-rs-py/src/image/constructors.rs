@@ -33,6 +33,7 @@ fn image_merge_callback_contract(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[pyfunction]
 fn image_blend(
     image1: &Bound<'_, PyImage>,
@@ -45,20 +46,30 @@ fn image_blend(
     Ok(PyImage { inner: rs })
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[pyfunction]
+#[pyo3(signature = (image1, image2, mask, execution_context=None))]
 fn image_composite(
     image1: &Bound<'_, PyImage>,
     image2: &Bound<'_, PyImage>,
     mask: &Bound<'_, PyImage>,
+    execution_context: Option<pyo3::PyRef<'_, PyExecutionContext>>,
 ) -> PyResult<PyImage> {
     let b1 = image1.borrow();
     let b2 = image2.borrow();
     let bm = mask.borrow();
-    let rs = pillow_rs::image_composite(&b1.inner, &b2.inner, &bm.inner).map_err(map_error)?;
-    Ok(PyImage { inner: rs })
+    let execution_context = execution_context.map(|context| context.inner);
+    let result = match execution_context {
+        Some(context) => pillow_rs::image_composite_with_execution_context(
+            &b1.inner, &b2.inner, &bm.inner, context,
+        ),
+        None => pillow_rs::image_composite(&b1.inner, &b2.inner, &bm.inner),
+    }
+    .map_err(map_error)?;
+    Ok(PyImage { inner: result })
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[pyfunction]
 #[pyo3(signature = (image1, image2, execution_context=None))]
 fn image_alpha_composite(

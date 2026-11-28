@@ -5,3 +5,4 @@ pub(crate) mod dynamic_image;
 pub(crate) mod execution;
 pub(crate) mod palette;
 pub(crate) mod quantization;
+pub(crate) mod sample;

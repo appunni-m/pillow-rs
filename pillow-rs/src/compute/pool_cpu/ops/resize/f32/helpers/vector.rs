@@ -1,10 +1,9 @@
 //! Native float-mode vector kernels for direct and boxed Resize geometry.
 
 use super::super::super::helpers::{native_nearest, typed_nearest::BoxBounds};
+use super::resize::FilterResolver;
 use crate::error::PilError;
-use crate::ops::pil_resize::{
-    f32_samples_from_le_bytes, filter_from_resample, precompute_coeffs_f64,
-};
+use crate::ops::pil_resize::{f32_samples_from_le_bytes, precompute_coeffs_f64};
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 use wide::{f32x8, f64x8};
@@ -27,20 +26,49 @@ const F_RESIZE_VECTOR_WIDTH: usize = 16;
 type FResizeLaneTap = ([usize; SIMD_RESIZE_LANES], f64x8, u8, bool);
 type FResizeHorizontalLanePlan = (Vec<(usize, usize)>, Vec<FResizeLaneTap>);
 
-/// Run the F32 vector strategy over the exact four-byte sample carrier.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-pub(crate) fn execute(
+/// Run the F32 vector strategy with the architecture's ordered product width.
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
+#[cfg(any(target_arch = "aarch64", target_arch = "wasm32"))]
+pub(crate) fn execute<const PRODUCT_BLOCK_WIDTH: usize>(
     input: &RgbaImage,
     output_width: u32,
     output_height: u32,
     filter: ResampleFilter,
     bounds: BoxBounds,
 ) -> Result<RgbaImage, PilError> {
+    execute_with_filter::<PRODUCT_BLOCK_WIDTH>(
+        input,
+        output_width,
+        output_height,
+        filter,
+        bounds,
+        crate::ops::pil_resize::filter_from_resample,
+    )
+}
+
+/// Run the vector strategy with an architecture-selected coefficient kernel.
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
+pub(crate) fn execute_with_filter<const PRODUCT_BLOCK_WIDTH: usize>(
+    input: &RgbaImage,
+    output_width: u32,
+    output_height: u32,
+    filter: ResampleFilter,
+    bounds: BoxBounds,
+    resolve_filter: FilterResolver,
+) -> Result<RgbaImage, PilError> {
     if let Some(bounds) = bounds {
-        return boxed::execute(input, output_width, output_height, bounds, filter);
+        return boxed::execute_with_filter::<PRODUCT_BLOCK_WIDTH>(
+            input,
+            output_width,
+            output_height,
+            bounds,
+            filter,
+            resolve_filter,
+        );
     }
-    // Pillow reduces very tall images vertically first; the f32 pass boundary
-    // makes the order observable even when both stages accumulate in f64.
+    // Pillow limits the intermediate for extremely tall inputs by filtering
+    // vertically first. Preserve that pass boundary when both dimensions
+    // change; the F32 cast between passes can affect the public samples.
     if !matches!(filter, ResampleFilter::Nearest)
         && output_width != 0
         && output_height != 0
@@ -48,18 +76,39 @@ pub(crate) fn execute(
         && u64::from(input.height()) > u64::from(input.width()) * 100
         && output_height < input.height()
     {
-        let intermediate = execute(input, input.width(), output_height, filter, None)?;
-        return execute(&intermediate, output_width, output_height, filter, None);
+        let intermediate = execute_with_filter::<PRODUCT_BLOCK_WIDTH>(
+            input,
+            input.width(),
+            output_height,
+            filter,
+            None,
+            resolve_filter,
+        )?;
+        return execute_with_filter::<PRODUCT_BLOCK_WIDTH>(
+            &intermediate,
+            output_width,
+            output_height,
+            filter,
+            None,
+            resolve_filter,
+        );
     }
-    execute_unboxed(input, output_width, output_height, filter)
+    execute_unboxed::<PRODUCT_BLOCK_WIDTH>(
+        input,
+        output_width,
+        output_height,
+        filter,
+        resolve_filter,
+    )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn execute_unboxed(
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
+fn execute_unboxed<const PRODUCT_BLOCK_WIDTH: usize>(
     input: &RgbaImage,
     output_width: u32,
     output_height: u32,
     filter: ResampleFilter,
+    resolve_filter: FilterResolver,
 ) -> Result<RgbaImage, PilError> {
     let source_width = usize::try_from(input.width()).map_err(|_| invalid_vector_request())?;
     let source_height = usize::try_from(input.height()).map_err(|_| invalid_vector_request())?;
@@ -94,7 +143,7 @@ fn execute_unboxed(
             output_bytes,
         )?
     } else {
-        f_resize_filtered_output(
+        f_resize_filtered_output::<PRODUCT_BLOCK_WIDTH>(
             &source,
             source_width,
             source_height,
@@ -102,6 +151,7 @@ fn execute_unboxed(
             output_height,
             &filter,
             output_bytes,
+            resolve_filter,
         )?
     };
     crate::compute::record_pipeline_operation_path("vector");
@@ -116,7 +166,7 @@ fn invalid_vector_request() -> PilError {
     PilError::InternalError("ImageF32 vector Resize received invalid dimensions".into())
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 fn f_resize_nearest_output(
     source: &[f32],
     source_width_px: u32,
@@ -159,8 +209,8 @@ fn f_resize_nearest_output(
     Ok((output, vector_blocks))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn f_resize_filtered_output(
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
+fn f_resize_filtered_output<const PRODUCT_BLOCK_WIDTH: usize>(
     source: &[f32],
     source_width: usize,
     source_height: usize,
@@ -168,8 +218,9 @@ fn f_resize_filtered_output(
     output_height: usize,
     filter: &ResampleFilter,
     output_byte_count: usize,
+    resolve_filter: FilterResolver,
 ) -> Result<(Vec<u8>, u64), PilError> {
-    let (kernel, support) = filter_from_resample(*filter);
+    let (kernel, support) = resolve_filter(*filter);
     let needs_horizontal = output_width != source_width;
     let needs_vertical = output_height != source_height;
     let intermediate_len = source_height
@@ -178,7 +229,7 @@ fn f_resize_filtered_output(
     let (intermediate, horizontal_blocks) = if needs_horizontal {
         let coeffs =
             precompute_coeffs_f64(output_width as u32, source_width as u32, kernel, support);
-        f_resize_horizontal_pass(
+        f_resize_horizontal_pass::<PRODUCT_BLOCK_WIDTH>(
             source,
             source_width,
             source_height,
@@ -212,7 +263,7 @@ fn f_resize_filtered_output(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 fn f_resize_identity_pass(
     source: &[f32],
     source_width: usize,
@@ -245,8 +296,8 @@ fn f_resize_identity_pass(
     Ok((intermediate, vector_blocks))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn f_resize_horizontal_pass(
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
+fn f_resize_horizontal_pass<const PRODUCT_BLOCK_WIDTH: usize>(
     source: &[f32],
     source_width: usize,
     source_height: usize,
@@ -278,7 +329,9 @@ fn f_resize_horizontal_pass(
                 let (start, count) = ranges[output_x / SIMD_RESIZE_LANES];
                 f_resize_horizontal_planned_block(source, source_row, &taps[start..start + count])?
             } else {
-                f_resize_horizontal_general_block(source, source_row, output_x, count, coeffs)?
+                f_resize_horizontal_general_block::<PRODUCT_BLOCK_WIDTH>(
+                    source, source_row, output_x, count, coeffs,
+                )?
             };
             intermediate[intermediate_row + output_x..intermediate_row + output_x + count]
                 .copy_from_slice(&values[..count]);
@@ -288,7 +341,7 @@ fn f_resize_horizontal_pass(
     Ok((intermediate, vector_blocks))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 fn build_f_resize_horizontal_lane_plan(
     coeffs: &crate::ops::pil_resize::FilterCoeffsF64,
     source_width: usize,
@@ -342,7 +395,7 @@ fn build_f_resize_horizontal_lane_plan(
     Ok(Some((block_ranges, lane_taps)))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 fn f_resize_horizontal_planned_block(
     source: &[f32],
     source_row: usize,
@@ -386,8 +439,8 @@ fn f_resize_horizontal_planned_block(
     Ok(sums.to_array().map(|value| value as f32))
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
-fn f_resize_horizontal_general_block(
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
+fn f_resize_horizontal_general_block<const PRODUCT_BLOCK_WIDTH: usize>(
     source: &[f32],
     source_row: usize,
     output_x: usize,
@@ -398,12 +451,12 @@ fn f_resize_horizontal_general_block(
         .map(|lane| coeffs.weights[output_x + lane].len())
         .max()
         .unwrap_or(0);
-    // Pillow's F-mode horizontal resampler separates complete 16-tap
+    // Pillow's F-mode horizontal resampler separates complete architecture-sized
     // product/add blocks from the fused tail. Neighboring output lanes can
     // have different tap counts, so preserve that boundary independently.
     let product_counts: [usize; SIMD_RESIZE_LANES] = std::array::from_fn(|lane| {
         if lane < count {
-            (coeffs.weights[output_x + lane].len() / F_RESIZE_VECTOR_WIDTH) * F_RESIZE_VECTOR_WIDTH
+            (coeffs.weights[output_x + lane].len() / PRODUCT_BLOCK_WIDTH) * PRODUCT_BLOCK_WIDTH
         } else {
             0
         }
@@ -473,7 +526,7 @@ fn f_resize_horizontal_general_block(
     Ok(values)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 fn f_resize_vertical_pass(
     intermediate: &[f32],
     source_height: usize,
@@ -537,7 +590,7 @@ fn f_resize_vertical_pass(
     Ok(vector_blocks)
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-28; parity=pass@f32-vector-closure-20261128; benchmark=pending
 fn f_resize_vertical_block(
     intermediate: &[f32],
     output_width: usize,

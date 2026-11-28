@@ -21,6 +21,7 @@ declare_quantize_native_mode!(u8, "ImageRgbPremultiplied8", ImageRgbPremultiplie
 /// Maps stored premultiplied RGB lanes directly, matching Pillow's palette mapper.
 // Pillow wrapper-mode overrides can admit visible L/RGB while the exact raster
 // remains RGBa; the native palette mapper reads the stored lanes directly.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_quantize_with_palette(
     image: &Input,
     palette: &[[u8; 3]],

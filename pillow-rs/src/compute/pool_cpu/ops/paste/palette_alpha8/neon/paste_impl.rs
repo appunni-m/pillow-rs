@@ -6,7 +6,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::{
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<I>(strategy: BytePlan<'_, I>) -> Result<DynamicImage, PilError>
 where
     I: Deref<Target = DynamicImage>,

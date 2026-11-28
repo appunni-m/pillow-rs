@@ -10,7 +10,7 @@ use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
 // Keep this separate from the mode's native-endian input and export rules.
 pub(crate) const RESIZE_IS_BIG_ENDIAN: bool = true;
 
-static RESIZE_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 3] =
+static RESIZE_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
     super::super::helpers::support::luma16_architectures(Mode::ImageI16N);
 
 pub(crate) const SUPPORT: ModeSupport =
@@ -21,7 +21,7 @@ pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::serial(
     super::super::helpers::support::INPUTS,
 );
 
-// VERIFY: source=reviewed@2026-11-22; parity=pass@migration-parity-75cc2aeb1bde4900b01f7ce223621407; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize_selected(
     context: &crate::compute::ExecutionContext,
     selection: &StrategySelection,
@@ -44,6 +44,22 @@ pub(crate) fn resize_selected(
         let architecture =
             super::super::helpers::strategy::require_architecture(context, selection)?;
         match architecture {
+            #[cfg(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "avx",
+                not(target_feature = "fma")
+            ))]
+            crate::compute::Architecture::Avx => {
+                super::avx::resize_impl::execute(input, width, height, filter)
+            }
+            #[cfg(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "avx",
+                target_feature = "fma"
+            ))]
+            crate::compute::Architecture::AvxFma => {
+                super::avx::resize_impl::execute(input, width, height, filter)
+            }
             #[cfg(all(
                 any(target_arch = "x86", target_arch = "x86_64"),
                 target_feature = "sse2"

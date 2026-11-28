@@ -17,6 +17,7 @@ pub(crate) struct TransformPlan<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<TransformPlan<'a>>;
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     support: ModeSupport,
     image: &'a DynamicImage,
@@ -51,7 +52,14 @@ pub(crate) fn selection<'a>(plan: &'a Strategy<'_>) -> &'a StrategySelection {
 
 pub(crate) type ExecuteInto =
     for<'a> fn(&DynamicImage, TransformRequest<'a>, &mut DynamicImage) -> Result<(), PilError>;
+pub(crate) type ExecuteIntoWithValidity = for<'a> fn(
+    &DynamicImage,
+    TransformRequest<'a>,
+    &mut DynamicImage,
+    &mut [u8],
+) -> Result<(), PilError>;
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_into(
     plan: Strategy<'_>,
     output: &mut DynamicImage,
@@ -63,7 +71,9 @@ pub(crate) fn execute_into(
     match architecture {
         Architecture::Default => default(image, request, output),
         Architecture::Avx2
+        | Architecture::Avx2Fma
         | Architecture::Avx
+        | Architecture::AvxFma
         | Architecture::Sse2
         | Architecture::Neon
         | Architecture::WasmSimd128 => architecture_specific.ok_or_else(|| {
@@ -73,6 +83,35 @@ pub(crate) fn execute_into(
         })?(image, request, output),
         architecture => Err(PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for Transform"
+        ))),
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
+pub(crate) fn execute_into_with_validity(
+    plan: Strategy<'_>,
+    output: &mut DynamicImage,
+    validity: &mut [u8],
+    default: ExecuteIntoWithValidity,
+    architecture_specific: Option<ExecuteIntoWithValidity>,
+) -> Result<(), PilError> {
+    let architecture = plan.selection().implementation.architecture;
+    let TransformPlan { image, request } = plan.implementation;
+    match architecture {
+        Architecture::Default => default(image, request, output, validity),
+        Architecture::Avx2
+        | Architecture::Avx2Fma
+        | Architecture::Avx
+        | Architecture::AvxFma
+        | Architecture::Sse2
+        | Architecture::Neon
+        | Architecture::WasmSimd128 => architecture_specific.ok_or_else(|| {
+            PilError::InternalError(format!(
+                "Transform {architecture:?} has no direct destination validity strategy"
+            ))
+        })?(image, request, output, validity),
+        architecture => Err(PilError::InternalError(format!(
+            "unexpected {architecture:?} architecture selected for Transform validity"
         ))),
     }
 }

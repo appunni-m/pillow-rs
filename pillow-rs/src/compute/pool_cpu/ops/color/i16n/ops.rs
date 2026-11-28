@@ -32,6 +32,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
 static ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 24] =
     super::super::helpers::convert::luma16::architecture_support(Mode::ImageI16N);
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute(
     source: &Samples,
     target: Mode,

@@ -120,11 +120,19 @@ fn transpose_from_int(value: i64) -> &'static str {
 /// Marshal Python's path/file-like font source into core-owned input.
 /// Filesystem access and Python protocol calls stay at this host boundary;
 /// source validation and font loading remain in `pillow-rs`.
+// TODO(pillow-rs#3ptb): verify public font path, file-like, and read-fault
+// parity after the shared HostPath conversion.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn imagefont_source_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ImageFontSourceInput> {
     if let Some(path) = host_path_from_python(value)? {
-        let data = std::fs::read(&path)
+        if path.kind == HostPathKind::Bytes && host_path_contains_null(&path) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "embedded null byte",
+            ));
+        }
+        let data = std::fs::read(&path.path)
             .map_err(|_| pyo3::exceptions::PyOSError::new_err("cannot open resource"))?;
         return Ok(pillow_rs::ImageFontSourceInput::Bytes(data));
     }

@@ -9,6 +9,7 @@ pub(crate) struct Kernel<'a, P: Pixel> {
     distance: u32,
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a, P: Pixel>(
     input: &'a ImageBuffer<P, Vec<P::Subpixel>>,
     distance: u32,
@@ -16,6 +17,7 @@ pub(crate) fn prepare<'a, P: Pixel>(
     Kernel { input, distance }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute<P: Pixel>(
     kernel: Kernel<'_, P>,
 ) -> Result<ImageBuffer<P, Vec<P::Subpixel>>, PilError> {
@@ -53,6 +55,7 @@ pub(crate) fn execute<P: Pixel>(
 /// Preserve the archived Default identity fast path for Pillow's L, LA, RGB,
 /// and RGBA spread strategies. Other mode owners use [`execute`] so their
 /// native-mode extension behavior remains explicit at the call site.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn execute_with_distance_one_identity<P: Pixel>(
     kernel: Kernel<'_, P>,
 ) -> Result<ImageBuffer<P, Vec<P::Subpixel>>, PilError> {
@@ -71,6 +74,7 @@ pub(crate) fn execute_with_distance_one_identity<P: Pixel>(
     execute(kernel)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn gather_native_samples<P: Pixel>(
     input: &ImageBuffer<P, Vec<P::Subpixel>>,
     mapping: &[usize],

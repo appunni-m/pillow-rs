@@ -8,7 +8,7 @@ use crate::raster::Mode;
 
 pub(crate) type VectorArchitectures = [ImplementationSupport; 4];
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::draw) const fn vector_architectures(
     mode: Mode,
 ) -> VectorArchitectures {
@@ -56,7 +56,7 @@ pub(in crate::compute::pool_cpu::ops::draw) const fn vector_architectures(
     ]
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn vector_support(
     mode: Mode,
     architectures: &'static VectorArchitectures,
@@ -70,7 +70,7 @@ pub(crate) const fn vector_support(
     )
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn serial_support(mode: Mode) -> ModeSupport {
     ModeSupport::cpu(
         OperationId::Draw,
@@ -81,11 +81,10 @@ pub(crate) const fn serial_support(mode: Mode) -> ModeSupport {
     )
 }
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 // TODO(pillow-rs#3ptb): define native ink semantics and expected outputs before
 // adding Draw strategies for the five internal high-depth modes; these explicit
 // unsupported routes are not Pillow parity failures.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) const fn unsupported_support(mode: Mode) -> ModeSupport {
     ModeSupport::Rejected {
         mode,

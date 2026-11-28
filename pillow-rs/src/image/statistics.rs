@@ -2,7 +2,9 @@
 
 mod result;
 
-pub use result::{StatResult, StatValue, stat_from_histogram, stat_from_list};
+pub use result::{
+    StatResult, StatValue, stat_from_histogram, stat_from_integer_histogram, stat_from_list,
+};
 
 use crate::compute::PipelineOperationTelemetryCapture;
 use crate::compute::registry::support::OperationId;

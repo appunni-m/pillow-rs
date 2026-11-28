@@ -11,6 +11,7 @@ pub(crate) enum MaskStrategy<'a> {
 }
 
 impl<'a> MaskStrategy<'a> {
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn new(image: &'a DynamicImage) -> Result<Self, PilError> {
         match image {
             DynamicImage::One(image) => Ok(Self::One(image)),
@@ -19,6 +20,7 @@ impl<'a> MaskStrategy<'a> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn facts(&self) -> SecondaryInputFacts {
         match self {
             Self::One(image) => mask_facts(Mode::One, image),
@@ -26,6 +28,7 @@ impl<'a> MaskStrategy<'a> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn with_samples<T>(
         self,
         one: impl FnOnce(&[u8]) -> T,
@@ -37,6 +40,7 @@ impl<'a> MaskStrategy<'a> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
     pub(crate) fn image(self) -> &'a GrayImage {
         match self {
             Self::One(image) | Self::ImageLuma8(image) => image,
@@ -48,6 +52,7 @@ impl<'a> MaskStrategy<'a> {
 /// nonzero sample becomes 255. Keep that normalization fused into the target
 /// operation instead of allocating an intermediate luma image.
 /// Source: Pillow 12.2.0 `Convert.c::bit2l`.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[inline(always)]
 pub(crate) fn normalize_sample<const ONE: bool>(sample: u8) -> u8 {
     if ONE {
@@ -60,6 +65,7 @@ pub(crate) fn normalize_sample<const ONE: bool>(sample: u8) -> u8 {
 // TODO(pillow-rs#3ptb): parity-check noncanonical One mask samples (0, 1, 255)
 // across destination modes and selected Default/vector strategies.
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn mask_facts(mode: Mode, image: &GrayImage) -> SecondaryInputFacts {
     SecondaryInputFacts {
         mode,

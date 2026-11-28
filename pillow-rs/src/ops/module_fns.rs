@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
     InputContract, MergeBandModeRule, ModeSupport, OperationId, PaletteKnowledge, RequestFacts,
     SecondaryInputFacts, StrategyInputs,
@@ -90,24 +91,27 @@ pub fn frombytes_owned_with_plan(
 }
 
 /// Composites `im2` over `im1` and returns a new image.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn alpha_composite(im1: &Image, im2: &Image) -> Result<Image, PilError> {
-    let mut result = im1.copy();
-    result.alpha_composite(im2, (0, 0), (0, 0))?;
-    Ok(result)
+    let (_, context) = im1.cpu_arch_execution_route_advisory();
+    alpha_composite_with_execution_context(im1, im2, context)
 }
 
 /// Composites under a route captured by a composed public caller.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[doc(hidden)]
 pub fn alpha_composite_with_execution_context(
     im1: &Image,
     im2: &Image,
     context: crate::compute::ExecutionContext,
 ) -> Result<Image, PilError> {
-    let background = im1.clone().with_execution_context(context);
-    let overlay = im2.clone().with_execution_context(context);
+    let mut background = im1.clone().with_execution_context(context);
+    background.load()?;
+    let mut overlay = im2.clone().with_execution_context(context);
+    overlay.load()?;
     let mut result = background.copy();
     result.alpha_composite(&overlay, (0, 0), (0, 0))?;
+    result.load_with_execution_context(context)?;
     Ok(result.with_execution_context(context))
 }
 
@@ -302,6 +306,9 @@ pub fn merge_inputs(mode: Mode, bands: &[MergeInput]) -> Result<Image, PilError>
 ///
 /// Returns [`PilError::ValueError`] for incompatible modes or unequal dimensions, or
 /// another [`PilError`] when metadata lookup fails.
+// TODO(pillow-rs#3ptb): verify direct Blend outputs, mode/size fault order, and
+// selected/fallback receipts after callers bind the intended ExecutionContext.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilError> {
     let mode1 = image1.mode_identity()?;
     let mode2 = image2.mode_identity()?;
@@ -350,11 +357,32 @@ pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilErr
 
 /// Composites `image1` over `image2` using `mask`.
 ///
+/// The destination image owns the output mode and default execution route.
+/// Python's public wrapper retains its copy-plus-Paste callbacks separately.
+///
 /// # Errors
 ///
 /// Returns [`PilError::ValueError`] when `image1` and `mask` dimensions differ,
 /// or another [`PilError`] when size lookup fails.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, PilError> {
+    let (_, context) = image2.cpu_arch_execution_route_advisory();
+    composite_with_execution_context(image1, image2, mask, context)
+}
+
+/// Composites with the context selected by the public caller.
+// TODO(pillow-rs#3ptb): verify CompositeModule pixels, palette metadata,
+// context propagation, and fault/route receipts across the CPU matrix.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
+pub fn composite_with_execution_context(
+    image1: &Image,
+    image2: &Image,
+    mask: &Image,
+    context: ExecutionContext,
+) -> Result<Image, PilError> {
+    let image1 = image1.clone().with_execution_context(context);
+    let image2 = image2.clone().with_execution_context(context);
+    let mask = mask.clone().with_execution_context(context);
     // PIL.composite = image2.copy() followed by image2.paste(image1, None, mask)
     // The output matches image2's size; smaller images are pasted at (0,0).
     // PIL requires image1 and mask to have the same size (via paste).
@@ -374,19 +402,26 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
     } else {
         // Pillow 12.2 PIL.Image.composite starts from image2.copy(), then
         // Image.paste converts image1 to the destination mode before blending.
-        image1.convert(output_mode, None, None, None, None)?
+        image1.convert_with_execution_context(output_mode, None, None, context)?
     };
+    // The nested pipeline selects its concrete strategy at materialization;
+    // reject unsupported output modes now using that same operation contract.
+    OperationId::CompositeModule
+        .support()
+        .for_mode(output_mode)
+        .validate_mode()?;
     let mut result = Image::push_op(
         &source,
         PipelineOp::CompositeModule {
             other: Arc::new(image2.clone()),
-            mask: Arc::new(mask.clone()),
+            mask: Arc::new(mask),
             mask_alpha,
         },
     );
     if let Image::Pipeline {
         ref mut palette,
         ref mut palette_alpha,
+        ref mut palette_data,
         ..
     } = result
     {
@@ -395,17 +430,34 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
             // image2 even when image1 was converted to P for the paste.
             *palette = Some(image2.extract_palette().unwrap_or_default());
             *palette_alpha = image2.palette_alpha();
+            *palette_data = Some(image2.palette_data().cloned().unwrap_or_else(|| {
+                if image2.palette_model() == Some(crate::image::PaletteModel::Rgba) {
+                    crate::image::PaletteData::Rgba
+                } else {
+                    crate::image::PaletteData::Rgb
+                }
+            }));
         } else if output_mode == Mode::ImagePaletteAlpha8 {
             // Image.composite starts with image2.copy(); Pillow preserves the
             // destination PA image's palette on that newly allocated result.
             *palette = image2.extract_palette();
             *palette_alpha = image2.palette_alpha();
+            *palette_data = image2.palette_data().cloned().or_else(|| {
+                palette.as_ref().map(|_| {
+                    if image2.palette_model() == Some(crate::image::PaletteModel::Rgba) {
+                        crate::image::PaletteData::Rgba
+                    } else {
+                        crate::image::PaletteData::Rgb
+                    }
+                })
+            });
         } else {
             *palette = None;
             *palette_alpha = None;
+            *palette_data = None;
         }
     }
-    Ok(result)
+    Ok(result.with_execution_context(context))
 }
 
 /// Generates Gaussian noise using the source image dimensions.
@@ -475,22 +527,22 @@ pub fn radial_gradient(mode: Mode) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Returns [`PilError::ValueError`] for zero size, negative extent dimensions,
-/// or `quality < 2`. Returns [`PilError::DimensionError`] when allocation
-/// checks fail.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+/// Returns [`PilError::ValueError`] for negative extent dimensions or
+/// `quality < 2`. Zero-sized outputs are empty images. Returns
+/// [`PilError::DimensionError`] when allocation checks fail.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub fn effect_mandelbrot(
     size: (u32, u32),
     extent: (f64, f64, f64, f64),
     quality: i32,
 ) -> Result<Image, PilError> {
-    let (x0, y0, x1, y1) = extent;
-    if quality < 2 || x0 >= x1 || y0 >= y1 {
-        return Err(PilError::ValueError("unrecognized argument value".into()));
-    }
     let (width, height) = size;
     if width == 0 || height == 0 {
-        return Image::new(width, height, Mode::ImageLuma8, (0, 0, 0, 255));
+        crate::compute::pool_cpu::ops::effects::ops::validate_mandelbrot_request(
+            size, extent, quality,
+        )?;
+        crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?;
+        return Image::new_empty_with_mode(width, height, Mode::ImageLuma8);
     }
 
     let generated = crate::compute::execute_eager_cpu_mandelbrot(size, extent, quality)?;

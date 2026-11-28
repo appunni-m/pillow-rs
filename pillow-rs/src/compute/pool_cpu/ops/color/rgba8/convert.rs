@@ -241,6 +241,7 @@ pub(crate) fn execute_palette_target(
     unsafe_code,
     reason = "architecture dispatch relies on the validated Convert strategy selection"
 )]
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) unsafe fn execute(
     source: &RgbaImage,
     target: Mode,

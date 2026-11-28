@@ -91,6 +91,7 @@ pub trait DrawTextRouteCallbacks {
 
 /// Select the direct FreeType route, keeping host checks in Pillow order.
 #[doc(hidden)]
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub fn draw_uses_direct_text_route<C: DrawTextRouteCallbacks>(
     draw_mode: Mode,
     callbacks: &mut C,
@@ -420,7 +421,7 @@ impl Draw {
     /// destination materialization fails.
     // TODO(pillow-rs#brg0): rerun the exact CPU `text.mode.cmyk` and
     // `text.nuanced.stroked-rgba` output cases after CPU source closure.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub fn text_with_options(
         &mut self,
         x: i32,
@@ -486,7 +487,7 @@ impl Draw {
     // TODO(pillow-rs#brg0): rerun the exact CPU centered-anchor, explicit-font-
     // size, three-line-spacing, and CMYK multiline output cases after source
     // closure; retain frozen case IDs and output bytes.
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     pub fn multiline_text_with_options(
         &mut self,
         x: f64,
@@ -508,7 +509,7 @@ impl Draw {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn multiline_text_with_options_ref(
         &mut self,
         x: f64,
@@ -534,7 +535,7 @@ impl Draw {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn multiline_text_with_options_ref_with_context(
         &mut self,
         x: f64,
@@ -554,7 +555,7 @@ impl Draw {
         self.draw_positioned_text_lines(positioned, font, fill, options, requested_backend, context)
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn draw_positioned_text_lines<'a>(
         &mut self,
         positioned: Vec<crate::font::text_layout::PositionedTextLine<'a>>,
@@ -581,7 +582,7 @@ impl Draw {
         Ok(())
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn draw_text_at(
         &mut self,
         x: f64,
@@ -678,7 +679,7 @@ impl Draw {
         })
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn text_with_options_inner(
         &mut self,
         x: i32,
@@ -702,7 +703,7 @@ impl Draw {
         )
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn text_with_options_inner_with_context(
         &mut self,
         x: i32,
@@ -758,7 +759,7 @@ impl Draw {
         }
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn text_with_options_inner_selected(
         &mut self,
         x: i32,
@@ -817,7 +818,7 @@ impl Draw {
         Ok(((width, height), selection))
     }
 
-    // VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
     fn text_render_and_compose(
         &mut self,
         x: i32,

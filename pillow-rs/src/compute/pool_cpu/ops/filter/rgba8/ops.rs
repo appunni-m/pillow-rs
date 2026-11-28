@@ -22,8 +22,17 @@ static MIN_FILTER_ARCHITECTURES: [crate::compute::registry::support::Implementat
         crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 4 },
     );
 // TODO(pillow-rs#3ptb): freeze RGBA radius-seven GaussianBlur output and
-// selected/fallback receipts for Default, AVX2, and NEON after CPU source closure.
-static GAUSSIAN_BLUR_ARCHITECTURES: [ImplementationSupport; 7] = [
+// selected/fallback receipts for Default, AVX2, and NEON, including the
+// 32-bit x86 AVX2 generic fallback after this guard-specific dispatch fix.
+static GAUSSIAN_BLUR_ARCHITECTURES: [ImplementationSupport; 8] = [
+    ImplementationSupport::cpu(
+        OperationId::GaussianBlur,
+        MODE,
+        Architecture::Avx512F,
+        cfg!(target_arch = "x86_64"),
+        &[Architecture::Avx512F],
+        StrategyGuard::FilterRgbaGaussianBlurRadiusSevenAvx512F,
+    ),
     ImplementationSupport::cpu(
         OperationId::GaussianBlur,
         MODE,
@@ -118,6 +127,7 @@ super::super::helpers::native_filter3x3_arch_leaf!(ImageRgba8, RgbaImage, 4);
 super::super::helpers::native_filter5x5_architectures!(MODE, 4);
 super::super::helpers::native_filter5x5_arch_leaf!(ImageRgba8, RgbaImage, 4);
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         OperationId::Filter3x3 => {
@@ -177,6 +187,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -216,8 +227,9 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
         if radius == 7
             && fractional_weight != 0
             && matches!(
-                selection.implementation.architecture,
-                Architecture::Avx2 | Architecture::Neon
+                selection.guard,
+                StrategyGuard::FilterRgbaGaussianBlurRadiusSeven
+                    | StrategyGuard::FilterRgbaGaussianBlurRadiusSevenAvx512F
             )
         {
             return execute_gaussian_blur(image, sigma, selection, context);
@@ -229,6 +241,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     super::super::helpers::execute_native_byte_blur::<4>(image, MODE, request, selection, context)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
@@ -297,11 +310,12 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     super::default::execute(image, request)
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 fn execute_gaussian_blur(
     image: &DynamicImage,
     sigma: f32,
     selection: &StrategySelection,
-    context: &crate::compute::ExecutionContext,
+    _context: &crate::compute::ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
     match selection.implementation.architecture {
         Architecture::Default => super::default::execute(
@@ -311,7 +325,7 @@ fn execute_gaussian_blur(
         Architecture::Avx2 => {
             #[cfg(target_arch = "x86_64")]
             {
-                super::avx2::execute_gaussian_blur_radius_seven(image, sigma, context)
+                super::avx2::execute_gaussian_blur_radius_seven(image, sigma, _context)
             }
             #[cfg(not(target_arch = "x86_64"))]
             {
@@ -320,10 +334,22 @@ fn execute_gaussian_blur(
                 ))
             }
         }
+        Architecture::Avx512F => {
+            #[cfg(target_arch = "x86_64")]
+            {
+                super::avx512f::execute_gaussian_blur_radius_seven(image, sigma, _context)
+            }
+            #[cfg(not(target_arch = "x86_64"))]
+            {
+                Err(PilError::InternalError(
+                    "RGBA GaussianBlur selected AVX-512F on a non-x86_64 target".into(),
+                ))
+            }
+        }
         Architecture::Neon => {
             #[cfg(target_arch = "aarch64")]
             {
-                super::neon::execute_gaussian_blur_radius_seven(image, sigma, context)
+                super::neon::execute_gaussian_blur_radius_seven(image, sigma, _context)
             }
             #[cfg(not(target_arch = "aarch64"))]
             {

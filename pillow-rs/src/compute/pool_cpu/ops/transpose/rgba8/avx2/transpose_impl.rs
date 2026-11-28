@@ -15,6 +15,7 @@ use crate::raster::{DynamicImage, RgbaImage};
 const TILE: usize = 8;
 const CHANNELS: usize = 4;
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 /// Executes the selected RGBA AVX2 transpose strategy.
 ///
 /// # Safety
@@ -39,6 +40,7 @@ pub(crate) unsafe fn execute(
     Ok(DynamicImage::ImageRgba8(output))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 /// Executes an admitted RGBA AVX2 transpose into a caller-owned output buffer.
 ///
 /// # Safety
@@ -104,6 +106,7 @@ pub(crate) unsafe fn execute_into(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transpose_flags(method: &TransposeMethod) -> Result<(bool, bool), PilError> {
     let flags = match method {
         TransposeMethod::Rotate90 => (true, false),
@@ -119,6 +122,7 @@ fn transpose_flags(method: &TransposeMethod) -> Result<(bool, bool), PilError> {
     Ok(flags)
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn copy_bottom_edge(
     source: &[u8],
     output: &mut [u8],
@@ -142,6 +146,7 @@ fn copy_bottom_edge(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn copy_right_edge(
     source: &[u8],
     output: &mut [u8],
@@ -166,6 +171,7 @@ fn copy_right_edge(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn copy_pixel(
     source: &[u8],
     output: &mut [u8],
@@ -187,6 +193,7 @@ fn copy_pixel(
         .copy_from_slice(&source[source_start..source_start + CHANNELS]);
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[target_feature(enable = "avx2")]
 unsafe fn transpose_full_tiles(
     source: &[u8],
@@ -232,6 +239,7 @@ unsafe fn transpose_full_tiles(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[target_feature(enable = "avx2")]
 unsafe fn transpose_tile(
     source: &[u8],

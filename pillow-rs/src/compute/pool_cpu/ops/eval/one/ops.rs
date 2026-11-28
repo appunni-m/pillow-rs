@@ -110,6 +110,7 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_float_lut(
     input: &GrayImage,
     lut: &[f64],

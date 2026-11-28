@@ -86,6 +86,7 @@ const fn flatten_architecture_support(
     ]
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const fn architecture_support(mode: Mode) -> [ImplementationSupport; 24] {
     flatten_architecture_support(
         target_architecture_support(mode, Mode::ImageLuma8),
@@ -100,6 +101,7 @@ pub(crate) const fn architecture_support(mode: Mode) -> [ImplementationSupport; 
 }
 
 /// Converts a native u16 raster; I;16N changes decode byte order, not sample range.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_mode(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
     if is_luma16_target(target) {
         return execute_i16_target(source, target);
@@ -189,6 +191,7 @@ pub(crate) fn execute_palette_target(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn execute_native_vector(
     source: &Samples,
     target: Mode,
@@ -197,6 +200,7 @@ pub(crate) fn execute_native_vector(
 }
 
 // Widening I;16 samples to I/F preserves the complete unsigned 16-bit value.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(to_luma(source))),
@@ -213,6 +217,7 @@ fn execute(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_i16_target(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
     // Prepared Convert returns same-mode identity before this helper. Cross-
     // alias I;16 conversions clip each sample to the byte range.
@@ -238,6 +243,7 @@ fn execute_i16_target(source: &Samples, target: Mode) -> Result<DynamicImage, Pi
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) const fn is_luma16_target(target: Mode) -> bool {
     matches!(
         target,
@@ -245,6 +251,7 @@ pub(crate) const fn is_luma16_target(target: Mode) -> bool {
     )
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn execute_vector(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
     let target_channels = vector_target_channels(target)?;
     let source_dims = CheckedDims::new_allow_empty(source.width(), source.height(), 1)?;
@@ -274,6 +281,7 @@ fn execute_vector(source: &Samples, target: Mode) -> Result<DynamicImage, PilErr
     )
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn vector_target_channels(target: Mode) -> Result<u8, PilError> {
     match target {
         Mode::ImageLuma8 => Ok(1),
@@ -288,6 +296,7 @@ fn vector_target_channels(target: Mode) -> Result<u8, PilError> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn append_target_samples(target: Mode, samples: u16x8, active: usize, output: &mut Vec<u8>) {
     if target == Mode::ImageI32 {
         for value in samples.to_array().into_iter().take(active) {
@@ -305,6 +314,7 @@ fn append_target_samples(target: Mode, samples: u16x8, active: usize, output: &m
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn append_float_samples(samples: u16x8, active: usize, output: &mut Vec<u8>) {
     let samples = u32x8::from(samples);
     let mut bits = u32x8::splat(0);
@@ -318,12 +328,14 @@ fn append_float_samples(samples: u16x8, active: usize, output: &mut Vec<u8>) {
     append_f32_bytes(bits.to_array().map(f32::from_bits), active, output);
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn append_f32_bytes(values: [f32; 8], active: usize, output: &mut Vec<u8>) {
     for value in values.into_iter().take(active) {
         output.extend_from_slice(&value.to_le_bytes());
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn append_clipped_samples(target: Mode, samples: [u8; 8], active: usize, output: &mut Vec<u8>) {
     for sample in samples.into_iter().take(active) {
         match target {
@@ -338,6 +350,7 @@ fn append_clipped_samples(target: Mode, samples: [u8; 8], active: usize, output:
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn finish_vector(
     source: &Samples,
     target: Mode,

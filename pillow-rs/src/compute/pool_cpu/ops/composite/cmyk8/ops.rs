@@ -10,6 +10,7 @@ pub(crate) const MODE: Mode = Mode::ImageCmyk8;
 
 super::super::helpers::declare_composite_module_support!(ImageCmyk8, luma_mask(4, 16));
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
@@ -18,6 +19,8 @@ pub(crate) fn merge(
     super::super::helpers::strategy::require_operation_mode(selection, OperationId::Merge, MODE)?;
     match selection.implementation.architecture {
         Architecture::Default => super::default::operations::merge(source, remaining),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => super::avx512f::merge_impl::merge(source, remaining, selection),
         #[cfg(all(
             any(target_arch = "x86", target_arch = "x86_64"),
             target_feature = "sse2"
@@ -33,6 +36,7 @@ pub(crate) fn merge(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn blend(
     source: &DynamicImage,
     other: &DynamicImage,

@@ -11,6 +11,7 @@ pub(crate) struct ComposedPointLut {
 
 /// Compose a consecutive point-operation run only for the exact modes whose
 /// Pillow semantics match a channel-major byte lookup table.
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn compose_run(ops: &[PipelineOp], mode: Mode) -> Option<ComposedPointLut> {
     let bands = match mode {
         Mode::ImageLuma8 => 1,
@@ -73,6 +74,7 @@ fn identity_lut(bands: usize) -> Vec<u8> {
         .collect()
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 fn operation_lut(op: &PipelineOp, bands: usize) -> Option<Vec<u8>> {
     match op {
         PipelineOp::Invert => Some(
@@ -94,7 +96,7 @@ fn operation_lut(op: &PipelineOp, bands: usize) -> Option<Vec<u8>> {
                 })
                 .collect(),
         ),
-        PipelineOp::Posterize { bits } if *bits <= 8 => {
+        PipelineOp::Posterize { bits } if (1..=8).contains(bits) => {
             let mask = !((1u8 << (8 - bits)) - 1);
             Some(
                 (0..bands)

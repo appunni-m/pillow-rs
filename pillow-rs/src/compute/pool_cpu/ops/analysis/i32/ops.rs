@@ -1,10 +1,33 @@
 use crate::compute::Architecture;
-use crate::compute::registry::support::StrategySelection;
+use crate::compute::Backend;
+use crate::compute::registry::support::{
+    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
+    StrategySelection,
+};
 use crate::error::PilError;
 use crate::raster::{Mode, RgbaImage};
 
 use super::super::helpers::get_data::{self as helpers, GetDataOutput, GetDataRequest};
 use super::default::get_data_impl;
+
+const AVX512F_REQUIRES: &[Architecture] = &[Architecture::Avx512F];
+const GET_EXTREMA_ARCHITECTURES: &[ImplementationSupport] = &[ImplementationSupport::cpu(
+    OperationId::GetExtrema,
+    Mode::ImageI32,
+    Architecture::Avx512F,
+    cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+    AVX512F_REQUIRES,
+    StrategyGuard::GetExtremaI32Avx512F,
+)];
+
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) const GET_EXTREMA_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::GetExtrema,
+    Mode::ImageI32,
+    OutputModeRule::NoRasterResult,
+    &[],
+    GET_EXTREMA_ARCHITECTURES,
+);
 
 // VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
 pub(crate) fn execute_get_data(
@@ -25,6 +48,31 @@ pub(crate) fn execute_get_data(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn execute_getextrema(
+    image: &RgbaImage,
+    selection: StrategySelection,
+) -> Result<crate::image::FormattedExtrema, PilError> {
+    let implementation = selection.implementation;
+    if implementation.operation != OperationId::GetExtrema
+        || implementation.mode != Mode::ImageI32
+        || implementation.backend != Backend::Cpu
+    {
+        return Err(PilError::InternalError(
+            "GetExtrema strategy selection did not match its operation and mode".into(),
+        ));
+    }
+    match implementation.architecture {
+        Architecture::Default => Ok(super::super::helpers::extrema::i32_scalar(image)),
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::Avx512F => super::avx512f::extrema_impl::execute(image, &selection),
+        architecture => Err(PilError::InternalError(format!(
+            "GetExtrema has no {:?} {architecture:?} strategy",
+            Mode::ImageI32,
+        ))),
+    }
+}
+
 // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn scalar_samples(
     image: &RgbaImage,
@@ -42,12 +90,6 @@ crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
     ImageI32,
     crate::raster::RgbaImage,
     Pillow,
-);
-
-crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
-    ImageI32,
-    crate::raster::RgbaImage,
-    crate::compute::pool_cpu::ops::analysis::helpers::extrema::i32_scalar,
 );
 
 crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
@@ -125,9 +167,6 @@ crate::compute::pool_cpu::ops::analysis::helpers::getcolors_support::declare_get
 
 crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::declare_getextrema_bytes_support!(
     ImageI32, core_only,
-);
-crate::compute::pool_cpu::ops::analysis::helpers::extrema_execution::declare_getextrema_support!(
-    ImageI32, pillow,
 );
 crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_support!(
     ImageI32, 1, pillow,

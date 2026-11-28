@@ -8,7 +8,7 @@ use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
 };
 use crate::ops::pil_resize::{precompute_coeffs, precompute_coeffs_boxed_for_filter};
 
-// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize_filtered_fma_guard(input: StrategyInputs) -> GuardAssessment {
     match input.request {
         RequestFacts::Resize {
@@ -51,7 +51,37 @@ pub(crate) fn resize_filtered_fma_guard(input: StrategyInputs) -> GuardAssessmen
     }
 }
 
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn resize_avx512f_filtered_guard(input: StrategyInputs) -> GuardAssessment {
+    let (width, height, filter, boxed, bounds) = match input.request {
+        RequestFacts::Resize {
+            width,
+            height,
+            filter,
+            boxed,
+            box_bounds_bits,
+            ..
+        } => (width, height, filter, boxed, box_bounds_bits),
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    if boxed
+        || bounds.is_some()
+        || matches!(filter, crate::pipeline::ResampleFilter::Nearest)
+        || width < 8
+        || input.width > i32::MAX as u32
+        || (input.width, input.height) != (width, height)
+            && !crate::compute::pool_cpu::ops::resize::helpers::coefficients::horizontal_first(
+                (input.width, input.height),
+                (width, height),
+            )
+    {
+        return GuardAssessment::Ineligible;
+    }
+    resize_f32_vector_guard(input)
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pending; benchmark=pending
 pub(crate) fn resize_f32_vector_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height, filter, boxed, bounds_bits) = match input.request {
         RequestFacts::Resize {
@@ -71,6 +101,17 @@ pub(crate) fn resize_f32_vector_guard(input: StrategyInputs) -> GuardAssessment 
         return GuardAssessment::Ineligible;
     }
     if !boxed && (input.width, input.height) == (width, height) {
+        return GuardAssessment::Ineligible;
+    }
+    if !boxed
+        && !matches!(filter, crate::pipeline::ResampleFilter::Nearest)
+        && input.width != width
+        && input.height != height
+        && !crate::compute::pool_cpu::ops::resize::helpers::coefficients::horizontal_first(
+            (input.width, input.height),
+            (width, height),
+        )
+    {
         return GuardAssessment::Ineligible;
     }
     if matches!(filter, crate::pipeline::ResampleFilter::Nearest) && boxed && bounds_bits.is_none()
@@ -114,15 +155,49 @@ pub(crate) fn resize_f32_vector_guard(input: StrategyInputs) -> GuardAssessment 
     GuardAssessment::Satisfied
 }
 
-// VERIFY: source=reviewed@2026-11-22; parity=pending; benchmark=pending
-pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessment {
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
+pub(crate) fn resize_avx512_nearest_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height) = match input.request {
         RequestFacts::Resize {
             width,
             height,
+            filter: crate::pipeline::ResampleFilter::Nearest,
+            boxed: false,
+            box_bounds_bits: None,
+        } => (width, height),
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    if input.width == 0
+        || input.height == 0
+        || width < 16
+        || height == 0
+        || input.width > i32::MAX as u32
+        || (input.width, input.height) == (width, height)
+    {
+        return GuardAssessment::Ineligible;
+    }
+    match checked_native_bytes_guard(input, 4) {
+        GuardAssessment::Satisfied => {}
+        assessment => return assessment,
+    }
+    if crate::checked_dims::CheckedDims::new(width, height, 4).is_err() {
+        GuardAssessment::Ineligible
+    } else {
+        GuardAssessment::Satisfied
+    }
+}
+
+// VERIFY: source=reviewed@2026-11-27; parity=pending; benchmark=pending
+pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessment {
+    let (width, height, filter) = match input.request {
+        RequestFacts::Resize {
+            width,
+            height,
+            filter,
             boxed: false,
             ..
-        } => (width, height),
+        } => (width, height, filter),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -132,6 +207,19 @@ pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessme
     let layout = checked_native_bytes_guard(input, 2);
     if !matches!(layout, GuardAssessment::Satisfied) {
         return layout;
+    }
+    if !matches!(filter, crate::pipeline::ResampleFilter::Nearest) {
+        let horizontal_changes = input.width != width;
+        let vertical_changes = input.height != height;
+        if horizontal_changes != vertical_changes
+            || (horizontal_changes
+                && !crate::compute::pool_cpu::ops::resize::helpers::coefficients::horizontal_first(
+                    (input.width, input.height),
+                    (width, height),
+                ))
+        {
+            return GuardAssessment::Ineligible;
+        }
     }
     let output_width = match usize::try_from(width) {
         Ok(width) => width,
@@ -156,7 +244,7 @@ pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessme
 
 // TODO(pillow-rs#3ptb): Verify filtered I32 NEON output and Default fallback
 // parity on AArch64 after CPU source closure.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize_i32_neon_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height, filter) = match input.request {
         RequestFacts::Resize {
@@ -203,6 +291,7 @@ pub(crate) fn resize_i32_neon_guard(input: StrategyInputs) -> GuardAssessment {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-27; parity=pending; benchmark=pending
 pub(crate) fn resize_byte_nearest_vector_guard(
     input: StrategyInputs,
     channels: u8,
@@ -226,6 +315,7 @@ pub(crate) fn resize_byte_nearest_vector_guard(
         || input.width == 0
         || input.height == 0
         || (input.width, input.height) == (width, height)
+        || width < 16 / u32::from(channels)
     {
         return GuardAssessment::Ineligible;
     }
@@ -240,6 +330,7 @@ pub(crate) fn resize_byte_nearest_vector_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-27; parity=pending; benchmark=pending
 pub(crate) fn resize_byte_filtered_vector_guard(
     input: StrategyInputs,
     channels: u8,
@@ -264,6 +355,17 @@ pub(crate) fn resize_byte_filtered_vector_guard(
         || input.width == 0
         || input.height == 0
         || (input.width, input.height) == (width, height)
+    {
+        return GuardAssessment::Ineligible;
+    }
+    let horizontal_changes = input.width != width;
+    let vertical_changes = input.height != height;
+    if horizontal_changes != vertical_changes
+        || (horizontal_changes
+            && !crate::compute::pool_cpu::ops::resize::helpers::coefficients::horizontal_first(
+                (input.width, input.height),
+                (width, height),
+            ))
     {
         return GuardAssessment::Ineligible;
     }
@@ -294,6 +396,7 @@ pub(crate) fn resize_byte_filtered_vector_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize_byte_native_vector_guard(
     input: StrategyInputs,
     channels: u8,
@@ -309,6 +412,7 @@ pub(crate) fn resize_byte_native_vector_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize_byte_boxed_nearest_vector_guard(
     input: StrategyInputs,
     channels: u8,
@@ -324,6 +428,7 @@ pub(crate) fn resize_byte_boxed_nearest_vector_guard(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn resize_byte_boxed_vector_guard(
     input: StrategyInputs,
     channels: u8,

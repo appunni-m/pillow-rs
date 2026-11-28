@@ -8,7 +8,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
 
-// VERIFY: source=reviewed@2026-11-20; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
@@ -38,6 +38,7 @@ pub(crate) fn merge(
     Ok(image)
 }
 
+// VERIFY: source=reviewed@2026-11-24; parity=pending; benchmark=pending
 #[allow(unsafe_code)]
 fn interleave_rgb_neon(
     red: &[u8],

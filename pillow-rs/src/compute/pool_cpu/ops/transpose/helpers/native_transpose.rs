@@ -10,6 +10,7 @@ use crate::raster::{EncodableLayout, ImageBuffer, Pixel};
 use wide::{f32x4, u8x16, u16x8};
 
 /// Transposes a typed byte image through the mode's selected native strategy.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn transpose_u8<P, const CHANNELS: usize, const TILE: usize>(
     image: &ImageBuffer<P, Vec<u8>>,
     method: &TransposeMethod,
@@ -26,6 +27,7 @@ where
 }
 
 /// Transposes typed u16 samples as opaque native-endian byte pairs.
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 pub(crate) fn transpose_u16<P, const TILE: usize>(
     image: &ImageBuffer<P, Vec<u16>>,
     method: &TransposeMethod,
@@ -52,6 +54,7 @@ where
     Ok((output, vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transpose_bytes<const CHANNELS: usize, const TILE: usize>(
     source: &[u8],
     width: u32,
@@ -121,6 +124,7 @@ fn transpose_bytes<const CHANNELS: usize, const TILE: usize>(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transpose_tiled<const CHANNELS: usize, const TILE: usize>(
     source: &[u8],
     output: &mut [u8],
@@ -151,6 +155,7 @@ fn transpose_tiled<const CHANNELS: usize, const TILE: usize>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transpose_same_dimensions<const CHANNELS: usize>(
     source: &[u8],
     output: &mut [u8],
@@ -194,6 +199,7 @@ fn transpose_same_dimensions<const CHANNELS: usize>(
     Ok((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transpose_gathered_axis_swap<const CHANNELS: usize>(
     source: &[u8],
     output: &mut [u8],
@@ -226,6 +232,7 @@ fn transpose_gathered_axis_swap<const CHANNELS: usize>(
     Ok((vector_blocks, scalar_tail))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transpose_gathered_row(
     source: &[u8],
     output: &mut [u8],
@@ -275,6 +282,7 @@ fn transpose_gathered_row(
     Some((vector_blocks, scalar_tail as u64))
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 #[inline]
 fn gathered_source_column(
     method: &TransposeMethod,
@@ -291,6 +299,7 @@ fn gathered_source_column(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn copy_native_bytes(source: &[u8], output: &mut [u8]) -> Option<(u64, u64)> {
     if source.len() != output.len() {
         return None;
@@ -317,6 +326,7 @@ fn copy_native_bytes(source: &[u8], output: &mut [u8]) -> Option<(u64, u64)> {
 }
 
 #[inline]
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transpose_tile<const CHANNELS: usize, const TILE: usize>(
     source: &[u8],
     source_stride: usize,
@@ -359,6 +369,7 @@ fn transpose_tile<const CHANNELS: usize, const TILE: usize>(
     rows
 }
 
+// VERIFY: source=reviewed@2026-11-23; parity=pending; benchmark=pending
 fn transpose_row_group<const CHANNELS: usize, const TILE: usize>(
     source: &[u8],
     output: &mut [u8],

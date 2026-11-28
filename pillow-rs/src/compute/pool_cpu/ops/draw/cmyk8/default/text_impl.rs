@@ -1,9 +1,9 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
 
-// TODO(pillow-rs#brg0): rerun the exact CPU CMYK text and multiline-text
-// output cases after source closure; compare the raw four channel bytes.
-// VERIFY: source=reviewed@2026-11-21; parity=pending; benchmark=pending
+// TODO(pillow-rs#brg0): rerun the public ImageDraw.text and multiline_text
+// CMYK output cases after Stage 5 source closure; compare all four raw lanes.
+// VERIFY: source=reviewed@2026-11-25; parity=pending; benchmark=pending
 pub(crate) fn apply<const RGBA_MASK: bool>(
     mut image: DynamicImage,
     x: i32,

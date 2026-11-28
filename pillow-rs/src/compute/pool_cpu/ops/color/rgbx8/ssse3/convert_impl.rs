@@ -1,6 +1,16 @@
 //! SSSE3 RGBX-to-Luma8 and RGB Convert routes.
 
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "ssse3",
+    not(target_feature = "avx2")
+))]
 use crate::error::PilError;
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "ssse3",
+    not(target_feature = "avx2")
+))]
 use crate::raster::{DynamicImage, RgbaImage};
 
 #[cfg(all(
