@@ -102,26 +102,25 @@ and each case has a matching benchmark workflow. The five CoreOnly PutData
 writers also have 575 recorded-output cases across the declared size/pattern
 matrix. Those inputs exercise native u16 clamping, f32 narrowing, RGB/RGBA
 tuple arities, and multiband scale/offset handling without a Pillow oracle. The
-current indexed snapshot contains 152,571 size-matrix parity cases and
-177,882 parity cases total across 5,110 indexed parity documents. It has
-105,083 matrix benchmark workflows: 89,886 with Pillow comparisons and 15,197
+The active input snapshot contains 179,883 parity cases across 5,111 indexed
+parity documents. The single GPU admission fault-contract case is excluded from
+CPU-profile runs, leaving 179,882 CPU-applicable cases. The active benchmark
+index contains 107,474 workflows: 92,266 with a Pillow oracle and 15,208
 target-only workflows. Each applicable matrix benchmark declares CPU, SIMD,
 and GPU target profiles. The encoded `Image.open` mode matrix adds 1,035 parity
 inputs across nine modes and 38 size/pattern points; it stays outside backend
 benchmarks because image-slash-star owns this codec path rather than a compute
 pool. Resize's MKS2013/MKS2021 matrix contributes 8,574 parity cases and
 matching benchmark workflows across all 20 Pillow modes. The indexed benchmark
-corpus contains 105,786 workloads total. The same matrix inputs feed CPU, SIMD,
+corpus contains 107,474 workloads total. The same matrix inputs feed CPU, SIMD,
 and GPU target profiles; target-only cases use target profiles without a Pillow
 comparison.
 Requirement-specific benchmark workloads have distinct IDs, while specialized
 material workflows are emitted once per operation. Architecture selectors and
 physical GPU adapters replay these same workload inputs and are identified in
-their run receipts. The 105,083 matrix-workload total includes 104,731
-mode/size workflows and 352 32×24 pipeline-operation matrix workflows.
-The target-only matrix contains 15,197 cases across Image.frombytes, ImageChops,
-Crop, GetData, GetFlattenedData, GetBBox, PutData, Reduce, Resize, Brightness,
-and Sharpness. The 72 extra parity JSON
+their run receipts. These are input totals, not performance results. The
+operation × mode × architecture benchmark denominator is still being
+reconciled with the support declarations. The 72 extra parity JSON
 documents and five benchmark trial documents on disk are unindexed and excluded
 from these counts; their mapping is tracked in the CPU refactor plan.
 

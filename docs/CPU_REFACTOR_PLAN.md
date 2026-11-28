@@ -872,10 +872,16 @@ than a CPU kernel architecture cross-product.
 
 The pre-GetData snapshot contained 176,721 parity cases across 4,730 indexed
 parity documents and 103,945 benchmark workloads. The latest GetData matrix
-adds 1,150 target-only cases and 1,150 indexed benchmark workloads. The current
-manifest indexes 5,110 parity documents and 105,095 benchmark workloads; the
-176,721-case total is historical and is not the current case count. The index
-includes the regular-polygon mode requirements and 66 F32 rank workflows for
+adds 1,150 target-only cases and 1,150 indexed benchmark workloads. The active
+manifest indexes 5,111 parity documents, 179,883 parity cases, and 107,474
+benchmark workloads (manifest SHA-256
+`bf2734893b35e365054efa90ddf26ec54710e8cd47a70b86b6b7daf5251eb26f`). The
+input lock passes, and all 5,111 document hashes match PostgreSQL input
+snapshot `62db779f4eb483741937f4a6888bb113f97946dda69d816f7dd889a570043397`.
+The single `PIL.GpuBatchExecutor.submit.fault-contract.device-failure-at-admission`
+case is GPU-only, leaving 179,882 cases in the CPU profile; this matches the
+Default and Neon full-corpus selections. The 176,721-case total is historical.
+The index includes the regular-polygon mode requirements and 66 F32 rank workflows for
 NaN payloads, mixed signed zero, and vector-compatible infinities over 3×3,
 5×5, 9×9, and 11×11 windows. All 66 passed for each of the nine CPU
 architecture selectors (594
@@ -941,7 +947,7 @@ Stage 5 remains open.
 The generated public-contract page is stale: it records manifest SHA-256
 `3e36271fae8f7f25405a2ff961ea338992b7f3b80679c4b8460ed2c8ef56bc4a`, while the
 current manifest hashes to
-`aea5f40d617175d88bc18ab2515bac729e44b6c097024fc9b41724bb18ae6445`. Parity,
+`bf2734893b35e365054efa90ddf26ec54710e8cd47a70b86b6b7daf5251eb26f`. Parity,
 benchmark, coverage, and target-output evidence pages also contain older
 status data. TODO(pillow-rs#3ptb): after Stage 5 closes, regenerate the public
 contract and refresh evidence views from the current frozen input index; keep
@@ -2031,7 +2037,7 @@ matrix; each operation's support view must come from its own declarations.
 
 | Coverage area | Existing evidence | Required for CPU acceptance |
 | --- | --- | --- |
-| Input corpus | The generated index lists 5,110 parity documents, 177,882 indexed cases, and 105,095 benchmark workloads (manifest SHA-256 `aea5f40d617175d88bc18ab2515bac729e44b6c097024fc9b41724bb18ae6445`). Recent PostgreSQL parity uses frozen input snapshot `62db779f4eb483741937f4a6888bb113f97946dda69d816f7dd889a570043397`; the Default and Neon full-corpus evidence selects 179,882 cases. The index count and frozen-campaign count differ and have not been reconciled into one current support-derived denominator. | Freeze one current corpus and case-ID denominator from the indexed inputs and the operation support declarations; record its manifest, snapshot, and selector plans. |
+| Input corpus | The active manifest (`bf2734893b35e365054efa90ddf26ec54710e8cd47a70b86b6b7daf5251eb26f`) indexes 5,111 parity documents, 179,883 cases, and 107,474 benchmark workloads. The input lock passes and all parity document hashes match PostgreSQL snapshot `62db779f4eb483741937f4a6888bb113f97946dda69d816f7dd889a570043397`. Its one GPU-only admission fault case is excluded from CPU, giving 179,882 CPU-profile cases; the Default and Neon full-corpus runs select that exact count. | Keep this corpus and CPU-profile denominator frozen. Map every CPU-applicable case to its operation, mode, architecture strategy, and fallback/rejection receipt; that support-derived matrix is still incomplete. |
 | Recorded differences | The CPU/Default closure reports 179,882 unique verified passes: 178,912 unchanged baseline passes, 17 formerly failing cases replayed successfully, and 953 affected guards passed. CPU/Neon also passed the 179,882-case selection. Thirteen declared selectors passed a separate 970-case architecture closure (12,610 passes). The latest Filter closure adds 1,091 cases × 14 platform/selector lanes (15,274 passes). These closures report zero remaining mismatches in their selected sets; none establishes a complete current operation × Mode × Architecture denominator. | Reconcile the frozen failure and guard IDs with the current manifest, then execute every case required by the support-derived denominator. Preserve comparisons and public fault contracts. Keep image-slash-star encoding work outside pillow-rs. |
 | Mode identity stimulus | Current inputs include all 20 Pillow spellings and five internal high-depth Mode identities. All 231 recorded target outputs passed on the default CPU profile. This does not prove every operation/mode route or any non-default architecture. | Finish the support-derived denominator for every operation and mode, then collect output and exact identity evidence on every CPU Architecture selector. |
 | Mode strategies | The current corpus includes selected accepted and rejected mode routes, but does not contain one case for every `OperationId` × `Mode` outcome. The full operation/mode support cross-product remains unverified. | For every operation, exercise each exact mode’s declared output or rejection, including metadata, fault order, native CoreOnly outputs, and relevant target-mode transitions. |
@@ -2042,7 +2048,7 @@ There is no defensible operation × Mode × Architecture coverage percentage yet
 The support declarations enumerate the required combinations, but the parity
 corpus is not generated from that denominator. The 2026-11-10 matrix run proves
 outcomes only for its frozen 25,002 case IDs; it does not close missing support
-rows or represent the current 5,110-document input index. Keep its report and
+rows or represent the current 5,111-document input index. Keep its report and
 receipts as historical full-run evidence, not as proof of complete strategy
 coverage. Historical focused counts must not be added to the current
 denominator.
